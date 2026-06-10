@@ -17,9 +17,10 @@ export default function EditUserClient({ user, roles = [] }: { user: UserData, r
   const [formData, setFormData] = useState({
     name: user.name,
     email: user.email,
-    role: user.role,
+    role: roles.includes(user.role) ? user.role : 'OTHER',
     password: ''
   });
+  const [customRole, setCustomRole] = useState(roles.includes(user.role) ? '' : user.role);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,8 +29,15 @@ export default function EditUserClient({ user, roles = [] }: { user: UserData, r
     setIsLoading(true);
     setError(null);
 
+    const finalRole = formData.role === 'OTHER' ? customRole.trim().toUpperCase().replace(/ /g, '_') : formData.role;
+    if (formData.role === 'OTHER' && !finalRole) {
+      setError('Please specify a custom role.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      await updateUser(user.id, formData);
+      await updateUser(user.id, { ...formData, role: finalRole });
       alert('User successfully updated!');
       router.push('/users');
       router.refresh();
@@ -88,21 +96,27 @@ export default function EditUserClient({ user, roles = [] }: { user: UserData, r
         <div style={{ display: 'flex', gap: '20px' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: '500' }}>System Role *</label>
-            <input 
-              type="text" 
+            <select 
               name="role"
-              required
-              list="edit-role-options"
               value={formData.role}
               onChange={handleChange}
-              placeholder="Select or type a new role..."
               style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-            />
-            <datalist id="edit-role-options">
+            >
               {roles.map((r, i) => (
-                <option key={i} value={r} />
+                <option key={i} value={r}>{r}</option>
               ))}
-            </datalist>
+              <option value="OTHER" style={{ fontWeight: 'bold', color: 'var(--accent-color)' }}>+ Add New Role...</option>
+            </select>
+            {formData.role === 'OTHER' && (
+              <input 
+                type="text" 
+                required 
+                placeholder="Type new role (e.g. SAFETY_OFFICER)" 
+                value={customRole} 
+                onChange={e => setCustomRole(e.target.value)}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--accent-glow)', backgroundColor: 'rgba(0,240,255,0.05)', color: 'var(--text-primary)', marginTop: '8px' }}
+              />
+            )}
           </div>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ color: 'var(--accent-color)', fontSize: '0.9rem', fontWeight: '500' }}>Override Password (Optional)</label>

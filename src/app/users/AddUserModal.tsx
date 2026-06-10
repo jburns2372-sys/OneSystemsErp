@@ -9,6 +9,7 @@ export default function AddUserModal({ onClose, roles = [] }: { onClose: () => v
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('PROJECT_ENGINEER');
+  const [customRole, setCustomRole] = useState('');
   const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -58,20 +59,26 @@ export default function AddUserModal({ onClose, roles = [] }: { onClose: () => v
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>System Role</label>
-            <input 
-              type="text" 
-              required 
-              list="role-options"
+            <select 
               value={role} 
               onChange={e => setRole(e.target.value)}
-              placeholder="Select or type a new role..."
               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }}
-            />
-            <datalist id="role-options">
+            >
               {roles.map((r, i) => (
-                <option key={i} value={r} />
+                <option key={i} value={r}>{r}</option>
               ))}
-            </datalist>
+              <option value="OTHER" style={{ fontWeight: 'bold', color: 'var(--accent-color)' }}>+ Add New Role...</option>
+            </select>
+            {role === 'OTHER' && (
+              <input 
+                type="text" 
+                required 
+                placeholder="Type new role (e.g. SAFETY_OFFICER)" 
+                value={customRole} 
+                onChange={e => setCustomRole(e.target.value)}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--accent-glow)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)', marginTop: '8px' }}
+              />
+            )}
           </div>
           
           {error && <div style={{ color: '#ef4444', fontSize: '0.9rem' }}>{error}</div>}
