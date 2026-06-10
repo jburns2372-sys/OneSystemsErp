@@ -14,13 +14,19 @@ interface UserData {
 
 export default function EditUserClient({ user, roles = [] }: { user: UserData, roles?: string[] }) {
   const router = useRouter();
+
+  // Normalize matching to handle underscores vs spaces (e.g. FINANCE_OFFICER vs FINANCE OFFICER)
+  const normalizedUserRole = user.role.replace(/_/g, ' ').toUpperCase().trim();
+  const matchedRole = roles.find(r => r.replace(/_/g, ' ').toUpperCase().trim() === normalizedUserRole) || 
+                      (roles.includes(user.role) ? user.role : 'OTHER');
+
   const [formData, setFormData] = useState({
     name: user.name,
     email: user.email,
-    role: roles.includes(user.role) ? user.role : 'OTHER',
+    role: matchedRole,
     password: ''
   });
-  const [customRole, setCustomRole] = useState(roles.includes(user.role) ? '' : user.role);
+  const [customRole, setCustomRole] = useState(matchedRole === 'OTHER' ? user.role : '');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

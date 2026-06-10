@@ -10,6 +10,31 @@ export async function getSystemRoles() {
   return roles.map(r => r.name);
 }
 
+export async function deleteSystemRole(roleName: string) {
+  await prisma.systemRole.delete({
+    where: { name: roleName }
+  });
+  revalidatePath('/users');
+}
+
+export async function updateSystemRole(oldName: string, newName: string) {
+  const normalizedNew = newName.toUpperCase().trim();
+  
+  if (!normalizedNew) throw new Error("Role name cannot be empty");
+
+  const existing = await prisma.systemRole.findUnique({
+    where: { name: normalizedNew }
+  });
+  
+  if (existing) throw new Error("A role with this name already exists");
+
+  await prisma.systemRole.update({
+    where: { name: oldName },
+    data: { name: normalizedNew }
+  });
+  revalidatePath('/users');
+}
+
 async function ensureSystemRole(roleName: string) {
   const normalized = roleName.toUpperCase().trim();
   const existing = await prisma.systemRole.findUnique({

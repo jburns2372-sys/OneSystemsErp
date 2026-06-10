@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 
 import AddUserButton from './AddUserButton';
+import ManageRolesButton from './ManageRolesButton';
 import { getSystemRoles } from '@/app/actions/user';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,10 @@ export default async function UsersPage() {
           <h1>System Users</h1>
           <p>Manage access and roles for all personnel.</p>
         </div>
-        <AddUserButton roles={roles} />
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <ManageRolesButton roles={roles} />
+          <AddUserButton roles={roles} />
+        </div>
       </header>
 
       <div className={styles.tableContainer}>
