@@ -50,7 +50,7 @@ export default async function UsersPage() {
                 </td>
                 <td>{user.email || 'N/A'}</td>
                 <td>
-                  <span className={styles.roleBadge}>{user.role}</span>
+                  <span className={styles.roleBadge}>{user.role.replace(/_/g, ' ')}</span>
                 </td>
                 <td>
                   <span className={`${styles.badge} ${styles.badgeActive}`}>Active</span>
