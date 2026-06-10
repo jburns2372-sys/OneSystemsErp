@@ -4,21 +4,21 @@ import { useState, useTransition } from 'react';
 import { createUser } from '@/app/actions/user';
 import styles from './page.module.css';
 
-export default function AddUserModal({ onClose }: { onClose: () => void }) {
+export default function AddUserModal({ onClose, roles = [] }: { onClose: () => void, roles?: string[] }) {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('PROJECT_ENGINEER');
-  const [customRole, setCustomRole] = useState('');
+  const [role, setRole] = useState('PROJECT_ENGINEER');
   const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const finalRole = role === 'OTHER' ? customRole.trim().toUpperCase().replace(/ /g, '_') : role;
-    if (role === 'OTHER' && !finalRole) {
-      return setError('Please specify a custom role.');
+    const finalRole = role.trim().toUpperCase().replace(/ /g, '_');
+    if (!finalRole) {
+      return setError('Please specify a role.');
     }
 
     startTransition(async () => {
@@ -58,27 +58,21 @@ export default function AddUserModal({ onClose }: { onClose: () => void }) {
             />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Role</label>
-            <select 
-              value={role} onChange={e => setRole(e.target.value)}
+            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>System Role</label>
+            <input 
+              type="text" 
+              required 
+              list="role-options"
+              value={role} 
+              onChange={e => setRole(e.target.value)}
+              placeholder="Select or type a new role..."
               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }}
-            >
-              <option value="PROJECT_DIRECTOR">Project Director</option>
-              <option value="PROJECT_MANAGER">Project Manager</option>
-              <option value="PROJECT_ENGINEER">Project Engineer</option>
-              <option value="PROJECT_ACCOUNTANT">Project Accountant</option>
-              <option value="MATERIALS_ENGINEER">Materials Engineer</option>
-              <option value="COST_CONTROL">Cost Control</option>
-              <option value="PROCUREMENT">Procurement</option>
-              <option value="STOCKMAN">Stockman</option>
-              <option value="OTHER">Other (Specify)</option>
-            </select>
-            {role === 'OTHER' && (
-              <input 
-                type="text" required placeholder="e.g. SYSTEM_ADMIN" value={customRole} onChange={e => setCustomRole(e.target.value)}
-                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)', marginTop: '10px' }}
-              />
-            )}
+            />
+            <datalist id="role-options">
+              {roles.map((r, i) => (
+                <option key={i} value={r} />
+              ))}
+            </datalist>
           </div>
           
           {error && <div style={{ color: '#ef4444', fontSize: '0.9rem' }}>{error}</div>}

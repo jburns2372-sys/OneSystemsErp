@@ -12,7 +12,7 @@ interface UserData {
   role: string;
 }
 
-export default function EditUserClient({ user }: { user: UserData }) {
+export default function EditUserClient({ user, roles = [] }: { user: UserData, roles?: string[] }) {
   const router = useRouter();
   const [formData, setFormData] = useState({
     name: user.name,
@@ -88,21 +88,21 @@ export default function EditUserClient({ user }: { user: UserData }) {
         <div style={{ display: 'flex', gap: '20px' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: '500' }}>System Role *</label>
-            <select 
+            <input 
+              type="text" 
               name="role"
+              required
+              list="edit-role-options"
               value={formData.role}
               onChange={handleChange}
+              placeholder="Select or type a new role..."
               style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-            >
-              <option value="SYSTEM_ADMIN">System Admin</option>
-              <option value="PROJECT_MANAGER">Project Manager</option>
-              <option value="PROJECT_ENGINEER">Project Engineer</option>
-              <option value="PROCUREMENT_OFFICER">Procurement Officer</option>
-              <option value="WAREHOUSEMAN">Warehouseman</option>
-              <option value="ACCOUNTANT">Accountant</option>
-              <option value="HR_OFFICER">HR Officer</option>
-              <option value="PAYROLL_MASTER">Payroll Master</option>
-            </select>
+            />
+            <datalist id="edit-role-options">
+              {roles.map((r, i) => (
+                <option key={i} value={r} />
+              ))}
+            </datalist>
           </div>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ color: 'var(--accent-color)', fontSize: '0.9rem', fontWeight: '500' }}>Override Password (Optional)</label>

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
+import { getSystemRoles } from '@/app/actions/user';
 import EditUserClient from './EditUserClient';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,8 @@ export default async function EditUserPage({ params }: { params: { id: string } 
     notFound();
   }
 
+  const roles = await getSystemRoles();
+
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
       <header style={{ marginBottom: '30px' }}>
@@ -24,6 +27,7 @@ export default async function EditUserPage({ params }: { params: { id: string } 
       </header>
 
       <EditUserClient 
+        roles={roles}
         user={{
           id: user.id,
           name: user.name || '',

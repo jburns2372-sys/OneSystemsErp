@@ -4,7 +4,7 @@ import { useState } from 'react';
 import styles from './page.module.css';
 import AddUserModal from './AddUserModal';
 
-export default function AddUserButton() {
+export default function AddUserButton({ roles }: { roles: string[] }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -16,7 +16,7 @@ export default function AddUserButton() {
         + Add User
       </button>
 
-      {isOpen && <AddUserModal onClose={() => setIsOpen(false)} />}
+      {isOpen && <AddUserModal onClose={() => setIsOpen(false)} roles={roles} />}
     </>
   );
 }
