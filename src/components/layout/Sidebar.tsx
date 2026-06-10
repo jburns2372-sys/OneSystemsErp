@@ -7,10 +7,24 @@ import { useState, useEffect } from 'react';
 export default function Sidebar() {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--sidebar-width', isCollapsed ? '80px' : '280px');
-  }, [isCollapsed]);
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) {
+      document.documentElement.style.setProperty('--sidebar-width', '0px');
+    } else {
+      document.documentElement.style.setProperty('--sidebar-width', isCollapsed ? '80px' : '280px');
+      setMobileOpen(false);
+    }
+  }, [isCollapsed, isMobile]);
 
   interface SidebarLink {
     name: string;
@@ -42,20 +56,56 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside style={{
-      width: isCollapsed ? '80px' : 'var(--sidebar-width)',
-      backgroundColor: 'var(--bg-secondary)',
-      borderRight: '1px solid var(--glass-border)',
-      position: 'fixed',
-      left: 0,
-      top: 0,
-      bottom: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      zIndex: 100,
-      boxShadow: '5px 0 20px rgba(0,0,0,0.5)'
-    }}>
+    <>
+      {isMobile && (
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          style={{
+            position: 'fixed',
+            top: '15px',
+            left: '15px',
+            zIndex: 101,
+            backgroundColor: 'var(--glass-bg)',
+            border: '1px solid var(--glass-border)',
+            color: 'var(--text-primary)',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.2rem'
+          }}
+        >
+          ☰
+        </button>
+      )}
+
+      {isMobile && mobileOpen && (
+        <div 
+          onClick={() => setMobileOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 99, backdropFilter: 'blur(2px)'
+          }}
+        />
+      )}
+
+      <aside style={{
+        width: isMobile ? '280px' : (isCollapsed ? '80px' : 'var(--sidebar-width)'),
+        backgroundColor: 'var(--bg-secondary)',
+        borderRight: '1px solid var(--glass-border)',
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        transform: isMobile && !mobileOpen ? 'translateX(-100%)' : 'translateX(0)',
+        zIndex: 100,
+        boxShadow: '5px 0 20px rgba(0,0,0,0.5)'
+      }}>
       <div style={{ 
         padding: '20px', 
         display: 'flex', 
@@ -194,5 +244,6 @@ export default function Sidebar() {
         }
       `}</style>
     </aside>
+    </>
   );
 }
