@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { logout } from '@/app/actions/auth';
 
-export default function Sidebar() {
+export default function Sidebar({ permissions = {} }: { permissions?: Record<string, any> }) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -31,6 +31,7 @@ export default function Sidebar() {
     name: string;
     href: string;
     icon: string;
+    moduleKey?: string;
     subItems?: { name: string; href: string }[];
   }
 
@@ -38,23 +39,28 @@ export default function Sidebar() {
     { name: 'Dashboard', href: '/', icon: '⌂' },
     { name: 'Projects', href: '/projects', icon: '🏗️' },
     { name: 'AI Command Center', href: '/ai-command-center', icon: '🤖' },
-    { name: 'Procurement', href: '/procurement', icon: '🛒' },
-    { name: 'Inventory', href: '/inventory', icon: '📦' },
-    { name: 'Material Issuance', href: '/material-issuance', icon: '📤' },
-    { name: 'Finance', href: '/finance', icon: '💰' },
+    { name: 'Procurement', href: '/procurement', icon: '🛒', moduleKey: 'PROCUREMENT' },
+    { name: 'Inventory', href: '/inventory', icon: '📦', moduleKey: 'INVENTORY' },
+    { name: 'Material Issuance', href: '/material-issuance', icon: '📤', moduleKey: 'INVENTORY' },
+    { name: 'Finance', href: '/finance', icon: '💰', moduleKey: 'FINANCE' },
     { name: 'Subcontracting', href: '/subcontracting', icon: '👷' },
     { name: 'Accomplishments', href: '/accomplishments', icon: '📈' },
-    { name: 'Payroll', href: '/payroll', icon: '👥' },
-    { name: 'Payroll Payments', href: '/payroll-payments/dashboard', icon: '💸' },
+    { name: 'Payroll', href: '/payroll', icon: '👥', moduleKey: 'PAYROLL' },
+    { name: 'Payroll Payments', href: '/payroll-payments/dashboard', icon: '💸', moduleKey: 'PAYROLL' },
     { name: 'Equipment', href: '/equipment', icon: '🚜' },
     { name: 'Variation Orders', href: '/variation-orders', icon: '🔄' },
     { name: 'Reports', href: '/reports', icon: '📊' },
     { name: 'Documents', href: '/documents', icon: '📂' },
     { name: 'Knowledge Center', href: '/knowledge-center', icon: '🧠' },
     { name: 'AI ERP Assistant', href: '/ai/erp-assistant', icon: '💬' },
-    { name: 'Users', href: '/users', icon: '👤' },
-    { name: 'Settings', href: '/settings', icon: '⚙️' },
+    { name: 'Users', href: '/users', icon: '👤', moduleKey: 'WORKER_DATABASE' },
+    { name: 'Settings', href: '/settings', icon: '⚙️', moduleKey: 'SYSTEM_ROLES' },
   ];
+
+  const visibleLinks = links.filter(link => {
+    if (!link.moduleKey) return true;
+    return permissions[link.moduleKey]?.canView;
+  });
 
   return (
     <>
@@ -138,7 +144,7 @@ export default function Sidebar() {
       </div>
 
       <nav style={{ flex: 1, padding: '20px 10px', display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto' }}>
-        {links.map((link) => {
+        {visibleLinks.map((link) => {
           const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href) && (!link.subItems || link.subItems.every(sub => !pathname.startsWith(sub.href))));
           const hasActiveSub = link.subItems?.some(sub => pathname.startsWith(sub.href));
 
