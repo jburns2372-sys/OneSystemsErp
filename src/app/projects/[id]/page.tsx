@@ -42,7 +42,7 @@ export default async function ProjectDetailsPage({
     for (const item of project.awardedBoqItems) {
       customHtml += `<tr>
         <td>${item.itemCode || ''}</td>
-        <td>${item.description || item.itemDesc || ''}</td>
+        <td>${item.description || ''}</td>
         <td>${item.unit || ''}</td>
         <td>${item.quantity?.toLocaleString() || ''}</td>
         <td>${item.combinedUnitCost?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || ''}</td>
