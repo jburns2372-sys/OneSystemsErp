@@ -7,6 +7,7 @@ import Topbar from "@/components/layout/Topbar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://onesystemserp.com'),
   title: "PGH-PMS | Project Management System",
   description: "Comprehensive construction Project Management and Monitoring System",
 };
