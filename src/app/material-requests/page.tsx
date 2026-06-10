@@ -10,7 +10,8 @@ import CreateMRFDropdown from './CreateMRFDropdown';
 export const dynamic = 'force-dynamic';
 
 export default async function MaterialRequestsPage() {
-  const userId = cookies().get('userId')?.value || '';
+  const cookieStore = await cookies();
+  const userId = cookieStore.get('userId')?.value || '';
   const permissions = await getUserPermissions(userId);
 
   const requests = await prisma.materialRequest.findMany({

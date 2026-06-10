@@ -7,7 +7,8 @@ import { getUserPermissions } from '@/lib/permissions';
 import { cookies } from 'next/headers';
 
 export default async function ProcurementHub() {
-  const userId = cookies().get('userId')?.value || '';
+  const cookieStore = await cookies();
+  const userId = cookieStore.get('userId')?.value || '';
   const permissions = await getUserPermissions(userId);
 
   return (
