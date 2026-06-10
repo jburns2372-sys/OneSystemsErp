@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import styles from '../../projects/page.module.css';
 import Link from 'next/link';
 import DeliveryWorkflowButtons from './DeliveryWorkflowButtons';
+import { getUserPermissions } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,11 +25,14 @@ export default async function DeliveryDetailsPage({ params }: { params: Promise<
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
   let currentUser = null;
+  let permissions: Record<string, any> = {};
+
   if (sessionId) {
     currentUser = await prisma.user.findUnique({ where: { id: sessionId }, select: { id: true, name: true, role: true } });
+    if (currentUser) {
+      permissions = await getUserPermissions(currentUser.id);
+    }
   }
-
-  const isProjectAccountant = currentUser?.role === 'PROJECT_ACCOUNTANT' || currentUser?.role === 'SYSTEM_ADMIN' || currentUser?.role === 'ADMIN';
 
   return (
     <div className={styles.container} style={{ maxWidth: '1000px', margin: '0 auto' }}>
@@ -71,7 +75,7 @@ export default async function DeliveryDetailsPage({ params }: { params: Promise<
           <DeliveryWorkflowButtons 
             deliveryId={delivery.id} 
             status={delivery.status} 
-            isProjectAccountant={isProjectAccountant} 
+            permissions={permissions} 
           />
         </div>
       </header>

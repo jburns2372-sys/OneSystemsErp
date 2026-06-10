@@ -1,9 +1,24 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import PermissionGuard from '@/components/PermissionGuard';
+import { getUserPermissions } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PaymentBatchesPage() {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value;
+  let currentUser = null;
+  let permissions: Record<string, any> = {};
+
+  if (sessionId) {
+    currentUser = await prisma.user.findUnique({ where: { id: sessionId }, select: { id: true, role: true } });
+    if (currentUser) {
+      permissions = await getUserPermissions(currentUser.id);
+    }
+  }
+
   const batches = await prisma.paymentBatch.findMany({
     include: {
       payrollPeriod: true,
@@ -22,9 +37,11 @@ export default async function PaymentBatchesPage() {
             Manage and export GCash and Bank Transfer batches.
           </p>
         </div>
-        <Link href="/finance/payment-batches/new" style={{ background: 'var(--accent-color)', color: '#000', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold' }}>
-          + Generate New Batch
-        </Link>
+        <PermissionGuard permissions={permissions} moduleName="PAYROLL" action="canReleasePayment">
+          <Link href="/finance/payment-batches/new" style={{ background: 'var(--accent-color)', color: '#000', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold' }}>
+            + Generate New Batch
+          </Link>
+        </PermissionGuard>
       </header>
 
       <div style={{ background: 'var(--card-bg)', borderRadius: '12px', padding: '20px', border: '1px solid var(--glass-border)', overflowX: 'auto' }}>

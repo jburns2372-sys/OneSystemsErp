@@ -3,6 +3,8 @@
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import { requirePermission } from '@/lib/permissions';
+import { submitTransaction, approveTransaction } from '@/lib/workflow';
 
 export async function encodeDelivery(data: {
   poId: string;
@@ -14,9 +16,9 @@ export async function encodeDelivery(data: {
   if (!sessionId) throw new Error('Unauthorized');
 
   const user = await prisma.user.findUnique({ where: { id: sessionId } });
-  if (!user || (user.role !== 'STOCKMAN' && user.role !== 'SYSTEM_ADMIN' && user.role !== 'ADMIN')) {
-    throw new Error('Only Stockman can encode deliveries');
-  }
+  if (!user) throw new Error('User not found');
+
+  await requirePermission(user.id, 'DELIVERY_RECEIVING', 'canCreate');
 
   // Check for mismatches and generate notes
   const mismatchedItems = data.items.filter(item => item.quantity !== item.drQuantity);
@@ -56,6 +58,8 @@ export async function encodeDelivery(data: {
     }
   });
 
+  await submitTransaction(user.id, user.role || 'STOCKMAN', 'DELIVERY_RECEIVING', delivery.id);
+
   revalidatePath('/deliveries');
   revalidatePath('/inventory');
   return { success: true, deliveryId: delivery.id };
@@ -67,9 +71,9 @@ export async function approveDelivery(deliveryId: string) {
   if (!sessionId) throw new Error('Unauthorized');
 
   const user = await prisma.user.findUnique({ where: { id: sessionId } });
-  if (!user || user.role !== 'PROJECT_ACCOUNTANT') {
-    throw new Error('Only Project Accountant can approve deliveries');
-  }
+  if (!user) throw new Error('User not found');
+
+  await requirePermission(user.id, 'DELIVERY_RECEIVING', 'canApprove');
 
   const delivery = await prisma.delivery.findUnique({
     where: { id: deliveryId },
@@ -156,6 +160,9 @@ export async function approveDelivery(deliveryId: string) {
     });
 
   });
+
+  // Call the Maker-Checker workflow engine
+  await approveTransaction(user.id, user.role || 'PROJECT_ACCOUNTANT', 'DELIVERY_RECEIVING', deliveryId, 'Approved Delivery');
 
   revalidatePath(`/deliveries/${deliveryId}`);
   revalidatePath('/deliveries');

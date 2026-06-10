@@ -2,9 +2,17 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { requirePermission } from '@/lib/permissions';
+import { submitTransaction } from '@/lib/workflow';
 
 export async function generatePaymentBatch(periodId: string, paymentMethodType: string, payrollBankAccountId: string, userId: string) {
   try {
+    const currentUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!currentUser) throw new Error('User not found');
+
+    // Requires canReleasePayment because a batch explicitly triggers payment processing
+    await requirePermission(currentUser.id, 'PAYROLL', 'canReleasePayment');
+
     const period = await prisma.payrollPeriod.findUnique({
       where: { id: periodId },
       include: {
@@ -67,15 +75,13 @@ export async function generatePaymentBatch(periodId: string, paymentMethodType: 
       })
     ]);
 
-    // Update the payrolls to link to the batch (optional but good for tracking)
-    // Actually the `paymentBatchId` is on `Payroll`, wait, wait. 
-    // In schema I added `paymentBatchRows PaymentBatchRow[]` to Payroll, so it's linked via `PaymentBatchRow`.
-    
-    // BUT I also have `paymentBatchId` on `Payroll`!
+    // Link payslips
     await prisma.payroll.updateMany({
       where: { id: { in: period.payrolls.map(p => p.id) } },
       data: { paymentBatchId: batch.id }
     });
+
+    await submitTransaction(currentUser.id, currentUser.role || 'FINANCE_OFFICER', 'PAYROLL', batch.id);
 
     revalidatePath(`/payroll/${periodId}`);
     return { success: true, batchId: batch.id };

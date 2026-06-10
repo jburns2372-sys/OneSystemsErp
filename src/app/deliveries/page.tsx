@@ -2,19 +2,23 @@ import styles from '../projects/page.module.css';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
+import PermissionGuard from '@/components/PermissionGuard';
+import { getUserPermissions } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DeliveriesPage() {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
-  let userRole = null;
-  if (sessionId) {
-    const user = await prisma.user.findUnique({ where: { id: sessionId }, select: { role: true } });
-    userRole = user?.role;
-  }
+  let currentUser = null;
+  let permissions: Record<string, any> = {};
 
-  const isStockman = userRole === 'STOCKMAN' || userRole === 'SYSTEM_ADMIN' || userRole === 'ADMIN';
+  if (sessionId) {
+    currentUser = await prisma.user.findUnique({ where: { id: sessionId }, select: { id: true, role: true } });
+    if (currentUser) {
+      permissions = await getUserPermissions(currentUser.id);
+    }
+  }
 
   const deliveries = await prisma.delivery.findMany({
     orderBy: { date: 'desc' },
@@ -28,9 +32,9 @@ export default async function DeliveriesPage() {
           <h1>Deliveries</h1>
           <p>Track materials received on-site.</p>
         </div>
-        {isStockman && (
+        <PermissionGuard permissions={permissions} moduleName="DELIVERY_RECEIVING" action="canCreate">
           <Link href="/deliveries/new" className={styles.primaryButton}>+ Receive Delivery</Link>
-        )}
+        </PermissionGuard>
       </header>
 
       <div className={styles.tableContainer}>
