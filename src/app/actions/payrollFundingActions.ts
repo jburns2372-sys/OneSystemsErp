@@ -2,9 +2,16 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { requirePermission } from '@/lib/permissions';
+import { submitTransaction, approveTransaction } from '@/lib/workflow';
 
 export async function createFundingRequest(periodId: string, destinationAccountId: string, userId: string) {
   try {
+    const currentUser = await prisma.user.findFirst();
+    if (currentUser) {
+      await requirePermission(currentUser.id, 'PAYROLL', 'canSubmit');
+    }
+
     const period = await prisma.payrollPeriod.findUnique({
       where: { id: periodId },
       include: { payrolls: true }
@@ -44,6 +51,10 @@ export async function createFundingRequest(periodId: string, destinationAccountI
       }
     });
 
+    if (currentUser) {
+      await submitTransaction(currentUser.id, 'HR_OFFICER', 'PAYROLL', request.id);
+    }
+
     revalidatePath(`/payroll/${periodId}`);
     return { success: true, requestId: request.id };
   } catch (error: any) {
@@ -60,6 +71,18 @@ export async function approveFundingRequest(requestId: string, userId: string) {
     });
 
     if (!request) throw new Error('Funding request not found');
+
+    const currentUser = await prisma.user.findFirst();
+    if (currentUser) {
+      await requirePermission(currentUser.id, 'PAYROLL', 'canApprove');
+      
+      // Enforce Maker-Checker
+      if (request.preparedById === currentUser.id) {
+        throw new Error('Self-approval is strictly prohibited. The Maker cannot be the Approver.');
+      }
+      
+      await approveTransaction(currentUser.id, 'PROJECT_MANAGER', 'PAYROLL', request.id, 'Approved Payroll Funding');
+    }
 
     // Update account balance
     await prisma.payrollBankAccount.update({

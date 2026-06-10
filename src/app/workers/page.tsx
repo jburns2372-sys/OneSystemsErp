@@ -2,10 +2,16 @@ import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import WorkerDeleteButton from './WorkerDeleteButton';
 import ExportWorkersButton from './ExportWorkersButton';
+import PermissionGuard from '@/components/PermissionGuard';
+import { getUserPermissions } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function WorkersDirectoryPage() {
+  // Mock current user, replace with real session logic
+  const currentUser = await prisma.user.findFirst() || { id: 'mock-id' };
+  const permissions = await getUserPermissions(currentUser.id);
+
   const workers = await prisma.worker.findMany({
     orderBy: { createdAt: 'desc' }
   });
@@ -18,24 +24,29 @@ export default async function WorkersDirectoryPage() {
           <p style={{ margin: '5px 0 0 0', color: 'var(--text-secondary)' }}>Manage all regular employees, daily workers, and consultants.</p>
         </div>
         <div style={{ display: 'flex', gap: '15px' }}>
-          <ExportWorkersButton workers={workers} />
-          <Link href="/workers/new" style={{
-            background: 'var(--accent-color)', 
-            color: '#000', 
-            padding: '10px 20px', 
-            borderRadius: '8px', 
-            textDecoration: 'none', 
-            fontWeight: 'bold',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            Add New Worker
-          </Link>
+          <PermissionGuard permissions={permissions} moduleName="WORKER_DATABASE" action="canExport">
+            <ExportWorkersButton workers={workers} />
+          </PermissionGuard>
+          
+          <PermissionGuard permissions={permissions} moduleName="WORKER_DATABASE" action="canCreate">
+            <Link href="/workers/new" style={{
+              background: 'var(--accent-color)', 
+              color: '#000', 
+              padding: '10px 20px', 
+              borderRadius: '8px', 
+              textDecoration: 'none', 
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add New Worker
+            </Link>
+          </PermissionGuard>
         </div>
       </div>
 
@@ -90,10 +101,16 @@ export default async function WorkersDirectoryPage() {
                     <Link href={`/workers/${worker.id}`} style={{ color: 'var(--accent-color)', textDecoration: 'none', padding: '5px 10px', background: 'rgba(241, 196, 15, 0.1)', borderRadius: '6px', border: '1px solid rgba(241, 196, 15, 0.3)' }}>
                       View
                     </Link>
-                    <Link href={`/workers/${worker.id}/edit`} style={{ color: '#3498db', textDecoration: 'none', padding: '5px 10px', background: 'rgba(52, 152, 219, 0.1)', borderRadius: '6px', border: '1px solid rgba(52, 152, 219, 0.3)' }}>
-                      Edit
-                    </Link>
-                    <WorkerDeleteButton workerId={worker.id} />
+                    
+                    <PermissionGuard permissions={permissions} moduleName="WORKER_DATABASE" action="canEditDraft">
+                      <Link href={`/workers/${worker.id}/edit`} style={{ color: '#3498db', textDecoration: 'none', padding: '5px 10px', background: 'rgba(52, 152, 219, 0.1)', borderRadius: '6px', border: '1px solid rgba(52, 152, 219, 0.3)' }}>
+                        Edit
+                      </Link>
+                    </PermissionGuard>
+
+                    <PermissionGuard permissions={permissions} moduleName="WORKER_DATABASE" action="canDeleteDraft">
+                      <WorkerDeleteButton workerId={worker.id} />
+                    </PermissionGuard>
                   </div>
                 </td>
               </tr>

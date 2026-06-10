@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { generateText } from 'ai';
 import { google } from '@ai-sdk/google';
+import { requirePermission } from '@/lib/permissions';
 
 export async function validateWorkerProfileWithAI(workerData: any) {
   try {
@@ -68,6 +69,15 @@ Output exactly a JSON array of objects with the following schema, and NO markdow
 
 export async function saveWorkerProfile(data: any, aiValidationLogs: any[]) {
   try {
+    const currentUser = await prisma.user.findFirst();
+    if (currentUser) {
+      if (data.id) {
+        await requirePermission(currentUser.id, 'WORKER_DATABASE', 'canEditDraft');
+      } else {
+        await requirePermission(currentUser.id, 'WORKER_DATABASE', 'canCreate');
+      }
+    }
+
     // Basic standardizing of rates if empty
     const rateData = {
       dailyRate: Number(data.dailyRate || 0),
@@ -173,6 +183,11 @@ export async function saveWorkerProfile(data: any, aiValidationLogs: any[]) {
 
 export async function approvePaymentProfile(workerId: string) {
   try {
+    const currentUser = await prisma.user.findFirst();
+    if (currentUser) {
+      await requirePermission(currentUser.id, 'WORKER_DATABASE', 'canReleasePayment');
+    }
+
     const worker = await prisma.worker.findUnique({ where: { id: workerId } });
     if (!worker) throw new Error('Worker not found');
 
@@ -183,11 +198,11 @@ export async function approvePaymentProfile(workerId: string) {
 
     if (worker.allowedPaymentMethod === 'GCash Only' && worker.gcashNumber) {
       updateData.gcashVerificationStatus = 'Verified';
-      updateData.gcashApprovedBy = 'Finance Admin'; // Hardcoded for demo
+      updateData.gcashApprovedBy = currentUser?.name || 'Finance Admin';
       updateData.gcashLastUpdatedDate = new Date();
     } else if (worker.allowedPaymentMethod === 'Bank Transfer Only' && worker.bankAccountNumber) {
       updateData.bankVerificationStatus = 'Verified';
-      updateData.bankApprovedBy = 'Finance Admin'; // Hardcoded for demo
+      updateData.bankApprovedBy = currentUser?.name || 'Finance Admin';
       updateData.bankLastUpdatedDate = new Date();
     }
 
@@ -205,6 +220,11 @@ export async function approvePaymentProfile(workerId: string) {
 
 export async function holdPaymentProfile(workerId: string, reason: string) {
   try {
+    const currentUser = await prisma.user.findFirst();
+    if (currentUser) {
+      await requirePermission(currentUser.id, 'WORKER_DATABASE', 'canEditDraft');
+    }
+
     await prisma.worker.update({
       where: { id: workerId },
       data: {
@@ -222,6 +242,11 @@ export async function holdPaymentProfile(workerId: string, reason: string) {
 
 export async function deleteWorker(id: string) {
   try {
+    const currentUser = await prisma.user.findFirst();
+    if (currentUser) {
+      await requirePermission(currentUser.id, 'WORKER_DATABASE', 'canDeleteDraft');
+    }
+
     await prisma.worker.delete({
       where: { id }
     });

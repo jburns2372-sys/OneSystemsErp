@@ -1,12 +1,15 @@
 import React from 'react';
 import { Worker } from '@prisma/client';
+import PermissionGuard from '@/components/PermissionGuard';
 
-export default function WorkerPaymentProfileCard({ worker }: { worker: Worker }) {
+export default function WorkerPaymentProfileCard({ worker, permissions }: { worker: Worker, permissions: Record<string, any> }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
         <h3 className="text-lg font-medium text-gray-900">Payment & Routing Profile</h3>
-        <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">Edit</button>
+        <PermissionGuard permissions={permissions} moduleName="WORKER_DATABASE" action="canEditDraft">
+          <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">Edit</button>
+        </PermissionGuard>
       </div>
       <div className="p-6">
         <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
