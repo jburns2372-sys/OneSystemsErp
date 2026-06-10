@@ -35,65 +35,22 @@ export default async function ProjectDetailsPage({
   }
 
   let htmlTable = '';
-  let hasBOQ = false;
-  try {
-    const match = project.description?.match(/BOQ File Uploaded: (.*)/);
-    if (match && match[1]) {
-      hasBOQ = true;
-      const fileName = match[1].trim();
-      const filePath = path.join(process.cwd(), 'public', 'uploads', 'boq', fileName);
-      if (fs.existsSync(filePath)) {
-        const fileBuffer = fs.readFileSync(filePath);
-        const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        
-        // Convert to array of arrays, removing entirely blank rows
-        const rows = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1, blankrows: false });
-        
-        // Find which columns actually have data
-        const colHasData: boolean[] = [];
-        for (const row of rows) {
-          if (Array.isArray(row)) {
-            for (let i = 0; i < row.length; i++) {
-              if (row[i] !== undefined && row[i] !== null && String(row[i]).trim() !== '') {
-                colHasData[i] = true;
-              }
-            }
-          }
-        }
-        
-        let customHtml = '<table><tbody>';
-        for (const row of rows) {
-          if (!Array.isArray(row)) continue;
-          
-          let rowHasData = false;
-          let trHtml = '<tr>';
-          for (let i = 0; i < colHasData.length; i++) {
-            if (colHasData[i]) {
-              const cellVal = row[i] !== undefined && row[i] !== null ? row[i] : '';
-              if (String(cellVal).trim() !== '') rowHasData = true;
-              
-              // Format numbers nicely if they seem like costs/quantities
-              let displayVal = cellVal;
-              if (typeof cellVal === 'number' && !Number.isInteger(cellVal)) {
-                 displayVal = cellVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-              }
-              
-              trHtml += `<td>${displayVal}</td>`;
-            }
-          }
-          trHtml += '</tr>';
-          
-          if (rowHasData) {
-            customHtml += trHtml;
-          }
-        }
-        customHtml += '</tbody></table>';
-        htmlTable = customHtml;
-      }
+  let hasBOQ = project.awardedBoqItems && project.awardedBoqItems.length > 0;
+
+  if (hasBOQ) {
+    let customHtml = '<table><thead><tr style="background: #e0e0e0; font-weight: bold;"><th>Item No.</th><th>Description</th><th>Unit</th><th>Quantity</th><th>Unit Cost</th><th>Total Cost</th></tr></thead><tbody>';
+    for (const item of project.awardedBoqItems) {
+      customHtml += `<tr>
+        <td>${item.itemCode || ''}</td>
+        <td>${item.description || item.itemDesc || ''}</td>
+        <td>${item.unit || ''}</td>
+        <td>${item.quantity?.toLocaleString() || ''}</td>
+        <td>${item.combinedUnitCost?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || ''}</td>
+        <td>${item.totalCost?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || ''}</td>
+      </tr>`;
     }
-  } catch (e) {
-    console.error('Error reading Excel file:', e);
+    customHtml += '</tbody></table>';
+    htmlTable = customHtml;
   }
 
   return (
@@ -104,33 +61,6 @@ export default async function ProjectDetailsPage({
           <h1>{project.name}</h1>
           <p style={{ whiteSpace: 'pre-wrap' }}>{project.description?.replace(/BOQ File Uploaded: .*/, '') || 'No description provided.'}</p>
           
-          {hasBOQ && (
-            <div style={{ marginTop: '15px' }}>
-              <a 
-                href={`/uploads/boq/${project.description?.split('BOQ File Uploaded: ')[1].trim()}`} 
-                target="_blank" 
-                rel="noreferrer"
-                style={{ 
-                  display: 'inline-flex', 
-                  alignItems: 'center', 
-                  gap: '8px',
-                  backgroundColor: 'var(--accent-color)', 
-                  color: '#fff', 
-                  padding: '8px 16px', 
-                  borderRadius: '6px', 
-                  textDecoration: 'none', 
-                  fontWeight: 'bold',
-                  fontSize: '0.9rem'
-                }}
-              >
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                  <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
-                </svg>
-                Download Original BOQ File
-              </a>
-            </div>
-          )}
         </div>
         <div style={{ textAlign: 'right', minWidth: 'max-content', marginLeft: '20px' }}>
           <div style={{ fontSize: '1.15rem', color: 'var(--accent-color)', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
