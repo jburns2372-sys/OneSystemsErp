@@ -1,0 +1,149 @@
+<USER_REQUEST>
+# MASTER ANTIGRAVITY INSTRUCTION
+
+## AI-Assisted End-to-End Construction Project Management System
+
+## PGH-PMS Project Management App
+
+Develop PGH-PMS as a complete AI-assisted construction project management platform that manages the full project lifecycle from awarded Bill of Quantity upload up to final project closeout.
+
+The system shall cover:
+
+Project setup
+Awarded BOQ upload
+BOQ validation
+BOQ locking
+Materials consolidation
+Material request
+Procurement
+Purchase orders
+Deliveries
+Inventory
+Material issuance slips
+Expense ledger
+Petty cash
+Supplier payables
+Subcontracting and job orders
+Project accomplishments
+Progress billing
+Collections
+Payroll
+Equipment monitoring
+Variation orders
+Document control
+Reports
+AI validation
+Audit trail
+Project closeout
+
+The system must use AI assistance in all complicated processes, especially in validation, matching, consolidation, risk detection, anomaly detection, document checking, cost checking, billing validation, subcontractor alignment, and report preparation.
+
+However, AI must act only as an assistant and validator.
+
+AI shall not automatically approve, reject, delete, overwrite, or modify official records without human confirmation.
+
+Final authority must remain with authorized users.
+
+---
+
+# 1. Fundamental System Principle
+
+The Awarded Bill of Quantity is the contractual master reference.
+
+The system must preserve the awarded BOQ exactly as uploaded and approved.
+
+The awarded BOQ shall be used for:
+
+Contract monitoring
+Project accomplishment
+Client progress billing
+Variation order reference
+Subcontracting scope alignment
+Cost control reference
+Final project closeout
+
+The system may create internal consolidated materials BOQ for procurement efficiency, but this consolidated BOQ must never replace the awarded BOQ.
+
+Critical rule:
+
+Awarded BOQ = Contractual and billing reference
+Consolidated BOQ = Internal procurement and material planning reference
+
+All transactions must remain traceabl
+<truncated 37357 bytes>
+ipt reading
+Duplicate expense detection
+Subcontract scope alignment
+Subcontract billing validation
+Accomplishment validation
+Progress billing validation
+Variation order detection
+Cost overrun prediction
+Material savings detection
+Missing document detection
+Report generation
+Project risk scoring
+Executive summary preparation
+
+AI must provide:
+
+Suggested action
+Risk level
+Reason
+Supporting data
+Required human reviewer
+
+AI must never automatically approve official transactions.
+
+---
+
+# 35. Final System Objective
+
+Build PGH-PMS as a powerful AI-assisted construction project management system that can answer the following at any time:
+
+What was awarded?
+What was consolidated?
+What was requested?
+What was approved?
+What was purchased?
+What was delivered?
+What was issued?
+What was installed?
+What was accomplished?
+What was billed?
+What was collected?
+What remains unpaid?
+What remains undelivered?
+What remains unissued?
+What is over budget?
+What is under budget?
+What is unsupported?
+What is risky?
+What is missing?
+What is the project profit or loss?
+What should management act on immediately?
+
+The system must be designed so that every major transaction is:
+
+BOQ-linked
+AI-assisted
+Human-approved
+Document-supported
+Cost-controlled
+Audit-tracked
+Report-ready
+
+This shall be the master architecture and development instruction for the PGH-PMS Antigravity project management app.
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-06T01:48:25+08:00.
+
+The user's current state is as follows:
+Active Document: c:\Users\user\Documents\JD SOFTWARE PROJECTS\PGH-PMS\check.js (LANGUAGE_JAVASCRIPT)
+Cursor is on line: 7
+Other open documents:
+- c:\Users\user\Documents\JD SOFTWARE PROJECTS\PGH-PMS\src\app\actions\mutations.ts (LANGUAGE_TYPESCRIPT)
+- c:\Users\user\Documents\JD SOFTWARE PROJECTS\PGH-PMS\src\app\projects\[id]\BOQActions.tsx (LANGUAGE_TSX)
+- c:\Users\user\Documents\JD SOFTWARE PROJECTS\PGH-PMS\check.js (LANGUAGE_JAVASCRIPT)
+</ADDITIONAL_METADATA>

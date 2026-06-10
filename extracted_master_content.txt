@@ -1,0 +1,105 @@
+<USER_REQUEST>
+# MASTER ANTIGRAVITY INSTRUCTIONS
+
+## ERP Payroll Payment Automation Using UnionBank Philippines InstaPay with PESONet Fallback and GCash for Weekly Workers
+
+Create a complete Payroll Payment Automation Module inside the ERP application.
+
+The objective is to systematically and securely automate the payment of generated, approved, locked, and funded payslips using:
+
+1. Dedicated Payroll Bank Account
+2. UnionBank Philippines InstaPay API as the primary bank transfer route
+3. UnionBank Philippines PESONet API as fallback bank transfer route
+4. GCash disbursement route for weekly salaried workers only
+5. Approved payslip queue
+6. Payroll funding verification
+7. Payment approval workflow
+8. API payment submission
+9. Payment reconciliation
+10. Failed payment exception handling
+11. AI validation and fraud detection
+12. Full audit trail and accounting integration
+
+The system must never store UnionBank online banking usernames or passwords.
+
+The system may only store approved API credentials such as Client ID, Client Secret, Partner ID, OAuth credentials, API tokens, webhook signing secret if provided, sandbox credentials, and production credentials.
+
+All API credentials must be encrypted, masked, and accessible only to authorized users.
+
+---
+
+# A. FINAL PAYMENT ROUTING RULES
+
+The system must enforce the following payment rules:
+
+## 1. Weekly Salaried Workers
+
+Weekly salaried workers must be paid through **GCash only**.
+
+Rules:
+
+* Payment method = GCash only
+* Do not allow bank transfer
+* Do not route to UnionBank InstaPay
+* Do not route to UnionBank PESONet
+* Do not include in bank disbursement batch
+* Require verified GCash mobile number
+* Require verified GCash account name
+* If GCash details are missing or unverified, place payslip on Payment Hold
+
+## 2. Semi-Monthly Workers
+
+Semi-monthly workers must be paid through their nominated bank account only.
+
+Bank route priority:
+
+1. UnionBank internal transfer, if recipient account is UnionBank and interna
+<truncated 42016 bytes>
+ayments to exception queue
+* Route failed or ineligible InstaPay payments to PESONet when allowed
+* Prevent duplicate payment between InstaPay and PESONet
+* Protect all API credentials and account details
+* Maintain complete audit trail
+* Use AI to detect payment risk, fraud, duplication, and routing violations
+
+Important final rule:
+
+The ERP must never store UnionBank online banking usernames or passwords.
+
+The ERP must never mark a payslip as Paid unless UnionBank, GCash, or the selected provider confirms successful payment and reconciliation is completed.
+
+The ERP must never allow duplicate payment for the same payslip and payroll period.
+
+1. Workers Database Payment Profile
+2. Dedicated UnionBank Payroll Bank Account
+3. Payroll Locking and Approved Payslip Queue
+4. Payroll Funding Request
+5. UnionBank Provider Setup
+6. InstaPay and PESONet Bank Code Mapping
+7. UnionBank OAuth Authentication
+8. Transfer Rail Selection Engine
+9. InstaPay Payment Batch
+10. PESONet Fallback Batch
+11. API Payment Line and Idempotency Key
+12. Payment Approval Workflow
+13. API Submission Flow
+14. Status Polling / Webhook Handler
+15. Reconciliation Module
+16. Payment Exception Queue
+17. AI Validation
+18. Reports, Dashboard, Security, and Audit Trail
+19. Sandbox Testing
+20. Production Activation
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-08T18:16:32+08:00.
+
+The user's current state is as follows:
+Other open documents:
+- c:\Users\user\Documents\JD SOFTWARE PROJECTS\PGH-PMS\src\app\material-issuance\CreateIssuanceModal.tsx (LANGUAGE_TSX)
+- c:\Users\user\Documents\JD SOFTWARE PROJECTS\PGH-PMS\src\app\supplier-payables\page.tsx (LANGUAGE_TSX)
+- c:\Users\user\Documents\JD SOFTWARE PROJECTS\PGH-PMS\src\app\actions\returnActions.ts (LANGUAGE_TYPESCRIPT)
+- c:\Users\user\Documents\JD SOFTWARE PROJECTS\PGH-PMS\src\app\petty-cash\[id]\ReplenishmentModal.tsx (LANGUAGE_TSX)
+- c:\Users\user\Documents\JD SOFTWARE PROJECTS\PGH-PMS\src\app\deliveries\[id]\print\page.tsx (LANGUAGE_TSX)
+</ADDITIONAL_METADATA>

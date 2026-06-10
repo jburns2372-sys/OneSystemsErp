@@ -1,0 +1,93 @@
+'use client';
+
+import { useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { createSupplier } from '@/app/actions/supplierActions';
+import Link from 'next/link';
+
+export default function NewSupplierPage() {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      await createSupplier(formData);
+      router.push('/procurement/suppliers');
+    });
+  };
+
+  return (
+    <div style={{ padding: '40px 20px', maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '30px' }}>
+        <Link href="/procurement/suppliers" style={{ color: 'var(--accent-color)', textDecoration: 'none', fontWeight: 'bold', marginRight: '20px' }}>&larr; Back</Link>
+        <h1 style={{ color: 'var(--text-primary)', margin: 0 }}>Add New Supplier</h1>
+      </div>
+
+      <form onSubmit={handleSubmit} style={{ backgroundColor: 'var(--bg-secondary)', padding: '30px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Supplier Name *</label>
+            <input name="name" required style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>TIN</label>
+            <input name="tin" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }} />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Address</label>
+          <input name="address" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }} />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Contact Person</label>
+            <input name="contactPerson" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Contact Number</label>
+            <input name="contactNumber" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }} />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Email</label>
+            <input name="email" type="email" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Terms of Payment</label>
+            <select name="paymentTerms" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }}>
+              <option value="">-- Select Terms --</option>
+              <option value="CASH ON DELIVERY">CASH ON DELIVERY</option>
+              <option value="DATED CHECK ON DELIVERY">DATED CHECK ON DELIVERY</option>
+              <option value="PDC 30">PDC 30</option>
+              <option value="PDC 45">PDC 45</option>
+              <option value="PDC 60">PDC 60</option>
+              <option value="PDC 90">PDC 90</option>
+              <option value="PDC 180">PDC 180</option>
+              <option value="BANK TRANSFER">BANK TRANSFER</option>
+              <option value="GCASH">GCASH</option>
+            </select>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '30px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>VAT Setting *</label>
+          <select name="isVatable" required style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }}>
+            <option value="true">VAT Registered</option>
+            <option value="false">NON-VAT</option>
+          </select>
+        </div>
+
+        <button type="submit" disabled={isPending} style={{ backgroundColor: 'var(--accent-color)', color: '#000', padding: '12px 24px', borderRadius: '8px', border: 'none', fontWeight: 'bold', width: '100%', cursor: isPending ? 'not-allowed' : 'pointer', opacity: isPending ? 0.7 : 1 }}>
+          {isPending ? 'Saving...' : 'Save Supplier'}
+        </button>
+      </form>
+    </div>
+  );
+}

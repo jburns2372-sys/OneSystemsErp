@@ -1,0 +1,2517 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  password      String?
+  emailVerified DateTime?
+  image         String?
+  role          String    @default("PROJECT_ENGINEER")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  managedProjects Project[] @relation("ProjectManager")
+
+  materialRequests   MaterialRequest[] @relation("RequestedBy")
+  checkedMRs         MaterialRequest[] @relation("CheckedBy")
+  approvedMRs        MaterialRequest[] @relation("ApprovedBy")
+  preparedMRs        MaterialRequest[] @relation("PreparedBy")
+  expenses           Expense[]         @relation("ExpenseLoggedBy")
+  uploadedDocs       Document[]        @relation("DocumentUploader")
+  deliveriesReceived Delivery[]        @relation("DeliveryReceiver")
+  verifiedDeliveries Delivery[]        @relation("DeliveryVerifier")
+  reviewedDeliveries Delivery[]        @relation("DeliveryReviewer")
+  approvedDeliveries Delivery[]        @relation("DeliveryApprover")
+  consumptionsLogged ConsumptionLog[]
+
+  misCreated   MaterialIssuance[] @relation("MISForeman")
+  misProcessed MaterialIssuance[] @relation("MISWarehouseman")
+  misApproved  MaterialIssuance[] @relation("MISAccountant")
+  misReleased  MaterialIssuance[] @relation("MISReleaser")
+
+  mrsCreated   MaterialReturn[] @relation("MRSForeman")
+  mrsProcessed MaterialReturn[] @relation("MRSWarehouseman")
+
+  pcCustodians PettyCashAccount[] @relation("PCCustodian")
+  pcApprovers  PettyCashAccount[] @relation("PCApprover")
+  pcReviewers  PettyCashAccount[] @relation("PCReviewer")
+
+  // HR & Payroll Relations
+  encodedDtrs         DailyTimeRecord[] @relation("DtrEncoder")
+  createdPayrolls     PayrollPeriod[]   @relation("PayrollCreator")
+  approvedPayrolls    PayrollPeriod[]   @relation("PayrollApprover")
+  approvedDeductions  DeductionLedger[] @relation("DeductionApprover")
+  payrollApproverLogs PayrollApproval[] @relation("PayrollApproverLog")
+
+  // Added Workflow Relations
+  preparedPOs                 PurchaseOrder[]             @relation("POPreparedBy")
+  reviewedPOs                 PurchaseOrder[]             @relation("POReviewedBy")
+  approvedPOs                 PurchaseOrder[]             @relation("POApprovedBy")
+  reviewedExpenses            Expense[]                   @relation("ExpenseReviewedBy")
+  approvedExpenses            Expense[]                   @relation("ExpenseApprovedBy")
+  uploadedProofFiles          ExpenseProofFile[]          @relation("ExpenseProofUploadedBy")
+  verifiedProofFiles          ExpenseProofFile[]          @relation("ExpenseProofVerifiedBy")
+  approvalActions             ExpenseApprovalLog[]        @relation("ExpenseApprovalActionBy")
+  uploadedWorkerDocs          WorkerDocument[]            @relation("WorkerDocumentUploader")
+  uploadedTemplates           DocumentTemplate[]          @relation("DocumentTemplateUploader")
+  uploadedAccomplishmentFiles ProjectAccomplishmentFile[] @relation("AccomplishmentFileUploader")
+  projectAccomplishmentFiles  ProjectAccomplishmentFile[]
+}
+
+model SystemRole {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model Project {
+  id                         String    @id @default(cuid())
+  name                       String
+  description                String?
+  location                   String?
+  startDate                  DateTime?
+  endDate                    DateTime?
+  status                     String    @default("PLANNING")
+  // Financial & Billing Fields
+  contractAmountVATInclusive Boolean   @default(true)
+  vatRate                    Float     @default(12.0)
+  retentionPercentage        Float     @default(10.0)
+  withholdingTaxPercentage   Float     @default(2.0)
+  mobilizationAdvanceAmount  Float     @default(0)
+  advanceRecoupmentMethod    String    @default("PRO_RATA")
+  liquidatedDamagesRate      Float     @default(0.1)
+  otherDeductions            Float     @default(0)
+  paymentTerms               String?
+  boqLocked                  Boolean   @default(false)
+  consolidatedBOQLocked      Boolean   @default(false)
+
+  // Additional Fields
+  contractNumber           String?
+  client                   String?
+  contractor               String?
+  gpsLatitude              Float?
+  gpsLongitude             Float?
+  acceptableGeotagRadius   Float     @default(100)
+  projectCategory          String?
+  fundingSource            String?
+  contractAmount           Float     @default(0)
+  originalContractDuration Int?
+  noticeToProceedDate      DateTime?
+  originalCompletionDate   DateTime?
+  revisedCompletionDate    DateTime?
+  implementingOffice       String?
+
+  // Relations
+  managerId String?
+  manager   User?   @relation("ProjectManager", fields: [managerId], references: [id])
+
+  awardedBoqItems      AwardedBOQItem[]
+  consolidatedBoqItems ConsolidatedBOQItem[]
+  materialRequests     MaterialRequest[]
+  expenses             Expense[]
+  pettyCashAccounts    PettyCashAccount[]
+  workers              Worker[]              @relation("ProjectWorkers")
+  documents            Document[]
+  documentTemplates    DocumentTemplate[]
+  consumptions         ConsumptionLog[]
+  issuances            MaterialIssuance[]
+  materialReturns      MaterialReturn[]
+  dtrs                 DailyTimeRecord[]
+  payrollPeriods       PayrollPeriod[]
+  payrolls             Payroll[]
+
+  // New Accomplishment and Billing Relations
+  accomplishments     Accomplishment[]
+  billings            Billing[]
+  variationOrders     VariationOrder[]
+  evidenceFiles       EvidenceFile[]
+  projectCameras      ProjectCamera[]
+  aiValidationRuns    AIValidationRun[]
+  subcontractPackages SubcontractPackage[]
+  jobOrders           JobOrder[]
+  subcontractBillings SubcontractBilling[]
+  backCharges         BackCharge[]
+
+  knowledgeReferences KnowledgeReference[]
+
+  createdAt                       DateTime                         @default(now())
+  updatedAt                       DateTime                         @updatedAt
+  projectAccomplishmentFiles      ProjectAccomplishmentFile[]
+  projectAccomplishmentAIFindings ProjectAccomplishmentAIFinding[]
+}
+
+model AwardedBOQItem {
+  id               String  @id @default(cuid())
+  itemCode         String
+  category         String?
+  description      String
+  unit             String
+  quantity         Float
+  directCost       Float   @default(0)
+  indirectCost     Float   @default(0)
+  combinedUnitCost Float   @default(0)
+  totalCost        Float
+
+  // Accomplishment & Billing Tracking
+  previousQuantityAccomplished Float @default(0)
+  currentQuantityAccomplished  Float @default(0)
+  totalQuantityAccomplished    Float @default(0)
+  remainingQuantity            Float @default(0)
+  percentageAccomplished       Float @default(0)
+  amountAccomplished           Float @default(0)
+  balanceAmount                Float @default(0)
+
+  // Internal Tracking (Rule 16)
+  actualOrderedQuantity          Float  @default(0)
+  actualDeliveredQuantity        Float  @default(0)
+  actualInstalledQuantity        Float  @default(0)
+  finalApprovedInstalledQuantity Float?
+  materialSavingsQuantity        Float  @default(0)
+  materialSavingsAmount          Float  @default(0)
+  wastageQuantity                Float  @default(0)
+  actualCost                     Float  @default(0)
+  costVariance                   Float  @default(0)
+
+  aiValidationRequired Boolean @default(true)
+  requiredEvidenceType String? // PHOTOS, VIDEOS, DOCUMENTS
+  status               String  @default("PENDING")
+
+  processingType String @default("MATERIAL_EQUIPMENT") // MATERIAL_EQUIPMENT, EXPENSE_BASED, MILESTONE_BASED, HYBRID
+
+  // Relations
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  mappings BOQMapping[]
+
+  // New Accomplishment and Billing Relations
+  lotBreakdowns       BOQLotBreakdown[]
+  accomplishmentItems AccomplishmentItem[]
+  billingItems        BillingItem[]
+  variationOrders     VariationOrder[]
+  evidenceFiles       EvidenceFile[]
+  aiValidationRuns    AIValidationRun[]
+
+  expenses              Expense[]
+  pettyCashExpenses     PettyCashExpense[]
+  subcontractorBOQItems SubcontractorBOQItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ConsolidatedBOQItem {
+  id          String  @id @default(cuid())
+  itemCode    String
+  category    String?
+  description String
+  unit        String
+  quantity    Float
+  unitCost    Float
+  totalCost   Float
+
+  status String @default("PENDING")
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  deliveredQty Float @default(0)
+  consumedQty  Float @default(0)
+
+  // Procurement Relations
+  mrItems          MaterialRequestItem[]
+  poItems          PurchaseOrderItem[]
+  deliveryItems    DeliveryItem[]
+  consumptionItems ConsumptionItem[]
+  issuanceItems    IssuanceItem[]
+  returnItems      ReturnItem[]
+
+  mappings          BOQMapping[]
+  expenses          Expense[]
+  pettyCashExpenses PettyCashExpense[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BOQMapping {
+  id                   String  @id @default(cuid())
+  mappingType          String // ONE_TO_ONE, ONE_TO_MANY, MANY_TO_ONE
+  allocationPercentage Float?
+  allocationQuantity   Float?
+  remarks              String?
+  aiConfidenceScore    Float?
+  status               String  @default("APPROVED") // PENDING_AI, APPROVED, REJECTED
+
+  awardedBoqItemId String
+  awardedBoqItem   AwardedBOQItem @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+
+  consolidatedBoqItemId String
+  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Supplier {
+  id            String  @id @default(cuid())
+  name          String
+  tin           String?
+  contactPerson String?
+  contactNumber String?
+  email         String?
+  address       String?
+  paymentTerms  String?
+  website       String?
+  plantLocation String?
+  isVatable     Boolean @default(true)
+
+  purchaseOrders  PurchaseOrder[]
+  accountsPayable AccountsPayable[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MaterialRequest {
+  id       String @id @default(cuid())
+  mrNumber String @unique
+  status   String @default("DRAFT") // DRAFT, AI_CHECKING, SUBMITTED, FOR_REVIEW, RETURNED, APPROVED, REJECTED, PARTIALLY_PROCURED, FULLY_PROCURED, CLOSED
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  requesterId String
+  requester   User   @relation("RequestedBy", fields: [requesterId], references: [id])
+
+  preparerId String?
+  preparer   User?   @relation("PreparedBy", fields: [preparerId], references: [id])
+
+  checkerId String?
+  checker   User?   @relation("CheckedBy", fields: [checkerId], references: [id])
+
+  approverId String?
+  approver   User?   @relation("ApprovedBy", fields: [approverId], references: [id])
+
+  // MRF Details
+  purpose       String?
+  priority      String  @default("NORMAL") // URGENT, HIGH, NORMAL, LOW
+  locationOfUse String?
+  remarks       String?
+
+  aiValidationRisk  String? // Flags over-ordering or duplicate requests
+  aiValidationNotes String? // Detailed AI check notes
+
+  items          MaterialRequestItem[]
+  purchaseOrders PurchaseOrder[]
+
+  dateNeeded DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model MaterialRequestItem {
+  id               String @id @default(cuid())
+  quantity         Float
+  approvedQuantity Float?
+  breakdownData    Json?
+
+  mrId String
+  mr   MaterialRequest @relation(fields: [mrId], references: [id], onDelete: Cascade)
+
+  consolidatedBoqItemId String
+  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id])
+}
+
+model PurchaseOrder {
+  id       String @id @default(cuid())
+  poNumber String @unique
+  status   String @default("DRAFT") // DRAFT, ISSUED, DELIVERED, PAID
+
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  mrId String
+  mr   MaterialRequest @relation(fields: [mrId], references: [id])
+
+  items      PurchaseOrderItem[]
+  deliveries Delivery[]
+  payables   AccountsPayable[]
+
+  totalAmount      Float     @default(0)
+  netAmount        Float     @default(0)
+  vatAmount        Float     @default(0)
+  deliveryDate     DateTime?
+  paymentTermsDays Int?
+  dueDate          DateTime?
+
+  // Workflow Approval Rules (Rule 25.B)
+  preparerId String?
+  preparer   User?   @relation("POPreparedBy", fields: [preparerId], references: [id])
+
+  reviewerId String?
+  reviewer   User?   @relation("POReviewedBy", fields: [reviewerId], references: [id])
+
+  approverId String?
+  approver   User?   @relation("POApprovedBy", fields: [approverId], references: [id])
+
+  aiValidationRisk String? // Flags unusual pricing or remaining BOQ mismatch
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PurchaseOrderItem {
+  id       String @id @default(cuid())
+  quantity Float
+  unitCost Float
+
+  poId String
+  po   PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+
+  consolidatedBoqItemId String
+  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id])
+}
+
+model Expense {
+  id                   String   @id @default(cuid())
+  amount               Float
+  totalBreakdownAmount Float    @default(0)
+  date                 DateTime
+  category             String // e.g., MATERIALS, RENTAL, CONSUMABLES, OVERHEAD
+  description          String
+  receiptRef           String?
+  supplierName         String?
+  isAccrued            Boolean  @default(false)
+  netAmount            Float    @default(0)
+  vatAmount            Float    @default(0)
+  billingEligibility   String   @default("BILLABLE") // BILLABLE, NON_BILLABLE, FOR_VALIDATION, FOR_VARIATION
+  status               String   @default("DRAFT")
+  aiValidationStatus   String?
+  approvalStatus       String?
+  aiValidationRisk     String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  loggedById String
+  loggedBy   User   @relation("ExpenseLoggedBy", fields: [loggedById], references: [id])
+
+  costType String @default("DIRECT") // DIRECT, INDIRECT, GENERAL, TEMPORARY, REIMBURSABLE
+
+  awardedBoqItemId String?
+  awardedBoqItem   AwardedBOQItem? @relation(fields: [awardedBoqItemId], references: [id])
+
+  consolidatedBoqItemId String?
+  consolidatedBoqItem   ConsolidatedBOQItem? @relation(fields: [consolidatedBoqItemId], references: [id])
+
+  breakdownItems ExpenseBreakdownItem[]
+  proofFiles     ExpenseProofFile[]
+  aiValidation   ExpenseAIValidation?
+  approvalLogs   ExpenseApprovalLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pettyCashExpense PettyCashExpense?
+
+  // Workflow Approval Rules (Rule 25.D)
+  reviewerId String?
+  reviewer   User?   @relation("ExpenseReviewedBy", fields: [reviewerId], references: [id])
+
+  approverId String?
+  approver   User?   @relation("ExpenseApprovedBy", fields: [approverId], references: [id])
+}
+
+model ExpenseBreakdownItem {
+  id                  String             @id @default(cuid())
+  expenseId           String
+  expense             Expense            @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  description         String
+  specification       String?
+  quantity            Float
+  unit                String
+  unitCost            Float
+  totalCost           Float
+  supplierName        String?
+  purchaseReferenceNo String?
+  receiptInvoiceNo    String?
+  purchaseDate        DateTime?
+  remarks             String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  proofFiles          ExpenseProofFile[]
+}
+
+model ExpenseProofFile {
+  id              String                @id @default(cuid())
+  expenseId       String
+  expense         Expense               @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  breakdownItemId String?
+  breakdownItem   ExpenseBreakdownItem? @relation(fields: [breakdownItemId], references: [id], onDelete: Cascade)
+  fileName        String
+  fileType        String
+  fileUrl         String
+  fileHash        String?
+  uploadedById    String
+  uploadedBy      User                  @relation("ExpenseProofUploadedBy", fields: [uploadedById], references: [id])
+  uploadedAt      DateTime              @default(now())
+  verifiedById    String?
+  verifiedBy      User?                 @relation("ExpenseProofVerifiedBy", fields: [verifiedById], references: [id])
+  verifiedAt      DateTime?
+  status          String                @default("UPLOADED")
+}
+
+model ExpenseAIValidation {
+  id                   String   @id @default(cuid())
+  expenseId            String   @unique
+  expense              Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  validationStatus     String // Passed, Needs Review, Rejected, Incomplete, Possible Duplicate, Over Budget, Missing Proof of Purchase
+  validationScore      Float?
+  findings             String?
+  recommendations      String?
+  duplicateWarning     Boolean  @default(false)
+  budgetWarning        Boolean  @default(false)
+  scopeAlignmentResult String?
+  createdAt            DateTime @default(now())
+}
+
+model ExpenseApprovalLog {
+  id             String   @id @default(cuid())
+  expenseId      String
+  expense        Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  action         String
+  actionByUserId String
+  actionByUser   User     @relation("ExpenseApprovalActionBy", fields: [actionByUserId], references: [id])
+  comments       String?
+  previousStatus String?
+  newStatus      String?
+  createdAt      DateTime @default(now())
+}
+
+model PettyCashAccount {
+  id                   String  @id @default(cuid())
+  accountName          String // e.g., "Main Office Petty Cash", "Site A Petty Cash"
+  department           String?
+  fundLimit            Float
+  replenishmentTrigger Float?
+  currentBalance       Float // Automatically calculated/updated
+
+  // Relationships
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  custodianId String
+  custodian   User   @relation("PCCustodian", fields: [custodianId], references: [id])
+
+  approverId String?
+  approver   User?   @relation("PCApprover", fields: [approverId], references: [id])
+
+  reviewerId String?
+  reviewer   User?   @relation("PCReviewer", fields: [reviewerId], references: [id])
+
+  expenses       PettyCashExpense[]
+  replenishments PettyCashReplenishment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PettyCashExpense {
+  id                 String   @id @default(cuid())
+  date               DateTime
+  payee              String
+  purpose            String
+  category           String // Meals, Fuel, Toll, Supplies, etc.
+  amount             Float
+  isVat              Boolean  @default(false)
+  netAmount          Float    @default(0)
+  vatAmount          Float    @default(0)
+  billingEligibility String   @default("BILLABLE") // BILLABLE, NON_BILLABLE, FOR_VALIDATION, FOR_VARIATION
+  receiptNumber      String?
+  attachmentUrl      String?
+  isNoReceipt        Boolean  @default(false)
+  remarks            String?
+  status             String   @default("PENDING") // PENDING, LIQUIDATED, REJECTED
+
+  expenseId String?  @unique
+  expense   Expense? @relation(fields: [expenseId], references: [id])
+
+  // The account this was drawn from
+  accountId String
+  account   PettyCashAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  // The project it was charged to
+  projectId String?
+  // We don't strictly require a relation to Project if we just want to log the name, but linking it is better.
+
+  // The replenishment batch it belongs to (if any)
+  replenishmentId String?
+  replenishment   PettyCashReplenishment? @relation(fields: [replenishmentId], references: [id])
+
+  costType String @default("DIRECT") // DIRECT, INDIRECT, GENERAL, TEMPORARY, REIMBURSABLE
+
+  awardedBoqItemId String?
+  awardedBoqItem   AwardedBOQItem? @relation(fields: [awardedBoqItemId], references: [id])
+
+  consolidatedBoqItemId String?
+  consolidatedBoqItem   ConsolidatedBOQItem? @relation(fields: [consolidatedBoqItemId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PettyCashReplenishment {
+  id            String @id @default(cuid())
+  requestNumber String @unique
+  status        String @default("DRAFT") // DRAFT, SUBMITTED, FINANCE_REVIEW, FOR_APPROVAL, APPROVED, RELEASED, CLOSED
+
+  fundLimit        Float
+  beginningBalance Float
+  totalExpenses    Float
+  cashOnHand       Float
+  amountRequested  Float
+
+  reviewerAction  String? // ACCEPT, REJECT, RETURN, ADJUST
+  reviewerRemarks String?
+
+  approverId   String?
+  approvalDate DateTime?
+
+  releaseDate  DateTime?
+  releaseMode  String? // Cash, Bank, Check, GCash
+  releaseRefNo String?
+  receiverId   String?
+
+  accountId String
+  account   PettyCashAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  expenses PettyCashExpense[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Worker {
+  id              String    @id @default(cuid())
+  workerId        String?   @unique // Custom Employee No.
+  firstName       String
+  lastName        String
+  middleName      String?
+  suffix          String?
+  nickname        String?
+  dateOfBirth     DateTime?
+  gender          String?
+  civilStatus     String?
+  mobileNumber    String?
+  emailAddress    String?
+  completeAddress String?
+
+  emergencyContactName     String?
+  emergencyContactNumber   String?
+  emergencyContactRelation String?
+
+  // Employment / Engagement Type
+  employmentType            String    @default("PROJECT_BASED") // REGULAR, PROJECT_BASED, CONTRACTUAL, PROBATIONARY, DAILY_WORKER, MONTHLY_EMPLOYEE, HOURLY_WORKER, PIECE_RATE_WORKER, FREELANCE_CONSULTANT, ONE_LOT_WORKER, RETAINER_CONSULTANT, TEMPORARY_WORKER, OTHER
+  workerCategory            String    @default("SKILLED") // SKILLED, HELPER, FOREMAN, SUPERVISOR, DRIVER, OPERATOR, ENGINEER, ADMIN, ACCOUNTING, WAREHOUSE, SAFETY_OFFICER, CONSULTANT, FREELANCER, OTHER
+  designation               String? // e.g., Carpenter, Mason, Foreman, Laborer
+  department                String?
+  dateHired                 DateTime?
+  engagementStartDate       DateTime?
+  contractEndDate           DateTime?
+  employmentStatus          String    @default("ACTIVE") // ACTIVE, INACTIVE, RESIGNED, TERMINATED, ON_LEAVE, SUSPENDED, COMPLETED_CONTRACT
+  restDay                   String?
+  standardWorkHours         Float?    @default(8)
+  overtimeEligible          Boolean   @default(true)
+  nightDifferentialEligible Boolean   @default(true)
+  holidayPayEligible        Boolean   @default(true)
+  subjectToAttendance       Boolean   @default(true)
+  subjectToPayrollCutoff    Boolean   @default(true)
+
+  // Rate Type and Compensation
+  rateType            String  @default("DAILY_RATE") // DAILY_RATE, MONTHLY_SALARY, HOURLY_RATE, PIECE_RATE, ONE_LOT, PROFESSIONAL_FEE, RETAINER_FEE
+  basicMonthlySalary  Float   @default(0)
+  dailyRate           Float   @default(0)
+  hourlyRate          Float   @default(0)
+  pieceRate           Float   @default(0)
+  unitDescription     String?
+  contractAmount      Float   @default(0)
+  professionalFee     Float   @default(0)
+  paymentBasis        String? // ONE_TIME, PROGRESS_BILLING, MILESTONE, PERCENTAGE_ACCOMPLISHMENT
+  billingFrequency    String? // PER_CUTOFF, MONTHLY, PER_DELIVERABLE, PER_INVOICE, ONE_TIME
+  prorationMethod     String? // FIXED_PER_CUTOFF, CALENDAR_DAYS, WORKING_DAYS, ATTENDANCE_BASED
+  retentionPercentage Float   @default(0)
+  withholdingTaxRate  Float   @default(0)
+  allowance           Float   @default(0)
+
+  // Government IDs
+  tinNumber         String?
+  sssNumber         String?
+  philHealthNumber  String?
+  pagIbigNumber     String?
+  umidNumber        String?
+  nationalIdNumber  String?
+  validIdType       String?
+  validIdNumber     String?
+  validIdExpiryDate DateTime?
+
+  // Payroll Deductions & Taxes
+  withholdingTaxEnabled           Boolean @default(false)
+  sssDeductionEnabled             Boolean @default(false)
+  philHealthDeductionEnabled      Boolean @default(false)
+  pagibigDeductionEnabled         Boolean @default(false)
+  otherGovernmentDeductionEnabled Boolean @default(false)
+
+  taxClassification       String  @default("COMPENSATION_EMPLOYEE") // COMPENSATION_EMPLOYEE, MINIMUM_WAGE_EARNER, CONSULTANT_PROFESSIONAL, SUPPLIER_CONTRACTOR, NON_TAXABLE, TAX_EXEMPT
+  withholdingTaxType      String  @default("COMPENSATION_WITHHOLDING_TAX") // COMPENSATION_WITHHOLDING_TAX, EXPANDED_WITHHOLDING_TAX, FINAL_TAX, NONE
+  taxExemptionReason      String?
+  birFormType             String?
+  registeredBusinessName  String?
+  officialReceiptRequired Boolean @default(false)
+  taxStatus               String  @default("SINGLE") // Legacy field for backward compat
+
+  // Bank and Payment Details
+  payrollMode String @default("CASH") // CASH, BANK_TRANSFER, GCASH, CHECK, SUPPLIER_CONSULTANT_BILLING
+
+  // NEW PAYMENT RULE FIELDS
+  payrollCategory      String? @default("Other") // Weekly Salaried, Semi-Monthly, Monthly, 1-Lot Consultant, Freelance Consultant, Other
+  allowedPaymentMethod String? @default("Manual Hold") // GCash Only, Bank Transfer Only, Manual Hold
+
+  // GCash Info
+  gcashAccountName          String?
+  gcashNumber               String?
+  gcashVerificationStatus   String?   @default("Pending") // Pending, Verified, Invalid, On Hold
+  gcashSupportingAttachment String?
+  gcashUpdatedBy            String?
+  gcashApprovedBy           String?
+  gcashLastUpdatedDate      DateTime?
+
+  // Bank Info
+  bankName                 String?
+  bankBranch               String?
+  bankAccountName          String?
+  bankAccountNumber        String?
+  bankAccountType          String?
+  bankVerificationStatus   String?   @default("Pending") // Pending, Verified, Invalid, On Hold
+  bankSupportingAttachment String?
+  bankUpdatedBy            String?
+  bankApprovedBy           String?
+  bankLastUpdatedDate      DateTime?
+
+  // Payment Profile Control
+  paymentProfileStatus String? @default("Pending") // Pending, Verified, Invalid, On Hold
+  paymentHoldReason    String?
+  paymentRemarks       String?
+
+  checkPayeeName   String?
+  billingPayeeName String?
+  billingAddress   String?
+
+  // Relations
+  projectId String?
+  project   Project? @relation("ProjectWorkers", fields: [projectId], references: [id])
+
+  dtrs                DailyTimeRecord[]
+  payrolls            Payroll[]
+  documents           WorkerDocument[]
+  deductions          DeductionLedger[]
+  allowances          Allowance[]
+  aiValidationResults AIWorkerValidationResult[]
+  knowledgeReferences KnowledgeReference[]
+
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  paymentBatchRows               PaymentBatchRow[]
+  paymentExceptions              PaymentException[]
+  paymentFallbackRecommendations PaymentFallbackRecommendation[]
+}
+
+model AIWorkerValidationResult {
+  id           String   @id @default(cuid())
+  workerId     String
+  worker       Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  category     String // Profile, GovernmentIDs, Payment, Documents, Rules
+  severity     String // LOW, MEDIUM, HIGH, CRITICAL
+  message      String
+  fieldRef     String?
+  status       String   @default("OPEN") // OPEN, RESOLVED, IGNORED
+  ignoreReason String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model WorkerDocument {
+  id       String @id @default(cuid())
+  workerId String
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  title      String
+  category   String // ID, RESUME, CONTRACT, MEDICAL, CLEARANCE, TRAINING, OTHER
+  fileUrl    String
+  expiryDate DateTime?
+  remarks    String?
+
+  uploadedById String?
+  uploadedBy   User?   @relation("WorkerDocumentUploader", fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DailyTimeRecord {
+  id       String @id @default(cuid())
+  workerId String
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  date      DateTime
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  timeIn  DateTime?
+  timeOut DateTime?
+
+  regularHours     Float @default(0)
+  overtimeHours    Float @default(0)
+  nightDiffHours   Float @default(0)
+  restDayHours     Float @default(0)
+  holidayHours     Float @default(0)
+  lateMinutes      Int   @default(0)
+  undertimeMinutes Int   @default(0)
+
+  isAbsent      Boolean @default(false)
+  absenceStatus String? // e.g., AWOL, LEAVE_WITH_PAY, LEAVE_WITHOUT_PAY
+
+  sourceFile       String?
+  validationStatus String  @default("PENDING")
+
+  remarks String?
+  status  String  @default("DRAFT") // DRAFT, APPROVED
+
+  encodedById String?
+  encodedBy   User?   @relation("DtrEncoder", fields: [encodedById], references: [id])
+
+  payrollPeriodId String?
+  payrollPeriod   PayrollPeriod? @relation(fields: [payrollPeriodId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workerId, date])
+}
+
+model PayrollPeriod {
+  id                 String   @id @default(cuid())
+  payrollBatchNumber String   @unique @default(cuid())
+  month              Int
+  year               Int
+  calendarRule       String   @default("SEMI_MONTHLY") // SEMI_MONTHLY, WEEKLY, MONTHLY, CUSTOM, PROJECT_BASED, CONSULTANT
+  periodType         String // FIRST_HALF, SECOND_HALF, WEEK_1, FULL_MONTH, CUSTOM...
+  startDate          DateTime
+  endDate            DateTime
+  payrollDate        DateTime
+  status             String   @default("DRAFT") // DRAFT, OPEN, ATTENDANCE_UPLOADED, ATTENDANCE_VALIDATED, PAYROLL_COMPUTED, FOR_REVIEW, REVIEWED, FOR_APPROVAL, APPROVED, RELEASED, LOCKED, CANCELLED
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+  notes     String?
+
+  createdById String?
+  createdBy   User?   @relation("PayrollCreator", fields: [createdById], references: [id])
+
+  approvedById String?
+  approvedBy   User?   @relation("PayrollApprover", fields: [approvedById], references: [id])
+
+  knowledgeReferences KnowledgeReference[]
+
+  cancelledAt  DateTime?
+  dateApproved DateTime?
+  dateReleased DateTime?
+
+  // Phase 3: Payroll Locking
+  isLocked   Boolean   @default(false)
+  lockedAt   DateTime?
+  lockedById String?
+  dummyField String?
+
+  payrolls        Payroll[]
+  dtrs            DailyTimeRecord[]
+  approvals       PayrollApproval[]
+  fundingRequests PayrollFundingRequest[]
+  paymentBatches  PaymentBatch[]
+  deductionLogs   DeductionLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Payroll {
+  id       String @id @default(cuid())
+  workerId String
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  payrollPeriodId String
+  payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  compensationType String @default("DAILY") // DAILY, MONTHLY, HOURLY, PER_PIECE, PER_LOT, FREELANCE, PROJECT_BASED
+  rate             Float  @default(0)
+
+  // Computed Time
+  daysWorked    Float @default(0)
+  regularHours  Float @default(0)
+  overtimeHours Float @default(0)
+
+  // Earnings
+  basicPay             Float @default(0)
+  overtimePay          Float @default(0)
+  nightDiffPay         Float @default(0)
+  holidayPay           Float @default(0)
+  restDayPay           Float @default(0)
+  allowances           Float @default(0)
+  nonTaxableAllowances Float @default(0)
+  otherEarnings        Float @default(0)
+  grossPay             Float @default(0)
+  grossTaxablePay      Float @default(0) // Derived
+
+  // Statutory Deductions
+  sssDeduction         Float @default(0)
+  sssEmployerShare     Float @default(0)
+  sssEcEmployerShare   Float @default(0)
+  sssWispDeduction     Float @default(0)
+  sssWispEmployerShare Float @default(0)
+
+  philhealthDeduction     Float @default(0)
+  philhealthEmployerShare Float @default(0)
+
+  pagibigDeduction     Float @default(0)
+  pagibigEmployerShare Float @default(0)
+
+  // Tax Deductions
+  taxableCompensation Float   @default(0)
+  birPayrollFrequency String?
+  birEffectiveYear    Int?
+  birBracketNo        Int?
+  birBaseTax          Float?
+  birTaxRatePercent   Float?
+  birExcessOver       Float?
+  withholdingTax      Float   @default(0) // Computed
+  manualTaxAdjustment Float   @default(0) // Manual Override
+  finalWithholdingTax Float   @default(0) // Computed + Override
+
+  cashAdvance         Float @default(0)
+  loanDeduction       Float @default(0)
+  otherDeductions     Float @default(0)
+  lateUndertimeAmount Float @default(0)
+  totalDeductions     Float @default(0)
+
+  // Final
+  netPay  Float   @default(0)
+  remarks String?
+
+  // Payment Status & Exceptions
+  paymentMethod        String? // GCash Only, Bank Transfer Only
+  paymentStatus        String  @default("PENDING") // PENDING, ON_HOLD, EXCEPTION, PAID, FAILED
+  paymentHoldReason    String?
+  paymentBatchId       String?
+  transactionReference String?
+
+  paymentBatchRows PaymentBatchRow[]
+
+  earnings   PayrollEarning[]
+  deductions PayrollDeduction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workerId, payrollPeriodId])
+}
+
+model PayrollEarning {
+  id            String  @id @default(cuid())
+  payrollId     String
+  payroll       Payroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  earningType   String
+  amount        Float
+  taxableStatus Boolean @default(true)
+  remarks       String?
+}
+
+model PayrollDeduction {
+  id                       String  @id @default(cuid())
+  payrollId                String
+  payroll                  Payroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  deductionType            String
+  amount                   Float
+  recurringStatus          Boolean @default(false)
+  governmentMandatedStatus Boolean @default(false)
+  remarks                  String?
+}
+
+model PayrollApproval {
+  id              String        @id @default(cuid())
+  payrollPeriodId String
+  payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  approvalLevel   Int
+  approverUserId  String
+  approverUser    User          @relation("PayrollApproverLog", fields: [approverUserId], references: [id])
+  approverRole    String
+  approvalStatus  String        @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvalDate    DateTime?
+  remarks         String?
+}
+
+model DeductionLedger {
+  id       String @id @default(cuid())
+  workerId String
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  type                String // CASH_ADVANCE, LOAN, UNIFORM, TOOLS, DAMAGE, OTHER
+  principalAmount     Float
+  deductionPerPayroll Float
+  balance             Float
+
+  status  String  @default("ACTIVE") // ACTIVE, FULLY_PAID, CANCELLED
+  remarks String?
+
+  approvedById String?
+  approvedBy   User?   @relation("DeductionApprover", fields: [approvedById], references: [id])
+
+  logs DeductionLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DeductionLog {
+  id       String          @id @default(cuid())
+  ledgerId String
+  ledger   DeductionLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+
+  payrollPeriodId String
+  payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id])
+
+  amountDeducted Float
+
+  createdAt DateTime @default(now())
+}
+
+model Allowance {
+  id       String @id @default(cuid())
+  workerId String
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  type      String
+  amount    Float
+  isTaxable Boolean @default(false)
+  frequency String  @default("PER_PAYROLL") // PER_PAYROLL, MONTHLY, ONE_TIME
+
+  effectiveDate DateTime
+  endDate       DateTime?
+  status        String    @default("ACTIVE") // ACTIVE, INACTIVE
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GovernmentSettings {
+  id              String @id @default(cuid())
+  // PhilHealth
+  phEmployeeRate  Float  @default(2.5) // 2.5% 
+  phEmployerRate  Float  @default(2.5) // 2.5%
+  phSalaryFloor   Float  @default(10000)
+  phSalaryCeiling Float  @default(100000)
+
+  // PagIBIG
+  pagibigEmployeeRate Float @default(2.0)
+  pagibigEmployerRate Float @default(2.0)
+  pagibigMaxSalary    Float @default(10000)
+
+  // Rules
+  deductionSchedule String @default("SPLIT") // FIRST_HALF, SECOND_HALF, SPLIT
+
+  updatedAt DateTime @updatedAt
+}
+
+model SSSTable {
+  id                  String   @id @default(cuid())
+  effectiveYear       Int      @default(2025)
+  minCompensation     Float
+  maxCompensation     Float
+  monthlySalaryCredit Float
+  regularSsEmployer   Float
+  regularSsEmployee   Float
+  ecEmployer          Float
+  wispEmployer        Float
+  wispEmployee        Float
+  totalEmployer       Float
+  totalEmployee       Float
+  totalContribution   Float
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model BIRWithholdingTaxTable {
+  id               String    @id @default(cuid())
+  effectiveYear    Int       @default(2025)
+  payrollFrequency String // DAILY, WEEKLY, SEMI_MONTHLY, MONTHLY
+  bracketNo        Int?
+  compensationFrom Float
+  compensationTo   Float? // Nullable for "No limit"
+  baseTax          Float
+  taxRatePercent   Float
+  excessOver       Float
+  isActive         Boolean   @default(true)
+  isLocked         Boolean   @default(false)
+  createdBy        String?
+  updatedBy        String?
+  approvedBy       String?
+  approvedAt       DateTime?
+  remarks          String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model PayrollAuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  userName   String?
+  actionType String // DTR_UPLOAD, PAYROLL_GENERATE, PAYROLL_APPROVE, MANUAL_ADJUSTMENT, TABLE_UPDATE
+  module     String // HR, PAYROLL, CONFIG
+  recordId   String?
+  oldValue   String?
+  newValue   String?
+  ipAddress  String?
+  remarks    String?
+  timestamp  DateTime @default(now())
+}
+
+model Document {
+  id       String @id @default(cuid())
+  title    String
+  category String // e.g., NOA, NTP, INSURANCE, PLAN, CONTRACT, OTHER
+  fileUrl  String
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  uploaderId String
+  uploader   User   @relation("DocumentUploader", fields: [uploaderId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Delivery {
+  id            String   @id @default(cuid())
+  receiptNumber String?
+  date          DateTime @default(now())
+  status        String   @default("RECEIVED") // PENDING_PAYMENT, RECEIVED
+
+  poId String
+  po   PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+
+  items   DeliveryItem[]
+  payable AccountsPayable?
+
+  receivedById String?
+  receivedBy   User?   @relation("DeliveryReceiver", fields: [receivedById], references: [id])
+
+  verifierId String?
+  verifiedBy User?   @relation("DeliveryVerifier", fields: [verifierId], references: [id])
+
+  reviewerId String?
+  reviewedBy User?   @relation("DeliveryReviewer", fields: [reviewerId], references: [id])
+
+  approverId String?
+  approvedBy User?   @relation("DeliveryApprover", fields: [approverId], references: [id])
+
+  proofFileUrl  String?
+  hasProof      Boolean @default(true)
+  isMismatch    Boolean @default(false)
+  mismatchNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DeliveryItem {
+  id         String @id @default(cuid())
+  quantity   Float // Actual physical quantity received
+  drQuantity Float? // Quantity written on the Delivery Receipt
+
+  deliveryId String
+  delivery   Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  consolidatedBoqItemId String
+  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id])
+  remarks               String?
+}
+
+model ConsumptionLog {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now())
+  description String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  loggedById String
+  loggedBy   User   @relation(fields: [loggedById], references: [id])
+
+  items ConsumptionItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ConsumptionItem {
+  id       String @id @default(cuid())
+  quantity Float
+
+  logId String
+  log   ConsumptionLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+
+  consolidatedBoqItemId String
+  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id])
+}
+
+model MaterialIssuance {
+  id        String @id @default(cuid())
+  misNumber String @unique
+  status    String @default("PENDING") // PENDING, PROCESSED, APPROVED, RELEASED, REJECTED
+  activity  String
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  foremanId String
+  foreman   User   @relation("MISForeman", fields: [foremanId], references: [id])
+
+  warehousemanId String?
+  warehouseman   User?   @relation("MISWarehouseman", fields: [warehousemanId], references: [id])
+
+  accountantId String?
+  accountant   User?   @relation("MISAccountant", fields: [accountantId], references: [id])
+
+  releasedById String?
+  releasedBy   User?   @relation("MISReleaser", fields: [releasedById], references: [id])
+
+  releaseDate DateTime?
+
+  items     IssuanceItem[]
+  returns   MaterialReturn[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model IssuanceItem {
+  id           String @id @default(cuid())
+  requestedQty Float
+  releasedQty  Float  @default(0)
+
+  issuanceId String
+  issuance   MaterialIssuance @relation(fields: [issuanceId], references: [id], onDelete: Cascade)
+
+  consolidatedBoqItemId String
+  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id])
+
+  returnItems ReturnItem[]
+}
+
+model MaterialReturn {
+  id        String  @id @default(cuid())
+  mrsNumber String  @unique
+  status    String  @default("PENDING") // PENDING, RECEIVED
+  remarks   String?
+
+  issuanceId String
+  issuance   MaterialIssuance @relation(fields: [issuanceId], references: [id])
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  foremanId String
+  foreman   User   @relation("MRSForeman", fields: [foremanId], references: [id])
+
+  warehousemanId String?
+  warehouseman   User?   @relation("MRSWarehouseman", fields: [warehousemanId], references: [id])
+
+  receiveDate DateTime?
+
+  items     ReturnItem[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model ReturnItem {
+  id          String @id @default(cuid())
+  returnedQty Float
+  condition   String @default("GOOD") // GOOD, DAMAGED, SCRAP
+
+  returnId       String
+  materialReturn MaterialReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+
+  issuanceItemId String
+  issuanceItem   IssuanceItem @relation(fields: [issuanceItemId], references: [id])
+
+  consolidatedBoqItemId String
+  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id])
+}
+
+model AccountsPayable {
+  id            String    @id @default(cuid())
+  voucherNumber String?   @unique
+  amount        Float
+  dueDate       DateTime
+  status        String    @default("PENDING") // PENDING, PARTIALLY_PAID, PAID, OVERDUE
+  paymentMethod String? // Cash, Bank Transfer, Dated Check, Post-Dated Check, GCash
+  paymentRef    String?
+  paidAt        DateTime?
+  paidAmount    Float     @default(0)
+  netAmount     Float     @default(0)
+  vatAmount     Float     @default(0)
+
+  deliveryId String   @unique
+  delivery   Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  poId String
+  po   PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================================
+// CONSTRUCTION ACCOMPLISHMENT & BILLING MODULE
+// ==========================================
+
+model BOQLotBreakdown {
+  id               String @id @default(cuid())
+  description      String
+  weightPercentage Float // e.g., 25 for 25%
+
+  boqItemId String
+  boqItem   AwardedBOQItem @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
+}
+
+model Accomplishment {
+  id                 String   @id @default(cuid())
+  billingPeriod      String
+  accomplishmentDate DateTime
+  remarks            String?
+  preparedById       String?
+  status             String   @default("DRAFT") // DRAFT, SUBMITTED, PENDING_AI, AI_VALIDATED, AI_FLAGGED, FOR_INSPECTION, INSPECTED, RETURNED, APPROVED, REJECTED, BILLED, PAID
+  approvedAmount     Float?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  items            AccomplishmentItem[]
+  evidenceFiles    EvidenceFile[]
+  aiValidationRuns AIValidationRun[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AccomplishmentItem {
+  id                          String  @id @default(cuid())
+  workCategory                String?
+  descriptionOfWork           String?
+  previousQuantity            Float   @default(0)
+  currentQuantityClaimed      Float   @default(0)
+  approvedQuantity            Float?
+  totalQuantityToDate         Float   @default(0)
+  contractQuantity            Float   @default(0)
+  remainingQuantity           Float   @default(0)
+  unitCost                    Float   @default(0)
+  currentAccomplishmentAmount Float   @default(0)
+  totalAccomplishmentAmount   Float   @default(0)
+  percentageAccomplished      Float   @default(0)
+  aiValidationStatus          String  @default("PENDING")
+  inspectionStatus            String  @default("PENDING")
+  approvalStatus              String  @default("PENDING")
+  remarks                     String?
+
+  accomplishmentId String
+  accomplishment   Accomplishment @relation(fields: [accomplishmentId], references: [id], onDelete: Cascade)
+
+  boqItemId String
+  boqItem   AwardedBOQItem @relation(fields: [boqItemId], references: [id])
+
+  inspections Inspection[]
+}
+
+model Inspection {
+  id                      String    @id @default(cuid())
+  inspectionDateRequested DateTime?
+  actualQuantityVerified  Float     @default(0)
+  approvedQuantity        Float     @default(0)
+  approvedPercentage      Float     @default(0)
+  inspectionFindings      String?
+  deficiencies            String?
+  punchlistItems          String?
+  inspectorName           String?
+  dateInspected           DateTime?
+  approvalStatus          String    @default("PENDING") // APPROVED_AS_CLAIMED, APPROVED_WITH_ADJUSTMENT, RETURNED, REJECTED
+  remarks                 String?
+
+  accomplishmentItemId String
+  accomplishmentItem   AccomplishmentItem @relation(fields: [accomplishmentItemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model Billing {
+  id                    String   @id @default(cuid())
+  billingNumber         String   @unique
+  billingPeriodFrom     DateTime
+  billingPeriodTo       DateTime
+  billingDate           DateTime
+  billingType           String // FIRST, REGULAR, FINAL, RETENTION, VO, ADVANCE
+  contractAmount        Float
+  revisedContractAmount Float
+  totalPreviousBilling  Float    @default(0)
+  currentBillingAmount  Float    @default(0)
+  totalBillingToDate    Float    @default(0)
+  balanceContractAmount Float    @default(0)
+  aiBillingRiskStatus   String?
+  status                String   @default("DRAFT") // DRAFT, FOR_APPROVAL, APPROVED, SUBMITTED, ON_HOLD, PAID
+
+  preparedById String?
+  checkedById  String?
+  approvedById String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  items            BillingItem[]
+  deductions       BillingDeduction[]
+  payments         Payment[]
+  aiValidationRuns AIValidationRun[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BillingItem {
+  id                        String  @id @default(cuid())
+  contractQuantity          Float
+  unitCost                  Float
+  contractAmount            Float
+  previousQuantityBilled    Float   @default(0)
+  currentQuantityForBilling Float   @default(0)
+  totalQuantityBilledToDate Float   @default(0)
+  previousAmountBilled      Float   @default(0)
+  currentAmount             Float   @default(0)
+  totalAmountToDate         Float   @default(0)
+  balanceQuantity           Float   @default(0)
+  balanceAmount             Float   @default(0)
+  percentageAccomplished    Float   @default(0)
+  aiStatus                  String?
+  aiRiskLevel               String?
+
+  billingId String
+  billing   Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+
+  boqItemId String
+  boqItem   AwardedBOQItem @relation(fields: [boqItemId], references: [id])
+}
+
+model BillingDeduction {
+  id                            String @id @default(cuid())
+  grossBilling                  Float
+  retention                     Float  @default(0)
+  withholdingTax                Float  @default(0)
+  vat                           Float  @default(0)
+  mobilizationAdvanceRecoupment Float  @default(0)
+  previousOverpayment           Float  @default(0)
+  liquidatedDamages             Float  @default(0)
+  backCharges                   Float  @default(0)
+  otherDeductions               Float  @default(0)
+  netAmountDue                  Float
+
+  billingId String
+  billing   Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id                      String   @id @default(cuid())
+  billingAmount           Float
+  approvedAmount          Float
+  netAmountDue            Float
+  amountPaid              Float
+  paymentDate             DateTime
+  paymentReferenceNumber  String?
+  bankOrCheckNumber       String?
+  orNumber                String?
+  ewtCertificateReference String?
+  paymentStatus           String // UNPAID, PARTIALLY_PAID, PAID, OVERDUE, CANCELLED
+  remarks                 String?
+
+  billingId String
+  billing   Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VariationOrder {
+  id                 String   @id @default(cuid())
+  voNumber           String   @unique
+  dateRequested      DateTime
+  requestedById      String?
+  reasonForVariation String?
+  newItemDescription String?
+  unit               String?
+  additionalQuantity Float    @default(0)
+  deductiveQuantity  Float    @default(0)
+  unitCost           Float    @default(0)
+  additiveAmount     Float    @default(0)
+  deductiveAmount    Float    @default(0)
+  netVoAmount        Float    @default(0)
+  approvalStatus     String   @default("DRAFT") // DRAFT, SUBMITTED, REVIEW, APPROVED, REJECTED, IMPLEMENTED
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  boqItemId String?
+  boqItem   AwardedBOQItem? @relation(fields: [boqItemId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EvidenceFile {
+  id             String    @id @default(cuid())
+  fileName       String
+  fileType       String
+  evidenceType   String // PHOTO, VIDEO, PLAN, INSPECTION_REPORT, etc.
+  fileUrl        String
+  uploadedById   String?
+  uploadDate     DateTime  @default(now())
+  gpsLatitude    Float?
+  gpsLongitude   Float?
+  dateTaken      DateTime?
+  metadataStatus String?
+  description    String?
+  versionNumber  Int       @default(1)
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  boqItemId String?
+  boqItem   AwardedBOQItem? @relation(fields: [boqItemId], references: [id])
+
+  accomplishmentId String?
+  accomplishment   Accomplishment? @relation(fields: [accomplishmentId], references: [id])
+
+  aiValidationRuns AIValidationEvidence[]
+}
+
+model ProjectCamera {
+  id               String    @id @default(cuid())
+  cameraName       String
+  cameraLocation   String?
+  cameraType       String?
+  streamUrl        String
+  username         String?
+  password         String?
+  gpsLatitude      Float?
+  gpsLongitude     Float?
+  installationDate DateTime?
+  status           String    @default("ACTIVE")
+  remarks          String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  snapshots LiveCameraSnapshot[]
+}
+
+model LiveCameraSnapshot {
+  id           String   @id @default(cuid())
+  fileUrl      String
+  capturedAt   DateTime @default(now())
+  capturedById String?
+
+  cameraId String
+  camera   ProjectCamera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+}
+
+model AIValidationRun {
+  id                 String    @id @default(cuid())
+  validationType     String
+  status             String // PENDING, IN_PROGRESS, VALIDATED, FLAGGED, REJECTED, OVERRIDE_APPROVED, OVERRIDE_REJECTED
+  overallScore       Float?
+  visualScore        Float?
+  locationScore      Float?
+  dateScore          Float?
+  boqMatchScore      Float?
+  planMatchScore     Float?
+  duplicateRiskScore Float?
+  recommendation     String?
+  summaryFindings    String?
+  createdById        String?
+  completedAt        DateTime?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  accomplishmentId String?
+  accomplishment   Accomplishment? @relation(fields: [accomplishmentId], references: [id])
+
+  billingId String?
+  billing   Billing? @relation(fields: [billingId], references: [id])
+
+  boqItemId String?
+  boqItem   AwardedBOQItem? @relation(fields: [boqItemId], references: [id])
+
+  evidence     AIValidationEvidence[]
+  findings     AIValidationFinding[]
+  humanReviews AIHumanReview[]
+
+  createdAt DateTime @default(now())
+}
+
+model AIValidationEvidence {
+  id                     String    @id @default(cuid())
+  evidenceType           String
+  fileUrl                String
+  fileName               String
+  source                 String // UPLOAD, LIVE_CAMERA
+  capturedFromLiveCamera Boolean   @default(false)
+  cameraId               String?
+  latitude               Float?
+  longitude              Float?
+  timestamp              DateTime?
+  metadataStatus         String?
+
+  aiValidationRunId String
+  aiValidationRun   AIValidationRun @relation(fields: [aiValidationRunId], references: [id], onDelete: Cascade)
+
+  evidenceFileId String?
+  evidenceFile   EvidenceFile? @relation(fields: [evidenceFileId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model AIValidationFinding {
+  id                 String  @id @default(cuid())
+  findingCategory    String // VISUAL, BOQ_CONSISTENCY, QUANTITY, DUPLICATE, GEOTAG, DATE_TIME
+  findingTitle       String
+  findingDescription String?
+  severity           String // INFO, LOW, MEDIUM, HIGH, CRITICAL
+  confidenceScore    Float?
+  relatedFileId      String?
+  relatedBoqItemId   String?
+  recommendedAction  String?
+
+  aiValidationRunId String
+  aiValidationRun   AIValidationRun @relation(fields: [aiValidationRunId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model AIDuplicatePhotoCheck {
+  id                       String  @id @default(cuid())
+  currentFileId            String
+  matchedFileId            String
+  projectId                String
+  similarityScore          Float
+  matchType                String // EXACT, CROPPED, SIMILAR
+  previousBillingId        String?
+  previousAccomplishmentId String?
+  result                   String
+
+  createdAt DateTime @default(now())
+}
+
+model AIHumanReview {
+  id             String  @id @default(cuid())
+  reviewerId     String
+  reviewerRole   String
+  decision       String // ACCEPTED, OVERRIDDEN, REJECTED, ADJUSTED
+  remarks        String?
+  overrideReason String?
+
+  aiValidationRunId String
+  aiValidationRun   AIValidationRun @relation(fields: [aiValidationRunId], references: [id], onDelete: Cascade)
+
+  reviewedAt DateTime @default(now())
+}
+
+enum BusinessType {
+  CORPORATION
+  PARTNERSHIP
+  SOLE_PROPRIATOR
+  INDIVIDUAL_CONTRACTOR
+}
+
+enum Specialization {
+  CIVIL
+  ARCHITECTURAL
+  ELECTRICAL
+  MECHANICAL
+  PLUMBING
+  FIRE_PROTECTION
+  FDAS
+  AUXILIARY_ELV
+  HVAC
+  STRUCTURED_CABLING
+  TESTING_COMMISSIONING
+  HAULING
+  LABOR_ONLY
+  SUPPLY_INSTALL
+}
+
+enum AccreditationStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+  BLACKLISTED
+  EXPIRED
+}
+
+model Subcontractor {
+  id                    String                 @id @default(uuid())
+  name                  String
+  businessName          String?
+  businessType          BusinessType
+  address               String?
+  contactPerson         String?
+  contactNumber         String?
+  email                 String?
+  tin                   String?
+  birReg                String?
+  dtiSecReg             String?
+  mayorPermit           String?
+  pcabLicense           String?
+  bankName              String?
+  bankAccountName       String?
+  bankAccountNumber     String?
+  specialization        Json?
+  accreditation         AccreditationStatus    @default(PENDING)
+  requiredDocs          Json?
+  docExpiries           Json?
+  safetyRecords         Json?
+  evaluationRating      Int?
+  remarks               String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  packages              SubcontractPackage[]
+  jobOrders             JobOrder[]
+  subcontractorBOQItems SubcontractorBOQItem[]
+  subcontractBillings   SubcontractBilling[]
+  backCharges           BackCharge[]
+}
+
+// ---------------------------
+// Subcontracting Management Models
+// ---------------------------
+
+model ProgramOfWorks {
+  id          String             @id @default(cuid())
+  packageId   String
+  package     SubcontractPackage @relation(fields: [packageId], references: [id])
+  title       String
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
+  activities  Json? // Structured list of activities
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model SubcontractorBOQItem {
+  id               String         @id @default(cuid())
+  subcontractorId  String
+  subcontractor    Subcontractor  @relation(fields: [subcontractorId], references: [id])
+  awardedBoqItemId String
+  awardedBoqItem   AwardedBOQItem @relation(fields: [awardedBoqItemId], references: [id])
+  quantity         Float
+  unitCost         Float
+  totalCost        Float          @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model AccomplishmentRecord {
+  id                String              @id @default(cuid())
+  jobOrderId        String
+  jobOrder          JobOrder            @relation(fields: [jobOrderId], references: [id])
+  description       String?
+  quantityCompleted Float?
+  completedAt       DateTime            @default(now())
+  // Media uploads and AI validation reference
+  photos            Json?
+  videos            Json?
+  aiValidationId    String?
+  aiValidation      AIValidationResult? @relation(fields: [aiValidationId], references: [id])
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+model PaymentRecord {
+  id              String             @id @default(cuid())
+  billingId       String
+  billing         SubcontractBilling @relation(fields: [billingId], references: [id])
+  amountPaid      Float
+  paymentDate     DateTime           @default(now())
+  method          String // BANK_TRANSFER, CASH, CHECK, GCash, etc.
+  referenceNumber String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+}
+
+model AIValidationResult {
+  id                    String                 @id @default(cuid())
+  type                  String // e.g., "BOQ_MATCH", "PHOTO_CHECK"
+  status                String                 @default("PENDING") // PENDING, PASSED, FAILED, FLAGGED
+  score                 Float?
+  details               Json?
+  accomplishmentRecords AccomplishmentRecord[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+}
+
+enum ContractType {
+  LABOR_ONLY
+  SUPPLY_ONLY
+  SUPPLY_INSTALL
+  EQUIPMENT_RENTAL
+  TESTING_COMMISSIONING
+  RECTIFICATION
+  PROFESSIONAL_SERVICE
+  LUMP_SUM
+}
+
+enum CostType {
+  DIRECT
+  INDIRECT
+  GENERAL_REQUIREMENT
+  TEMPORARY
+}
+
+enum PaymentTerms {
+  PROGRESS
+  MILESTONE
+  LUMP_SUM
+  PER_QUANTITY
+  PER_LOT
+  PER_DAY
+  PER_MANPOWER
+}
+
+enum PackageStatus {
+  DRAFT
+  FOR_REVIEW
+  FOR_BUDGET_VALIDATION
+  FOR_TECHNICAL_APPROVAL
+  FOR_FINAL_APPROVAL
+  APPROVED
+  AGREEMENT_ISSUED
+  JOB_ORDER_ISSUED
+  ONGOING
+  FOR_INSPECTION
+  PARTIALLY_ACCOMPLISHED
+  FOR_BILLING
+  BILLED
+  PARTIALLY_PAID
+  FULLY_PAID
+  CLOSED
+  CANCELLED
+}
+
+model SubcontractPackage {
+  id                  String                      @id @default(uuid())
+  projectId           String
+  project             Project                     @relation(fields: [projectId], references: [id])
+  packageNumber       String                      @unique
+  subcontractorId     String
+  subcontractor       Subcontractor               @relation(fields: [subcontractorId], references: [id])
+  workCategory        String
+  contractType        ContractType
+  awardedBoqItemId    String?
+  masterBoqItemId     String?
+  scopeOfWork         String
+  location            String
+  floorBuildingZone   String?
+  quantity            Float
+  unit                String
+  unitCost            Float
+  contractAmount      Float
+  internalBudget      Float?
+  costType            CostType
+  paymentTerms        PaymentTerms
+  retentionPct        Float?
+  whtPct              Float?
+  mobilizationAdvance Float?
+  startDate           DateTime?
+  targetCompletion    DateTime?
+  warrantyPeriod      Int? // months
+  attachments         Json?
+  status              PackageStatus               @default(DRAFT)
+  remarks             String?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  jobOrders           JobOrder[]
+  accomplishments     SubcontractAccomplishment[]
+  billings            SubcontractBilling[]
+  backCharges         BackCharge[]
+  programOfWorks      ProgramOfWorks[]
+}
+
+enum MaterialResponsibility {
+  COMPANY_SUPPLIED
+  CONTRACTOR_SUPPLIED
+  MIXED
+}
+
+enum JobOrderStatus {
+  DRAFT
+  FOR_REVIEW
+  FOR_FINANCIAL_REVIEW
+  FOR_TECHNICAL_REVIEW
+  APPROVED
+  ISSUED
+  CANCELLED
+}
+
+model JobOrder {
+  id                         String                      @id @default(uuid())
+  jobNumber                  String                      @unique
+  projectId                  String
+  project                    Project                     @relation(fields: [projectId], references: [id])
+  subcontractBillings        SubcontractBilling[]
+  subcontractorId            String?
+  subcontractor              Subcontractor?              @relation(fields: [subcontractorId], references: [id])
+  packageId                  String?
+  package                    SubcontractPackage?         @relation(fields: [packageId], references: [id])
+  subcontractAccomplishments SubcontractAccomplishment[]
+  description                String
+  boqReferenceId             String?
+  location                   String
+  contractAmount             Float
+  paymentBasis               PaymentTerms
+  startDate                  DateTime?
+  completionDate             DateTime?
+  requiredOutput             String?
+  materialResponsibility     MaterialResponsibility
+  safetyRequirements         String?
+  acceptanceCriteria         String?
+  attachments                Json?
+  preparedBy                 String?
+  reviewedBy                 String?
+  approvedBy                 String?
+  status                     JobOrderStatus              @default(DRAFT)
+  remarks                    String?
+  accomplishmentRecords      AccomplishmentRecord[]
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+}
+
+enum AccomplishmentStatus {
+  DRAFT
+  FOR_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model SubcontractAccomplishment {
+  id                String               @id @default(uuid())
+  packageId         String
+  package           SubcontractPackage   @relation(fields: [packageId], references: [id])
+  jobOrderId        String?
+  jobOrder          JobOrder?            @relation(fields: [jobOrderId], references: [id])
+  workDescription   String
+  location          String
+  prevPercent       Float
+  currentPercent    Float
+  cumulativePercent Float
+  prevQty           Float
+  currentQty        Float
+  totalQty          Float
+  remainingQty      Float
+  photos            Json?
+  videos            Json?
+  inspectionReport  String?
+  qaQcStatus        String?
+  materialIssuedRef String?
+  deliveryRef       String?
+  remarks           String?
+  preparedBy        String?
+  verifiedBy        String?
+  approvedBy        String?
+  status            AccomplishmentStatus @default(DRAFT)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+}
+
+enum AccountingStatus {
+  PENDING
+  REVIEWED
+}
+
+enum ApprovalStatus {
+  DRAFT
+  SUBMITTED
+  FOR_SITE_VALIDATION
+  FOR_ACCOUNTING_REVIEW
+  FOR_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  RETURNED
+  REJECTED
+}
+
+enum BillingStatus {
+  DRAFT
+  SUBMITTED
+  FOR_VALIDATION
+  APPROVED_FOR_PAYMENT
+  PAID
+}
+
+model SubcontractBilling {
+  id                    String              @id @default(uuid())
+  billingNumber         String              @unique
+  projectId             String
+  project               Project             @relation(fields: [projectId], references: [id])
+  subcontractorId       String
+  subcontractor         Subcontractor       @relation(fields: [subcontractorId], references: [id])
+  packageId             String?
+  package               SubcontractPackage? @relation(fields: [packageId], references: [id])
+  jobOrderId            String?
+  jobOrder              JobOrder?           @relation(fields: [jobOrderId], references: [id])
+  contractAmount        Float
+  previousGross         Float
+  currentGross          Float
+  totalGross            Float
+  remainingBalance      Float
+  retentionDeduction    Float?
+  whtDeduction          Float?
+  mobilizationDeduction Float?
+  backCharges           Float?
+  materialCharges       Float?
+  penalties             Float?
+  otherDeductions       Float?
+  netPayable            Float
+  billingPeriod         String?
+  supportingDocs        Json?
+  aiValidationResult    Json?
+  accountingStatus      AccountingStatus    @default(PENDING)
+  approvalStatus        ApprovalStatus      @default(DRAFT)
+  paymentStatus         PaymentStatus       @default(PENDING)
+  status                BillingStatus       @default(DRAFT)
+  payments              PaymentRecord[]
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+}
+
+model BackCharge {
+  id               String               @id @default(uuid())
+  backChargeNumber String               @unique
+  projectId        String
+  project          Project              @relation(fields: [projectId], references: [id])
+  subcontractorId  String
+  subcontractor    Subcontractor        @relation(fields: [subcontractorId], references: [id])
+  packageId        String?
+  package          SubcontractPackage?  @relation(fields: [packageId], references: [id])
+  jobOrderId       String?
+  description      String
+  incidentDate     DateTime?
+  costComputation  Float
+  photos           Json?
+  inspectionReport String?
+  materialRef      String?
+  manpowerRef      String?
+  amount           Float
+  acknowledgment   AcknowledgmentStatus @default(PENDING)
+  disputeStatus    DisputeStatus        @default(NONE)
+  approvalStatus   BackChargeStatus     @default(DRAFT)
+  deductionStatus  DeductionStatus      @default(PENDING)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+}
+
+enum AcknowledgmentStatus {
+  PENDING
+  ACKNOWLEDGED
+}
+
+enum DisputeStatus {
+  NONE
+  DISPUTED
+}
+
+enum BackChargeStatus {
+  DRAFT
+  FOR_REVIEW
+  ISSUED_TO_SUBCONTRACTOR
+  ACKNOWLEDGED
+  APPROVED
+  DEDUCTED
+  CANCELLED
+}
+
+enum DeductionStatus {
+  PENDING
+  DEDUCTED
+}
+
+model PayrollCutoffSetting {
+  id                String  @id @default(cuid())
+  cutoffName        String
+  cutoffType        String // SEMI_MONTHLY_FIXED, CUSTOM_SEMI_MONTHLY, WEEKLY, BI_WEEKLY, MONTHLY, MANUAL
+  startDay          Int?
+  endDay            Int?
+  payrollReleaseDay Int?
+  crossesMonth      Boolean @default(false)
+  isDefault         Boolean @default(false)
+  status            String  @default("ACTIVE")
+  appliesTo         String  @default("ALL") // ALL, DEPARTMENT, PROJECT
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model KnowledgeRecord {
+  id            String  @id @default(cuid())
+  knowledgeId   String  @unique @default(cuid()) // Auto-generated ID, or user-defined like SOP-001
+  title         String
+  description   String?
+  notebookType  String // e.g., "ERP Master Notebook", "BOQ and Materials Notebook"
+  notebookUrl   String?
+  relatedModule String?
+  documentType  String // e.g., "Business Rule", "SOP", "User Manual"
+  version       String  @default("v1.0")
+  status        String  @default("Draft") // Draft, For Review, Approved, Active, Superseded, Archived
+
+  owner      String?
+  preparedBy String?
+  reviewedBy String?
+  approvedBy String?
+
+  dateCreated  DateTime  @default(now())
+  dateReviewed DateTime?
+  dateApproved DateTime?
+
+  tags            String?
+  uploadedFileUrl String?
+  summary         String?
+  remarks         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  references  KnowledgeReference[]
+  auditTrails KnowledgeAuditTrail[]
+}
+
+model KnowledgeReference {
+  id                String          @id @default(cuid())
+  knowledgeRecordId String
+  knowledgeRecord   KnowledgeRecord @relation(fields: [knowledgeRecordId], references: [id], onDelete: Cascade)
+
+  // Polymorphic-like relations for existing modules
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  workerId String?
+  worker   Worker? @relation(fields: [workerId], references: [id])
+
+  payrollPeriodId String?
+  payrollPeriod   PayrollPeriod? @relation(fields: [payrollPeriodId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model KnowledgeAuditTrail {
+  id                String          @id @default(cuid())
+  knowledgeRecordId String
+  knowledgeRecord   KnowledgeRecord @relation(fields: [knowledgeRecordId], references: [id], onDelete: Cascade)
+
+  action      String // e.g., "Created", "Approved", "Superseded", "Revised"
+  performedBy String?
+  oldValue    String?
+  newValue    String?
+  reason      String?
+
+  timestamp DateTime @default(now())
+}
+
+// ====================================================================
+// PAYROLL PAYMENT AUTOMATION MODULE (PHASES 2-9)
+// ====================================================================
+
+model PayrollBankAccount {
+  id                      String    @id @default(cuid())
+  bankName                String
+  bankBranch              String?
+  accountNumber           String
+  accountName             String
+  currency                String    @default("PHP")
+  beginningBalance        Float     @default(0)
+  currentAvailableBalance Float     @default(0)
+  reservedPayrollBalance  Float     @default(0)
+  actualBankBalance       Float     @default(0)
+  lastBalanceSyncDate     DateTime?
+  apiEnabled              Boolean   @default(false)
+  bankApiProvider         String?
+  status                  String    @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  createdById             String
+  approvedById            String?
+  dateCreated             DateTime  @default(now())
+  remarks                 String?
+
+  ledgers         PayrollBankLedger[]
+  fundingRequests PayrollFundingRequest[]
+  paymentBatches  PaymentBatch[]
+}
+
+model PayrollBankLedger {
+  id                   String             @id @default(cuid())
+  payrollBankAccountId String
+  account              PayrollBankAccount @relation(fields: [payrollBankAccountId], references: [id])
+  transactionDate      DateTime           @default(now())
+  transactionType      String // DEPOSIT, FUNDING, PAYMENT_RELEASE, BANK_CHARGE, ADJUSTMENT
+  amount               Float
+  balanceAfter         Float
+  referenceId          String? // Could be FundingRequest ID or PaymentBatch ID
+  referenceNumber      String?
+  remarks              String?
+  createdById          String
+}
+
+model PayrollFundingRequest {
+  id                         String             @id @default(cuid())
+  fundingRequestNumber       String             @unique
+  payrollBatchId             String?
+  payrollPeriodId            String
+  payrollPeriod              PayrollPeriod      @relation(fields: [payrollPeriodId], references: [id])
+  totalNetPay                Float
+  estimatedCharges           Float
+  totalRequiredFunding       Float
+  availablePayrollBalance    Float
+  fundingShortage            Float
+  fundingSourceAccount       String?
+  destinationAccountId       String
+  destinationAccount         PayrollBankAccount @relation(fields: [destinationAccountId], references: [id])
+  fundingStatus              String             @default("PENDING") // PENDING, FOR_APPROVAL, APPROVED, FUNDED, REJECTED
+  preparedById               String
+  reviewedById               String?
+  approvedById               String?
+  dateFunded                 DateTime?
+  fundingBankReferenceNumber String?
+  proofOfTransferUrl         String?
+  remarks                    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentBatch {
+  id                     String             @id @default(cuid())
+  batchNumber            String             @unique
+  payrollBatchId         String?
+  payrollPeriodId        String
+  payrollPeriod          PayrollPeriod      @relation(fields: [payrollPeriodId], references: [id])
+  paymentMethodType      String // GCASH, BANK
+  transferRail           String? // InstaPay, PESONet, GCash, Manual
+  providerId             String?
+  provider               PaymentProvider?   @relation(fields: [providerId], references: [id])
+  providerBatchReference String?
+  expectedSettlementDate DateTime?
+  payrollBankAccountId   String
+  payrollBankAccount     PayrollBankAccount @relation(fields: [payrollBankAccountId], references: [id])
+  status                 String             @default("DRAFT") // DRAFT, FOR_REVIEW, FOR_APPROVAL, APPROVED, RELEASED, PROCESSING, SUCCESSFUL, PARTIAL, FAILED, CANCELLED
+  totalAmount            Float
+  totalWorkers           Int
+  preparedById           String
+  reviewedById           String?
+  approvedById           String?
+  releasedById           String?
+  dateReleased           DateTime?
+  reconciliationFileUrl  String?
+  remarks                String?
+  aiRiskLevel            String?
+  aiAuditNotes           String?
+
+  rows      PaymentBatchRow[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+}
+
+model PaymentBatchRow {
+  id                            String       @id @default(cuid())
+  paymentBatchId                String
+  paymentBatch                  PaymentBatch @relation(fields: [paymentBatchId], references: [id], onDelete: Cascade)
+  payrollId                     String
+  payroll                       Payroll      @relation(fields: [payrollId], references: [id])
+  workerId                      String
+  worker                        Worker       @relation(fields: [workerId], references: [id])
+  amount                        Float
+  transferRail                  String?
+  recipientBankName             String?
+  recipientBankCode             String?
+  recipientAccountNumber        String?
+  recipientAccountName          String?
+  gcashMobileNumber             String?
+  gcashAccountName              String?
+  remarks                       String?
+  senderReferenceId             String?      @unique
+  idempotencyKey                String?      @unique
+  originalInstaPayReference     String?
+  unionBankTransactionReference String?
+  providerResponseCode          String?
+  providerResponseMessage       String?
+  failureReason                 String?
+  retryCount                    Int          @default(0)
+  expectedSettlementDate        DateTime?
+  datePaid                      DateTime?
+  rawApiResponseReference       String?
+
+  status               String    @default("PENDING") // PENDING, PROCESSING, SUCCESSFUL, FAILED, REJECTED, ON_HOLD
+  transactionReference String? // Legacy field
+  exceptionReason      String?
+  reconciledAt         DateTime?
+}
+
+model PaymentException {
+  id                        String    @id @default(cuid())
+  apiPaymentBatchId         String?
+  payrollBatchId            String?
+  payrollId                 String?
+  payslipNumber             String?
+  workerId                  String
+  worker                    Worker    @relation(fields: [workerId], references: [id])
+  amount                    Float?
+  recipientBankName         String?
+  recipientBankCode         String?
+  transferRail              String?
+  requiredPaymentMethod     String?
+  exceptionReason           String
+  unionBankResponseCode     String?
+  unionBankResponseMessage  String?
+  correctiveAction          String?
+  assignedToId              String?
+  status                    String    @default("OPEN") // OPEN, RESOLVED, REPROCESSED, CLOSED
+  approvedById              String?
+  dateResolved              DateTime?
+  reprocessedTransactionRef String?
+  remarks                   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentProvider {
+  id                      String    @id @default(cuid())
+  providerName            String
+  providerType            String // Corporate Bank API, GCash
+  transferRail            String // InstaPay, PESONet, Internal
+  environment             String    @default("Sandbox") // Sandbox, Production
+  apiBaseUrlSandbox       String?
+  apiBaseUrlProduction    String?
+  oauthTokenUrl           String?
+  clientId                String?
+  clientSecret            String?
+  partnerId               String?
+  corporateAccountNumber  String?
+  debitAccountNumber      String?
+  debitAccountName        String?
+  currency                String    @default("PHP")
+  webhookUrl              String?
+  webhookSigningSecret    String?
+  statusCallbackUrl       String?
+  singleTransactionLimit  Float?
+  dailyTransactionLimit   Float?
+  monthlyTransactionLimit Float?
+  cutOffTime              String?
+  expectedSettlementTime  String?
+  status                  String    @default("Draft") // Draft, For Review, Active Sandbox, Active Production, Suspended, Inactive
+  lastConnectionTest      DateTime?
+  createdById             String?
+  approvedById            String?
+  dateCreated             DateTime  @default(now())
+  dateActivated           DateTime?
+  remarks                 String?
+
+  batches PaymentBatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ReceivingBank {
+  id              String    @id @default(cuid())
+  bankCode        String    @unique
+  bankName        String
+  shortName       String?
+  instaPayEnabled Boolean   @default(false)
+  pesonetEnabled  Boolean   @default(false)
+  lastSyncedDate  DateTime?
+  status          String    @default("ACTIVE")
+  rawApiReference String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentFallbackRecommendation {
+  id                    String    @id @default(cuid())
+  payslipNumber         String?
+  workerId              String
+  worker                Worker    @relation(fields: [workerId], references: [id])
+  amount                Float
+  originalIntendedRoute String    @default("InstaPay")
+  fallbackRoute         String    @default("PESONet")
+  fallbackReason        String
+  originalInstaPayRef   String?
+  recommendedBy         String // System, AI, Finance
+  approvalStatus        String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedById          String?
+  approvalDate          DateTime?
+  remarks               String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DocumentTemplate {
+  id           String  @id @default(cuid())
+  templateName String // e.g. "Progress Billing", "Certificate of Payment"
+  templateType String // e.g. "PROGRESS_BILLING", "CERTIFICATE_OF_PAYMENT"
+  fileUrl      String
+  fileName     String
+  parsedData   Json?
+  isLocked     Boolean @default(false)
+  uploadedById String?
+  uploadedBy   User?   @relation("DocumentTemplateUploader", fields: [uploadedById], references: [id])
+  status       String  @default("ACTIVE")
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProjectAccomplishmentFile {
+  id               String  @id @default(cuid())
+  projectId        String
+  project          Project @relation(fields: [projectId], references: [id])
+  billingId        String?
+  fileName         String
+  originalFilePath String
+  workingFilePath  String?
+  fileSize         Int
+  fileType         String
+  fileVersion      Int     @default(1)
+
+  uploadedById String?
+  uploadedBy   User?   @relation("AccomplishmentFileUploader", fields: [uploadedById], references: [id])
+
+  status           String  @default("ACTIVE")
+  isLockedOriginal Boolean @default(true)
+  remarks          String?
+
+  findings ProjectAccomplishmentAIFinding[]
+  versions ProjectAccomplishmentFileVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // This is required to satisfy the "user" relation referenced in the error log
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+}
+
+model ProjectAccomplishmentFileVersion {
+  id            String                    @id @default(cuid())
+  fileId        String
+  file          ProjectAccomplishmentFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  filePath      String
+  savedBy       String?
+  savedAt       DateTime                  @default(now())
+  remarks       String?
+}
+
+model ProjectAccomplishmentAIFinding {
+  id             String                    @id @default(cuid())
+  fileId         String
+  file           ProjectAccomplishmentFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project                   @relation(fields: [projectId], references: [id])
+  billingId      String?
+  findingType    String
+  sheetName      String?
+  cellReference  String?
+  description    String
+  severity       String                    @default("INFO")
+  recommendation String?
+
+  createdAt DateTime @default(now())
+}
+
+model KnowledgeRuleReference {
+  id               String   @id @default(cuid())
+  notebookName     String
+  moduleName       String
+  ruleCategory     String
+  ruleTitle        String
+  ruleDescription  String
+  affectedProcess  String?
+  validationType   String?
+  severity         String   @default("BLOCK")
+  isMandatory      Boolean  @default(true)
+  effectiveDate    DateTime @default(now())
+  lastReviewedDate DateTime?
+  sourceLink       String?
+  createdBy        String?
+  updatedBy        String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model KnowledgeRuleAuditLog {
+  id                 String   @id @default(cuid())
+  transactionId      String?
+  moduleName         String
+  notebookName       String
+  ruleApplied        String
+  validationResult   String
+  actionTaken        String
+  userAction         String?
+  overrideRequested  Boolean  @default(false)
+  overrideApprovedBy String?
+  overrideReason     String?
+  timestamp          DateTime @default(now())
+}
+

@@ -1,0 +1,119 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+import { updateMRStatus, runMRFAIValidation } from '@/app/actions/mutations';
+
+interface Props {
+  mrId: string;
+  status: string;
+  currentUser: { id: string; name: string | null; role: string } | null;
+}
+
+export default function MRWorkflowButtons({ mrId, status, currentUser }: Props) {
+  const [isPending, startTransition] = useTransition();
+  
+  const role = currentUser?.role || '';
+
+  function handleAIValidation() {
+    startTransition(async () => {
+      await runMRFAIValidation(mrId);
+    });
+  }
+
+  function handleStatusUpdate(newStatus: string) {
+    if (!currentUser?.id) return;
+    startTransition(async () => {
+      await updateMRStatus(mrId, newStatus, currentUser.id);
+    });
+  }
+
+  return (
+    <div style={{ marginTop: '10px' }}>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        
+        {/* Preparation Phase - Materials Engineer */}
+        {status === 'DRAFT' && (
+          <button onClick={handleAIValidation} disabled={isPending || (role !== 'MATERIALS_ENGINEER' && role !== 'PROJECT_ENGINEER')} className="btn-ai" title="Requires Materials Engineer Role">
+            {isPending ? 'Running AI Check...' : '🤖 Run AI Check'}
+          </button>
+        )}
+
+        {(status === 'AI_CHECKING' || status === 'RETURNED') && (
+          <>
+            <button onClick={handleAIValidation} disabled={isPending || (role !== 'MATERIALS_ENGINEER' && role !== 'PROJECT_ENGINEER')} className="btn-ai" title="Requires Materials Engineer Role">
+              {isPending ? 'Running AI Check...' : '🤖 Re-run AI Check'}
+            </button>
+            <button onClick={() => handleStatusUpdate('SUBMITTED')} disabled={isPending || (role !== 'MATERIALS_ENGINEER' && role !== 'PROJECT_ENGINEER')} className="btn-primary" title="Requires Materials Engineer Role">
+              {isPending ? 'Submitting...' : '📤 Submit for Review'}
+            </button>
+          </>
+        )}
+
+        {/* Checking Phase - Cost Control */}
+        {status === 'SUBMITTED' && (
+          <>
+            <button onClick={() => handleStatusUpdate('FOR_REVIEW')} disabled={isPending || role !== 'COST_CONTROL'} className="btn-primary" title="Requires Cost Control Role">
+              {isPending ? 'Processing...' : '🔍 Mark as Checked (Cost Control)'}
+            </button>
+            <button onClick={() => handleStatusUpdate('RETURNED')} disabled={isPending || role !== 'COST_CONTROL'} className="btn-danger" title="Requires Cost Control Role">
+              {isPending ? 'Processing...' : '↩️ Return to Preparer'}
+            </button>
+          </>
+        )}
+
+        {/* Approval Phase - Project Manager */}
+        {status === 'FOR_REVIEW' && (
+          <>
+            <button onClick={() => handleStatusUpdate('APPROVED')} disabled={isPending || (role !== 'PROJECT_MANAGER' && role !== 'PROJECT_DIRECTOR')} className="btn-success" title="Requires Project Manager Role">
+              {isPending ? 'Approving...' : '✅ Approve MRF (Project Manager)'}
+            </button>
+            <button onClick={() => handleStatusUpdate('REJECTED')} disabled={isPending || (role !== 'PROJECT_MANAGER' && role !== 'PROJECT_DIRECTOR')} className="btn-danger" title="Requires Project Manager Role">
+              {isPending ? 'Rejecting...' : '❌ Reject MRF'}
+            </button>
+          </>
+        )}
+      </div>
+
+      <style>{`
+        .btn-ai {
+          background: linear-gradient(135deg, #8b5cf6, #a855f7);
+          color: white; border: none; padding: 10px 20px;
+          border-radius: 8px; font-weight: bold; cursor: pointer;
+          box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+          transition: all 0.2s;
+        }
+        .btn-ai:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(139, 92, 246, 0.6); }
+        .btn-ai:disabled { opacity: 0.7; cursor: not-allowed; }
+
+        .btn-primary {
+          background-color: var(--accent-color);
+          color: #000; border: none; padding: 10px 20px;
+          border-radius: 8px; font-weight: bold; cursor: pointer;
+          box-shadow: 0 4px 15px rgba(0, 255, 163, 0.3);
+          transition: all 0.2s;
+        }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 255, 163, 0.5); }
+        .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
+
+        .btn-success {
+          background-color: #22c55e;
+          color: white; border: none; padding: 10px 20px;
+          border-radius: 8px; font-weight: bold; cursor: pointer;
+          box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+          transition: all 0.2s;
+        }
+        .btn-success:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(34, 197, 94, 0.5); }
+        .btn-success:disabled { opacity: 0.7; cursor: not-allowed; }
+
+        .btn-danger {
+          background-color: transparent;
+          border: 1px solid #ef4444; color: #ef4444;
+          padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer;
+          transition: all 0.2s;
+        }
+        .btn-danger:hover:not(:disabled) { background-color: rgba(239, 68, 68, 0.1); }
+        .btn-danger:disabled { opacity: 0.7; cursor: not-allowed; }
+      `}</style>
+    </div>
+  );
+}

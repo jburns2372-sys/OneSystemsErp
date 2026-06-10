@@ -1,6 +1,6 @@
 import styles from './page.module.css';
 
-import { getDashboardStats } from './actions/project';
+import { getDashboardStats } from '@/app/actions/project';
 
 export default async function Home() {
   const stats = await getDashboardStats();
