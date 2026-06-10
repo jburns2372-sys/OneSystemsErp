@@ -20,17 +20,9 @@ export async function createProject(formData: FormData) {
   let parsedItems: any[] = [];
   let savedFilePath = '';
 
-  // Save file locally
+  // Process file in memory (Vercel is read-only)
   const buffer = Buffer.from(await boqFile.arrayBuffer());
   const fileName = `${Date.now()}_${boqFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'boq');
-  
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-  
-  savedFilePath = path.join(uploadDir, fileName);
-  fs.writeFileSync(savedFilePath, buffer);
 
   // Parse Excel file
   const workbook = xlsx.read(buffer, { type: 'buffer' });
