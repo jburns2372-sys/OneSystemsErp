@@ -386,3 +386,26 @@ export async function deleteProject(projectId: string) {
   revalidatePath('/projects');
 }
 
+export async function getLotBreakdowns(boqItemId: string) {
+  return await prisma.bOQLotBreakdown.findMany({
+    where: { boqItemId },
+  });
+}
+
+export async function saveLotBreakdown(data: any) {
+  const breakdown = await prisma.bOQLotBreakdown.create({
+    data: {
+      boqItemId: data.boqItemId,
+      description: data.description,
+      weightPercentage: 0
+    }
+  });
+  return { ...breakdown, ...data };
+}
+
+export async function deleteLotBreakdown(breakdownId: string) {
+  await prisma.bOQLotBreakdown.delete({
+    where: { id: breakdownId }
+  });
+  return { success: true };
+}

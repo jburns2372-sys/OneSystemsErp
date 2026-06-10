@@ -148,7 +148,7 @@ export async function syncTemplateWithBOQAction(projectId: string, parsedData: a
           if (!cellItemNo) continue;
 
           // Find match in BOQ
-          const match = boqItems.find(b => b.itemNumber === cellItemNo);
+          const match = boqItems.find(b => b.itemCode === cellItemNo);
           if (match) {
             let updated = false;
 
@@ -167,7 +167,7 @@ export async function syncTemplateWithBOQAction(projectId: string, parsedData: a
             };
 
             if (qtyCol !== -1) updateCell(qtyCol, match.quantity);
-            if (unitCostCol !== -1) updateCell(unitCostCol, match.unitCost);
+            if (unitCostCol !== -1) updateCell(unitCostCol, match.combinedUnitCost);
             if (totalCostCol !== -1) updateCell(totalCostCol, match.totalCost);
             
             if (updated) synchronizedCount++;

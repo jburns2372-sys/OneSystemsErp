@@ -29,8 +29,8 @@ export default function WorkerPaymentProfileCard({ worker }: { worker: Worker })
             <h4 className="text-sm font-semibold text-gray-900 mb-4">Bank Information (InstaPay / PESONet)</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <dt className="text-xs font-medium text-gray-500">Bank Name / Code</dt>
-                <dd className="mt-1 text-sm text-gray-900">{worker.bankName || '-'} ({worker.bankCode || '-'})</dd>
+                <dt className="text-sm font-medium text-gray-500">Bank Name</dt>
+                <dd className="mt-1 text-sm text-gray-900">{worker.bankName || '-'}</dd>
               </div>
               <div>
                 <dt className="text-xs font-medium text-gray-500">Account Number</dt>

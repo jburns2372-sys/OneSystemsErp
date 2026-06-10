@@ -23,8 +23,8 @@ export default function ApplicableRulesPanel({ moduleName }: ApplicableRulesPane
         getRecentAuditLogsForModule(moduleName)
       ]);
       
-      if (rulesRes.success) setRules(rulesRes.data);
-      if (logsRes.success) setAuditLogs(logsRes.data);
+      if (rulesRes.success) setRules(rulesRes.data || []);
+      if (logsRes.success) setAuditLogs(logsRes.data || []);
       setLoading(false);
     }
     fetchData();

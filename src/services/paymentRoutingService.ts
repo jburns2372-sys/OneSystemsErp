@@ -36,24 +36,24 @@ export class PaymentRoutingService {
     }
 
     // 3. UnionBank Internal Transfer (If recipient is UnionBank)
-    const isUnionBank = worker.bankCode === 'UBP' || worker.bankName?.toLowerCase().includes('union');
+    const isUnionBank = worker.bankName?.toLowerCase().includes('union') || false;
     if (isUnionBank) {
       // Assuming Internal Transfer is configured as highest priority if same bank
       return { route: 'UNIONBANK_INTERNAL' };
     }
 
     // Look up the Receiving Bank capabilities
-    const bankCode = worker.bankCode;
-    if (!bankCode) {
-      return { route: 'MANUAL_REVIEW', reason: 'Worker bank profile missing Bank Code.' };
+    const bankName = worker.bankName;
+    if (!bankName) {
+      return { route: 'MANUAL_REVIEW', reason: 'Worker bank profile missing Bank Name.' };
     }
 
-    const bank = await prisma.receivingBank.findUnique({
-      where: { bankCode }
+    const bank = await prisma.receivingBank.findFirst({
+      where: { bankName: bankName }
     });
 
     if (!bank) {
-      return { route: 'MANUAL_REVIEW', reason: 'Bank code not found in supported Receiving Banks list.' };
+      return { route: 'MANUAL_REVIEW', reason: 'Bank not found in supported Receiving Banks list.' };
     }
 
     // 4. InstaPay Limit Check
@@ -67,11 +67,11 @@ export class PaymentRoutingService {
     if (bank.pesonetEnabled) {
       const reason = netPay > instaPayLimit 
         ? `Amount ${netPay} exceeds InstaPay limit of ${instaPayLimit}`
-        : `Bank ${bankCode} is not InstaPay enabled`;
+        : `Bank ${bankName} is not InstaPay enabled`;
       return { route: 'PESONET', reason };
     }
 
     // 6. Manual Fallback
-    return { route: 'MANUAL_REVIEW', reason: `Bank ${bankCode} is neither InstaPay nor PESONet enabled.` };
+    return { route: 'MANUAL_REVIEW', reason: `Bank ${bankName} is neither InstaPay nor PESONet enabled.` };
   }
 }

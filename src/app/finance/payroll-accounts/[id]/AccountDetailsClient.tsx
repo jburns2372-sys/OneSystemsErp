@@ -56,7 +56,7 @@ export default function AccountDetailsClient({ account }: { account: any }) {
             <tbody>
               {account.ledgers.map((l: any) => (
                 <tr key={l.id} style={{ borderBottom: '1px solid #222' }}>
-                  <td style={{ padding: '10px' }}>{new Date(l.createdAt).toLocaleString()}</td>
+                  <td style={{ padding: '10px' }}>{new Date(l.transactionDate || l.createdAt || new Date()).toLocaleString()}</td>
                   <td style={{ padding: '10px', color: l.transactionType === 'DEPOSIT' ? '#2ecc71' : '#e74c3c' }}>{l.transactionType}</td>
                   <td style={{ padding: '10px' }}>₱ {l.amount.toLocaleString()}</td>
                   <td style={{ padding: '10px' }}>₱ {l.balanceAfter.toLocaleString()}</td>
@@ -86,12 +86,12 @@ export default function AccountDetailsClient({ account }: { account: any }) {
               {account.fundingRequests.map((r: any) => (
                 <tr key={r.id} style={{ borderBottom: '1px solid #222' }}>
                   <td style={{ padding: '10px' }}>{r.fundingRequestNumber}</td>
-                  <td style={{ padding: '10px' }}>{new Date(r.requestDate).toLocaleDateString()}</td>
-                  <td style={{ padding: '10px', fontWeight: 'bold' }}>₱ {r.requestedAmount.toLocaleString()}</td>
+                  <td style={{ padding: '10px' }}>{new Date(r.createdAt || r.requestDate || new Date()).toLocaleDateString()}</td>
+                  <td style={{ padding: '10px', fontWeight: 'bold' }}>₱ {(r.totalRequiredFunding || r.requestedAmount || 0).toLocaleString()}</td>
                   <td style={{ padding: '10px' }}>{r.remarks || '-'}</td>
-                  <td style={{ padding: '10px', color: r.status === 'APPROVED' ? '#2ecc71' : '#f1c40f' }}>{r.status}</td>
+                  <td style={{ padding: '10px', color: (r.fundingStatus || r.status) === 'APPROVED' ? '#2ecc71' : '#f1c40f' }}>{r.fundingStatus || r.status}</td>
                   <td style={{ padding: '10px' }}>
-                    {r.status === 'PENDING' && (
+                    {(r.fundingStatus || r.status) === 'PENDING' && (
                       <button 
                         onClick={() => handleApproveFunding(r.id)}
                         disabled={loadingId === r.id}

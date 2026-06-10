@@ -49,7 +49,8 @@ export default function BatchGeneratorClient({ periods, accounts }: { periods: a
       formData.accountId,
       shortageAmount,
       `Insufficient funds for ${formData.paymentMethodType} batch`,
-      'admin-user'
+      'admin-user',
+      formData.periodId
     );
     setLoading(false);
     if (res.success) {

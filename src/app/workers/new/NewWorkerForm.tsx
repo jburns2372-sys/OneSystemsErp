@@ -11,6 +11,7 @@ export default function NewWorkerForm({ initialData }: { initialData?: any }) {
   const [isValidating, setIsValidating] = useState(false);
   
   const [formData, setFormData] = useState({
+    id: undefined as string | undefined,
     workerId: '',
     firstName: '',
     lastName: '',

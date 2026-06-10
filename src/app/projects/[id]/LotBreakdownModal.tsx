@@ -26,7 +26,7 @@ export default function LotBreakdownModal({ boqItem, projectId, onClose }: { boq
     loadData();
   }, [boqItem.id]);
 
-  const totalBreakdownAmount = breakdowns.reduce((sum, b) => sum + b.estimatedAmount, 0);
+  const totalBreakdownAmount = breakdowns.reduce((sum, b) => sum + (b.estimatedAmount || 0), 0);
   const remainingBudget = boqItem.totalCost - totalBreakdownAmount;
 
   const handleAdd = () => {
@@ -188,12 +188,12 @@ export default function LotBreakdownModal({ boqItem, projectId, onClose }: { boq
                   {breakdowns.map(b => (
                     <tr key={b.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
                       <td style={{ padding: '8px' }}>
-                        <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px' }}>{b.category}</span>
+                        <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px' }}>{b.category || 'MISC'}</span>
                       </td>
                       <td style={{ padding: '8px' }}>{b.description}</td>
-                      <td style={{ padding: '8px', textAlign: 'right' }}>{b.quantity} {b.unit}</td>
-                      <td style={{ padding: '8px', textAlign: 'right' }}>{b.estimatedUnitCost.toLocaleString()}</td>
-                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{b.estimatedAmount.toLocaleString()}</td>
+                      <td style={{ padding: '8px', textAlign: 'right' }}>{b.quantity || 1} {b.unit || 'lot'}</td>
+                      <td style={{ padding: '8px', textAlign: 'right' }}>{(b.estimatedUnitCost || 0).toLocaleString()}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{(b.estimatedAmount || 0).toLocaleString()}</td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
                         <button onClick={() => handleDelete(b.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1rem' }}>🗑</button>
                       </td>

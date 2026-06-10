@@ -11,7 +11,7 @@ export default async function PayrollAccountDetailsPage({ params }: { params: Pr
     where: { id },
     include: {
       ledgers: {
-        orderBy: { createdAt: 'desc' }
+        orderBy: { transactionDate: 'desc' }
       },
       fundingRequests: {
         orderBy: { createdAt: 'desc' }

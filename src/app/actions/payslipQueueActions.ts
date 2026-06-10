@@ -9,7 +9,7 @@ export async function holdPayslip(payslipId: string, reason: string) {
       where: { id: payslipId },
       data: {
         paymentStatus: 'ON_HOLD',
-        paymentRemarks: reason
+        paymentHoldReason: reason
       }
     });
 
@@ -26,7 +26,7 @@ export async function resolvePayslipException(payslipId: string) {
       where: { id: payslipId },
       data: {
         paymentStatus: 'PENDING',
-        paymentRemarks: 'Resolved'
+        paymentHoldReason: 'Resolved'
       }
     });
 
