@@ -28,11 +28,7 @@ export default async function PayableDetailsPage({ params, searchParams }: { par
 
   if (!payable) return notFound();
 
-  // Bypass Prisma Client schema cache for voucherNumber
-  const rawData: any[] = await prisma.$queryRaw`SELECT voucherNumber FROM AccountsPayable WHERE id = ${id}`;
-  if (rawData.length > 0 && rawData[0].voucherNumber) {
-    (payable as any).voucherNumber = rawData[0].voucherNumber;
-  }
+
 
   return (
     <div className={styles.container} style={{ maxWidth: '1000px', margin: '0 auto' }}>

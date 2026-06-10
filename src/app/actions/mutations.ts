@@ -347,9 +347,10 @@ export async function lockProjectBOQ(projectId: string) {
 }
 
 export async function toggleConsolidatedBOQLock(id: string, lockState: boolean) {
-  // Use raw SQL to bypass Prisma schema validation since dev server locked the schema generation
-  const lockedVal = lockState ? 1 : 0;
-  await prisma.$executeRaw`UPDATE Project SET consolidatedBOQLocked = ${lockedVal} WHERE id = ${id}`;
+  await prisma.project.update({
+    where: { id },
+    data: { consolidatedBOQLocked: lockState }
+  });
   revalidatePath(`/projects/${id}`);
 }
 

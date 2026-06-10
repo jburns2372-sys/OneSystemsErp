@@ -18,8 +18,15 @@ export default async function ExpensesPage() {
   const receiptRefs = expenses.map(e => e.receiptRef).filter(Boolean) as string[];
   let payables: any[] = [];
   if (receiptRefs.length > 0) {
-    const placeholders = receiptRefs.map(r => `'${r.replace(/'/g, "''")}'`).join(',');
-    payables = await prisma.$queryRawUnsafe(`SELECT voucherNumber, dueDate FROM AccountsPayable WHERE voucherNumber IN (${placeholders})`);
+    payables = await prisma.accountsPayable.findMany({
+      where: {
+        voucherNumber: { in: receiptRefs }
+      },
+      select: {
+        voucherNumber: true,
+        dueDate: true
+      }
+    });
   }
   const payableMap = new Map(payables.map(p => [p.voucherNumber, p]));
 
