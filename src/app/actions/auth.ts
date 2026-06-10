@@ -12,9 +12,14 @@ export async function login(formData: FormData) {
     return { error: 'Email and password are required' };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email }
-  });
+  let user;
+  try {
+    user = await prisma.user.findUnique({
+      where: { email }
+    });
+  } catch (error: any) {
+    return { error: 'Database connection error: ' + (error.message || 'Unknown error') };
+  }
 
   if (!user || user.password !== password) {
     return { error: 'Invalid email or password' };

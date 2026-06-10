@@ -12,11 +12,16 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     
-    const formData = new FormData(e.currentTarget);
-    const result = await login(formData);
-    
-    if (result?.error) {
-      setError(result.error);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const result = await login(formData);
+      
+      if (result?.error) {
+        setError(result.error);
+        setLoading(false);
+      }
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred during authentication.');
       setLoading(false);
     }
   }
