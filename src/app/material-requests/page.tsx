@@ -1,12 +1,18 @@
 import styles from '../projects/page.module.css';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import PermissionGuard from '@/components/PermissionGuard';
+import { getUserPermissions } from '@/lib/permissions';
 
 import CreateMRFDropdown from './CreateMRFDropdown';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MaterialRequestsPage() {
+  const userId = cookies().get('userId')?.value || '';
+  const permissions = await getUserPermissions(userId);
+
   const requests = await prisma.materialRequest.findMany({
     orderBy: { createdAt: 'desc' },
     include: { 
@@ -30,59 +36,63 @@ export default async function MaterialRequestsPage() {
           <h1>Material Requests</h1>
           <p>Review and manage material requisitions across all projects.</p>
         </div>
-        <CreateMRFDropdown projects={lockedProjects} />
+        <PermissionGuard permissions={permissions} moduleName="PROCUREMENT" action="canAdd">
+          <CreateMRFDropdown projects={lockedProjects} />
+        </PermissionGuard>
       </header>
 
-      <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>MR Number</th>
-              <th>Project</th>
-              <th>Requester</th>
-              <th>Priority</th>
-              <th>Items</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {requests.length === 0 ? (
+      <PermissionGuard permissions={permissions} moduleName="PROCUREMENT" action="canView" fallback={<div style={{ padding: '20px', color: '#ef4444' }}>You do not have permission to view Material Requests.</div>}>
+        <div className={styles.tableContainer}>
+          <table className={styles.table}>
+            <thead>
               <tr>
-                <td colSpan={7} className={styles.emptyState}>No material requests found.</td>
+                <th>MR Number</th>
+                <th>Project</th>
+                <th>Requester</th>
+                <th>Priority</th>
+                <th>Items</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
-            ) : requests.map(req => (
-              <tr key={req.id}>
-                <td>
-                  <div className={styles.projectName}>{req.mrNumber}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{req.purpose || 'No purpose specified'}</div>
-                </td>
-                <td>{req.project.name}</td>
-                <td>{req.requester.name}</td>
-                <td>
-                  <span style={{
-                    fontWeight: 'bold',
-                    color: req.priority === 'URGENT' ? '#ef4444' : 
-                           req.priority === 'HIGH' ? '#f97316' : 
-                           req.priority === 'LOW' ? '#94a3b8' : 'var(--text-primary)'
-                  }}>
-                    {req.priority}
-                  </span>
-                </td>
-                <td>{req._count.items} items</td>
-                <td>
-                  <span className={`${styles.badge} ${styles['status-' + req.status.toLowerCase()]} badge-${req.status}`}>
-                    {req.status.replace('_', ' ')}
-                  </span>
-                </td>
-                <td>
-                  <Link href={`/material-requests/${req.id}`} className={styles.actionLink}>View Details</Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {requests.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className={styles.emptyState}>No material requests found.</td>
+                </tr>
+              ) : requests.map(req => (
+                <tr key={req.id}>
+                  <td>
+                    <div className={styles.projectName}>{req.mrNumber}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{req.purpose || 'No purpose specified'}</div>
+                  </td>
+                  <td>{req.project.name}</td>
+                  <td>{req.requester.name}</td>
+                  <td>
+                    <span style={{
+                      fontWeight: 'bold',
+                      color: req.priority === 'URGENT' ? '#ef4444' : 
+                             req.priority === 'HIGH' ? '#f97316' : 
+                             req.priority === 'LOW' ? '#94a3b8' : 'var(--text-primary)'
+                    }}>
+                      {req.priority}
+                    </span>
+                  </td>
+                  <td>{req._count.items} items</td>
+                  <td>
+                    <span className={`${styles.badge} ${styles['status-' + req.status.toLowerCase()]} badge-${req.status}`}>
+                      {req.status.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td>
+                    <Link href={`/material-requests/${req.id}`} className={styles.actionLink}>View Details</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </PermissionGuard>
 
       <style>{`
         .btn-primary {

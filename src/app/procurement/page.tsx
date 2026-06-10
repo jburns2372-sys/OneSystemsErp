@@ -1,9 +1,15 @@
-'use client';
+'use server';
 
 import Link from 'next/link';
 import ApplicableRulesPanel from '@/components/ApplicableRulesPanel';
+import PermissionGuard from '@/components/PermissionGuard';
+import { getUserPermissions } from '@/lib/permissions';
+import { cookies } from 'next/headers';
 
-export default function ProcurementHub() {
+export default async function ProcurementHub() {
+  const userId = cookies().get('userId')?.value || '';
+  const permissions = await getUserPermissions(userId);
+
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <ApplicableRulesPanel moduleName="Procurement" />
@@ -12,140 +18,112 @@ export default function ProcurementHub() {
         <p style={{ margin: 0, color: 'var(--text-secondary)' }}>Manage your material requests and purchase orders from a central dashboard.</p>
       </header>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: '30px'
-      }}>
-        {/* Material Requests Card */}
-        <Link href="/material-requests" style={{ textDecoration: 'none' }}>
-          <div style={{
-            background: 'var(--bg-secondary)',
-            borderRadius: '16px',
-            padding: '30px',
-            border: '1px solid var(--glass-border)',
-            transition: 'all 0.3s ease',
-            cursor: 'pointer',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-5px)';
-            e.currentTarget.style.borderColor = 'var(--accent-color)';
-            e.currentTarget.style.boxShadow = '0 8px 30px rgba(0, 240, 255, 0.15)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'none';
-            e.currentTarget.style.borderColor = 'var(--glass-border)';
-            e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.2)';
-          }}
-          >
-            <div style={{ fontSize: '3rem', marginBottom: '15px' }}>📝</div>
-            <h2 style={{ color: 'var(--text-primary)', margin: '0 0 10px 0', fontSize: '1.5rem' }}>Material Requests</h2>
-            <p style={{ color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5', flexGrow: 1 }}>
-              Review, approve, and track material requests from your projects. View MRF status and details.
-            </p>
-            <div style={{ 
-              marginTop: '20px', 
-              color: 'var(--accent-color)', 
-              fontWeight: 'bold',
+      <PermissionGuard permissions={permissions} moduleName="PROCUREMENT" action="canView" fallback={<div style={{ padding: '20px', color: '#ef4444' }}>You do not have permission to view the Procurement Hub.</div>}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: '30px'
+        }}>
+          {/* Material Requests Card */}
+          <Link href="/material-requests" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: 'var(--bg-secondary)',
+              borderRadius: '16px',
+              padding: '30px',
+              border: '1px solid var(--glass-border)',
+              transition: 'all 0.3s ease',
+              cursor: 'pointer',
+              height: '100%',
               display: 'flex',
-              alignItems: 'center',
-              gap: '5px'
-            }}>
-              View Requests <span>→</span>
+              flexDirection: 'column',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+            }}
+            >
+              <div style={{ fontSize: '3rem', marginBottom: '15px' }}>📝</div>
+              <h2 style={{ color: 'var(--text-primary)', margin: '0 0 10px 0', fontSize: '1.5rem' }}>Material Requests</h2>
+              <p style={{ color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5', flexGrow: 1 }}>
+                Review, approve, and track material requests from your projects. View MRF status and details.
+              </p>
+              <div style={{ 
+                marginTop: '20px', 
+                color: 'var(--accent-color)', 
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}>
+                View Requests <span>→</span>
+              </div>
             </div>
-          </div>
-        </Link>
+          </Link>
 
-        {/* Purchase Orders Card */}
-        <Link href="/procurement/purchase-orders" style={{ textDecoration: 'none' }}>
-          <div style={{
-            background: 'var(--bg-secondary)',
-            borderRadius: '16px',
-            padding: '30px',
-            border: '1px solid var(--glass-border)',
-            transition: 'all 0.3s ease',
-            cursor: 'pointer',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-5px)';
-            e.currentTarget.style.borderColor = 'var(--accent-color)';
-            e.currentTarget.style.boxShadow = '0 8px 30px rgba(0, 240, 255, 0.15)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'none';
-            e.currentTarget.style.borderColor = 'var(--glass-border)';
-            e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.2)';
-          }}
-          >
-            <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🛒</div>
-            <h2 style={{ color: 'var(--text-primary)', margin: '0 0 10px 0', fontSize: '1.5rem' }}>Purchase Orders</h2>
-            <p style={{ color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5', flexGrow: 1 }}>
-              Manage purchase orders generated from approved material requests. Track PO status and delivery.
-            </p>
-            <div style={{ 
-              marginTop: '20px', 
-              color: 'var(--accent-color)', 
-              fontWeight: 'bold',
+          {/* Purchase Orders Card */}
+          <Link href="/procurement/purchase-orders" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: 'var(--bg-secondary)',
+              borderRadius: '16px',
+              padding: '30px',
+              border: '1px solid var(--glass-border)',
+              transition: 'all 0.3s ease',
+              cursor: 'pointer',
+              height: '100%',
               display: 'flex',
-              alignItems: 'center',
-              gap: '5px'
-            }}>
-              View Purchase Orders <span>→</span>
+              flexDirection: 'column',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+            }}
+            >
+              <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🛒</div>
+              <h2 style={{ color: 'var(--text-primary)', margin: '0 0 10px 0', fontSize: '1.5rem' }}>Purchase Orders</h2>
+              <p style={{ color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5', flexGrow: 1 }}>
+                Manage purchase orders generated from approved material requests. Track PO status and delivery.
+              </p>
+              <div style={{ 
+                marginTop: '20px', 
+                color: 'var(--accent-color)', 
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}>
+                View Purchase Orders <span>→</span>
+              </div>
             </div>
-          </div>
-        </Link>
+          </Link>
 
-        {/* Vendors & Suppliers Card */}
-        <Link href="/procurement/suppliers" style={{ textDecoration: 'none' }}>
-          <div style={{
-            background: 'var(--bg-secondary)',
-            borderRadius: '16px',
-            padding: '30px',
-            border: '1px solid var(--glass-border)',
-            transition: 'all 0.3s ease',
-            cursor: 'pointer',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-5px)';
-            e.currentTarget.style.borderColor = 'var(--accent-color)';
-            e.currentTarget.style.boxShadow = '0 8px 30px rgba(0, 240, 255, 0.15)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'none';
-            e.currentTarget.style.borderColor = 'var(--glass-border)';
-            e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.2)';
-          }}
-          >
-            <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🏢</div>
-            <h2 style={{ color: 'var(--text-primary)', margin: '0 0 10px 0', fontSize: '1.5rem' }}>Vendors & Suppliers</h2>
-            <p style={{ color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5', flexGrow: 1 }}>
-              Manage vendor directory, contact information, and VAT settings.
-            </p>
-            <div style={{ 
-              marginTop: '20px', 
-              color: 'var(--accent-color)', 
-              fontWeight: 'bold',
+          {/* Vendors & Suppliers Card */}
+          <Link href="/procurement/suppliers" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: 'var(--bg-secondary)',
+              borderRadius: '16px',
+              padding: '30px',
+              border: '1px solid var(--glass-border)',
+              transition: 'all 0.3s ease',
+              cursor: 'pointer',
+              height: '100%',
               display: 'flex',
-              alignItems: 'center',
-              gap: '5px'
-            }}>
-              View Suppliers <span>→</span>
+              flexDirection: 'column',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+            }}
+            >
+              <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🏢</div>
+              <h2 style={{ color: 'var(--text-primary)', margin: '0 0 10px 0', fontSize: '1.5rem' }}>Vendors & Suppliers</h2>
+              <p style={{ color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5', flexGrow: 1 }}>
+                Manage vendor directory, contact information, and VAT settings.
+              </p>
+              <div style={{ 
+                marginTop: '20px', 
+                color: 'var(--accent-color)', 
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}>
+                View Suppliers <span>→</span>
+              </div>
             </div>
-          </div>
-        </Link>
-      </div>
+          </Link>
+        </div>
+      </PermissionGuard>
     </div>
   );
 }
