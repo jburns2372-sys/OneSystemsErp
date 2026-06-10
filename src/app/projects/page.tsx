@@ -1,11 +1,18 @@
 import styles from './page.module.css';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import PermissionGuard from '@/components/PermissionGuard';
+import { getUserPermissions } from '@/lib/permissions';
 import NewProjectButton from './NewProjectButton';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ProjectsPage() {
+  const cookieStore = await cookies();
+  const userId = cookieStore.get('session')?.value || '';
+  const permissions = await getUserPermissions(userId);
+
   const projects = await prisma.project.findMany({
     orderBy: { createdAt: 'desc' },
     include: { manager: true }
@@ -18,7 +25,9 @@ export default async function ProjectsPage() {
           <h1>Projects</h1>
           <p>Manage and monitor all active construction projects.</p>
         </div>
-        <NewProjectButton />
+        <PermissionGuard permissions={permissions} moduleName="PROJECT_MANAGEMENT" action="canCreate">
+          <NewProjectButton />
+        </PermissionGuard>
       </header>
 
       <div className={styles.tableContainer}>

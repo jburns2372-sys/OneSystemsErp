@@ -13,6 +13,7 @@ export default function MRWorkflowButtons({ mrId, status, currentUser }: Props) 
   const [isPending, startTransition] = useTransition();
   
   const role = currentUser?.role || '';
+  if (role === 'GUEST_USER') return null;
 
   function handleAIValidation() {
     startTransition(async () => {

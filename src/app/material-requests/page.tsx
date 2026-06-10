@@ -37,7 +37,7 @@ export default async function MaterialRequestsPage() {
           <h1>Material Requests</h1>
           <p>Review and manage material requisitions across all projects.</p>
         </div>
-        <PermissionGuard permissions={permissions} moduleName="PROCUREMENT" action="canAdd">
+        <PermissionGuard permissions={permissions} moduleName="PROCUREMENT" action="canCreate">
           <CreateMRFDropdown projects={lockedProjects} />
         </PermissionGuard>
       </header>
