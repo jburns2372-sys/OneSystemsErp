@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import * as xlsx from 'xlsx';
+import { put } from '@vercel/blob';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -20,9 +21,17 @@ export async function createProject(formData: FormData) {
   let parsedItems: any[] = [];
   let savedFilePath = '';
 
-  // Process file in memory (Vercel is read-only)
+  // Process file in memory
   const buffer = Buffer.from(await boqFile.arrayBuffer());
   const fileName = `${Date.now()}_${boqFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+
+  // Upload the original BOQ to Vercel Blob for permanent cloud storage
+  const blob = await put(`boq/${fileName}`, buffer, {
+    access: 'public',
+    addRandomSuffix: false
+  });
+  
+  description = `BOQ File Uploaded: ${blob.url}`;
 
   // Parse Excel file
   const workbook = xlsx.read(buffer, { type: 'buffer' });

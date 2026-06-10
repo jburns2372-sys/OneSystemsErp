@@ -6,6 +6,7 @@ import { computePayrollForPeriod } from './payrollEngine';
 import { promises as fs } from 'fs';
 import path from 'path';
 import Papa from 'papaparse';
+import { put } from '@vercel/blob';
 
 export async function saveManualDtr(data: any, payrollPeriodId: string, encodedById: string) {
   try {
@@ -88,17 +89,15 @@ export async function processAIBiometrics(formData: FormData) {
       return { success: false, error: 'No file provided' };
     }
 
-    // Recommended Save Location: 
-    // In production, this should ideally go to a cloud bucket (S3, GCS, etc).
-    // For local environments, we save it in a secure folder outside the public web root.
-    const uploadsDir = path.join(process.cwd(), 'uploads', 'biometrics');
-    await fs.mkdir(uploadsDir, { recursive: true });
-
-    // Save the file
+    // Save the file to Vercel Blob
     const buffer = Buffer.from(await file.arrayBuffer());
     const safeFileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-    const filePath = path.join(uploadsDir, safeFileName);
-    await fs.writeFile(filePath, buffer);
+    
+    const blob = await put(`biometrics/${safeFileName}`, buffer, {
+      access: 'public',
+      addRandomSuffix: false
+    });
+    const fileUrl = blob.url;
     
     // Continue with CSV parsing
     const period = await prisma.payrollPeriod.findUnique({ where: { id: payrollPeriodId } });
@@ -143,7 +142,7 @@ export async function processAIBiometrics(formData: FormData) {
           regularHours, 
           overtimeHours,
           payrollPeriodId,
-          sourceFile: safeFileName
+          sourceFile: fileUrl
         },
         create: {
           workerId: workerDbId,
@@ -151,7 +150,7 @@ export async function processAIBiometrics(formData: FormData) {
           regularHours,
           overtimeHours,
           payrollPeriodId,
-          sourceFile: safeFileName
+          sourceFile: fileUrl
         }
       });
     }

@@ -2,9 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { writeFile, mkdir } from "fs/promises";
+import { put, copy } from "@vercel/blob";
 import { join } from "path";
-import { existsSync } from "fs";
 import ExcelJS from "exceljs";
 
 export async function uploadAccomplishmentFileAction(projectId: string, formData: FormData) {
@@ -17,20 +16,16 @@ export async function uploadAccomplishmentFileAction(projectId: string, formData
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Create uploads directory if it doesn't exist
-    const uploadDir = join(process.cwd(), "public", "uploads", "accomplishments");
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-    }
-
     // Generate unique filename to prevent overwriting
     const uniqueId = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
     const newFileName = `${uniqueId}-${sanitizedFileName}`;
-    const filePath = join(uploadDir, newFileName);
 
-    // Save the physical file securely
-    await writeFile(filePath, buffer);
+    // Upload to Vercel Blob
+    const blob = await put(`accomplishments/${newFileName}`, buffer, {
+      access: 'public',
+      addRandomSuffix: false
+    });
 
     // Optional: get currently logged in user ID if you have an auth system
     // For now, leaving it null or you can pass it from the client
@@ -41,7 +36,7 @@ export async function uploadAccomplishmentFileAction(projectId: string, formData
       data: {
         projectId,
         fileName: file.name,
-        originalFilePath: `/uploads/accomplishments/${newFileName}`,
+        originalFilePath: blob.url,
         fileSize: buffer.length,
         fileType: file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         isLockedOriginal: false,
@@ -138,26 +133,24 @@ export async function createWorkingCopyAction(fileId: string) {
     if (!fileRecord) return { success: false, error: "File not found" };
     if (fileRecord.workingFilePath) return { success: true, message: "Working copy already exists", workingFilePath: fileRecord.workingFilePath };
 
-    const uploadDir = join(process.cwd(), "public", "uploads", "accomplishments");
-    const originalPhysicalPath = join(process.cwd(), "public", fileRecord.originalFilePath);
-
     const uniqueId = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const sanitizedFileName = fileRecord.fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
     const newFileName = `working-${uniqueId}-${sanitizedFileName}`;
-    const workingPhysicalPath = join(uploadDir, newFileName);
 
-    const fs = await import("fs/promises");
-    await fs.copyFile(originalPhysicalPath, workingPhysicalPath);
+    const copiedBlob = await copy(fileRecord.originalFilePath, `accomplishments/${newFileName}`, {
+      access: 'public',
+      addRandomSuffix: false
+    });
 
     await prisma.projectAccomplishmentFile.update({
       where: { id: fileId },
       data: {
-        workingFilePath: `/uploads/accomplishments/${newFileName}`,
+        workingFilePath: copiedBlob.url,
       }
     });
 
     revalidatePath("/accomplishments");
-    return { success: true, workingFilePath: `/uploads/accomplishments/${newFileName}` };
+    return { success: true, workingFilePath: copiedBlob.url };
   } catch (error: any) {
     console.error("Error creating working copy:", error);
     return { success: false, error: error.message || "Failed to create working copy" };
@@ -172,16 +165,17 @@ export async function saveFileEditAction(fileId: string, base64Data: string, isL
 
     if (!fileRecord) return { success: false, error: "File not found" };
 
-    const uploadDir = join(process.cwd(), "public", "uploads", "accomplishments");
     const uniqueId = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const sanitizedFileName = fileRecord.fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
     const newFileName = `v${fileRecord.fileVersion + 1}-${uniqueId}-${sanitizedFileName}`;
-    const newPhysicalPath = join(uploadDir, newFileName);
-    const publicPath = `/uploads/accomplishments/${newFileName}`;
 
     const buffer = Buffer.from(base64Data, "base64");
-    const fs = await import("fs/promises");
-    await fs.writeFile(newPhysicalPath, buffer);
+    
+    const blob = await put(`accomplishments/${newFileName}`, buffer, {
+      access: 'public',
+      addRandomSuffix: false
+    });
+    const publicPath = blob.url;
 
     const updatedFile = await prisma.$transaction(async (tx) => {
       const version = await tx.projectAccomplishmentFileVersion.create({
@@ -213,16 +207,17 @@ export async function saveFileEditAction(fileId: string, base64Data: string, isL
 
 export async function saveAsNewAccomplishmentFileAction(projectId: string, base64Data: string, newFileName: string, originalFileType: string, isLocked: boolean = false) {
   try {
-    const uploadDir = join(process.cwd(), "public", "uploads", "accomplishments");
     const uniqueId = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const sanitizedFileName = newFileName.replace(/[^a-zA-Z0-9.-]/g, "_");
     const newPhysicalFileName = `v1-${uniqueId}-${sanitizedFileName}`;
-    const newPhysicalPath = join(uploadDir, newPhysicalFileName);
-    const publicPath = `/uploads/accomplishments/${newPhysicalFileName}`;
 
     const buffer = Buffer.from(base64Data, "base64");
-    const fs = await import("fs/promises");
-    await fs.writeFile(newPhysicalPath, buffer);
+    
+    const blob = await put(`accomplishments/${newPhysicalFileName}`, buffer, {
+      access: 'public',
+      addRandomSuffix: false
+    });
+    const publicPath = blob.url;
 
     const newFile = await prisma.projectAccomplishmentFile.create({
       data: {
@@ -256,7 +251,7 @@ export async function createSuccessiveBillingAction(projectId: string, templateF
       return { success: false, error: "The selected previously locked billing could not be found." };
     }
 
-    const sourcePath = join(process.cwd(), "public", latestBilling.workingFilePath || latestBilling.originalFilePath);
+    const fileUrl = latestBilling.workingFilePath || latestBilling.originalFilePath;
 
     let nextNumber = 2;
     let baseName = "PROGRESS BILLING";
@@ -280,19 +275,20 @@ export async function createSuccessiveBillingAction(projectId: string, templateF
 
     const newFileName = `${baseName} ${nextNumber}${ext}`;
 
-    const fs = await import("fs/promises");
     const uniqueId = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const sanitizedFileName = newFileName.replace(/[^a-zA-Z0-9.-]/g, "_");
     const newPhysicalFileName = `${uniqueId}-${sanitizedFileName}`;
-    const newPhysicalPath = join(process.cwd(), "public", "uploads", "accomplishments", newPhysicalFileName);
-    const publicPath = `/uploads/accomplishments/${newPhysicalFileName}`;
 
-    await fs.copyFile(sourcePath, newPhysicalPath);
+    let finalBuffer: Buffer;
 
     // Automatically carry over Accomplishment To Date (Col 13) to Previous Period (Col 11)
     try {
+      const response = await fetch(fileUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      const sourceBuffer = Buffer.from(arrayBuffer);
+
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.readFile(newPhysicalPath);
+      await workbook.xlsx.load(sourceBuffer);
       const worksheet = workbook.worksheets[0];
 
       if (worksheet) {
@@ -333,12 +329,26 @@ export async function createSuccessiveBillingAction(projectId: string, templateF
             }
           }
         });
-        await workbook.xlsx.writeFile(newPhysicalPath);
+        const uint8Array = await workbook.xlsx.writeBuffer();
+        finalBuffer = Buffer.from(uint8Array);
+      } else {
+        const response = await fetch(fileUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        finalBuffer = Buffer.from(arrayBuffer);
       }
     } catch (excelError) {
       console.error("Failed to manipulate Excel columns:", excelError);
       // We continue even if excel parsing fails, so the user at least gets the duplicated file.
+      const response = await fetch(fileUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      finalBuffer = Buffer.from(arrayBuffer);
     }
+
+    const blob = await put(`accomplishments/${newPhysicalFileName}`, finalBuffer, {
+      access: 'public',
+      addRandomSuffix: false
+    });
+    const publicPath = blob.url;
 
     const newFile = await prisma.projectAccomplishmentFile.create({
       data: {

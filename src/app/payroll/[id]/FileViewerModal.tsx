@@ -11,7 +11,7 @@ export default function FileViewerModal({ filename, onClose }: { filename: strin
 
   useEffect(() => {
     if (isCsv) {
-      fetch(`/api/uploads/biometrics/${filename}`)
+      fetch(filename)
         .then(res => {
           if (!res.ok) throw new Error('File not found');
           return res.text();
@@ -61,7 +61,7 @@ export default function FileViewerModal({ filename, onClose }: { filename: strin
             </div>
           ) : (
             <iframe 
-              src={`/api/uploads/biometrics/${filename}`} 
+              src={filename} 
               style={{ width: '100%', height: '70vh', border: 'none' }}
               title="File Viewer"
             />

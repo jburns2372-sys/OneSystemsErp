@@ -93,7 +93,29 @@ export default async function ProjectDetailsPage({
                 Total Awarded Cost: ₱ {project.contractAmount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
               </p>
             </div>
-            <BOQActions projectId={project.id} isLocked={project.boqLocked} hasBOQ={hasBOQ} />
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+              {project.description && project.description.includes('BOQ File Uploaded: ') && (
+                <a 
+                  href={project.description.split('BOQ File Uploaded: ')[1]} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ 
+                    padding: '8px 16px', 
+                    borderRadius: '8px', 
+                    background: 'rgba(0, 240, 255, 0.1)', 
+                    color: 'var(--accent-color)', 
+                    textDecoration: 'none', 
+                    fontWeight: 'bold',
+                    fontSize: '0.9rem', 
+                    border: '1px solid rgba(0, 240, 255, 0.3)',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  ⬇️ Download Original BOQ
+                </a>
+              )}
+              <BOQActions projectId={project.id} isLocked={project.boqLocked} hasBOQ={hasBOQ} />
+            </div>
           </div>
           <AwardedBOQViewer htmlTable={htmlTable} />
         </>
