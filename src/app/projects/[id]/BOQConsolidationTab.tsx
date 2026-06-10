@@ -21,8 +21,11 @@ export default async function BOQConsolidationTab({
     );
   }
 
-  const result = await prisma.$queryRaw<any[]>`SELECT consolidatedBOQLocked FROM Project WHERE id = ${projectId}`;
-  const isConsolidatedLocked = result && result[0] ? Boolean(result[0].consolidatedBOQLocked) : false;
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { consolidatedBOQLocked: true }
+  });
+  const isConsolidatedLocked = project ? project.consolidatedBOQLocked : false;
 
   const consolidatedItems = await prisma.consolidatedBOQItem.findMany({
     where: { 
