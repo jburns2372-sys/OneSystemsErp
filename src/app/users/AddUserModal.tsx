@@ -9,7 +9,6 @@ export default function AddUserModal({ onClose, roles = [] }: { onClose: () => v
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('PROJECT_ENGINEER');
-  const [role, setRole] = useState('PROJECT_ENGINEER');
   const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
