@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { logout } from '@/app/actions/auth';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -201,31 +202,56 @@ export default function Sidebar() {
         padding: '20px',
         borderTop: '1px solid var(--glass-border)',
         display: 'flex',
+        flexDirection: isCollapsed ? 'column' : 'row',
         alignItems: 'center',
         gap: '15px',
-        justifyContent: isCollapsed ? 'center' : 'flex-start',
+        justifyContent: 'space-between',
         backgroundColor: 'rgba(0, 0, 0, 0.2)'
       }}>
-        <div style={{
-          width: '35px',
-          height: '35px',
-          borderRadius: '50%',
-          backgroundColor: 'var(--accent-color)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#000',
-          fontWeight: 'bold',
-          flexShrink: 0
-        }}>
-          AD
-        </div>
-        {!isCollapsed && (
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 'bold', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>System Admin</div>
-            <div style={{ color: 'var(--accent-color)', fontSize: '0.75rem', letterSpacing: '1px' }}>ONLINE</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div style={{
+            width: '35px',
+            height: '35px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--accent-color)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#000',
+            fontWeight: 'bold',
+            flexShrink: 0
+          }}>
+            AD
           </div>
-        )}
+          {!isCollapsed && (
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 'bold', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>System Admin</div>
+              <div style={{ color: 'var(--accent-color)', fontSize: '0.75rem', letterSpacing: '1px' }}>ONLINE</div>
+            </div>
+          )}
+        </div>
+        
+        <form action={logout}>
+          <button 
+            type="submit"
+            className="collapse-btn"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '1.2rem',
+              padding: '5px',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            title="Sign Out"
+          >
+            🚪
+          </button>
+        </form>
       </div>
 
       <style>{`
