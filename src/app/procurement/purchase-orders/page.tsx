@@ -2,6 +2,8 @@ import styles from '../../projects/page.module.css';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
+import PermissionGuard from '@/components/PermissionGuard';
+import { getUserPermissions } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,13 +11,19 @@ export default async function ProcurementPage() {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
   let currentUser = null;
+  let permissions: Record<string, any> = {};
+
   if (sessionId) {
     currentUser = await prisma.user.findUnique({ where: { id: sessionId } });
+    if (currentUser) {
+      permissions = await getUserPermissions(currentUser.id);
+    }
   }
 
-  const isProcurement = currentUser?.role === 'PROCUREMENT_OFFICER' || currentUser?.role === 'PROCUREMENT';
+  // Ensure only users with canCreate or canSubmit on PURCHASE_ORDER see the pending MRFs
+  const canCreatePO = permissions['PURCHASE_ORDER']?.canCreate || permissions['PURCHASE_ORDER']?.canSubmit;
 
-  const pendingMRFs = isProcurement ? await prisma.materialRequest.findMany({
+  const pendingMRFs = canCreatePO ? await prisma.materialRequest.findMany({
     where: { status: 'APPROVED' },
     include: { project: true }
   }) : [];
@@ -34,29 +42,31 @@ export default async function ProcurementPage() {
         </div>
       </header>
 
-      {pendingMRFs.length > 0 && (
-        <div style={{ marginBottom: '40px', backgroundColor: 'rgba(250, 204, 21, 0.1)', border: '1px solid rgba(250, 204, 21, 0.3)', padding: '20px', borderRadius: '12px' }}>
-          <h2 style={{ color: '#facc15', margin: '0 0 15px 0', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            ⚠️ Action Required: Approved MRFs Awaiting PO
-          </h2>
-          <div style={{ display: 'grid', gap: '10px' }}>
-            {pendingMRFs.map(mr => (
-              <div key={mr.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-secondary)', padding: '15px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                <div>
-                  <strong style={{ color: 'var(--text-primary)', fontSize: '1.1rem' }}>{mr.mrNumber}</strong>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>Project: {mr.project.name} | Needed By: {mr.dateNeeded ? new Date(mr.dateNeeded).toLocaleDateString() : 'N/A'}</div>
+      <PermissionGuard permissions={permissions} moduleName="PURCHASE_ORDER" action="canCreate">
+        {pendingMRFs.length > 0 && (
+          <div style={{ marginBottom: '40px', backgroundColor: 'rgba(250, 204, 21, 0.1)', border: '1px solid rgba(250, 204, 21, 0.3)', padding: '20px', borderRadius: '12px' }}>
+            <h2 style={{ color: '#facc15', margin: '0 0 15px 0', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              ⚠️ Action Required: Approved MRFs Awaiting PO
+            </h2>
+            <div style={{ display: 'grid', gap: '10px' }}>
+              {pendingMRFs.map(mr => (
+                <div key={mr.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-secondary)', padding: '15px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                  <div>
+                    <strong style={{ color: 'var(--text-primary)', fontSize: '1.1rem' }}>{mr.mrNumber}</strong>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>Project: {mr.project.name} | Needed By: {mr.dateNeeded ? new Date(mr.dateNeeded).toLocaleDateString() : 'N/A'}</div>
+                  </div>
+                  <Link 
+                    href={`/procurement/purchase-orders/new?mrId=${mr.id}`}
+                    style={{ backgroundColor: 'var(--accent-color)', color: '#000', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold' }}
+                  >
+                    Generate PO
+                  </Link>
                 </div>
-                <Link 
-                  href={`/procurement/purchase-orders/new?mrId=${mr.id}`}
-                  style={{ backgroundColor: 'var(--accent-color)', color: '#000', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold' }}
-                >
-                  Generate PO
-                </Link>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </PermissionGuard>
 
       <div className={styles.tableContainer}>
         <table className={styles.table}>

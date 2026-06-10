@@ -3,6 +3,9 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { requirePermission } from '@/lib/permissions';
+import { submitTransaction, approveTransaction } from '@/lib/workflow';
+import { validateTransactionWithAI } from '@/lib/ai-validation';
 
 export async function createPOFromMRF(mrId: string, items: { consolidatedBoqItemId: string, quantity: number, unitCost: number, supplierId: string }[]) {
   const cookieStore = await cookies();
@@ -11,6 +14,11 @@ export async function createPOFromMRF(mrId: string, items: { consolidatedBoqItem
   if (!sessionId) {
     throw new Error('Not authenticated');
   }
+
+  const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
+  if (!currentUser) throw new Error('User not found');
+
+  await requirePermission(currentUser.id, 'PURCHASE_ORDER', 'canCreate');
 
   // Group items by supplierId
   const supplierGroups = items.reduce((groups: Record<string, any[]>, item) => {
@@ -67,6 +75,20 @@ export async function createPOFromMRF(mrId: string, items: { consolidatedBoqItem
         }
       }
     });
+
+    // Enforce Workflow Submission
+    await submitTransaction(currentUser.id, currentUser.role || 'PURCHASING_OFFICER', 'PURCHASE_ORDER', po.id);
+
+    // Trigger AI Validation Engine to check against Awarded BOQ
+    const aiCheck = await validateTransactionWithAI('PURCHASE_ORDER', po, currentUser.id, currentUser.role || 'PURCHASING_OFFICER');
+    
+    if (aiCheck.status === 'BLOCKING_ISSUE') {
+      // Revert status to draft or flag it heavily if AI detects major violation
+      await prisma.purchaseOrder.update({
+        where: { id: po.id },
+        data: { status: 'AI_BLOCKED' }
+      });
+    }
     
     createdPOIds.push(po.id);
   }
@@ -81,4 +103,37 @@ export async function createPOFromMRF(mrId: string, items: { consolidatedBoqItem
   revalidatePath('/material-requests');
   
   return createdPOIds;
+}
+
+export async function approvePurchaseOrder(poId: string) {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value;
+  
+  if (!sessionId) throw new Error('Not authenticated');
+
+  const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
+  if (!currentUser) throw new Error('User not found');
+
+  await requirePermission(currentUser.id, 'PURCHASE_ORDER', 'canApprove');
+
+  const po = await prisma.purchaseOrder.findUnique({ where: { id: poId } });
+  if (!po) throw new Error('PO not found');
+
+  // Maker-Checker specific to PO logic
+  if (po.preparerId === currentUser.id) {
+    throw new Error('Self-approval blocked by Workflow Engine.');
+  }
+
+  await prisma.purchaseOrder.update({
+    where: { id: poId },
+    data: {
+      status: 'APPROVED',
+      approvedById: currentUser.id
+    }
+  });
+
+  await approveTransaction(currentUser.id, currentUser.role || 'PROJECT_DIRECTOR', 'PURCHASE_ORDER', po.id, 'Approved PO digitally');
+
+  revalidatePath('/procurement/purchase-orders');
+  return { success: true };
 }

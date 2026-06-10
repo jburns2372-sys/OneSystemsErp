@@ -3,6 +3,7 @@ import styles from '../../projects/page.module.css';
 import Link from 'next/link';
 import POWorkflowButtons from './POWorkflowButtons';
 import { cookies } from 'next/headers';
+import { getUserPermissions } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,8 +28,13 @@ export default async function PurchaseOrderDetailsPage({ params }: { params: Pro
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
   let currentUser = null;
+  let permissions: Record<string, any> = {};
+
   if (sessionId) {
     currentUser = await prisma.user.findUnique({ where: { id: sessionId }, select: { id: true, name: true, role: true } });
+    if (currentUser) {
+      permissions = await getUserPermissions(currentUser.id);
+    }
   }
 
   if (!po) {
@@ -46,7 +52,7 @@ export default async function PurchaseOrderDetailsPage({ params }: { params: Pro
             <span className={`badge-${po.status}`} style={{ fontWeight: 'bold', padding: '6px 12px', borderRadius: '20px', backgroundColor: 'var(--bg-dark)' }}>{po.status.replace('_', ' ')}</span>
           </div>
         </div>
-        <POWorkflowButtons poId={po.id} status={po.status} currentUser={currentUser} />
+        <POWorkflowButtons poId={po.id} status={po.status} currentUser={currentUser} permissions={permissions} />
       </div>
 
       <div style={{ 
