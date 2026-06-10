@@ -125,5 +125,5 @@ export async function lockRecord(
     }
   });
   
-  await logAudit(userId, null, moduleName, transactionId, 'LOCK_RECORD', null, 'LOCKED', reason);
+  await logAudit(userId, null, moduleName, transactionId, 'LOCK_RECORD', undefined, 'LOCKED', reason);
 }

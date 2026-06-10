@@ -29,7 +29,7 @@ export default function POWorkflowButtons({ poId, status, currentUser, permissio
     setErrorMsg(null);
     startTransition(async () => {
       try {
-        const res = await approvePurchaseOrder(poId);
+        const res = await approvePurchaseOrder(poId) as any;
         if (!res.success && res.error) {
            setErrorMsg(res.error);
         }

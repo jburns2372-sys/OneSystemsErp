@@ -128,7 +128,7 @@ export async function approvePurchaseOrder(poId: string) {
     where: { id: poId },
     data: {
       status: 'APPROVED',
-      approvedById: currentUser.id
+      approverId: currentUser.id
     }
   });
 

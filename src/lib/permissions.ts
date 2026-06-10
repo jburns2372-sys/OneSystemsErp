@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth'; // Or however auth is managed. Wait, this app might use simple cookies or next-auth.
 import { cookies } from 'next/headers';
 
 // We'll export a generic function that takes the user email or ID, since auth might be custom.

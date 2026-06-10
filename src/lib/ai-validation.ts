@@ -67,7 +67,7 @@ export async function validateTransactionWithAI(
 
   // 4. Also drop an audit log if it's a blocking issue
   if (result === 'BLOCKING_ISSUE') {
-    await logAudit(userId, userRole, moduleName, transactionData.id, 'AI_VALIDATION_FAILED', null, result, findings);
+    await logAudit(userId, userRole, moduleName, transactionData.id, 'AI_VALIDATION_FAILED', undefined, result, findings);
   }
 
   return { status: result, message: findings, logId: aiLog.id };

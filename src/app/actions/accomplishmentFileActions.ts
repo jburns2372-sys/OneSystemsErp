@@ -288,7 +288,7 @@ export async function createSuccessiveBillingAction(projectId: string, templateF
       const sourceBuffer = Buffer.from(arrayBuffer);
 
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(sourceBuffer);
+      await workbook.xlsx.load(sourceBuffer as any);
       const worksheet = workbook.worksheets[0];
 
       if (worksheet) {

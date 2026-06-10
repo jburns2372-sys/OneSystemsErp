@@ -26,7 +26,7 @@ describe('PaymentRoutingService', () => {
     bankVerificationStatus: 'Verified',
     bankCode: 'BDO',
     bankName: 'BDO Unibank',
-  } as Worker;
+  } as unknown as Worker;
 
   it('routes Weekly Salaried workers to GCash if verified', async () => {
     const worker = {
@@ -35,7 +35,7 @@ describe('PaymentRoutingService', () => {
       allowedPaymentMethod: 'GCash Only',
       gcashNumber: '09171234567',
       gcashVerificationStatus: 'Verified'
-    } as Worker;
+    } as unknown as Worker;
 
     const result = await PaymentRoutingService.determineRoute(worker, 5000);
     expect(result.route).toBe('GCASH');
@@ -46,7 +46,7 @@ describe('PaymentRoutingService', () => {
       ...baseWorker,
       payrollCategory: 'Weekly Salaried',
       allowedPaymentMethod: 'Bank Transfer Only',
-    } as Worker;
+    } as unknown as Worker;
 
     const result = await PaymentRoutingService.determineRoute(worker, 5000);
     expect(result.route).toBe('MANUAL_REVIEW');
@@ -57,7 +57,7 @@ describe('PaymentRoutingService', () => {
       ...baseWorker,
       bankCode: 'UBP',
       bankName: 'Union Bank of the Phils',
-    } as Worker;
+    } as unknown as Worker;
 
     const result = await PaymentRoutingService.determineRoute(worker, 15000);
     expect(result.route).toBe('UNIONBANK_INTERNAL');

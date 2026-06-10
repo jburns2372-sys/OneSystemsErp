@@ -25,7 +25,7 @@ export default function DeliveryWorkflowButtons({
     setError('');
     startTransition(async () => {
       try {
-        const res = await approveDelivery(deliveryId);
+        const res = await approveDelivery(deliveryId) as any;
         if (res.success) {
           router.refresh();
         } else {
