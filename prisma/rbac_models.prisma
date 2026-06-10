@@ -1,0 +1,256 @@
+
+// -----------------------------------------------------------------------------
+// MASTER ANTIGRAVITY RBAC, WORKFLOW, AND AI NOTEBOOK TABLES
+// -----------------------------------------------------------------------------
+
+model Role {
+  id          String   @id @default(cuid())
+  roleName    String   @unique
+  roleCode    String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model Module {
+  id          String   @id @default(cuid())
+  moduleName  String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  moduleId     String
+  moduleName   String
+
+  canView                   Boolean @default(false)
+  canCreate                 Boolean @default(false)
+  canEditDraft              Boolean @default(false)
+  canSubmit                 Boolean @default(false)
+  canReview                 Boolean @default(false)
+  canRecommend              Boolean @default(false)
+  canApprove                Boolean @default(false)
+  canReject                 Boolean @default(false)
+  canReturnForCorrection    Boolean @default(false)
+  canCancel                 Boolean @default(false)
+  canRevise                 Boolean @default(false)
+  canLock                   Boolean @default(false)
+  canUnlockWithAuthorization Boolean @default(false)
+  canReleasePayment         Boolean @default(false)
+  canMarkAsPaid             Boolean @default(false)
+  canUploadAttachment       Boolean @default(false)
+  canDownloadAttachment     Boolean @default(false)
+  canPrint                  Boolean @default(false)
+  canExport                 Boolean @default(false)
+  canDeleteDraft            Boolean @default(false)
+  canVoidRecord             Boolean @default(false)
+  canViewAuditLogs          Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, moduleId])
+}
+
+model WorkflowTemplate {
+  id           String @id @default(cuid())
+  moduleName   String @unique
+  description  String?
+  isActive     Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  steps        WorkflowStep[]
+}
+
+model WorkflowStep {
+  id                 String @id @default(cuid())
+  templateId         String
+  stepOrder          Int
+  stageName          String
+  requiredRole       String
+  actionRequired     String // e.g., REVIEW, APPROVE
+  isTerminal         Boolean @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  template WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+}
+
+model TransactionWorkflow {
+  id                  String @id @default(cuid())
+  moduleName          String
+  transactionId       String
+
+  preparedBy          String?
+  preparedByRole      String?
+  reviewedBy          String?
+  reviewedByRole      String?
+  recommendedBy       String?
+  recommendedByRole   String?
+  approvedBy          String?
+  approvedByRole      String?
+  paidBy              String?
+  paidByRole          String?
+
+  currentStatus       String @default("DRAFT")
+  currentStage        String @default("PREPARATION")
+  nextRequiredRole    String?
+
+  datePrepared        DateTime?
+  dateReviewed        DateTime?
+  dateRecommended     DateTime?
+  dateApproved        DateTime?
+  datePaid            DateTime?
+
+  remarks             String?
+  auditReference      String?
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([moduleName, transactionId])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  userId        String?
+  userRole      String?
+  moduleName    String
+  transactionId String?
+  actionType    String
+  oldValue      String?  @db.Text
+  newValue      String?  @db.Text
+  remarks       String?  @db.Text
+  ipAddress     String?
+  deviceInfo    String?
+  createdAt     DateTime @default(now())
+
+  user User? @relation("AuditLogs", fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model AIValidationLog {
+  id                String   @id @default(cuid())
+  moduleName        String
+  transactionId     String
+  userId            String?
+  userRole          String?
+  validationType    String
+  validationResult  String // PASSED, WARNING, BLOCKING_ISSUE, NEEDS_HUMAN_REVIEW
+  riskLevel         String?
+  aiFindings        String?  @db.Text
+  aiRecommendation  String?  @db.Text
+  createdAt         DateTime @default(now())
+
+  user User? @relation("AIValidationLogs", fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model LockedRecord {
+  id            String   @id @default(cuid())
+  moduleName    String
+  transactionId String
+  lockedBy      String?
+  lockedAt      DateTime @default(now())
+  reason        String?
+
+  @@unique([moduleName, transactionId])
+}
+
+model RevisionRequest {
+  id            String   @id @default(cuid())
+  moduleName    String
+  transactionId String
+  requestedBy   String
+  reason        String   @db.Text
+  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime @default(now())
+}
+
+model PaymentLog {
+  id               String   @id @default(cuid())
+  transactionId    String
+  moduleName       String
+  amount           Float
+  paymentMethod    String
+  referenceNumber  String?
+  processedBy      String
+  processedByRole  String?
+  createdAt        DateTime @default(now())
+}
+
+model UserLoginLog {
+  id           String   @id @default(cuid())
+  userId       String
+  ipAddress    String?
+  deviceInfo   String?
+  status       String // SUCCESS, FAILED, LOCKED
+  createdAt    DateTime @default(now())
+
+  user User @relation("UserLoginLogs", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RoleConflictRule {
+  id               String   @id @default(cuid())
+  role1Code        String
+  role2Code        String
+  severity         String // HIGH, CRITICAL
+  description      String?
+  createdAt        DateTime @default(now())
+}
+
+model AINotebookReference {
+  id                String   @id @default(cuid())
+  fileName          String
+  fileType          String
+  fileUrl           String
+  uploadedBy        String
+  uploadedByRole    String?
+  projectAssignment String?
+  moduleAssignment  String?
+  referenceCategory String
+  effectiveDate     DateTime?
+  expiryDate        DateTime?
+  versionNumber     Int      @default(1)
+  status            String   @default("PENDING_AI_INDEXING")
+  isMandatory       Boolean  @default(false)
+  supersededById    String?
+  approvedBy        String?
+  approvedDate      DateTime?
+  isLocked          Boolean  @default(false)
+  aiIndexingStatus  String   @default("PENDING")
+  aiSummary         String?  @db.Text
+  keywords          String?
+  validationUseCase String?
+  fileHash          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
