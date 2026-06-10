@@ -10,6 +10,11 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://onesystemserp.com'),
   title: "PGH-PMS | Project Management System",
   description: "Comprehensive construction Project Management and Monitoring System",
+  appleWebApp: {
+    capable: true,
+    title: "PGH-PMS",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({
