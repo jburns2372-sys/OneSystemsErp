@@ -199,16 +199,16 @@ export default function Sidebar() {
       </nav>
 
       <div style={{
-        padding: '20px',
+        padding: '15px',
         borderTop: '1px solid var(--glass-border)',
         display: 'flex',
-        flexDirection: isCollapsed ? 'column' : 'row',
-        alignItems: 'center',
+        flexDirection: 'column',
         gap: '15px',
-        justifyContent: 'space-between',
-        backgroundColor: 'rgba(0, 0, 0, 0.2)'
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', width: '100%', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
           <div style={{
             width: '35px',
             height: '35px',
@@ -224,32 +224,38 @@ export default function Sidebar() {
             AD
           </div>
           {!isCollapsed && (
-            <div style={{ overflow: 'hidden' }}>
-              <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 'bold', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>System Admin</div>
-              <div style={{ color: 'var(--accent-color)', fontSize: '0.75rem', letterSpacing: '1px' }}>ONLINE</div>
+            <div style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 'bold', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>System Admin</span>
+              <span style={{ color: 'var(--accent-color)', fontSize: '0.75rem', letterSpacing: '1px' }}>ONLINE</span>
             </div>
           )}
         </div>
         
-        <form action={logout}>
+        <form action={logout} style={{ width: '100%' }}>
           <button 
             type="submit"
             className="collapse-btn"
             style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-secondary)',
+              width: '100%',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#ef4444',
               cursor: 'pointer',
-              fontSize: '1.2rem',
-              padding: '5px',
-              borderRadius: '4px',
+              fontSize: '1rem',
+              padding: '8px',
+              borderRadius: '6px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              transition: 'all 0.2s',
+              fontWeight: 'bold',
+              gap: '6px'
             }}
             title="Sign Out"
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; }}
           >
-            🚪
+            🚪 {!isCollapsed && <span style={{ fontSize: '0.8rem' }}>Log Out</span>}
           </button>
         </form>
       </div>
