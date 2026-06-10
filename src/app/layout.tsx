@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
+import OfflineSyncProvider from "@/components/layout/OfflineSyncProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,13 +26,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Sidebar />
-        <div style={{ marginLeft: 'var(--sidebar-width)', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <Topbar />
-          <main style={{ padding: '30px', flex: 1, backgroundColor: 'var(--bg-primary)' }}>
-            {children}
-          </main>
-        </div>
+        <OfflineSyncProvider>
+          <Sidebar />
+          <div style={{ marginLeft: 'var(--sidebar-width)', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            <Topbar />
+            <main style={{ padding: '30px', flex: 1, backgroundColor: 'var(--bg-primary)' }}>
+              {children}
+            </main>
+          </div>
+        </OfflineSyncProvider>
       </body>
     </html>
   );

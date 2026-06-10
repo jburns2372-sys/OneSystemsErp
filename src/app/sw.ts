@@ -1,6 +1,7 @@
 import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
-import { Serwist } from "serwist";
+import { Serwist, NetworkOnly } from "serwist";
+import { BackgroundSyncPlugin } from "@serwist/background-sync";
 
 // This declares the value of `injectionPoint` to TypeScript.
 // `injectionPoint` is the string that will be replaced by the
@@ -13,6 +14,10 @@ declare global {
 }
 
 declare const self: ServiceWorkerGlobalScope;
+
+const bgSyncPlugin = new BackgroundSyncPlugin("serverActionsQueue", {
+  maxRetentionTime: 24 * 60, // Retry for max of 24 Hours (specified in minutes)
+});
 
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
@@ -31,5 +36,12 @@ const serwist = new Serwist({
     ],
   },
 });
+
+serwist.registerRoute(
+  ({ request }) => request.method === "POST" || request.headers.has('next-action'),
+  new NetworkOnly({
+    plugins: [bgSyncPlugin],
+  })
+);
 
 serwist.addEventListeners();
