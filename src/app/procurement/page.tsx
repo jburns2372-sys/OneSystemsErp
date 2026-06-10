@@ -8,7 +8,7 @@ import { cookies } from 'next/headers';
 
 export default async function ProcurementHub() {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('userId')?.value || '';
+  const userId = cookieStore.get('session')?.value || '';
   const permissions = await getUserPermissions(userId);
 
   return (

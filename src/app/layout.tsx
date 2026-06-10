@@ -32,7 +32,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('userId')?.value || '';
+  const userId = cookieStore.get('session')?.value || '';
   const permissions = await getUserPermissions(userId);
 
   return (

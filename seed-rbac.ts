@@ -19,6 +19,7 @@ async function main() {
     { roleCode: 'SYSTEM_ADMIN', module: 'PURCHASE_ORDER', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
     { roleCode: 'SYSTEM_ADMIN', module: 'PAYROLL', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
     { roleCode: 'SYSTEM_ADMIN', module: 'FINANCE', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
+    { roleCode: 'SYSTEM_ADMIN', module: 'INVENTORY', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
 
     // --- MATERIALS ENGINEER ---
     { roleCode: 'MATERIALS_ENGINEER', module: 'PROCUREMENT', canView: true, canCreate: true, canEditDraft: false, canDeleteDraft: false, canApprove: false },
@@ -50,7 +51,7 @@ async function main() {
     { roleCode: 'COST_OFFICER', module: 'FINANCE', canView: true, canCreate: false, canEditDraft: true, canDeleteDraft: false, canApprove: true },
 
     // --- GUEST USER ---
-    { roleCode: 'GUEST_USER', module: 'PROCUREMENT', canView: false, canCreate: false, canEditDraft: false, canDeleteDraft: false, canApprove: false }
+    { roleCode: 'GUEST_USER', module: 'PROCUREMENT', canView: true, canCreate: false, canEditDraft: false, canDeleteDraft: false, canApprove: false }
   ];
 
   // 3. Apply the permissions to the database
@@ -105,7 +106,7 @@ async function main() {
            role: { connect: { id: guestRoleId } }, 
            module: { connect: { id: mod.id } }, 
            moduleName: modName, 
-           canView: false, canCreate: false, canEditDraft: false, canDeleteDraft: false, canApprove: false 
+           canView: true, canCreate: false, canEditDraft: false, canDeleteDraft: false, canApprove: false 
          }
        });
      }
