@@ -67,7 +67,7 @@ Pending AI Overrides: ${stats.pendingAIOverrides}
   const projects = await prisma.project.findMany({ take: 10 });
   let projectContext = '--- ACTIVE PROJECTS ---\n';
   for (const p of projects) {
-    projectContext += `- ${p.name} (${p.status}): Budget=₱${p.contractBudget}\n`;
+    projectContext += `- ${p.name} (${p.status}): Budget=₱${p.contractAmount}\n`;
   }
 
   const systemPrompt = `You are the specialized AI Command Center Autonomous Agent for the company's Enterprise Resource Planning (ERP) system.
