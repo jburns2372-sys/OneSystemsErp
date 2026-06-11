@@ -35,6 +35,31 @@ export async function getDashboardStats() {
   });
   const accomplishmentPercentage = boqStats._avg.percentageAccomplished || 0;
 
+  // Additional Role-Specific Stats
+  const pendingAIOverrides = await prisma.aIValidationOverride.count({
+    where: { approvedBy: null }
+  });
+
+  const pendingPettyCash = await prisma.pettyCashAccount.count({
+    where: { currentBalance: { lt: 5000 } } // arbitrary threshold for "needs replenishment"
+  });
+
+  const activePayrollPeriods = await prisma.payrollPeriod.count({
+    where: { status: { in: ['DRAFT', 'PROCESSING', 'PENDING_APPROVAL'] } }
+  });
+
+  const activePurchaseOrders = await prisma.purchaseOrder.count({
+    where: { status: { in: ['PENDING', 'APPROVED', 'PARTIAL_DELIVERY'] } }
+  });
+
+  const expectedDeliveries = await prisma.purchaseOrder.count({
+    where: { status: { in: ['APPROVED', 'PARTIAL_DELIVERY'] } }
+  });
+
+  const pendingMRFs = await prisma.materialRequest.count({
+    where: { status: 'PENDING' }
+  });
+
   return {
     totalProjects,
     pendingMRs,
@@ -43,5 +68,11 @@ export async function getDashboardStats() {
     totalExpenses,
     totalPayables,
     accomplishmentPercentage,
+    pendingAIOverrides,
+    pendingPettyCash,
+    activePayrollPeriods,
+    activePurchaseOrders,
+    expectedDeliveries,
+    pendingMRFs
   };
 }

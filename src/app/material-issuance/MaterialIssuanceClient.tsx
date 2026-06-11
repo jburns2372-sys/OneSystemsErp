@@ -7,8 +7,9 @@ import IssuanceDetailsModal from './IssuanceDetailsModal';
 
 import ReturnDetailsModal from './ReturnDetailsModal';
 import CreateReturnModal from './CreateReturnModal';
+import PermissionGuard from '@/components/PermissionGuard';
 
-export default function MaterialIssuanceClient({ issuances, projects, users, returns = [] }: { issuances: any[], projects: any[], users: any[], returns?: any[] }) {
+export default function MaterialIssuanceClient({ issuances, projects, users, returns = [], permissions }: { issuances: any[], projects: any[], users: any[], returns?: any[], permissions?: any }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreateReturnOpen, setIsCreateReturnOpen] = useState(false);
   const [selectedIssuance, setSelectedIssuance] = useState<any>(null);
@@ -71,15 +72,19 @@ export default function MaterialIssuanceClient({ issuances, projects, users, ret
         
         <div style={{ marginLeft: 'auto' }}>
           {activeTab === 'ISSUANCES' && (
-            <button onClick={() => setIsCreateOpen(true)} style={{ background: 'var(--accent-color)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(0, 255, 163, 0.2)', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}>
-              <span style={{ fontSize: '1.2rem' }}>+</span> New Issuance Slip
-            </button>
+            <PermissionGuard permissions={permissions} moduleName="MATERIAL_ISSUANCE" action="canCreate">
+              <button onClick={() => setIsCreateOpen(true)} style={{ background: 'var(--accent-color)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(0, 255, 163, 0.2)', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                <span style={{ fontSize: '1.2rem' }}>+</span> New Issuance Slip
+              </button>
+            </PermissionGuard>
           )}
           
           {activeTab === 'RETURNS' && (
-            <button onClick={() => setIsCreateReturnOpen(true)} style={{ background: 'var(--accent-color)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(0, 255, 163, 0.2)', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}>
-              <span style={{ fontSize: '1.2rem' }}>+</span> New Return Slip
-            </button>
+            <PermissionGuard permissions={permissions} moduleName="MATERIAL_ISSUANCE" action="canCreate">
+              <button onClick={() => setIsCreateReturnOpen(true)} style={{ background: 'var(--accent-color)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(0, 255, 163, 0.2)', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                <span style={{ fontSize: '1.2rem' }}>+</span> New Return Slip
+              </button>
+            </PermissionGuard>
           )}
         </div>
       </div>

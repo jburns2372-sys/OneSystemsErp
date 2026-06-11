@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import ManageRolesModal from './ManageRolesModal';
 
-export default function ManageRolesButton({ roles }: { roles: string[] }) {
+export default function ManageRolesButton({ roles, rbacRoles, modules, permissions }: { roles: string[], rbacRoles?: any[], modules?: any[], permissions?: any[] }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -27,7 +27,7 @@ export default function ManageRolesButton({ roles }: { roles: string[] }) {
         Manage Roles
       </button>
 
-      {isOpen && <ManageRolesModal onClose={() => setIsOpen(false)} roles={roles} />}
+      {isOpen && <ManageRolesModal onClose={() => setIsOpen(false)} roles={roles} rbacRoles={rbacRoles} modules={modules} permissions={permissions} />}
     </>
   );
 }

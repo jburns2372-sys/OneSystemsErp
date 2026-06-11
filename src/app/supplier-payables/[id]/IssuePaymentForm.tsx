@@ -3,11 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { issuePayment, clearAccruedPayment } from '@/app/actions/financeActions';
+import { submitAIOverrideRequest } from '@/app/actions/aiOverrideActions';
 
-export default function IssuePaymentForm({ payable, userRole }: { payable: any, userRole: string }) {
+export default function IssuePaymentForm({ payable, userRole, canIssue }: { payable: any, userRole: string, canIssue: boolean }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationLogId, setValidationLogId] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideSuccess, setOverrideSuccess] = useState(false);
   
   const supplierTerms = payable.po?.supplier?.paymentTerms || 'CASH ON DELIVERY';
 
@@ -20,7 +24,6 @@ export default function IssuePaymentForm({ payable, userRole }: { payable: any, 
 
   const isPaid = payable.status === 'PAID';
   const isAccrued = payable.status === 'ACCRUED';
-  const canIssue = userRole === 'COST_CONTROLLER' || userRole === 'FINANCE_OFFICER' || userRole === 'SYSTEM_ADMIN';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,13 +33,40 @@ export default function IssuePaymentForm({ payable, userRole }: { payable: any, 
     setError('');
     
     try {
-      await issuePayment(payable.id, formData);
-      router.refresh();
+      const res = await issuePayment(payable.id, formData);
+      if (res.success) {
+         router.refresh();
+      } else {
+         setError(res.error || 'Failed to issue payment');
+         setValidationLogId(res.validationLogId || null);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to issue payment');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOverride = async () => {
+    if (!validationLogId || !overrideReason) return;
+    setLoading(true);
+    const res = await submitAIOverrideRequest({
+      validationLogId,
+      transactionId: payable.id,
+      moduleName: 'Payment Issuance',
+      overriddenBy: 'user-stub', // Use actual session later
+      overriddenByRole: userRole,
+      overrideReason
+    });
+    
+    if (res.success) {
+      setOverrideSuccess(true);
+      setError('Override Request Submitted! A Project Director must approve it before this payment can be issued.');
+      setValidationLogId(null);
+    } else {
+      setError(res.error || 'Failed to submit override');
+    }
+    setLoading(false);
   };
 
   const handleClear = async () => {
@@ -98,7 +128,31 @@ export default function IssuePaymentForm({ payable, userRole }: { payable: any, 
         </div>
       ) : (
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {error && <div style={{ color: '#ef4444', padding: '10px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '4px' }}>{error}</div>}
+          {error && (
+            <div style={{ color: '#ef4444', padding: '15px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+              <div style={{ fontWeight: 600, marginBottom: '5px' }}>{error}</div>
+              
+              {validationLogId && !overrideSuccess && (
+                <div style={{ marginTop: '15px', padding: '15px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px' }}>
+                  <div style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '10px' }}>Apply for AI Exception Override:</div>
+                  <textarea 
+                    value={overrideReason} 
+                    onChange={e => setOverrideReason(e.target.value)} 
+                    placeholder="Justification for bypassing policy..."
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#111', color: '#fff', border: '1px solid #444', marginBottom: '10px' }}
+                  />
+                  <button 
+                    type="button"
+                    onClick={handleOverride}
+                    disabled={loading || !overrideReason}
+                    style={{ padding: '8px 16px', background: '#ffd43b', color: '#000', borderRadius: '6px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    Submit Override to Director
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           
           <div>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Amount to Pay (₱)</label>

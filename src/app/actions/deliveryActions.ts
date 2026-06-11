@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/permissions';
 import { submitTransaction, approveTransaction } from '@/lib/workflow';
+import { validateTransactionWithAI } from './aiValidationActions';
 
 export async function encodeDelivery(data: {
   poId: string;
@@ -38,6 +39,30 @@ export async function encodeDelivery(data: {
       return `${diff > 0 ? 'Missing' : 'Over-delivered'} ${Math.abs(diff)} of ${boq?.description || 'Unknown Item'} (Reason: ${item.remarks})`;
     }).join(' | ');
   }
+
+  // === AI VALIDATION INTERCEPTOR ===
+  const validation = await validateTransactionWithAI(
+    'Delivery Receiving',
+    {
+      action: 'Encode Delivery Receipt',
+      poId: data.poId,
+      receiptNumber: data.receiptNumber,
+      isMismatch,
+      mismatchNotes,
+      items: data.items
+    },
+    user.id,
+    user.role || 'STOCKMAN'
+  );
+
+  if (validation.validationStatus === 'BLOCKING ISSUE') {
+    return { 
+      success: false, 
+      error: `AI Blocked Transaction: ${validation.findings}`,
+      validationLogId: validation.validationLogId 
+    };
+  }
+  // =================================
 
   const delivery = await prisma.delivery.create({
     data: {

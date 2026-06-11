@@ -2,8 +2,10 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { validateTransactionWithAI } from './aiValidationActions';
+import { logAudit } from '@/lib/workflow';
 
-  export async function createPayrollPeriod(data: any, userId: string) {
+export async function createPayrollPeriod(data: any, userId: string) {
   try {
     const { month, year, calendarRule, periodType, startDate, endDate, payrollDate, projectId, notes } = data;
 
@@ -21,6 +23,31 @@ import { revalidatePath } from 'next/cache';
     if (existing) {
       throw new Error(`A payroll period for ${periodType} of ${month}/${year} already exists.`);
     }
+
+    // === AI VALIDATION INTERCEPTOR ===
+    const validation = await validateTransactionWithAI(
+      'Payroll Generation',
+      {
+        action: 'Create New Payroll Period',
+        month,
+        year,
+        calendarRule,
+        periodType,
+        startDate,
+        endDate
+      },
+      userId,
+      'USER' // Need actual user session role ideally, defaulting for now
+    );
+
+    if (validation.validationStatus === 'BLOCKING ISSUE') {
+      return { 
+        success: false, 
+        error: `AI Blocked Transaction: ${validation.findings}`,
+        validationLogId: validation.validationLogId 
+      };
+    }
+    // =================================
 
     // Generate Batch Number
     const typeCode = periodType.replace('_', '').substring(0, 4);
@@ -79,6 +106,17 @@ import { revalidatePath } from 'next/cache';
         data: payrollEntries
       });
     }
+
+    await logAudit(
+      userId,
+      'HR_OFFICER', // Default role if not available
+      'PAYROLL_PROCESSING',
+      period.id,
+      'CREATE_PAYROLL_PERIOD',
+      undefined,
+      'DRAFT',
+      `Created ${periodType} payroll period for ${month}/${year}`
+    );
 
     revalidatePath('/payroll');
     return { success: true, data: period };

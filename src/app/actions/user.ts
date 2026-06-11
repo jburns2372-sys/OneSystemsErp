@@ -14,6 +14,19 @@ export async function deleteSystemRole(roleName: string) {
   await prisma.systemRole.delete({
     where: { name: roleName }
   });
+  
+  const rbac = await prisma.role.findFirst({
+    where: {
+      OR: [
+        { roleName },
+        { roleCode: roleName }
+      ]
+    }
+  });
+  if (rbac) {
+    await prisma.role.delete({ where: { id: rbac.id } });
+  }
+  
   revalidatePath('/users');
 }
 
@@ -32,11 +45,27 @@ export async function updateSystemRole(oldName: string, newName: string) {
     where: { name: oldName },
     data: { name: normalizedNew }
   });
+  
+  const rbac = await prisma.role.findFirst({
+    where: {
+      OR: [
+        { roleName: oldName },
+        { roleCode: oldName }
+      ]
+    }
+  });
+  if (rbac) {
+    await prisma.role.update({
+      where: { id: rbac.id },
+      data: { roleName: normalizedNew, roleCode: normalizedNew }
+    });
+  }
+  
   revalidatePath('/users');
 }
 
-async function ensureSystemRole(roleName: string) {
-  const normalized = roleName.toUpperCase().trim();
+export async function createSystemRole(roleName: string) {
+  const normalized = roleName.toUpperCase().replace(/\s+/g, '_').trim();
   const existing = await prisma.systemRole.findUnique({
     where: { name: normalized }
   });
@@ -45,6 +74,28 @@ async function ensureSystemRole(roleName: string) {
       data: { name: normalized }
     });
   }
+  
+  // Ensure RBAC Role also exists
+  const existingRbac = await prisma.role.findFirst({
+    where: {
+      OR: [
+        { roleName: normalized },
+        { roleCode: normalized }
+      ]
+    }
+  });
+  if (!existingRbac) {
+    await prisma.role.create({
+      data: {
+        roleName: normalized,
+        roleCode: normalized,
+        description: normalized
+      }
+    });
+  }
+  
+  
+  revalidatePath('/users');
   return normalized;
 }
 
@@ -61,7 +112,7 @@ export async function createUser(data: { name: string, email: string, role: stri
     throw new Error('A user with this email already exists.');
   }
 
-  const finalRole = await ensureSystemRole(data.role);
+  const finalRole = await createSystemRole(data.role);
 
   await prisma.user.create({
     data: {
@@ -88,7 +139,7 @@ export async function updateUser(id: string, data: { name: string, email: string
     throw new Error('A different user with this email already exists.');
   }
 
-  const finalRole = await ensureSystemRole(data.role);
+  const finalRole = await createSystemRole(data.role);
 
   const updateData: any = {
     name: data.name,

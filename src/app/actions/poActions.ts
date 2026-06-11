@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { requirePermission } from '@/lib/permissions';
 import { submitTransaction, approveTransaction } from '@/lib/workflow';
-import { validateTransactionWithAI } from '@/lib/ai-validation';
+import { validateTransactionWithAI } from './aiValidationActions';
 
 export async function createPOFromMRF(mrId: string, items: { consolidatedBoqItemId: string, quantity: number, unitCost: number, supplierId: string }[]) {
   const cookieStore = await cookies();
@@ -28,6 +28,27 @@ export async function createPOFromMRF(mrId: string, items: { consolidatedBoqItem
     groups[item.supplierId].push(item);
     return groups;
   }, {});
+
+  // === AI VALIDATION INTERCEPTOR ===
+  const validation = await validateTransactionWithAI(
+    'Purchase Order Generation',
+    {
+      action: 'Generate Purchase Orders from MRF',
+      mrId,
+      itemsToProcure: items
+    },
+    currentUser.id,
+    currentUser.role || 'PURCHASING_OFFICER'
+  );
+
+  if (validation.validationStatus === 'BLOCKING ISSUE') {
+    return { 
+      success: false, 
+      error: `AI Blocked Transaction: ${validation.findings}`,
+      validationLogId: validation.validationLogId 
+    };
+  }
+  // =================================
 
   const createdPOIds = [];
   
@@ -78,17 +99,6 @@ export async function createPOFromMRF(mrId: string, items: { consolidatedBoqItem
 
     // Enforce Workflow Submission
     await submitTransaction(currentUser.id, currentUser.role || 'PURCHASING_OFFICER', 'PURCHASE_ORDER', po.id);
-
-    // Trigger AI Validation Engine to check against Awarded BOQ
-    const aiCheck = await validateTransactionWithAI('PURCHASE_ORDER', po, currentUser.id, currentUser.role || 'PURCHASING_OFFICER');
-    
-    if (aiCheck.status === 'BLOCKING_ISSUE') {
-      // Revert status to draft or flag it heavily if AI detects major violation
-      await prisma.purchaseOrder.update({
-        where: { id: po.id },
-        data: { status: 'AI_BLOCKED' }
-      });
-    }
     
     createdPOIds.push(po.id);
   }
@@ -102,7 +112,7 @@ export async function createPOFromMRF(mrId: string, items: { consolidatedBoqItem
   revalidatePath('/procurement/purchase-orders');
   revalidatePath('/material-requests');
   
-  return createdPOIds;
+  return { success: true, createdPOIds };
 }
 
 export async function approvePurchaseOrder(poId: string) {

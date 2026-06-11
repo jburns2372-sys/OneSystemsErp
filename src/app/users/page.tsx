@@ -13,6 +13,10 @@ export default async function UsersPage() {
     orderBy: { createdAt: 'desc' },
   });
   const roles = await getSystemRoles();
+  
+  const rbacRoles = await prisma.role.findMany({ orderBy: { roleName: 'asc' } });
+  const modules = await prisma.module.findMany({ orderBy: { moduleName: 'asc' } });
+  const permissions = await prisma.rolePermission.findMany();
 
   return (
     <div className={styles.container}>
@@ -22,7 +26,7 @@ export default async function UsersPage() {
           <p>Manage access and roles for all personnel.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <ManageRolesButton roles={roles} />
+          <ManageRolesButton roles={roles} rbacRoles={rbacRoles} modules={modules} permissions={permissions} />
           <AddUserButton roles={roles} />
         </div>
       </header>

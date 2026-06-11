@@ -2,11 +2,14 @@ import styles from '../page.module.css';
 import { prisma } from '@/lib/prisma';
 import PayrollClient from './PayrollClient';
 import { cookies } from 'next/headers';
+import { getUserPermissions } from '@/lib/permissions';
 
 export default async function PayrollPage() {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
   const currentUserId = sessionId || 'demo-user-id';
+
+  const permissions = await getUserPermissions(currentUserId);
 
   const periods = await prisma.payrollPeriod.findMany({
     include: {
@@ -32,7 +35,7 @@ export default async function PayrollPage() {
         <div className={styles.headerTitle}>
           <h1>Payroll Dashboard</h1>
         </div>
-        <PayrollClient periods={periods} workers={workers} projects={projects} currentUserId={currentUserId} />
+        <PayrollClient periods={periods} workers={workers} projects={projects} currentUserId={currentUserId} permissions={permissions} />
       </header>
     </div>
   );

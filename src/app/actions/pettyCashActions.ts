@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { validateTransactionWithAI } from './aiValidationActions';
 
 export async function createPettyCashAccount(data: {
   accountName: string;
@@ -80,6 +81,30 @@ export async function logPettyCashExpense(data: {
   issuedById?: string;
 }) {
   try {
+    // === AI VALIDATION INTERCEPTOR ===
+    const validation = await validateTransactionWithAI(
+      'Expense Ledger', // using Expense Ledger since policies usually cover all expenses
+      {
+        action: 'Log Petty Cash Expense',
+        payee: data.payee,
+        purpose: data.purpose,
+        category: data.category,
+        amount: data.amount,
+        hasReceipt: !data.isNoReceipt
+      },
+      data.issuedById || 'unknown',
+      'USER' // Default role for now
+    );
+
+    if (validation.validationStatus === 'BLOCKING ISSUE') {
+      return { 
+        success: false, 
+        error: `AI Blocked Transaction: ${validation.findings}`,
+        validationLogId: validation.validationLogId 
+      };
+    }
+    // =================================
+
     await prisma.$transaction(async (tx) => {
       // 1. Get the account and check balance
       const account = await tx.pettyCashAccount.findUnique({ where: { id: data.accountId } });

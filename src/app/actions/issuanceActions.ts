@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { validateTransactionWithAI } from './aiValidationActions';
 
 export async function getConsolidatedItemsForIssuance(projectId: string) {
   try {
@@ -22,6 +23,28 @@ export async function getConsolidatedItemsForIssuance(projectId: string) {
 
 export async function createIssuanceSlip(data: any) {
   try {
+    // === AI VALIDATION INTERCEPTOR ===
+    const validation = await validateTransactionWithAI(
+      'Material Issuance',
+      {
+        action: 'Create Material Issuance Slip',
+        projectId: data.projectId,
+        activity: data.activity,
+        itemsRequested: data.items
+      },
+      data.foremanId || 'unknown',
+      'USER' // Need actual user session role ideally, defaulting for now
+    );
+
+    if (validation.validationStatus === 'BLOCKING ISSUE') {
+      return { 
+        success: false, 
+        error: `AI Blocked Transaction: ${validation.findings}`,
+        validationLogId: validation.validationLogId 
+      };
+    }
+    // =================================
+
     // Generate a simple MIS Number
     const count = await prisma.materialIssuance.count();
     const misNumber = `MIS-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;

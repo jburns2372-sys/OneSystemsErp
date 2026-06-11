@@ -1,6 +1,7 @@
 import styles from '../projects/page.module.css';
 import { prisma } from '@/lib/prisma';
 import MaterialIssuanceClient from './MaterialIssuanceClient';
+import { getUserPermissions } from '@/lib/permissions';
 
 export default async function MaterialIssuancePage() {
   const issuances = await prisma.materialIssuance.findMany({
@@ -44,9 +45,13 @@ export default async function MaterialIssuancePage() {
     select: { id: true, name: true, role: true }
   });
 
+  // Fetch permissions for the logged-in user (using stub user for now)
+  const userId = users.length > 0 ? users[0].id : ''; 
+  const permissions = await getUserPermissions(userId);
+
   return (
     <div className={styles.pageContainer}>
-      <MaterialIssuanceClient issuances={issuances} projects={projects} users={users} returns={returns} />
+      <MaterialIssuanceClient issuances={issuances} projects={projects} users={users} returns={returns} permissions={permissions} />
     </div>
   );
 }

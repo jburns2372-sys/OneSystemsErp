@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getConsolidatedItemsForIssuance, createIssuanceSlip } from '../actions/issuanceActions';
+import { submitAIOverrideRequest } from '../actions/aiOverrideActions';
 
 export default function CreateIssuanceModal({ projects, users, onClose }: { projects: any[], users: any[], onClose: () => void }) {
   const [loading, setLoading] = useState(false);
@@ -11,6 +12,9 @@ export default function CreateIssuanceModal({ projects, users, onClose }: { proj
   const [items, setItems] = useState<any[]>([{ consolidatedBoqItemId: '', requestedQty: 1 }]);
   const [boqItems, setBoqItems] = useState<any[]>([]);
   const [error, setError] = useState('');
+  const [validationLogId, setValidationLogId] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideSuccess, setOverrideSuccess] = useState(false);
 
   // Fetch BOQ Items when project changes
   useEffect(() => {
@@ -88,8 +92,31 @@ export default function CreateIssuanceModal({ projects, users, onClose }: { proj
       onClose();
     } else {
       setError(res.error || 'Failed to create slip');
+      setValidationLogId(res.validationLogId || null);
       setLoading(false);
     }
+  };
+
+  const handleOverride = async () => {
+    if (!validationLogId || !overrideReason) return;
+    setLoading(true);
+    const res = await submitAIOverrideRequest({
+      validationLogId,
+      transactionId: 'PENDING_OVERRIDE',
+      moduleName: 'Material Issuance',
+      overriddenBy: foremanId || 'user-stub', // Use actual session later
+      overriddenByRole: 'WAREHOUSE_CUSTODIAN',
+      overrideReason
+    });
+    
+    if (res.success) {
+      setOverrideSuccess(true);
+      setError('Override Request Submitted! A Project Director must approve it before this material can be issued.');
+      setValidationLogId(null);
+    } else {
+      setError(res.error || 'Failed to submit override');
+    }
+    setLoading(false);
   };
 
   return (
@@ -162,7 +189,27 @@ export default function CreateIssuanceModal({ projects, users, onClose }: { proj
               borderRadius: '0 8px 8px 0',
               fontWeight: '500'
             }}>
-              {error}
+              <div style={{ marginBottom: '5px' }}>{error}</div>
+              
+              {validationLogId && !overrideSuccess && (
+                <div style={{ marginTop: '15px', padding: '15px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px' }}>
+                  <div style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '10px' }}>Apply for AI Exception Override:</div>
+                  <textarea 
+                    value={overrideReason} 
+                    onChange={e => setOverrideReason(e.target.value)} 
+                    placeholder="Justification for bypassing policy (e.g. emergency repair)..."
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#111', color: '#fff', border: '1px solid #444', marginBottom: '10px' }}
+                  />
+                  <button 
+                    type="button"
+                    onClick={handleOverride}
+                    disabled={loading || !overrideReason}
+                    style={{ padding: '8px 16px', background: '#ffd43b', color: '#000', borderRadius: '6px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    Submit Override to Director
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { encodeDelivery } from '@/app/actions/deliveryActions';
+import { submitAIOverrideRequest } from '@/app/actions/aiOverrideActions';
 import styles from '../../projects/page.module.css';
 
 export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: any[] }) {
@@ -16,6 +17,9 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   
   const [error, setError] = useState('');
+  const [validationLogId, setValidationLogId] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideSuccess, setOverrideSuccess] = useState(false);
 
   const selectedPo = purchaseOrders.find(po => po.id === selectedPoId);
 
@@ -74,11 +78,34 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
         });
         if (res.success) {
           router.push(`/deliveries/${res.deliveryId}`);
+        } else {
+          setError(res.error || 'Failed to log delivery');
+          setValidationLogId(res.validationLogId || null);
         }
       } catch (err: any) {
         setError(err.message || 'An error occurred while logging the delivery.');
       }
     });
+  };
+
+  const handleOverride = async () => {
+    if (!validationLogId || !overrideReason) return;
+    const res = await submitAIOverrideRequest({
+      validationLogId,
+      transactionId: 'PENDING_DELIVERY',
+      moduleName: 'Delivery Receiving',
+      overriddenBy: 'user-stub', // Use actual session later
+      overriddenByRole: 'STOCKMAN',
+      overrideReason
+    });
+    
+    if (res.success) {
+      setOverrideSuccess(true);
+      setError('Override Request Submitted! A Project Director must approve it before this delivery is encoded.');
+      setValidationLogId(null);
+    } else {
+      setError(res.error || 'Failed to submit override');
+    }
   };
 
   return (
@@ -197,7 +224,31 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
           </div>
         )}
 
-        {error && <div style={{ color: '#ef4444', padding: '10px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px' }}>{error}</div>}
+        {error && (
+          <div style={{ background: 'rgba(255, 107, 107, 0.1)', color: '#ff6b6b', padding: '15px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.9rem', border: '1px solid rgba(255, 107, 107, 0.3)' }}>
+            <div style={{ fontWeight: 600, marginBottom: '5px' }}>{error}</div>
+            
+            {validationLogId && !overrideSuccess && (
+              <div style={{ marginTop: '15px', padding: '15px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px' }}>
+                <div style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '10px' }}>Apply for AI Exception Override:</div>
+                <textarea 
+                  value={overrideReason} 
+                  onChange={e => setOverrideReason(e.target.value)} 
+                  placeholder="Justification for bypassing policy (e.g. Supplier will deliver missing items tomorrow)..."
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#111', color: '#fff', border: '1px solid #444', marginBottom: '10px' }}
+                />
+                <button 
+                  type="button"
+                  onClick={handleOverride}
+                  disabled={isPending || !overrideReason}
+                  style={{ padding: '8px 16px', background: '#ffd43b', color: '#000', borderRadius: '6px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  Submit Override to Director
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', marginTop: '20px' }}>
           <button 

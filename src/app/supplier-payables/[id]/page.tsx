@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import Link from 'next/link';
 import IssuePaymentForm from './IssuePaymentForm';
 import styles from '../../projects/page.module.css';
+import { getUserPermissions } from '@/lib/permissions';
 
 export default async function PayableDetailsPage({ params, searchParams }: { params: { id: string }, searchParams: { origin?: string } }) {
   const { origin } = await searchParams;
@@ -15,6 +16,9 @@ export default async function PayableDetailsPage({ params, searchParams }: { par
     const user = await prisma.user.findUnique({ where: { id: sessionId } });
     if (user) userRole = user.role;
   }
+
+  const permissions = await getUserPermissions(sessionId || '');
+  const canIssue = permissions?.PAYMENT_ISSUANCE?.canCreate || false;
 
   const { id } = await params;
 
@@ -126,7 +130,7 @@ export default async function PayableDetailsPage({ params, searchParams }: { par
 
         {/* Right Side: Form */}
         <div>
-          <IssuePaymentForm payable={payable} userRole={userRole} />
+          <IssuePaymentForm payable={payable} userRole={userRole} canIssue={canIssue} />
         </div>
       </div>
     </div>

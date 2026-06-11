@@ -3,10 +3,15 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPOFromMRF } from '@/app/actions/poActions';
+import { submitAIOverrideRequest } from '@/app/actions/aiOverrideActions';
 
 export default function GeneratePOForm({ mr, suppliers }: { mr: any, suppliers: any[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState('');
+  const [validationLogId, setValidationLogId] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideSuccess, setOverrideSuccess] = useState(false);
   
   const [items, setItems] = useState(
     mr.items.map((item: any) => ({
@@ -52,25 +57,50 @@ export default function GeneratePOForm({ mr, suppliers }: { mr: any, suppliers: 
     }
 
     startTransition(async () => {
+      setError('');
       try {
-        const poIds = await createPOFromMRF(mr.id, itemsToProcure.map((i: any) => ({
+        const res = await createPOFromMRF(mr.id, itemsToProcure.map((i: any) => ({
           consolidatedBoqItemId: i.consolidatedBoqItemId,
           quantity: i.quantity,
           unitCost: parseCost(i.unitCostInput),
           supplierId: i.supplierId
         })));
         
-        // If multiple POs created, redirect back to procurement hub, else to the single PO
-        if (poIds.length === 1) {
-          router.push(`/procurement/${poIds[0]}`);
+        if (res.success && res.createdPOIds) {
+          if (res.createdPOIds.length === 1) {
+            router.push(`/procurement/${res.createdPOIds[0]}`);
+          } else {
+            alert(`Successfully created ${res.createdPOIds.length} Purchase Orders.`);
+            router.push(`/procurement/purchase-orders`);
+          }
         } else {
-          alert(`Successfully created ${poIds.length} Purchase Orders.`);
-          router.push(`/procurement/purchase-orders`);
+          setError(res.error || 'Failed to generate PO');
+          setValidationLogId(res.validationLogId || null);
         }
       } catch (err: any) {
-        alert('Failed to generate PO: ' + err.message);
+        setError('Failed to generate PO: ' + err.message);
       }
     });
+  };
+
+  const handleOverride = async () => {
+    if (!validationLogId || !overrideReason) return;
+    const res = await submitAIOverrideRequest({
+      validationLogId,
+      transactionId: 'PENDING_PO_GEN',
+      moduleName: 'Purchase Order Generation',
+      overriddenBy: 'user-stub', // Use actual session later
+      overriddenByRole: 'PURCHASING_OFFICER',
+      overrideReason
+    });
+    
+    if (res.success) {
+      setOverrideSuccess(true);
+      setError('Override Request Submitted! A Project Director must approve it before this PO is created.');
+      setValidationLogId(null);
+    } else {
+      setError(res.error || 'Failed to submit override');
+    }
   };
 
   return (
@@ -80,6 +110,32 @@ export default function GeneratePOForm({ mr, suppliers }: { mr: any, suppliers: 
         <h3 style={{ color: 'var(--text-primary)', marginBottom: '5px' }}>Purchase Order Items</h3>
         <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.9rem' }}>Assign a supplier for each item. Items with different suppliers will automatically be split into separate Purchase Orders.</p>
       </div>
+
+      {error && (
+        <div style={{ background: 'rgba(255, 107, 107, 0.1)', color: '#ff6b6b', padding: '15px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.9rem', border: '1px solid rgba(255, 107, 107, 0.3)' }}>
+          <div style={{ fontWeight: 600, marginBottom: '5px' }}>{error}</div>
+          
+          {validationLogId && !overrideSuccess && (
+            <div style={{ marginTop: '15px', padding: '15px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px' }}>
+              <div style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '10px' }}>Apply for AI Exception Override:</div>
+              <textarea 
+                value={overrideReason} 
+                onChange={e => setOverrideReason(e.target.value)} 
+                placeholder="Justification for bypassing policy (e.g. Director requested specific supplier)..."
+                style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#111', color: '#fff', border: '1px solid #444', marginBottom: '10px' }}
+              />
+              <button 
+                type="button"
+                onClick={handleOverride}
+                disabled={isPending || !overrideReason}
+                style={{ padding: '8px 16px', background: '#ffd43b', color: '#000', borderRadius: '6px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                Submit Override to Director
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
         <thead>

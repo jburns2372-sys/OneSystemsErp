@@ -3,11 +3,15 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPayrollPeriod } from '@/app/actions/payrollActions';
+import { submitAIOverrideRequest } from '@/app/actions/aiOverrideActions';
 
 export default function CreatePeriodModal({ onClose, currentUserId, projects }: { onClose: () => void, currentUserId: string, projects: any[] }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationLogId, setValidationLogId] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideSuccess, setOverrideSuccess] = useState(false);
   
   const [formData, setFormData] = useState({
     month: new Date().getMonth() + 1,
@@ -87,8 +91,31 @@ export default function CreatePeriodModal({ onClose, currentUserId, projects }: 
       onClose();
     } else {
       setError(res.error || 'Failed to create period');
+      setValidationLogId(res.validationLogId || null);
       setLoading(false);
     }
+  };
+
+  const handleOverride = async () => {
+    if (!validationLogId || !overrideReason) return;
+    setLoading(true);
+    const res = await submitAIOverrideRequest({
+      validationLogId,
+      transactionId: 'PENDING_PAYROLL',
+      moduleName: 'Payroll Generation',
+      overriddenBy: currentUserId,
+      overriddenByRole: 'HR_MANAGER', // Can pull actual role later
+      overrideReason
+    });
+    
+    if (res.success) {
+      setOverrideSuccess(true);
+      setError('Override Request Submitted! A Project Director must approve it before this payroll period is created.');
+      setValidationLogId(null);
+    } else {
+      setError(res.error || 'Failed to submit override');
+    }
+    setLoading(false);
   };
 
   const getPeriodOptions = () => {
@@ -149,7 +176,27 @@ export default function CreatePeriodModal({ onClose, currentUserId, projects }: 
           <form onSubmit={handleSubmit}>
             {error && (
               <div style={{ background: 'rgba(255, 107, 107, 0.1)', color: '#ff6b6b', padding: '15px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.9rem', border: '1px solid rgba(255, 107, 107, 0.3)' }}>
-                {error}
+                <div style={{ fontWeight: 600, marginBottom: '5px' }}>{error}</div>
+                
+                {validationLogId && !overrideSuccess && (
+                  <div style={{ marginTop: '15px', padding: '15px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px' }}>
+                    <div style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '10px' }}>Apply for AI Exception Override:</div>
+                    <textarea 
+                      value={overrideReason} 
+                      onChange={e => setOverrideReason(e.target.value)} 
+                      placeholder="Justification for bypassing policy (e.g. Director requested special payroll)..."
+                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#111', color: '#fff', border: '1px solid #444', marginBottom: '10px' }}
+                    />
+                    <button 
+                      type="button"
+                      onClick={handleOverride}
+                      disabled={loading || !overrideReason}
+                      style={{ padding: '8px 16px', background: '#ffd43b', color: '#000', borderRadius: '6px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      Submit Override to Director
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

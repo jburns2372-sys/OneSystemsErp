@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { logPettyCashExpense } from '../../actions/pettyCashActions';
+import { submitAIOverrideRequest } from '../../actions/aiOverrideActions';
 import { useRouter } from 'next/navigation';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -25,6 +26,9 @@ export default function LogPCExpenseModal({ account, users, onClose }: { account
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationLogId, setValidationLogId] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideSuccess, setOverrideSuccess] = useState(false);
 
   const numNet = Number(netAmount) || 0;
   const vatAmount = isVat ? numNet * 0.12 : 0;
@@ -70,8 +74,31 @@ export default function LogPCExpenseModal({ account, users, onClose }: { account
       onClose();
     } else {
       setError(res.error || 'Failed to log expense');
+      setValidationLogId(res.validationLogId || null);
       setLoading(false);
     }
+  };
+
+  const handleOverride = async () => {
+    if (!validationLogId || !overrideReason) return;
+    setLoading(true);
+    const res = await submitAIOverrideRequest({
+      validationLogId,
+      transactionId: 'PENDING_OVERRIDE',
+      moduleName: 'Petty Cash',
+      overriddenBy: 'user-stub', // Use actual session later
+      overriddenByRole: 'USER',
+      overrideReason
+    });
+    
+    if (res.success) {
+      setOverrideSuccess(true);
+      setError('Override Request Submitted! A Project Director must approve it before this expense can be logged.');
+      setValidationLogId(null);
+    } else {
+      setError(res.error || 'Failed to submit override');
+    }
+    setLoading(false);
   };
 
   return (
@@ -97,7 +124,30 @@ export default function LogPCExpenseModal({ account, users, onClose }: { account
           Available Balance: <strong style={{ color: '#fff' }}>₱ {account.currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
         </div>
         
-        {error && <div style={{ background: 'rgba(255,50,50,0.1)', color: '#ff6b6b', padding: '10px', borderRadius: '6px', marginBottom: '15px' }}>{error}</div>}
+        {error && (
+          <div style={{ background: 'rgba(255,50,50,0.1)', color: '#ff6b6b', padding: '15px', borderRadius: '8px', marginBottom: '15px', border: '1px solid rgba(255,50,50,0.3)' }}>
+            <div style={{ fontWeight: 600, marginBottom: '5px' }}>{error}</div>
+            
+            {validationLogId && !overrideSuccess && (
+              <div style={{ marginTop: '15px', padding: '15px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px' }}>
+                <div style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '10px' }}>Apply for AI Exception Override:</div>
+                <textarea 
+                  value={overrideReason} 
+                  onChange={e => setOverrideReason(e.target.value)} 
+                  placeholder="Justification for bypassing policy..."
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#111', color: '#fff', border: '1px solid #444', marginBottom: '10px' }}
+                />
+                <button 
+                  onClick={handleOverride}
+                  disabled={loading || !overrideReason}
+                  style={{ padding: '8px 16px', background: '#ffd43b', color: '#000', borderRadius: '6px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  Submit Override to Director
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
           <div>

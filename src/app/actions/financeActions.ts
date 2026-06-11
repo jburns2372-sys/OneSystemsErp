@@ -3,6 +3,9 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { validateTransactionWithAI } from './aiValidationActions';
+import { getUserPermissions } from '@/lib/permissions';
+import { logAudit } from '@/lib/workflow';
 
 export async function issuePayment(payableId: string, paymentData: {
   amount: number;
@@ -15,9 +18,35 @@ export async function issuePayment(payableId: string, paymentData: {
   if (!sessionId) throw new Error('Unauthorized');
 
   const user = await prisma.user.findUnique({ where: { id: sessionId } });
-  if (!user || (user.role !== 'COST_CONTROLLER' && user.role !== 'FINANCE_OFFICER' && user.role !== 'SYSTEM_ADMIN')) {
-    throw new Error('Only Cost Controller or Finance Officer can issue payments');
+  if (!user) throw new Error('Unauthorized');
+
+  const permissions = await getUserPermissions(user.id);
+  const canIssue = permissions?.PAYMENT_ISSUANCE?.canCreate;
+  if (!canIssue) {
+    throw new Error('You do not have permission to issue payments.');
   }
+
+  // === AI VALIDATION INTERCEPTOR ===
+  const validation = await validateTransactionWithAI(
+    'Payment Issuance',
+    {
+      action: 'Issue Payment to Supplier',
+      amount: paymentData.amount,
+      paymentMethod: paymentData.paymentMethod,
+      paymentRef: paymentData.paymentRef,
+    },
+    user.id,
+    user.role
+  );
+
+  if (validation.validationStatus === 'BLOCKING ISSUE') {
+    return { 
+      success: false, 
+      error: `AI Blocked Transaction: ${validation.findings}`,
+      validationLogId: validation.validationLogId 
+    };
+  }
+  // =================================
 
   const payable = await prisma.accountsPayable.findUnique({
     where: { id: payableId },
@@ -111,6 +140,17 @@ export async function issuePayment(payableId: string, paymentData: {
       });
     }
   });
+
+  await logAudit(
+    user.id,
+    user.role || 'FINANCE_OFFICER',
+    'PAYMENT_ISSUANCE',
+    payableId,
+    'ISSUE_PAYMENT',
+    payable.status,
+    newStatus,
+    `Issued ${paymentData.paymentMethod} for ${paymentData.amount} (Ref: ${paymentData.paymentRef})`
+  );
 
   revalidatePath('/supplier-payables');
   revalidatePath(`/supplier-payables/${payableId}`);

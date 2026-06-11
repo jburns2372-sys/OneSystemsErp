@@ -7,8 +7,9 @@ import WorkerFormModal from './WorkerFormModal';
 import AIPayrollAssistant from './AIPayrollAssistant';
 import { deletePayrollPeriod } from '../actions/payrollEngine';
 import ApplicableRulesPanel from '@/components/ApplicableRulesPanel';
+import PermissionGuard from '@/components/PermissionGuard';
 
-export default function PayrollClient({ periods, workers, projects, currentUserId }: { periods: any[], workers: any[], projects: any[], currentUserId: string }) {
+export default function PayrollClient({ periods, workers, projects, currentUserId, permissions }: { periods: any[], workers: any[], projects: any[], currentUserId: string, permissions?: any }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('PERIODS');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -118,14 +119,16 @@ export default function PayrollClient({ periods, workers, projects, currentUserI
         
         <div style={{ marginLeft: 'auto' }}>
           {activeTab === 'PERIODS' && (
-            <button 
-              onClick={() => setIsCreateOpen(true)}
-              style={{ background: 'var(--accent-color)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(0, 255, 163, 0.2)', transition: 'transform 0.2s' }} 
-              onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'} 
-              onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
-            >
-              <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>+</span> Open New Period
-            </button>
+            <PermissionGuard permissions={permissions} moduleName="PAYROLL_PROCESSING" action="canCreate">
+              <button 
+                onClick={() => setIsCreateOpen(true)}
+                style={{ background: 'var(--accent-color)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(0, 255, 163, 0.2)', transition: 'transform 0.2s' }} 
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'} 
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>+</span> Open New Period
+              </button>
+            </PermissionGuard>
           )}
           {activeTab === 'WORKERS' && (
             <div style={{ display: 'flex', gap: '10px' }}>
