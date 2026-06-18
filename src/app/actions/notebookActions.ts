@@ -6,7 +6,8 @@ import { revalidatePath } from 'next/cache';
 const prisma = new PrismaClient();
 
 import { put } from '@vercel/blob';
-import mammoth from 'mammoth';
+import * as fs from 'fs';
+import path from 'path';
 const pdfParse = require('pdf-parse');
 import * as xlsx from 'xlsx';
 import { generateText } from 'ai';
@@ -45,7 +46,7 @@ export async function uploadReferenceFile(formData: FormData) {
 
     if (fileType === 'application/pdf' || extension === '.pdf') {
       try {
-        const pdfData = await pdf(buffer);
+        const pdfData = await pdfParse(buffer);
         extractedText = pdfData.text;
       } catch (e) {
         console.warn('Failed to parse PDF', e);
