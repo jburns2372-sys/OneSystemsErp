@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import AddUserButton from './AddUserButton';
 import ManageRolesButton from './ManageRolesButton';
+import DeleteUserButton from './DeleteUserButton';
 import { getSystemRoles } from '@/app/actions/user';
 
 export const dynamic = 'force-dynamic';
@@ -60,7 +61,10 @@ export default async function UsersPage() {
                   <span className={`${styles.badge} ${styles.badgeActive}`}>Active</span>
                 </td>
                 <td>
-                  <Link href={`/users/${user.id}`} className={styles.actionLink}>Edit</Link>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <Link href={`/users/${user.id}`} className={styles.actionLink}>Edit</Link>
+                    <DeleteUserButton userId={user.id} userName={user.name} />
+                  </div>
                 </td>
               </tr>
             ))}

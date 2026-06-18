@@ -159,3 +159,13 @@ export async function updateUser(id: string, data: { name: string, email: string
   revalidatePath('/users');
   revalidatePath(`/users/${id}`);
 }
+
+export async function deleteUser(id: string) {
+  if (!id) throw new Error('User ID is required');
+  
+  await prisma.user.delete({
+    where: { id }
+  });
+  
+  revalidatePath('/users');
+}

@@ -40,6 +40,19 @@ export async function resetTransactionData(confirmationText: string) {
       console.log(`Database backup created at ${backupPath}`);
     }
 
+    // ============================================================================
+    // STRICT DATA PROTECTION GUARANTEE (CORE SYSTEM INTEGRITY)
+    // ============================================================================
+    // The following core architectural entities are STRICTLY PROTECTED from resets:
+    // 1. ALL VALIDATION RULES (AI Validation Rules, System Rules)
+    // 2. USERS (Accounts, Profiles, Passwords)
+    // 3. USER RIGHTS & PERMISSIONS (RolePermissions Matrix)
+    // 4. SYSTEM ROLES (Role, SystemRole)
+    // 5. DEFINED PROCESSES (Workflows, Module Definitions)
+    // 6. MODULES (System Modules Configuration)
+    // 7. EVERYTHING IN THE KNOWLEDGE CENTER (KnowledgeRecord, KnowledgeReference)
+    // ============================================================================
+
     // 2. Perform the deletions in bottom-up order inside a transaction
     await prisma.$transaction(async (tx) => {
       // AI & Activity Logs

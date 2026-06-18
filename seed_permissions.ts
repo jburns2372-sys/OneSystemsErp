@@ -11,8 +11,8 @@ const canPay = { canView: true, canReleasePayment: true, canMarkAsPaid: true };
 const canAllAdmin = { canView: true, canCreate: true, canEditDraft: true, canSubmit: true, canReview: true, canRecommend: true, canApprove: true, canReject: true, canReturnForCorrection: true, canCancel: true, canRevise: true, canLock: true, canUnlockWithAuthorization: true, canUploadAttachment: true, canViewAuditLogs: true };
 
 async function grant(roleName: string, moduleCode: string, perms: any) {
-  const role = await prisma.role.findFirst({ where: { roleName: { equals: roleName, mode: 'insensitive' } } });
-  const mod = await prisma.module.findFirst({ where: { moduleName: { equals: moduleCode, mode: 'insensitive' } } });
+  const role = await prisma.role.findFirst({ where: { roleName: roleName } });
+  const mod = await prisma.module.findFirst({ where: { moduleName: moduleCode } });
   
   if (role && mod) {
     await prisma.rolePermission.upsert({

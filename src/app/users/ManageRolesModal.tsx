@@ -193,7 +193,7 @@ export default function ManageRolesModal({ onClose, roles, rbacRoles = [], modul
               style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
             >
               {roles.map(r => (
-                <option key={r} value={r}>{r}</option>
+                <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>
               ))}
             </select>
           </div>
@@ -241,7 +241,7 @@ export default function ManageRolesModal({ onClose, roles, rbacRoles = [], modul
         {selectedRole && (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <h3 style={{ margin: 0, color: 'var(--accent-color)' }}>Permissions for {selectedRole}</h3>
+              <h3 style={{ margin: 0, color: 'var(--accent-color)' }}>Permissions for {selectedRole.replace(/_/g, ' ')}</h3>
               <button 
                 onClick={() => handleGenerateSummary(selectedRole)}
                 disabled={isGeneratingSummary}
