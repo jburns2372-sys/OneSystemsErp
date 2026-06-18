@@ -275,3 +275,31 @@ export async function deletePayrollPeriod(periodId: string) {
     return { success: false, error: error.message || 'Failed to delete period' };
   }
 }
+
+
+export async function saveCutoffSetting(data: any) {
+  try {
+    if (data.id) {
+      await prisma.payrollCutoffSetting.update({
+        where: { id: data.id },
+        data
+      });
+    } else {
+      await prisma.payrollCutoffSetting.create({ data });
+    }
+    revalidatePath('/payroll/settings');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteCutoffSetting(id: string) {
+  try {
+    await prisma.payrollCutoffSetting.delete({ where: { id } });
+    revalidatePath('/payroll/settings');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

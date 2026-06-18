@@ -4,6 +4,7 @@ import Link from 'next/link';
 import * as xlsx from 'xlsx';
 import * as fs from 'fs';
 import * as path from 'path';
+import { cookies } from 'next/headers';
 
 import BOQActions from './BOQActions';
 import AwardedBOQViewer from './AwardedBOQViewer';
@@ -33,6 +34,14 @@ export default async function ProjectDetailsPage({
   if (!project) {
     return <div style={{ padding: '20px', color: 'red' }}>Project not found.</div>;
   }
+
+  const cookieStore = await cookies();
+  const email = cookieStore.get('demo_user_email')?.value || 'jburns@demo.com';
+  const currentUser = await prisma.user.findFirst({
+    where: { email },
+    include: { userRoles: { include: { role: true } } }
+  });
+  const isPurchasingOfficer = currentUser?.userRoles.some(ur => ur.role.roleCode === 'PURCHASING_OFFICER');
 
   let htmlTable = '';
   let hasBOQ = project.awardedBoqItems && project.awardedBoqItems.length > 0;
@@ -114,7 +123,9 @@ export default async function ProjectDetailsPage({
                   ⬇️ Download Original BOQ
                 </a>
               )}
-              <BOQActions projectId={project.id} isLocked={project.boqLocked} hasBOQ={hasBOQ} />
+              {!isPurchasingOfficer && (
+                <BOQActions projectId={project.id} isLocked={project.boqLocked} hasBOQ={hasBOQ} />
+              )}
             </div>
           </div>
           <AwardedBOQViewer htmlTable={htmlTable} />

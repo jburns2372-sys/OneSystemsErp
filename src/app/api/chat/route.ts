@@ -1,101 +1,117 @@
+import { google } from '@ai-sdk/google';
 import { streamText, tool } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { prisma } from '@/lib/prisma';
-import { getDashboardStats } from '@/app/actions/project';
 import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
+import pdfParse from 'pdf-parse';
 
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
-
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
 
-  // 1. Fetch live ERP statistics
-  const stats = await getDashboardStats();
-  const erpStatsContext = `
---- LIVE ERP STATISTICS ---
-Total Active Projects: ${stats.totalProjects}
-Total Contract Budget: ₱${stats.totalBudget.toLocaleString()}
-Total Expenses: ₱${stats.totalExpenses.toLocaleString()}
-Outstanding Payables: ₱${stats.totalPayables.toLocaleString()}
-System Users: ${stats.totalUsers}
-Pending Material Requests: ${stats.pendingMRs}
-Expected Deliveries: ${stats.expectedDeliveries}
-Pending AI Overrides: ${stats.pendingAIOverrides}
-`;
-
-  // 2. Fetch Active Master Policies
-  const references = await prisma.notebookReference.findMany({
-    where: { status: 'ACTIVE' },
-    include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } }
-  });
-  let policyContext = '--- MANDATORY COMPANY POLICIES ---\n';
-  for (const ref of references) {
-    if (ref.versions && ref.versions.length > 0) {
-       policyContext += `[Policy: ${ref.title}]\n${ref.versions[0].extractedText?.substring(0, 3000)}\n\n`;
-    }
-  }
-
-  // 3. Fetch Active Inventory Stocks
-  const stocks = await prisma.consolidatedBOQItem.findMany({ take: 50 });
-  let inventoryContext = '--- SITE STOCKS & INVENTORY ---\n';
-  if (stocks.length === 0) {
-    inventoryContext += 'No delivered materials in stock.\n';
-  } else {
-    for (const stock of stocks) {
-      if (stock.deliveredQty > 0) {
-        inventoryContext += `- ${stock.description}: Awarded=${stock.quantity} ${stock.unit}, Delivered=${stock.deliveredQty}, Consumed=${stock.consumedQty}, OnHand=${stock.deliveredQty - stock.consumedQty}\n`;
-      }
-    }
-  }
-
-  // 4. Fetch Payroll / Workers
-  const workers = await prisma.worker.findMany({ take: 50 });
-  let payrollContext = '--- ACTIVE WORKERS & PAYROLL ---\n';
-  if (workers.length === 0) {
-    payrollContext += 'No active workers found.\n';
-  } else {
-    for (const w of workers) {
-      payrollContext += `- ${w.firstName} ${w.lastName} (${w.designation || 'Worker'}): Rate=₱${w.dailyRate}/day, Status=${w.employmentStatus}\n`;
-    }
-  }
-
-  // 5. Fetch Finance (Petty Cash & Projects)
-  const projects = await prisma.project.findMany({ take: 10 });
-  let projectContext = '--- ACTIVE PROJECTS ---\n';
-  for (const p of projects) {
-    projectContext += `- ${p.name} (${p.status}): Budget=₱${p.contractBudget}\n`;
-  }
-
-  const systemPrompt = `You are the specialized AI Command Center Autonomous Agent for the company's Enterprise Resource Planning (ERP) system.
-You have real-time access to the company's operational statistics, inventory, payroll, and policies.
-Your job is to answer questions directly, accurately, and professionally.
-
-${erpStatsContext}
-
-${inventoryContext}
-
-${payrollContext}
-
-${projectContext}
-
-${policyContext}
-
-INSTRUCTIONS:
-1. If the user asks about the status of the company (e.g., "What is our budget?"), use the LIVE ERP STATISTICS to answer.
-2. If the user asks about policies, use the MANDATORY COMPANY POLICIES to answer.
-3. If the user asks about inventory, workers, or projects, use the injected tables above.
-4. Keep your answers concise, professional, and formatted in markdown.
-`;
-
-  const result = streamText({
-    model: google('gemini-2.5-flash'),
-    system: systemPrompt,
+  const result = await streamText({
+    model: google('models/gemini-2.5-flash'),
+    system: `You are the OneSystems ERP AI Data Center Assistant.
+Your goal is to answer questions based on the ERP database and uploaded files.
+You have access to several tools to search projects, workers, and read files.
+Always try to use a tool to fetch real data before answering. Do not guess information.
+If a user asks about an uploaded document, list the files first to get the URL, then read the file.`,
     messages,
+    tools: {
+      searchProjects: tool({
+        description: 'Search for projects in the database. Returns project details like name, status, and budget.',
+        parameters: z.object({
+          query: z.string().optional().describe('Search term for project name or location.'),
+          status: z.string().optional().describe('Filter by status (e.g. PLANNING, IN_PROGRESS, COMPLETED)'),
+        }),
+        execute: async ({ query, status }) => {
+          const projects = await prisma.project.findMany({
+            where: {
+              ...(query ? { name: { contains: query } } : {}),
+              ...(status ? { status } : {}),
+            },
+            take: 10,
+            select: { id: true, name: true, status: true, contractAmount: true, location: true },
+          });
+          return projects;
+        },
+      }),
+      searchWorkers: tool({
+        description: 'Search for workers or employees in the database.',
+        parameters: z.object({
+          name: z.string().optional().describe('Name of the worker to search for.'),
+        }),
+        execute: async ({ name }) => {
+          const workers = await prisma.worker.findMany({
+            where: name ? {
+              OR: [
+                { firstName: { contains: name } },
+                { lastName: { contains: name } },
+              ],
+            } : {},
+            take: 10,
+            select: { id: true, firstName: true, lastName: true, workerCategory: true, employmentStatus: true, department: true, dailyRate: true },
+          });
+          return workers;
+        },
+      }),
+      listUploadedFiles: tool({
+        description: 'List recently uploaded files in the system (Worker Documents, Expense Proofs, etc).',
+        parameters: z.object({
+          category: z.enum(['WORKER', 'EXPENSE', 'ALL']).optional().describe('Filter by category of documents'),
+        }),
+        execute: async ({ category }) => {
+          const results = [];
+          
+          if (!category || category === 'WORKER' || category === 'ALL') {
+            const workerDocs = await prisma.workerDocument.findMany({
+              take: 10,
+              orderBy: { createdAt: 'desc' },
+              select: { id: true, title: true, fileUrl: true, category: true, worker: { select: { firstName: true, lastName: true } } },
+            });
+            results.push(...workerDocs.map(d => ({ type: 'Worker Document', title: d.title, url: d.fileUrl, relatedTo: d.worker?.firstName + ' ' + d.worker?.lastName })));
+          }
+
+          if (!category || category === 'EXPENSE' || category === 'ALL') {
+            const expenseDocs = await prisma.expenseProofFile.findMany({
+              take: 10,
+              orderBy: { uploadedAt: 'desc' },
+              select: { id: true, fileName: true, fileUrl: true, expense: { select: { description: true, amount: true } } },
+            });
+            results.push(...expenseDocs.map(d => ({ type: 'Expense Proof', title: d.fileName, url: d.fileUrl, relatedTo: d.expense?.description })));
+          }
+
+          return results;
+        },
+      }),
+      readUploadedFile: tool({
+        description: 'Read the contents of an uploaded file (PDF or Text) from its URL to answer specific questions about it.',
+        parameters: z.object({
+          fileUrl: z.string().describe('The full URL of the file to read'),
+        }),
+        execute: async ({ fileUrl }) => {
+          try {
+            const response = await fetch(fileUrl);
+            if (!response.ok) throw new Error(`Failed to fetch file: ${response.statusText}`);
+            
+            const contentType = response.headers.get('content-type') || '';
+            
+            if (contentType.includes('application/pdf') || fileUrl.toLowerCase().endsWith('.pdf')) {
+              const arrayBuffer = await response.arrayBuffer();
+              const buffer = Buffer.from(arrayBuffer);
+              const data = await pdfParse(buffer);
+              return { success: true, text: data.text.substring(0, 8000) };
+            } else {
+              const text = await response.text();
+              return { success: true, text: text.substring(0, 8000) };
+            }
+          } catch (error: any) {
+            return { success: false, error: error.message };
+          }
+        },
+      }),
+    },
   });
 
-  return result.toTextStreamResponse();
+  return result.toDataStreamResponse();
 }

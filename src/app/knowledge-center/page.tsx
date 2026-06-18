@@ -32,7 +32,7 @@ export default async function KnowledgeCenterPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
         <div style={{ background: 'rgba(0,0,0,0.3)', padding: '25px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
           <h2 style={{ margin: '0 0 15px 0' }}>Gemini Notebooks</h2>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
@@ -50,6 +50,16 @@ export default async function KnowledgeCenterPage() {
           </p>
           <Link href="/knowledge-center/business-rules" style={{ padding: '10px 20px', background: 'var(--accent-color)', color: '#000', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold' }}>
             Manage Rules
+          </Link>
+        </div>
+
+        <div style={{ background: 'rgba(0,0,0,0.3)', padding: '25px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+          <h2 style={{ margin: '0 0 15px 0' }}>AI Assistant</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+            Chat with the AI Data Center to query projects, workers, and read uploaded files.
+          </p>
+          <Link href="/knowledge-center/chat" style={{ padding: '10px 20px', background: 'var(--accent-color)', color: '#000', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold' }}>
+            Open Chat
           </Link>
         </div>
       </div>

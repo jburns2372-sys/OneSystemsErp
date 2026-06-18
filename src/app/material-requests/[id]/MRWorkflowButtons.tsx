@@ -14,6 +14,7 @@ export default function MRWorkflowButtons({ mrId, status, currentUser }: Props) 
   
   const role = currentUser?.role || '';
   if (role === 'GUEST_USER') return null;
+  const isSimAdmin = role === 'SYSTEM_ADMIN' || role === 'ADMIN' || role === 'PROJECT_DIRECTOR';
 
   function handleAIValidation() {
     startTransition(async () => {
@@ -34,17 +35,17 @@ export default function MRWorkflowButtons({ mrId, status, currentUser }: Props) 
         
         {/* Preparation Phase - Materials Engineer */}
         {status === 'DRAFT' && (
-          <button onClick={handleAIValidation} disabled={isPending || (role !== 'MATERIALS_ENGINEER' && role !== 'PROJECT_ENGINEER')} className="btn-ai" title="Requires Materials Engineer Role">
+          <button onClick={handleAIValidation} disabled={isPending || (!isSimAdmin && role !== 'MATERIALS_ENGINEER' && role !== 'PROJECT_ENGINEER')} className="btn-ai" title="Requires Materials Engineer Role">
             {isPending ? 'Running AI Check...' : '🤖 Run AI Check'}
           </button>
         )}
 
         {(status === 'AI_CHECKING' || status === 'RETURNED') && (
           <>
-            <button onClick={handleAIValidation} disabled={isPending || (role !== 'MATERIALS_ENGINEER' && role !== 'PROJECT_ENGINEER')} className="btn-ai" title="Requires Materials Engineer Role">
+            <button onClick={handleAIValidation} disabled={isPending || (!isSimAdmin && role !== 'MATERIALS_ENGINEER' && role !== 'PROJECT_ENGINEER')} className="btn-ai" title="Requires Materials Engineer Role">
               {isPending ? 'Running AI Check...' : '🤖 Re-run AI Check'}
             </button>
-            <button onClick={() => handleStatusUpdate('SUBMITTED')} disabled={isPending || (role !== 'MATERIALS_ENGINEER' && role !== 'PROJECT_ENGINEER')} className="btn-primary" title="Requires Materials Engineer Role">
+            <button onClick={() => handleStatusUpdate('SUBMITTED')} disabled={isPending || (!isSimAdmin && role !== 'MATERIALS_ENGINEER' && role !== 'PROJECT_ENGINEER')} className="btn-primary" title="Requires Materials Engineer Role">
               {isPending ? 'Submitting...' : '📤 Submit for Review'}
             </button>
           </>
@@ -53,10 +54,10 @@ export default function MRWorkflowButtons({ mrId, status, currentUser }: Props) 
         {/* Checking Phase - Cost Control */}
         {status === 'SUBMITTED' && (
           <>
-            <button onClick={() => handleStatusUpdate('FOR_REVIEW')} disabled={isPending || role !== 'COST_CONTROL'} className="btn-primary" title="Requires Cost Control Role">
+            <button onClick={() => handleStatusUpdate('FOR_REVIEW')} disabled={isPending || (!isSimAdmin && role !== 'COST_CONTROL')} className="btn-primary" title="Requires Cost Control Role">
               {isPending ? 'Processing...' : '🔍 Mark as Checked (Cost Control)'}
             </button>
-            <button onClick={() => handleStatusUpdate('RETURNED')} disabled={isPending || role !== 'COST_CONTROL'} className="btn-danger" title="Requires Cost Control Role">
+            <button onClick={() => handleStatusUpdate('RETURNED')} disabled={isPending || (!isSimAdmin && role !== 'COST_CONTROL')} className="btn-danger" title="Requires Cost Control Role">
               {isPending ? 'Processing...' : '↩️ Return to Preparer'}
             </button>
           </>
@@ -65,10 +66,10 @@ export default function MRWorkflowButtons({ mrId, status, currentUser }: Props) 
         {/* Approval Phase - Project Manager */}
         {status === 'FOR_REVIEW' && (
           <>
-            <button onClick={() => handleStatusUpdate('APPROVED')} disabled={isPending || (role !== 'PROJECT_MANAGER' && role !== 'PROJECT_DIRECTOR')} className="btn-success" title="Requires Project Manager Role">
+            <button onClick={() => handleStatusUpdate('APPROVED')} disabled={isPending || (!isSimAdmin && role !== 'PROJECT_MANAGER' && role !== 'PROJECT_DIRECTOR')} className="btn-success" title="Requires Project Manager Role">
               {isPending ? 'Approving...' : '✅ Approve MRF (Project Manager)'}
             </button>
-            <button onClick={() => handleStatusUpdate('REJECTED')} disabled={isPending || (role !== 'PROJECT_MANAGER' && role !== 'PROJECT_DIRECTOR')} className="btn-danger" title="Requires Project Manager Role">
+            <button onClick={() => handleStatusUpdate('REJECTED')} disabled={isPending || (!isSimAdmin && role !== 'PROJECT_MANAGER' && role !== 'PROJECT_DIRECTOR')} className="btn-danger" title="Requires Project Manager Role">
               {isPending ? 'Rejecting...' : '❌ Reject MRF'}
             </button>
           </>

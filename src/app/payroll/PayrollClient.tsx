@@ -119,7 +119,7 @@ export default function PayrollClient({ periods, workers, projects, currentUserI
         
         <div style={{ marginLeft: 'auto' }}>
           {activeTab === 'PERIODS' && (
-            <PermissionGuard permissions={permissions} moduleName="PAYROLL_PROCESSING" action="canCreate">
+            <PermissionGuard permissions={permissions} moduleName="PAYROLL" action="canCreate">
               <button 
                 onClick={() => setIsCreateOpen(true)}
                 style={{ background: 'var(--accent-color)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(0, 255, 163, 0.2)', transition: 'transform 0.2s' }} 

@@ -50,7 +50,7 @@ export default function POWorkflowButtons({ poId, status, currentUser, permissio
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         
         {/* Approval Phase */}
-        {status === 'FOR_REVIEW' && (
+        {(status === 'DRAFT' || status === 'FOR_REVIEW') && (
           <>
             <PermissionGuard permissions={permissions} moduleName="PURCHASE_ORDER" action="canApprove">
               <button onClick={handleApprove} disabled={isPending} style={{ backgroundColor: '#00ffa3', color: '#000', padding: '10px 20px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', opacity: isPending ? 0.5 : 1 }} title="Requires canApprove Permission">

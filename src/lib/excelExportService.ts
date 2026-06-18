@@ -2,8 +2,8 @@ import ExcelJS from "exceljs";
 
 export async function exportFortuneSheetToExcelJS(sheetsData: any[]): Promise<Blob> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "PGH-PMS System";
-  workbook.lastModifiedBy = "PGH-PMS System";
+  workbook.creator = "OneSystemsErp";
+  workbook.lastModifiedBy = "OneSystemsErp";
   workbook.created = new Date();
   workbook.modified = new Date();
 

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { encodeDelivery } from '@/app/actions/deliveryActions';
+import { encodeDeliveryWithFile } from '@/app/actions/deliveryActions';
 import { submitAIOverrideRequest } from '@/app/actions/aiOverrideActions';
 import styles from '../../projects/page.module.css';
 
@@ -11,6 +11,7 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
   const [isPending, startTransition] = useTransition();
   const [selectedPoId, setSelectedPoId] = useState('');
   const [receiptNumber, setReceiptNumber] = useState('');
+  const [drFile, setDrFile] = useState<File | null>(null);
   
   const [drQuantities, setDrQuantities] = useState<Record<string, number>>({});
   const [actualQuantities, setActualQuantities] = useState<Record<string, number>>({});
@@ -71,11 +72,15 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
     setError('');
     startTransition(async () => {
       try {
-        const res = await encodeDelivery({
-          poId: selectedPoId,
-          receiptNumber,
-          items: itemsToDeliver
-        });
+        const formData = new FormData();
+        formData.append('poId', selectedPoId);
+        formData.append('receiptNumber', receiptNumber);
+        formData.append('items', JSON.stringify(itemsToDeliver));
+        if (drFile) {
+          formData.append('file', drFile);
+        }
+
+        const res = await encodeDeliveryWithFile(formData);
         if (res.success) {
           router.push(`/deliveries/${res.deliveryId}`);
         } else {
@@ -144,6 +149,20 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
               required
             />
           </div>
+        </div>
+
+        <div style={{ marginTop: '10px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Upload DR Document (For AI Validation)</label>
+          <input 
+            type="file" 
+            accept=".pdf,.jpg,.jpeg,.png"
+            onChange={e => setDrFile(e.target.files?.[0] || null)}
+            style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-dark)', color: 'white' }}
+            required
+          />
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '5px' }}>
+            The AI engine will perform OCR on this document to cross-reference encoded quantities with the physical receipt.
+          </p>
         </div>
 
         {selectedPo && (

@@ -9,6 +9,7 @@ const withSerwist = withSerwistInit({
 
 const nextConfig: NextConfig = {
   turbopack: {},
+  serverExternalPackages: ['pdf-parse', 'pdfjs-dist'],
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',

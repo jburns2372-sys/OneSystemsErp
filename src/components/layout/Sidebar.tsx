@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { logout } from '@/app/actions/auth';
 
-export default function Sidebar({ permissions = {} }: { permissions?: Record<string, any> }) {
+export default function Sidebar({ permissions = {}, user }: { permissions?: Record<string, any>, user?: { name?: string | null, email?: string | null } | null }) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -36,25 +36,24 @@ export default function Sidebar({ permissions = {} }: { permissions?: Record<str
   }
 
   const links: SidebarLink[] = [
-    { name: 'Dashboard', href: '/', icon: '⌂' },
-    { name: 'Projects', href: '/projects', icon: '🏗️' },
-    { name: 'AI Command Center', href: '/ai-command-center', icon: '🤖' },
+    { name: 'Dashboard', href: '/', icon: '⌂', moduleKey: 'DASHBOARD' },
+    { name: 'Projects', href: '/projects', icon: '🏗️', moduleKey: 'PROJECT_SETUP' },
+    { name: 'AI Command Center', href: '/ai-command-center', icon: '🤖', moduleKey: 'AI_VALIDATION' },
     { name: 'Procurement', href: '/procurement', icon: '🛒', moduleKey: 'PROCUREMENT' },
     { name: 'Inventory', href: '/inventory', icon: '📦', moduleKey: 'INVENTORY' },
-    { name: 'Material Issuance', href: '/material-issuance', icon: '📤', moduleKey: 'INVENTORY' },
+    { name: 'Material Issuance', href: '/material-issuance', icon: '📤', moduleKey: 'MATERIAL_ISSUANCE' },
     { name: 'Finance', href: '/finance', icon: '💰', moduleKey: 'FINANCE' },
-    { name: 'Subcontracting', href: '/subcontracting', icon: '👷' },
-    { name: 'Accomplishments', href: '/accomplishments', icon: '📈' },
+    { name: 'Subcontracting', href: '/subcontracting', icon: '👷', moduleKey: 'SUBCONTRACTING' },
+    { name: 'Accomplishments', href: '/accomplishments', icon: '📈', moduleKey: 'PROJECT_ACCOMPLISHMENT' },
     { name: 'Payroll', href: '/payroll', icon: '👥', moduleKey: 'PAYROLL' },
-    { name: 'Payroll Payments', href: '/payroll-payments/dashboard', icon: '💸', moduleKey: 'PAYROLL' },
-    { name: 'Equipment', href: '/equipment', icon: '🚜' },
-    { name: 'Variation Orders', href: '/variation-orders', icon: '🔄' },
-    { name: 'Reports', href: '/reports', icon: '📊' },
-    { name: 'Documents', href: '/documents', icon: '📂' },
-    { name: 'Knowledge Center', href: '/knowledge-center', icon: '🧠' },
-    { name: 'AI ERP Assistant', href: '/ai/erp-assistant', icon: '💬' },
-    { name: 'Users', href: '/users', icon: '👤', moduleKey: 'WORKER_DATABASE' },
-    { name: 'Settings', href: '/settings', icon: '⚙️', moduleKey: 'SYSTEM_ROLES' },
+    { name: 'Equipment', href: '/equipment', icon: '🚜', moduleKey: 'INVENTORY' },
+    { name: 'Variation Orders', href: '/variation-orders', icon: '🔄', moduleKey: 'VARIATION_ORDER' },
+    { name: 'Reports', href: '/reports', icon: '📊', moduleKey: 'REPORTS' },
+    { name: 'Documents', href: '/documents', icon: '📂', moduleKey: 'DOCUMENT_ATTACHMENTS' },
+    { name: 'Knowledge Center', href: '/knowledge-center', icon: '🧠', moduleKey: 'AI_NOTEBOOK_REFERENCE_CENTER' },
+    { name: 'AI ERP Assistant', href: '/ai/erp-assistant', icon: '💬', moduleKey: 'AI_NOTEBOOK_REFERENCE_CENTER' },
+    { name: 'Users', href: '/users', icon: '👤', moduleKey: 'USER_MANAGEMENT' },
+    { name: 'Settings', href: '/settings', icon: '⚙️', moduleKey: 'SYSTEM_SETTINGS' },
   ];
 
   const visibleLinks = links.filter(link => {
@@ -121,9 +120,9 @@ export default function Sidebar({ permissions = {} }: { permissions?: Record<str
         borderBottom: '1px solid var(--glass-border)'
       }}>
         {!isCollapsed && (
-          <div style={{ color: 'var(--accent-color)', fontWeight: '900', fontSize: '1.2rem', textShadow: '0 0 10px var(--accent-glow)', letterSpacing: '1px' }}>
-            PGH-PMS
-          </div>
+          <h2 style={{ margin: 0, color: 'var(--accent-color)', fontSize: '1.25rem', letterSpacing: '1px', textShadow: '0 0 10px var(--accent-color)' }}>
+            OneSystemsErp
+          </h2>
         )}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -143,7 +142,7 @@ export default function Sidebar({ permissions = {} }: { permissions?: Record<str
         </button>
       </div>
 
-      <nav style={{ flex: 1, padding: '20px 10px', display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto' }}>
+      <nav style={{ flex: 1, padding: '10px', display: 'flex', flexDirection: 'column', gap: '4px', overflowY: 'auto', overflowX: 'hidden' }}>
         {visibleLinks.map((link) => {
           const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href) && (!link.subItems || link.subItems.every(sub => !pathname.startsWith(sub.href))));
           const hasActiveSub = link.subItems?.some(sub => pathname.startsWith(sub.href));
@@ -155,12 +154,13 @@ export default function Sidebar({ permissions = {} }: { permissions?: Record<str
                 style={{ 
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '15px',
-                  padding: '12px 15px', 
-                  borderRadius: '8px', 
+                  gap: '12px',
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
                   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
                   color: (isActive || hasActiveSub) ? '#fff' : 'var(--text-secondary)',
                   textDecoration: 'none',
+                  fontSize: '0.9rem',
                   fontWeight: (isActive || hasActiveSub) ? '600' : '400',
                   backgroundColor: isActive ? 'rgba(0, 240, 255, 0.15)' : 'transparent',
                   borderLeft: (isActive || hasActiveSub) ? '3px solid var(--accent-color)' : '3px solid transparent',
@@ -170,7 +170,7 @@ export default function Sidebar({ permissions = {} }: { permissions?: Record<str
                 className={`sidebar-link ${isActive ? 'active' : ''}`}
                 title={isCollapsed ? link.name : ''}
               >
-                <span style={{ fontSize: '1.2rem' }}>{link.icon}</span>
+                <span style={{ fontSize: '1.1rem' }}>{link.icon}</span>
                 {!isCollapsed && <span>{link.name}</span>}
               </Link>
               
@@ -227,17 +227,20 @@ export default function Sidebar({ permissions = {} }: { permissions?: Record<str
             fontWeight: 'bold',
             flexShrink: 0
           }}>
-            AD
+            {user ? (user.name ? user.name.substring(0, 2).toUpperCase() : user.email?.substring(0, 2).toUpperCase() || 'U') : 'U'}
           </div>
           {!isCollapsed && (
             <div style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 'bold', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>System Admin</span>
+              <span style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 'bold', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                {user?.name || user?.email?.split('@')[0] || 'User'}
+              </span>
               <span style={{ color: 'var(--accent-color)', fontSize: '0.75rem', letterSpacing: '1px' }}>ONLINE</span>
             </div>
           )}
         </div>
         
-        <form action={logout} style={{ width: '100%' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+          <form action={logout} style={{ width: '100%' }}>
           <button 
             type="submit"
             className="collapse-btn"
@@ -264,6 +267,31 @@ export default function Sidebar({ permissions = {} }: { permissions?: Record<str
             🚪 {!isCollapsed && <span style={{ fontSize: '0.8rem' }}>Log Out</span>}
           </button>
         </form>
+        <Link href="/profile" style={{ textDecoration: 'none' }}>
+            <button
+              className="collapse-btn"
+              style={{
+                width: '100%',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                padding: '8px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s',
+                fontWeight: 'bold',
+                gap: '6px'
+              }}
+              title="My Profile"
+            >
+              ⚙️ {!isCollapsed && <span style={{ fontSize: '0.8rem' }}>My Profile</span>}
+            </button>
+          </Link>
+        </div>
       </div>
 
       <style>{`

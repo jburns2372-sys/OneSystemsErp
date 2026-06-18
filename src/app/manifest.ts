@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
  
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'PGH-PMS',
-    short_name: 'PGH-PMS',
+    name: 'OneSystemsErp',
+    short_name: 'OneSystemsErp',
     description: 'Comprehensive construction Project Management and Monitoring System',
     start_url: '/',
     display: 'standalone',

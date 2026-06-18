@@ -17,11 +17,11 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://onesystemserp.com'),
-  title: "PGH-PMS | Project Management System",
+  title: "OneSystemsErp | Project Management System",
   description: "Comprehensive construction Project Management and Monitoring System",
   appleWebApp: {
     capable: true,
-    title: "PGH-PMS",
+    title: "OneSystemsErp",
     statusBarStyle: "default",
   },
 };
@@ -33,13 +33,30 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
   const userId = cookieStore.get('session')?.value || '';
-  const permissions = await getUserPermissions(userId);
+  let user: any = null;
+  let permissions = await getUserPermissions(userId);
+
+  if (userId) {
+    user = await import('@/lib/prisma').then(m => m.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true, role: true }
+    }));
+  }
+
+  // Simulation logic for admins
+  if (user && (user.role === 'SYSTEM_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR')) {
+    const simulatedRole = cookieStore.get('simulatedRole')?.value;
+    if (simulatedRole && simulatedRole !== user.role) {
+      const { getPermissionsForRole } = await import('@/lib/permissions');
+      permissions = await getPermissionsForRole(simulatedRole);
+    }
+  }
 
   return (
     <html lang="en">
       <body className={inter.className}>
         <OfflineSyncProvider>
-          <Sidebar permissions={permissions} />
+          <Sidebar permissions={permissions} user={user} />
           <div style={{ marginLeft: 'var(--sidebar-width)', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <main style={{ padding: '30px', flex: 1, backgroundColor: 'var(--bg-primary)' }}>
               {children}

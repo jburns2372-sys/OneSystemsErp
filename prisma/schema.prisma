@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -78,6 +78,7 @@ model User {
   uploadedTemplates           DocumentTemplate[]          @relation("DocumentTemplateUploader")
   uploadedAccomplishmentFiles ProjectAccomplishmentFile[] @relation("AccomplishmentFileUploader")
   projectAccomplishmentFiles  ProjectAccomplishmentFile[]
+  preparedCanvassForms CanvassForm[] @relation("CanvassPreparedBy")
 }
 
 model SystemRole {
@@ -160,6 +161,7 @@ model Project {
   updatedAt                       DateTime                         @updatedAt
   projectAccomplishmentFiles      ProjectAccomplishmentFile[]
   projectAccomplishmentAIFindings ProjectAccomplishmentAIFinding[]
+  canvassForms   CanvassForm[]
 }
 
 model AwardedBOQItem {
@@ -210,7 +212,7 @@ model AwardedBOQItem {
   lotBreakdowns       BOQLotBreakdown[]
   accomplishmentItems AccomplishmentItem[]
   billingItems        BillingItem[]
-  variationOrders     VariationOrder[]
+  variationOrderItems VariationOrderItem[]
   evidenceFiles       EvidenceFile[]
   aiValidationRuns    AIValidationRun[]
 
@@ -254,6 +256,7 @@ model ConsolidatedBOQItem {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  canvassItems   CanvassItem[]
 }
 
 model BOQMapping {
@@ -293,6 +296,7 @@ model Supplier {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  quotations      SupplierQuotation[]
 }
 
 model MaterialRequest {
@@ -330,6 +334,7 @@ model MaterialRequest {
   dateNeeded DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  canvassForms   CanvassForm[]
 }
 
 model MaterialRequestItem {
@@ -381,6 +386,8 @@ model PurchaseOrder {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  canvassFormId String?
+  canvassForm   CanvassForm?     @relation(fields: [canvassFormId], references: [id])
 }
 
 model PurchaseOrderItem {
@@ -1487,24 +1494,185 @@ model Payment {
 model VariationOrder {
   id                 String   @id @default(cuid())
   voNumber           String   @unique
-  dateRequested      DateTime
+  dateRequested      DateTime @default(now())
   requestedById      String?
+  requestingDepartment String?
+  
+  // Header Details
+  variationType      String   // Change Order, Extra Work Order, Additive Variation, etc.
+  variationCategory  String?
+  sourceOfVariation  String?
   reasonForVariation String?
-  newItemDescription String?
-  unit               String?
-  additionalQuantity Float    @default(0)
-  deductiveQuantity  Float    @default(0)
-  unitCost           Float    @default(0)
-  additiveAmount     Float    @default(0)
-  deductiveAmount    Float    @default(0)
-  netVoAmount        Float    @default(0)
-  approvalStatus     String   @default("DRAFT") // DRAFT, SUBMITTED, REVIEW, APPROVED, REJECTED, IMPLEMENTED
+  detailedDescription String?
+  affectedLocation   String?
+  affectedFloorZone  String?
 
+  // Financial Impact (Computed Headers)
+  originalContractAmount Float @default(0)
+  totalPreviouslyApprovedAdditive Float @default(0)
+  totalPreviouslyApprovedDeductive Float @default(0)
+  currentRevisedContractAmount Float @default(0)
+  
+  additionalAmount   Float    @default(0)
+  deductiveAmount    Float    @default(0)
+  netVariationAmount Float    @default(0)
+  percentageImpact   Float    @default(0)
+
+  // Time Impact
+  timeImpact         String   @default("TO_BE_EVALUATED") // YES, NO, TO_BE_EVALUATED
+  additionalCalendarDaysRequested Int @default(0)
+  effectOnCriticalPath String @default("TO_BE_EVALUATED") // YES, NO, TO_BE_EVALUATED
+  effectOnProjectCompletionDate DateTime?
+
+  // Justifications & References
+  technicalJustification String?
+  commercialJustification String?
+  safetyJustification     String?
+  clientInstructionReference String?
+  consultantInstructionReference String?
+  drawingReference String?
+  siteInstructionReference String?
+  inspectionReportReference String?
+  quantityTakeOffReference String?
+  costEstimateReference String?
+  supplierQuotationReference String?
+  subcontractorQuotationReference String?
+
+  // AI & Status
+  aiValidationResult String?
+  aiRiskRating       String?
+  currentStatus      String   @default("DRAFT")
+  approvalHistory    String?
+  remarks            String?
+
+  // Implementation Flags
+  approvedForImplementation Boolean @default(false)
+  approvedForProcurement    Boolean @default(false)
+  approvedForSubcontracting Boolean @default(false)
+  approvedForJobOrder       Boolean @default(false)
+  approvedForBilling        Boolean @default(false)
+
+  // Relations
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  boqItemId String?
-  boqItem   AwardedBOQItem? @relation(fields: [boqItemId], references: [id])
+  items          VariationOrderItem[]
+  documents      VariationOrderDocument[]
+  approvals      VariationOrderApproval[]
+  aiValidations  AIVariationOrderValidation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VariationOrderItem {
+  id                 String   @id @default(cuid())
+  voItemNumber       String
+  itemClassification String // EXISTING_BOQ_ITEM, NEW_EXTRA_WORK_ITEM
+  workCategory       String?
+  location           String?
+  description        String
+  unit               String
+  
+  // Quantity
+  originalQuantity   Float @default(0)
+  previouslyApprovedQuantity Float @default(0)
+  currentProposedQuantity Float @default(0)
+  revisedQuantity    Float @default(0)
+
+  // Cost
+  originalUnitCost   Float @default(0)
+  proposedUnitCost   Float @default(0)
+  approvedUnitCost   Float @default(0)
+  
+  // Amounts
+  originalAmount     Float @default(0)
+  additionalAmount   Float @default(0)
+  deductiveAmount    Float @default(0)
+  netAmount          Float @default(0)
+
+  // Breakdown
+  costSource         String?
+  pricingBasis       String?
+  materialCost       Float @default(0)
+  laborCost          Float @default(0)
+  equipmentCost      Float @default(0)
+  subcontractCost    Float @default(0)
+  transportationCost Float @default(0)
+  consumables        Float @default(0)
+  overhead           Float @default(0)
+  profitMarkup       Float @default(0)
+  tax                Float @default(0)
+  otherDirectCost    Float @default(0)
+
+  // References
+  supplierQuotationReference String?
+  subcontractorQuotationReference String?
+  canvassReference   String?
+  attachmentReference String?
+
+  // Statuses
+  procurementStatus  String @default("PENDING")
+  subcontractStatus  String @default("PENDING")
+  accomplishmentStatus String @default("PENDING")
+  billingStatus      String @default("PENDING")
+  approvalStatus     String @default("PENDING")
+  remarks            String?
+
+  // Relations
+  variationOrderId String
+  variationOrder   VariationOrder @relation(fields: [variationOrderId], references: [id], onDelete: Cascade)
+
+  originalBoqItemId String?
+  originalBoqItem   AwardedBOQItem? @relation(fields: [originalBoqItemId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VariationOrderDocument {
+  id               String   @id @default(cuid())
+  fileName         String
+  fileType         String
+  fileUrl          String
+  documentCategory String // QUOTATION, JUSTIFICATION, DRAWING, PHOTO, SITE_INSTRUCTION, etc.
+  remarks          String?
+  uploadedById     String?
+  
+  variationOrderId String
+  variationOrder   VariationOrder @relation(fields: [variationOrderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VariationOrderApproval {
+  id               String   @id @default(cuid())
+  stage            String   // TECHNICAL_REVIEW, COST_REVIEW, PM_REVIEW, FINANCE_REVIEW, PD_APPROVAL, CLIENT_APPROVAL
+  action           String   // APPROVED, REJECTED, RETURNED
+  actionById       String?
+  remarks          String?
+  
+  variationOrderId String
+  variationOrder   VariationOrder @relation(fields: [variationOrderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AIVariationOrderValidation {
+  id               String   @id @default(cuid())
+  validationType   String   // SCOPE, QUANTITY, COST, TIME, DOCUMENT, RISK, PROFITABILITY
+  result           String   // PASSED, PASSED_WITH_WARNING, FAILED, MANUAL_REVIEW_REQUIRED
+  confidenceLevel  String   // LOW, MEDIUM, HIGH
+  riskLevel        String   // LOW, MEDIUM, HIGH, CRITICAL
+  findings         String?
+  missingRequirements String?
+  duplicateWarnings String?
+  recommendedAction String?
+  
+  variationOrderId String
+  variationOrder   VariationOrder @relation(fields: [variationOrderId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2673,9 +2841,9 @@ model AuditLog {
   moduleName    String
   transactionId String?
   actionType    String
-  oldValue      String?  @db.Text
-  newValue      String?  @db.Text
-  remarks       String?  @db.Text
+  oldValue      String?  
+  newValue      String?  
+  remarks       String?  
   ipAddress     String?
   deviceInfo    String?
   createdAt     DateTime @default(now())
@@ -2692,8 +2860,8 @@ model AIValidationLog {
   validationType    String
   validationResult  String // PASSED, WARNING, BLOCKING_ISSUE, NEEDS_HUMAN_REVIEW
   riskLevel         String?
-  aiFindings        String?  @db.Text
-  aiRecommendation  String?  @db.Text
+  aiFindings        String?  
+  aiRecommendation  String?  
   createdAt         DateTime @default(now())
 
   user User? @relation("AIValidationLogs", fields: [userId], references: [id], onDelete: SetNull)
@@ -2715,7 +2883,7 @@ model RevisionRequest {
   moduleName    String
   transactionId String
   requestedBy   String
-  reason        String   @db.Text
+  reason        String   
   status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
   reviewedBy    String?
   reviewedAt    DateTime?
@@ -2774,7 +2942,7 @@ model AINotebookReference {
   approvedDate      DateTime?
   isLocked          Boolean  @default(false)
   aiIndexingStatus  String   @default("PENDING")
-  aiSummary         String?  @db.Text
+  aiSummary         String?  
   keywords          String?
   validationUseCase String?
   fileHash          String?
@@ -2991,4 +3159,83 @@ model AIReferenceUsageLog {
   moduleName         String
   userId             String
   createdAt          DateTime @default(now())
+}
+
+// ---------------------------
+// Canvassing Models
+// ---------------------------
+
+model CanvassForm {
+  id             String @id @default(cuid())
+  canvassNumber  String @unique
+  status         String @default("DRAFT")
+  
+  mrId           String?
+  mr             MaterialRequest? @relation(fields: [mrId], references: [id])
+  
+  projectId      String
+  project        Project @relation(fields: [projectId], references: [id])
+
+  preparedById   String?
+  preparedBy     User? @relation("CanvassPreparedBy", fields: [preparedById], references: [id])
+  
+  items          CanvassItem[]
+  quotations     SupplierQuotation[]
+  purchaseOrders PurchaseOrder[]
+  
+  recommendedSupplierId String?
+  aiSummary             String?
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model CanvassItem {
+  id                    String @id @default(cuid())
+  quantityRequired      Float
+  
+  canvassFormId         String
+  canvassForm           CanvassForm @relation(fields: [canvassFormId], references: [id], onDelete: Cascade)
+  
+  consolidatedBoqItemId String
+  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id])
+
+  quotationItems        QuotationItem[]
+}
+
+model SupplierQuotation {
+  id             String @id @default(cuid())
+  status         String @default("RECEIVED")
+  totalAmount    Float  @default(0)
+  isRecommended  Boolean @default(false)
+  deliveryPeriod String?
+  paymentTerms   String?
+  aiRank         Int?
+  aiRationale    String?
+
+  canvassFormId  String
+  canvassForm    CanvassForm @relation(fields: [canvassFormId], references: [id], onDelete: Cascade)
+  
+  supplierId     String
+  supplier       Supplier @relation(fields: [supplierId], references: [id])
+
+  items          QuotationItem[]
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model QuotationItem {
+  id                String @id @default(cuid())
+  unitCost          Float
+  quantityAvailable Float
+  totalCost         Float
+  brand             String?
+  remarks           String?
+  
+  quotationId       String
+  quotation         SupplierQuotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  
+  canvassItemId     String
+  canvassItem       CanvassItem @relation(fields: [canvassItemId], references: [id])
 }

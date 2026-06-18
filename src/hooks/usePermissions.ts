@@ -9,6 +9,7 @@ export function usePermissions(permissions: Record<string, any> | null) {
   const hasPermission = useMemo(() => {
     return (moduleName: string, action: string): boolean => {
       if (!permissions) return false;
+      if (permissions.IS_ADMIN) return true;
       const modulePerms = permissions[moduleName];
       if (!modulePerms) return false;
       return !!modulePerms[action];

@@ -4,6 +4,8 @@ import PayrollClient from './PayrollClient';
 import { cookies } from 'next/headers';
 import { getUserPermissions } from '@/lib/permissions';
 
+import PayrollSubNav from '@/components/PayrollSubNav';
+
 export default async function PayrollPage() {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
@@ -32,9 +34,10 @@ export default async function PayrollPage() {
   return (
     <div className={styles.pageContainer}>
       <header className={styles.header}>
-        <div className={styles.headerTitle}>
+        <div className={styles.headerTitle} style={{ marginBottom: '15px' }}>
           <h1>Payroll Dashboard</h1>
         </div>
+        <PayrollSubNav />
         <PayrollClient periods={periods} workers={workers} projects={projects} currentUserId={currentUserId} permissions={permissions} />
       </header>
     </div>

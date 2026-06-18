@@ -112,7 +112,7 @@ export async function autoConsolidateBOQ(projectId: string) {
 
   let index = 1;
 
-  // Use a transaction for safety
+  // Use a transaction for safety with an increased timeout for large BOQs
   await prisma.$transaction(async (tx) => {
     for (const group of groups.values()) {
       // Calculate weighted unit cost. If quantity is 0, fallback to 0.
@@ -137,18 +137,19 @@ export async function autoConsolidateBOQ(projectId: string) {
         }
       });
 
-      // Create mapping links to prove synchronization
-      for (const item of group.items) {
-        await tx.bOQMapping.create({
-          data: {
-            mappingType: group.items.length > 1 ? 'MANY_TO_ONE' : 'ONE_TO_ONE',
-            aiConfidenceScore: 98.5, // Simulated high confidence score for exact text match
-            awardedBoqItemId: item.id,
-            consolidatedBoqItemId: consolidated.id
-          }
-        });
-      }
+      // Create mapping links using createMany to vastly reduce network roundtrips
+      await tx.bOQMapping.createMany({
+        data: group.items.map((item: any) => ({
+          mappingType: group.items.length > 1 ? 'MANY_TO_ONE' : 'ONE_TO_ONE',
+          aiConfidenceScore: 98.5,
+          awardedBoqItemId: item.id,
+          consolidatedBoqItemId: consolidated.id
+        }))
+      });
     }
+  }, {
+    maxWait: 20000, // 20 seconds to wait for a connection
+    timeout: 120000  // 120 seconds timeout for the transaction itself
   });
 
   revalidatePath(`/projects/${projectId}`);

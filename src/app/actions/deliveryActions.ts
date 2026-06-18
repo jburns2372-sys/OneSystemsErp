@@ -11,6 +11,7 @@ export async function encodeDelivery(data: {
   poId: string;
   receiptNumber: string;
   items: { consolidatedBoqItemId: string; quantity: number; drQuantity: number; remarks: string }[];
+  drDocumentText?: string;
 }) {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
@@ -49,7 +50,8 @@ export async function encodeDelivery(data: {
       receiptNumber: data.receiptNumber,
       isMismatch,
       mismatchNotes,
-      items: data.items
+      items: data.items,
+      attachedDocumentOCR: data.drDocumentText || 'No document attached.'
     },
     user.id,
     user.role || 'STOCKMAN'
@@ -194,3 +196,84 @@ export async function approveDelivery(deliveryId: string) {
   revalidatePath('/inventory');
   return { success: true };
 }
+
+import fs from 'fs';
+import path from 'path';
+import { verifyDeliveryDocumentWithAI } from './aiValidationActions';
+
+export async function encodeDeliveryWithFile(formData: FormData) {
+  try {
+    const poId = formData.get('poId') as string;
+    const receiptNumber = formData.get('receiptNumber') as string;
+    const itemsStr = formData.get('items') as string;
+    const items = JSON.parse(itemsStr);
+    const file = formData.get('file') as File | null;
+
+    let drDocumentText = 'No document uploaded.';
+
+    if (file && file.size > 0) {
+      // 1. Save file locally
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const fileName = `${Date.now()}-${file.name}`;
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'deliveries');
+      
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      const filePath = path.join(uploadDir, fileName);
+      fs.writeFileSync(filePath, buffer);
+
+      // 2. Prepare data for AI Vision matching
+      const po = await prisma.purchaseOrder.findUnique({
+        where: { id: poId },
+        include: { supplier: true }
+      });
+
+      if (!po) throw new Error("PO not found for AI Verification");
+
+      const itemIds = items.map((i: any) => i.consolidatedBoqItemId);
+      const boqItems = await prisma.consolidatedBOQItem.findMany({
+        where: { id: { in: itemIds } }
+      });
+
+      const poDetails = {
+        poNumber: po.poNumber,
+        supplierName: po.supplier.name,
+        items: items.map((i: any) => {
+          const b = boqItems.find(b => b.id === i.consolidatedBoqItemId);
+          return {
+            description: b?.description || 'Unknown',
+            quantity: i.quantity,
+            drQuantity: i.drQuantity
+          }
+        })
+      };
+
+      // 3. Call Gemini Vision
+      const visionResult = await verifyDeliveryDocumentWithAI(buffer, file.type, poDetails);
+
+      if (!visionResult.matches) {
+        // Intercept and return error immediately
+        return { 
+          success: false, 
+          error: `AI Document Mismatch: ${visionResult.findings}`,
+          // Also generate a validation log ID for the override request feature if you want, or just fail it hard
+          validationLogId: null 
+        };
+      }
+
+      drDocumentText = `[AI EXTRACTED OCR & VISION MATCH PASSED]: ${visionResult.findings}`;
+    }
+
+    return await encodeDelivery({
+      poId,
+      receiptNumber,
+      items,
+      drDocumentText
+    });
+  } catch (error: any) {
+    console.error('Error encoding delivery with file:', error);
+    return { success: false, error: error.message || 'Failed to process file and encode delivery.' };
+  }
+}
+

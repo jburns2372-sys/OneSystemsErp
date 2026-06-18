@@ -110,7 +110,7 @@ export async function createPayrollPeriod(data: any, userId: string) {
     await logAudit(
       userId,
       'HR_OFFICER', // Default role if not available
-      'PAYROLL_PROCESSING',
+      'PAYROLL',
       period.id,
       'CREATE_PAYROLL_PERIOD',
       undefined,

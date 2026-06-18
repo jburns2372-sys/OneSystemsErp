@@ -9,8 +9,9 @@ interface ConsolidatedBOQViewerProps {
   isLocked: boolean;
   consolidatedItems: any[];
   totalItems: number;
-  totalAmount: number;
   users?: { id: string; name: string | null }[];
+  canCreateMRF?: boolean;
+  canLock?: boolean;
 }
 
 export default function ConsolidatedBOQViewer({ 
@@ -19,7 +20,9 @@ export default function ConsolidatedBOQViewer({
   consolidatedItems, 
   totalItems, 
   totalAmount,
-  users = []
+  users = [],
+  canCreateMRF = true,
+  canLock = true
 }: ConsolidatedBOQViewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -55,7 +58,7 @@ export default function ConsolidatedBOQViewer({
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {isLocked && selectedItemIds.size > 0 && (
+          {isLocked && selectedItemIds.size > 0 && canCreateMRF && (
             <button 
               onClick={() => setIsModalOpen(true)}
               style={{
@@ -68,7 +71,9 @@ export default function ConsolidatedBOQViewer({
               📋 Generate MRF ({selectedItemIds.size})
             </button>
           )}
-          <LockConsolidatedBOQButton projectId={projectId} isLocked={isLocked} />
+          {canLock && (
+            <LockConsolidatedBOQButton projectId={projectId} isLocked={isLocked} />
+          )}
           <button 
             onClick={() => setIsFullscreen(!isFullscreen)}
             className="btn-secondary"

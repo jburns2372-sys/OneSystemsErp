@@ -58,6 +58,39 @@ export default async function ProcurementHub() {
             </div>
           </Link>
 
+          {/* Canvassing & Quotations Card */}
+          <Link href="/procurement/canvassing" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: 'var(--bg-secondary)',
+              borderRadius: '16px',
+              padding: '30px',
+              border: '1px solid var(--glass-border)',
+              transition: 'all 0.3s ease',
+              cursor: 'pointer',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+            }}
+            >
+              <div style={{ fontSize: '3rem', marginBottom: '15px' }}>⚖️</div>
+              <h2 style={{ color: 'var(--text-primary)', margin: '0 0 10px 0', fontSize: '1.5rem' }}>Canvassing & Supplier Comparison</h2>
+              <p style={{ color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5', flexGrow: 1 }}>
+                Prepare canvass forms from approved MRFs, encode supplier quotations, and use AI to compare and recommend the best vendor.
+              </p>
+              <div style={{ 
+                marginTop: '20px', 
+                color: '#a855f7', 
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}>
+                Start Canvassing <span>→</span>
+              </div>
+            </div>
+          </Link>
+
           {/* Purchase Orders Card */}
           <Link href="/procurement/purchase-orders" style={{ textDecoration: 'none' }}>
             <div style={{

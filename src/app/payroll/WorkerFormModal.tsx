@@ -18,8 +18,8 @@ export default function WorkerFormModal({ worker, onClose }: { worker: any, onCl
     dailyRate: 0,
     workerCategory: 'SKILLED',
     employmentType: 'PROJECT_BASED',
-    payrollCategory: 'Other',
-    allowedPaymentMethod: 'Manual Hold',
+    payrollCategory: 'Semi-Monthly',
+    allowedPaymentMethod: 'Bank Transfer Only',
     gcashNumber: '',
     gcashAccountName: '',
     bankName: '',
@@ -41,10 +41,6 @@ export default function WorkerFormModal({ worker, onClose }: { worker: any, onCl
       allowed = 'Bank Transfer Only';
       newRateType = 'MONTHLY_SALARY';
     }
-    else if (['1-Lot Consultant', 'Freelance Consultant'].includes(val)) {
-      allowed = 'Bank Transfer Only';
-      newRateType = 'ONE_LOT';
-    }
     
     setFormData({ ...formData, payrollCategory: val, allowedPaymentMethod: allowed, rateType: newRateType });
   };
@@ -60,8 +56,8 @@ export default function WorkerFormModal({ worker, onClose }: { worker: any, onCl
         dailyRate: worker.dailyRate || 0,
         workerCategory: worker.workerCategory || 'SKILLED',
         employmentType: worker.employmentType || 'PROJECT_BASED',
-        payrollCategory: worker.payrollCategory || 'Other',
-        allowedPaymentMethod: worker.allowedPaymentMethod || 'Manual Hold',
+        payrollCategory: worker.payrollCategory || 'Semi-Monthly',
+        allowedPaymentMethod: worker.allowedPaymentMethod || 'Bank Transfer Only',
         gcashNumber: worker.gcashNumber || '',
         gcashAccountName: worker.gcashAccountName || '',
         bankName: worker.bankName || '',
@@ -211,9 +207,6 @@ export default function WorkerFormModal({ worker, onClose }: { worker: any, onCl
                 <option value="Weekly Salaried" style={{ background: 'var(--bg-secondary)' }}>Weekly Salaried</option>
                 <option value="Semi-Monthly" style={{ background: 'var(--bg-secondary)' }}>Semi-Monthly</option>
                 <option value="Monthly" style={{ background: 'var(--bg-secondary)' }}>Monthly</option>
-                <option value="1-Lot Consultant" style={{ background: 'var(--bg-secondary)' }}>1-Lot Consultant</option>
-                <option value="Freelance Consultant" style={{ background: 'var(--bg-secondary)' }}>Freelance Consultant</option>
-                <option value="Other" style={{ background: 'var(--bg-secondary)' }}>Other</option>
               </select>
             </div>
 

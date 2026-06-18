@@ -1,10 +1,32 @@
 'use client';
+import { useState } from 'react';
+import CutoffFormModal from './CutoffFormModal';
 
 export default function CutoffSettings({ cutoffs }: { cutoffs: any[] }) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCutoff, setEditingCutoff] = useState<any>(null);
+
+  const openNew = () => {
+    setEditingCutoff(null);
+    setIsModalOpen(true);
+  };
+
+  const openEdit = (cutoff: any) => {
+    setEditingCutoff(cutoff);
+    setIsModalOpen(true);
+  };
+
   return (
     <div>
       <h3 style={{ margin: '0 0 20px 0', color: '#fff' }}>Custom Payroll Cutoff Configuration</h3>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>Configure exactly when the payroll period starts, ends, and releases across different groups or the entire company.</p>
+      <div style={{ background: 'rgba(52, 152, 219, 0.1)', borderLeft: '4px solid #3498db', padding: '15px 20px', borderRadius: '8px', marginBottom: '30px' }}>
+        <h4 style={{ margin: '0 0 10px 0', color: '#3498db', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>ℹ️</span> What are Custom Cutoffs?
+        </h4>
+        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.5' }}>
+          Custom Cutoffs allow you to define specialized payroll schedules for different groups of employees (e.g., Weekly for construction workers vs. Semi-Monthly for office staff). Setting these correctly ensures that Daily Time Records (DTRs) and Payslips are automatically generated on the exact dates required without manual calculation errors.
+        </p>
+      </div>
       
       <div style={{ display: 'grid', gap: '20px' }}>
         {cutoffs?.map((cutoff: any) => (
@@ -18,7 +40,7 @@ export default function CutoffSettings({ cutoffs }: { cutoffs: any[] }) {
                   <span style={{ background: 'rgba(52,152,219,0.1)', color: '#3498db', border: '1px solid rgba(52,152,219,0.3)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>Applies to: {cutoff.appliesTo}</span>
                 </div>
               </div>
-              <button style={{ background: 'transparent', border: '1px solid var(--text-secondary)', color: 'var(--text-secondary)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Edit</button>
+              <button onClick={() => openEdit(cutoff)} style={{ background: 'transparent', border: '1px solid var(--text-secondary)', color: 'var(--text-secondary)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Edit</button>
             </div>
             
             <div style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
@@ -49,9 +71,16 @@ export default function CutoffSettings({ cutoffs }: { cutoffs: any[] }) {
         )}
       </div>
 
-      <button style={{ marginTop: '20px', background: 'var(--accent-color)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+      <button onClick={openNew} style={{ marginTop: '20px', background: 'var(--accent-color)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
         <span>+</span> Create New Cutoff Setting
       </button>
+
+      {isModalOpen && (
+        <CutoffFormModal
+          cutoff={editingCutoff}
+          onClose={() => setIsModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

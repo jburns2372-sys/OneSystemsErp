@@ -1,10 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import styles from '../projects/page.module.css';
+import { processPayment } from '@/app/actions/progressActions';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SupplierPayablesPage() {
+export default async function UnifiedPayablesPage() {
   const payables = await prisma.accountsPayable.findMany({
     where: {
       status: { not: 'PAID' }
@@ -20,6 +21,34 @@ export default async function SupplierPayablesPage() {
     }
   });
 
+  const subconBillings = await prisma.subcontractBilling.findMany({
+    where: {
+      paymentStatus: 'PENDING',
+      status: 'APPROVED_FOR_PAYMENT',
+      packageId: { not: null }
+    },
+    include: {
+      subcontractor: true,
+      package: true,
+      project: true
+    },
+    orderBy: { createdAt: 'asc' }
+  });
+
+  const jobOrderBillings = await prisma.subcontractBilling.findMany({
+    where: {
+      paymentStatus: 'PENDING',
+      status: 'APPROVED_FOR_PAYMENT',
+      jobOrderId: { not: null }
+    },
+    include: {
+      subcontractor: true,
+      jobOrder: true,
+      project: true
+    },
+    orderBy: { createdAt: 'asc' }
+  });
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const fiveDaysFromNow = new Date(today);
@@ -31,19 +60,21 @@ export default async function SupplierPayablesPage() {
     return dueDate >= today && dueDate <= fiveDaysFromNow;
   });
 
+  const totalActionable = payables.length + subconBillings.length + jobOrderBillings.length;
+
   return (
-    <div className={styles.container} style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div className={styles.container} style={{ maxWidth: '1400px', margin: '0 auto', paddingBottom: '60px' }}>
       <header className={styles.header}>
         <div>
           <Link href="/finance" style={{ color: 'var(--text-secondary)', textDecoration: 'none', marginBottom: '10px', display: 'inline-block' }}>
             ← Back to Finance Hub
           </Link>
-          <h1>Supplier Payables</h1>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>Track outstanding balances to suppliers generated from approved material deliveries.</p>
+          <h1>Unified Finance Payables</h1>
+          <p style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>Track and process outstanding balances for Suppliers, Subcontractors, and Job Orders.</p>
         </div>
       </header>
 
-      {maturingPayables.length > 0 && (
+      {(maturingPayables.length > 0 || totalActionable > 0) && (
         <div style={{
           marginBottom: '30px',
           padding: '20px',
@@ -62,14 +93,16 @@ export default async function SupplierPayablesPage() {
               AI Finance Assistant
             </h3>
             <p style={{ margin: 0, color: 'var(--text-primary)', lineHeight: '1.5' }}>
-              Hello Finance Officer. Please note that there {maturingPayables.length === 1 ? 'is' : 'are'} <strong>{maturingPayables.length} payable{maturingPayables.length === 1 ? '' : 's'}</strong> maturing within the next 5 days. 
-              Please ensure sufficient funds are allocated in the master budget to clear these upcoming dues.
+              Hello Finance Officer. You have <strong>{payables.length}</strong> supplier payables, <strong>{subconBillings.length}</strong> subcontract billings, and <strong>{jobOrderBillings.length}</strong> job order billings waiting for payment.
+              {maturingPayables.length > 0 && ` Note that ${maturingPayables.length} supplier payable(s) are maturing within the next 5 days.`}
             </p>
           </div>
         </div>
       )}
 
-      <div className={styles.tableContainer} style={{ overflowX: 'auto' }}>
+      {/* SUPPLIER PAYABLES SECTION */}
+      <h2 style={{ color: 'var(--text-primary)', borderBottom: '1px solid #333', paddingBottom: '10px', marginTop: '40px' }}>1. Supplier Material Payables</h2>
+      <div className={styles.tableContainer} style={{ overflowX: 'auto', marginBottom: '40px' }}>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -86,7 +119,6 @@ export default async function SupplierPayablesPage() {
           <tbody>
             {payables.map(payable => {
               const isOverdue = new Date(payable.dueDate) < new Date() && payable.status !== 'PAID';
-              
               return (
                 <tr key={payable.id}>
                   <td style={{ fontWeight: 'bold' }}>{payable.po.supplier.name}</td>
@@ -102,53 +134,136 @@ export default async function SupplierPayablesPage() {
                   </td>
                   <td>
                     <span style={{
-                      padding: '4px 8px',
-                      borderRadius: '12px',
-                      fontSize: '0.8rem',
-                      fontWeight: 'bold',
-                      backgroundColor: payable.status === 'PENDING' ? 'rgba(234, 179, 8, 0.2)' : 
-                                     payable.status === 'ACCRUED' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                      color: payable.status === 'PENDING' ? '#eab308' : 
-                             payable.status === 'ACCRUED' ? '#a855f7' : '#3b82f6'
+                      padding: '4px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold',
+                      backgroundColor: payable.status === 'PENDING' ? 'rgba(234, 179, 8, 0.2)' : payable.status === 'ACCRUED' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                      color: payable.status === 'PENDING' ? '#eab308' : payable.status === 'ACCRUED' ? '#a855f7' : '#3b82f6'
                     }}>
                       {payable.status === 'ACCRUED' ? 'PDC ISSUED' : payable.status}
                     </span>
                   </td>
                   <td>
-                    {payable.status !== 'PAID' ? (
-                      <Link href={`/supplier-payables/${payable.id}`}>
-                        <button style={{ 
-                          padding: '6px 12px', 
-                          background: 'var(--accent-color)', 
-                          color: '#000', 
-                          border: 'none', 
-                          borderRadius: '4px', 
-                          fontWeight: 'bold', 
-                          cursor: 'pointer' 
-                        }}>
-                          {payable.status === 'ACCRUED' ? 'Clear Payment' : 'Issue Payment'}
-                        </button>
-                      </Link>
-                    ) : (
-                      <Link href={`/supplier-payables/${payable.id}`} style={{ color: 'var(--accent-color)', textDecoration: 'none' }}>
-                        View Payment
-                      </Link>
-                    )}
+                    <Link href={`/supplier-payables/${payable.id}`}>
+                      <button style={{ padding: '6px 12px', background: 'var(--accent-color)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
+                        {payable.status === 'ACCRUED' ? 'Clear Payment' : 'Issue Payment'}
+                      </button>
+                    </Link>
                   </td>
                 </tr>
               );
             })}
-            
-            {payables.length === 0 && (
-              <tr>
-                <td colSpan={8} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
-                  No supplier payables found.
-                </td>
-              </tr>
-            )}
+            {payables.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>No supplier payables found.</td></tr>}
           </tbody>
         </table>
       </div>
+
+      {/* SUBCONTRACT PAYABLES SECTION */}
+      <h2 style={{ color: 'var(--text-primary)', borderBottom: '1px solid #333', paddingBottom: '10px' }}>2. Subcontractor Payables</h2>
+      <div className={styles.tableContainer} style={{ overflowX: 'auto', marginBottom: '40px' }}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Subcontractor</th>
+              <th>Project</th>
+              <th>Package / Invoice</th>
+              <th>Gross Billed</th>
+              <th>Retention (10%)</th>
+              <th>Net Payable (₱)</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {subconBillings.map(bill => (
+              <tr key={bill.id}>
+                <td style={{ fontWeight: 'bold' }}>{bill.subcontractor?.name || 'Unknown'}</td>
+                <td>{bill.project?.name || 'N/A'}</td>
+                <td>
+                  <div>
+                    <Link href={`/subcontracting/invoice/${bill.id}`} style={{ color: 'var(--accent-color)', textDecoration: 'underline' }}>
+                      {bill.package?.packageNumber || 'N/A'}
+                    </Link>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Inv: {bill.billingNumber}</div>
+                </td>
+                <td>₱{bill.currentGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td style={{ color: '#ef4444' }}>-₱{(bill.retentionDeduction || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td style={{ fontWeight: 'bold', color: 'var(--accent-color)' }}>
+                  ₱{bill.netPayable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td>
+                  <Link href={`/supplier-payables/subcontract/${bill.id}`}>
+                    <button style={{
+                      padding: '6px 12px',
+                      background: bill.endorsedForPayment ? 'rgba(245, 158, 11, 0.15)' : 'var(--accent-color)',
+                      color: bill.endorsedForPayment ? '#fbbf24' : '#000',
+                      border: bill.endorsedForPayment ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
+                      borderRadius: '4px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}>
+                      {bill.endorsedForPayment ? 'Review Endorsement' : 'Issue Payment'}
+                    </button>
+                  </Link>
+                </td>
+              </tr>
+            ))}
+            {subconBillings.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>No pending subcontract billings.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {/* JOB ORDER PAYABLES SECTION */}
+      <h2 style={{ color: 'var(--text-primary)', borderBottom: '1px solid #333', paddingBottom: '10px' }}>3. Job Order Payables</h2>
+      <div className={styles.tableContainer} style={{ overflowX: 'auto' }}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Subcontractor</th>
+              <th>Project</th>
+              <th>Job Order / Invoice</th>
+              <th>Gross Billed</th>
+              <th>Net Payable (₱)</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {jobOrderBillings.map(bill => (
+              <tr key={bill.id}>
+                <td style={{ fontWeight: 'bold' }}>{bill.subcontractor?.name || 'Unknown'}</td>
+                <td>{bill.project?.name || 'N/A'}</td>
+                <td>
+                  <div>
+                    <Link href={`/subcontracting/invoice/${bill.id}`} style={{ color: 'var(--accent-color)', textDecoration: 'underline' }}>
+                      {bill.jobOrder?.jobNumber || 'N/A'}
+                    </Link>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Inv: {bill.billingNumber}</div>
+                </td>
+                <td>₱{bill.currentGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td style={{ fontWeight: 'bold', color: 'var(--accent-color)' }}>
+                  ₱{bill.netPayable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td>
+                  <Link href={`/supplier-payables/subcontract/${bill.id}`}>
+                    <button style={{
+                      padding: '6px 12px',
+                      background: bill.endorsedForPayment ? 'rgba(245, 158, 11, 0.15)' : 'var(--accent-color)',
+                      color: bill.endorsedForPayment ? '#fbbf24' : '#000',
+                      border: bill.endorsedForPayment ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
+                      borderRadius: '4px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}>
+                      {bill.endorsedForPayment ? 'Review Endorsement' : 'Issue Payment'}
+                    </button>
+                  </Link>
+                </td>
+              </tr>
+            ))}
+            {jobOrderBillings.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>No pending job order billings.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
     </div>
   );
 }

@@ -365,9 +365,6 @@ export default function NewWorkerForm({ initialData }: { initialData?: any }) {
                   <option value="Weekly Salaried">Weekly Salaried</option>
                   <option value="Semi-Monthly">Semi-Monthly</option>
                   <option value="Monthly">Monthly</option>
-                  <option value="1-Lot Consultant">1-Lot Consultant</option>
-                  <option value="Freelance Consultant">Freelance Consultant</option>
-                  <option value="Other">Other</option>
                 </select>
               </div>
               <div>

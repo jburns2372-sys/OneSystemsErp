@@ -14,15 +14,7 @@ interface PermissionGuardProps {
 }
 
 export default function PermissionGuard({ permissions, moduleName, action, children, fallback = null }: PermissionGuardProps) {
-  const [isAuthorized, setIsAuthorized] = useState(false);
-
-  useEffect(() => {
-    if (permissions && permissions[moduleName] && permissions[moduleName][action]) {
-      setIsAuthorized(true);
-    } else {
-      setIsAuthorized(false);
-    }
-  }, [permissions, moduleName, action]);
+  const isAuthorized = (permissions && permissions.IS_ADMIN) || (permissions && permissions[moduleName] && permissions[moduleName][action]);
 
   if (!isAuthorized) {
     return <>{fallback}</>;

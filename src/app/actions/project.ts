@@ -19,13 +19,17 @@ export async function getDashboardStats() {
   });
   const totalExpenses = expenses._sum.amount || 0;
 
-  // Let's assume outstanding payables are unpaid Purchase Orders minus paid ones
-  // Since we don't have a direct payable balance, we'll sum PO totalAmounts that aren't PAID
-  const unpaidPOs = await prisma.purchaseOrder.aggregate({
+  const unpaidAP = await prisma.accountsPayable.aggregate({
     where: { status: { not: 'PAID' } },
-    _sum: { totalAmount: true },
+    _sum: { amount: true },
   });
-  const totalPayables = unpaidPOs._sum.totalAmount || 0;
+  
+  const unpaidSubcontract = await prisma.subcontractBilling.aggregate({
+    where: { paymentStatus: { not: 'PAID' } },
+    _sum: { netPayable: true },
+  });
+
+  const totalPayables = (unpaidAP._sum.amount || 0) + (unpaidSubcontract._sum.netPayable || 0);
 
   // For accomplishment percentage, we can average across all projects if we have awardedBoqItems 
   // with percentageAccomplished, but for now we'll return a default 0 if we can't compute it easily.

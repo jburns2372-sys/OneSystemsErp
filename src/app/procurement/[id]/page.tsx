@@ -155,7 +155,7 @@ export default async function PurchaseOrderDetailsPage({ params }: { params: Pro
           </div>
 
           <div style={{ textAlign: 'center', position: 'relative' }}>
-            {po.status === 'ISSUED' && (
+            {['APPROVED', 'ISSUED', 'COMPLETED'].includes(po.status) && (
               <div style={{
                 position: 'absolute', top: '-30px', left: '50%', transform: 'translateX(-50%) rotate(-5deg)',
                 border: '3px solid #16a34a', color: '#16a34a', padding: '4px 12px', borderRadius: '4px',

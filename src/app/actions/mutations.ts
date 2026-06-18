@@ -26,12 +26,26 @@ export async function createProject(formData: FormData) {
   const fileName = `${Date.now()}_${boqFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
   // Upload the original BOQ to Vercel Blob for permanent cloud storage
-  const blob = await put(`boq/${fileName}`, buffer, {
-    access: 'public',
-    addRandomSuffix: false
-  });
+  let fileUrl = '';
+  try {
+    const blob = await put(`boq/${fileName}`, buffer, {
+      access: 'public',
+      addRandomSuffix: false,
+      token: process.env.BLOB_READ_WRITE_TOKEN
+    });
+    fileUrl = blob.url;
+  } catch (err: any) {
+    console.warn('Vercel Blob upload failed, falling back to local storage:', err.message);
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'boq');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const filePath = path.join(uploadDir, fileName);
+    fs.writeFileSync(filePath, buffer);
+    fileUrl = `/uploads/boq/${fileName}`;
+  }
   
-  description = `BOQ File Uploaded: ${blob.url}`;
+  description = `BOQ File Uploaded: ${fileUrl}`;
 
   // Parse Excel file
   const workbook = xlsx.read(buffer, { type: 'buffer' });

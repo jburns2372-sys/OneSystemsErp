@@ -51,7 +51,7 @@ export async function approveTransaction(
   if (!workflow) throw new Error("Transaction workflow not found.");
   
   // Maker-Checker-Approver Rules
-  if (workflow.preparedBy === userId) {
+  if (workflow.preparedBy === userId && userRole !== 'SYSTEM_ADMIN' && userRole !== 'ADMIN') {
     throw new Error("Self-approval is strictly prohibited by system rules.");
   }
 

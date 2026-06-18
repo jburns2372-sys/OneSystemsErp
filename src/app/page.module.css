@@ -57,6 +57,13 @@
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+.chartPlaceholder h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
 .emptyChart {
   height: 300px;
   display: flex;

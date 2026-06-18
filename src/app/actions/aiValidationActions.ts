@@ -132,3 +132,60 @@ export async function updateAIValidationLog(logId: string, transactionId: string
         console.error("Failed to update AI log with transaction ID", e);
     }
 }
+
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+export async function verifyDeliveryDocumentWithAI(fileBuffer: Buffer, mimeType: string, poDetails: any) {
+  try {
+    const prompt = `Act as an AI Document Verifier. You are validating an uploaded Delivery Receipt (DR) document against the system's Purchase Order (PO) details.
+
+System PO Details:
+- PO Number: ${poDetails.poNumber}
+- Supplier/Vendor: ${poDetails.supplierName}
+- Expected Items: 
+${poDetails.items.map((i: any) => `  * ${i.description} (Ordered: ${i.quantity}, DR encoded: ${i.drQuantity})`).join('\n')}
+
+Task:
+1. Examine the uploaded document.
+2. Verify if the vendor name on the document matches "${poDetails.supplierName}".
+3. Verify if the PO Number or DR Number matches the transaction.
+4. Verify if the item descriptions and quantities on the document match the expected items.
+
+If there are ANY mismatches, you MUST reject it and show the ACTUAL mismatch in the findings (e.g., "Vendor mismatch: PO says X, Document says Y"). Focus strictly on:
+- Vendor/Supplier mismatch
+- PO Number mismatch
+- Item Description or Quantity mismatch
+
+Return EXACTLY the following JSON format:
+{
+  "matches": true, // or false
+  "findings": "Explanation of the matches or the specific mismatches found."
+}`;
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+    // Force recompile to clear Next.js server action cache
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: fileBuffer.toString("base64"),
+          mimeType: mimeType
+        }
+      }
+    ]);
+
+    const responseText = result.response.text();
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+       return JSON.parse(jsonMatch[0]);
+    } else {
+       return { matches: false, findings: "Failed to parse AI response. Rejecting for safety." };
+    }
+  } catch (error: any) {
+    console.error('AI Document Verification Error:', error);
+    return { matches: false, findings: `AI Vision Engine Error: ${error.message}` };
+  }
+}
+

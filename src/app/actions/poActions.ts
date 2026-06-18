@@ -130,7 +130,7 @@ export async function approvePurchaseOrder(poId: string) {
   if (!po) throw new Error('PO not found');
 
   // Maker-Checker specific to PO logic
-  if (po.preparerId === currentUser.id) {
+  if (po.preparerId === currentUser.id && currentUser.role !== 'SYSTEM_ADMIN' && currentUser.role !== 'ADMIN') {
     throw new Error('Self-approval blocked by Workflow Engine.');
   }
 
@@ -147,3 +147,28 @@ export async function approvePurchaseOrder(poId: string) {
   revalidatePath('/procurement/purchase-orders');
   return { success: true };
 }
+
+export async function submitPOForApproval(poId: string) {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value;
+  
+  if (!sessionId) throw new Error('Not authenticated');
+
+  const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
+  if (!currentUser) throw new Error('User not found');
+
+  const po = await prisma.purchaseOrder.findUnique({ where: { id: poId } });
+  if (!po) throw new Error('PO not found');
+
+  await prisma.purchaseOrder.update({
+    where: { id: poId },
+    data: { status: 'FOR_REVIEW' }
+  });
+
+  await submitTransaction(currentUser.id, currentUser.role || 'PURCHASING_OFFICER', 'PURCHASE_ORDER', po.id);
+
+  revalidatePath(`/procurement/purchase-orders/${poId}`);
+  revalidatePath('/procurement/purchase-orders');
+  return { success: true };
+}
+
