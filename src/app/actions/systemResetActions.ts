@@ -92,7 +92,9 @@ export async function resetTransactionData(confirmationText: string) {
       await tx.payrollEarning.deleteMany({});
       await tx.payroll.deleteMany({});
       await tx.dailyTimeRecord.deleteMany({});
-      // Keep payrollPeriod and workerDocument
+      await tx.workerDocument.deleteMany({});
+      await tx.payrollPeriod.deleteMany({});
+      await tx.worker.deleteMany({});
 
       // Petty Cash Transactions
       await tx.pettyCashExpense.deleteMany({});
@@ -145,8 +147,16 @@ export async function resetTransactionData(confirmationText: string) {
       await tx.projectCamera.deleteMany({});
       await tx.liveCameraSnapshot.deleteMany({});
       
-      // DO NOT delete DocumentTemplate, Document, Project, BOQMapping, AwardedBOQItem, ConsolidatedBOQItem!
-      // These are FOUNDATIONAL data that define the UI and project structure.
+      // Delete user-uploaded project documents, but preserve DocumentTemplates (seeded UI data)
+      await tx.document.deleteMany({});
+      
+      // Delete the actual foundational project data so the system is totally blank for a new start.
+      await tx.bOQMapping.deleteMany({});
+      await tx.awardedBOQItem.deleteMany({});
+      await tx.consolidatedBOQItem.deleteMany({});
+      await tx.project.deleteMany({});
+      
+      // DO NOT delete DocumentTemplate or the Knowledge Base (Roles, SOPs, AI rules)!
 
       // Finally, log this massive reset action into AuditLog
       await tx.auditLog.create({
@@ -160,6 +170,24 @@ export async function resetTransactionData(confirmationText: string) {
     }, {
       timeout: 30000 // Allow up to 30s for the transaction
     });
+
+    // 3. Clear all physical uploaded files
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+    if (fs.existsSync(uploadsDir)) {
+      const foldersToClear = ['accomplishments', 'documents', 'payrolls', 'receipts'];
+      for (const folder of foldersToClear) {
+        const targetPath = path.join(uploadsDir, folder);
+        if (fs.existsSync(targetPath)) {
+          const files = fs.readdirSync(targetPath);
+          for (const file of files) {
+            fs.unlinkSync(path.join(targetPath, file));
+          }
+        }
+      }
+    }
+
+    const { revalidatePath } = require('next/cache');
+    revalidatePath('/', 'layout');
 
     return { success: true };
   } catch (error: any) {
