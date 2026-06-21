@@ -89,6 +89,8 @@ export default async function ProjectDetailsPage({
           </div>
           <div style={{ color: 'var(--text-secondary)' }}>Status: {project.status}</div>
           <div style={{ color: 'var(--text-secondary)' }}>Location: {project.location || 'N/A'}</div>
+          {project.startDate && <div style={{ color: 'var(--text-secondary)' }}>Date Started: {new Date(project.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} (15 Days post-NTP)</div>}
+          {project.originalCompletionDate && <div style={{ color: 'var(--text-secondary)' }}>Target Completion: {new Date(project.originalCompletionDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} (180 Calendar Days)</div>}
         </div>
       </header>
 
