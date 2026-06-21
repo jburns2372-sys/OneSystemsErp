@@ -7,9 +7,11 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  maxWidth?: string;
+  width?: string;
 }
 
-export default function Modal({ isOpen, onClose, title, children }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, maxWidth = '500px', width = '90%' }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,8 +53,8 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
           backgroundColor: 'var(--bg-secondary)',
           border: '1px solid var(--glass-border)',
           borderRadius: '12px',
-          width: '90%',
-          maxWidth: '500px',
+          width: width,
+          maxWidth: maxWidth,
           maxHeight: '90vh',
           overflowY: 'auto',
           boxShadow: '0 0 30px rgba(0, 240, 255, 0.1)',

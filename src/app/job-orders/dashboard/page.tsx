@@ -36,11 +36,11 @@ export default async function JobOrderDashboard() {
         </div>
         <div className={styles.statCard}>
           <h3>Pending Approvals</h3>
-          <div className={styles.statValue}>0</div>
+          <div className={styles.statValue}>{jobOrders.filter((jo: any) => jo.status === 'PENDING' || jo.status === 'FOR_APPROVAL').length}</div>
         </div>
         <div className={styles.statCard}>
           <h3>Total Billed Amount</h3>
-          <div className={styles.statValue}>₱0.00</div>
+          <div className={styles.statValue}>₱{jobOrders.reduce((sum: number, jo: any) => sum + (jo.totalBilledAmount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
         <div className={styles.statCard}>
           <h3>Total Payable</h3>

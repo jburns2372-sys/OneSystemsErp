@@ -5,6 +5,7 @@ import DashboardClient from './DashboardClient';
 import SubcontractListClient from './SubcontractListClient';
 import { getSubcontractPackages } from '@/app/actions/subcontractingActions';
 import { getJobOrders } from '@/app/actions/jobOrderActions';
+import { getAllSubcontractorVariationOrders } from '@/app/actions/variationOrderActions';
 
 const subModules = [
   { name: 'Dashboard', href: '/subcontracting/dashboard', icon: '📊', description: 'Overview and KPIs' },
@@ -30,6 +31,7 @@ const joModules = [
 export default async function SubcontractingDashboard() {
   const packages = await getSubcontractPackages();
   const jobOrders = await getJobOrders();
+  const variationOrders = await getAllSubcontractorVariationOrders();
 
   return (
     <div className={styles.dashboardContainer} style={{ maxWidth: '1400px' }}>
@@ -44,19 +46,19 @@ export default async function SubcontractingDashboard() {
       <div className={styles.statsGrid} style={{ marginBottom: '40px' }}>
         <div className={styles.statCard}>
           <h3>Active Subcontracts</h3>
-          <div className={styles.statValue}>1</div>
+          <div className={styles.statValue}>{packages?.length ?? 0}</div>
         </div>
         <div className={styles.statCard}>
           <h3>Active Job Orders</h3>
-          <div className={styles.statValue}>2</div>
+          <div className={styles.statValue}>{jobOrders?.length ?? 0}</div>
         </div>
         <div className={styles.statCard}>
           <h3>Total Billed Amount</h3>
-          <div className={styles.statValue}>₱0.00</div>
+          <div className={styles.statValue}>₱{(packages?.reduce((sum: number, p: any) => sum + (p.totalBilledAmount || 0), 0) ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
         <div className={styles.statCard}>
           <h3>Total Payable</h3>
-          <div className={styles.statValue}>₱0.00</div>
+          <div className={styles.statValue}>₱{(packages?.reduce((sum: number, p: any) => sum + (p.totalPayable || p.contractAmount || 0), 0) ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
         <div className={styles.statCard}>
           <h3>AI Flags</h3>
@@ -65,7 +67,7 @@ export default async function SubcontractingDashboard() {
       </div>
 
       {/* Modules Grid & Master List */}
-      <DashboardClient subModules={subModules} joModules={joModules} packages={packages} jobOrders={jobOrders} />
+      <DashboardClient subModules={subModules} joModules={joModules} packages={packages} jobOrders={jobOrders} variationOrders={variationOrders} />
     </div>
   );
 }

@@ -64,6 +64,22 @@ export async function getDashboardStats() {
     where: { status: 'PENDING' }
   });
 
+  const openCanvassing = await prisma.canvassForm.count({
+    where: { status: { in: ['DRAFT', 'PENDING', 'OPEN', 'FOR_REVIEW'] } }
+  });
+
+  // Real counts for every dashboard card
+  const totalWorkers = await prisma.worker.count();
+  const totalSubcontractors = await prisma.subcontractor.count();
+  const totalSuppliers = await prisma.supplier.count();
+  const totalAccomplishments = await prisma.accomplishment.count();
+  const totalIssuances = await prisma.materialIssuance.count();
+  const totalAuditLogs = await prisma.auditLog.count();
+  const totalDailyLogs = await prisma.dailyTimeRecord.count();
+  const totalDocuments = await prisma.document.count();
+  const totalJobOrders = await prisma.jobOrder.count();
+  const totalVariationOrders = await prisma.variationOrder.count();
+
   return {
     totalProjects,
     pendingMRs,
@@ -77,6 +93,17 @@ export async function getDashboardStats() {
     activePayrollPeriods,
     activePurchaseOrders,
     expectedDeliveries,
-    pendingMRFs
+    pendingMRFs,
+    openCanvassing,
+    totalWorkers,
+    totalSubcontractors,
+    totalSuppliers,
+    totalAccomplishments,
+    totalIssuances,
+    totalAuditLogs,
+    totalDailyLogs,
+    totalDocuments,
+    totalJobOrders,
+    totalVariationOrders
   };
 }

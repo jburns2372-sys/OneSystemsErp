@@ -120,7 +120,7 @@ ${extractedText.substring(0, 15000)}
         mandatoryFlag: isMandatory,
         status: 'ACTIVE',
         uploadedBy: 'user-stub', 
-        uploadedByRole: 'SYSTEM_ADMIN', 
+        uploadedByRole: 'SUPER_ADMIN', 
         moduleScope: targetModule || 'GENERAL',
         versions: {
           create: {

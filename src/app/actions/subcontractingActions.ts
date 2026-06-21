@@ -372,14 +372,14 @@ export async function unlockSubcontractPackage(id: string) {
     if (hasCompletedPayments) {
       isAuthorized = user?.email === 'pd@gmail.com' ||
         user?.role === 'PROJECT_DIRECTOR' ||
-        user?.role === 'SYSTEM_ADMIN' ||
-        user?.userRoles?.some(ur => ['SYSTEM_ADMIN', 'PROJECT_DIRECTOR'].includes(ur.role.roleCode));
+        user?.role === 'SUPER_ADMIN' ||
+        user?.userRoles?.some(ur => ['SUPER_ADMIN', 'PROJECT_DIRECTOR'].includes(ur.role.roleCode));
     } else {
       isAuthorized = user?.email === 'pd@gmail.com' ||
         user?.role === 'PROJECT_DIRECTOR' ||
         user?.role === 'PROJECT_MANAGER' ||
-        user?.role === 'SYSTEM_ADMIN' ||
-        user?.userRoles?.some(ur => ['SYSTEM_ADMIN', 'PROJECT_DIRECTOR', 'PROJECT_MANAGER'].includes(ur.role.roleCode));
+        user?.role === 'SUPER_ADMIN' ||
+        user?.userRoles?.some(ur => ['SUPER_ADMIN', 'PROJECT_DIRECTOR', 'PROJECT_MANAGER'].includes(ur.role.roleCode));
     }
 
     if (!isAuthorized) {

@@ -62,6 +62,7 @@ export async function uploadAndAnalyzeQuotation(canvassId: string, supplierId: s
         totalAmount: totalAmount,
         deliveryPeriod: simulatedDelivery,
         paymentTerms: simulatedPayment,
+        fileUrl: `/uploads/quotations/${fileName}`,
         items: {
           create: itemsData
         }

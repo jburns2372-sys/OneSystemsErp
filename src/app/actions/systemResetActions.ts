@@ -20,8 +20,8 @@ export async function resetTransactionData(confirmationText: string) {
   const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
   if (!currentUser) throw new Error('User not found');
 
-  if (currentUser.role !== 'SYSTEM_ADMIN') {
-    throw new Error('Unauthorized Action: Only SYSTEM_ADMIN can perform a master reset.');
+  if (currentUser.role !== 'SUPER_ADMIN') {
+    throw new Error('Unauthorized Action: Only SUPER_ADMIN can perform a master reset.');
   }
 
   try {
@@ -41,21 +41,26 @@ export async function resetTransactionData(confirmationText: string) {
     }
 
     // ============================================================================
-    // STRICT DATA PROTECTION GUARANTEE (CORE SYSTEM INTEGRITY)
+    // STRICTLY PROTECTED TABLES (NEVER deleted by master reset):
+    //   User, UserRole, SystemRole, Role, RolePermission, Module,
+    //   WorkflowTemplate, WorkflowStep, RoleConflictRule,
+    //   AIValidationRule, AIModulePrompt,
+    //   KnowledgeRecord, KnowledgeReference, KnowledgeAuditTrail,
+    //   KnowledgeRuleReference, KnowledgeRuleAuditLog,
+    //   NotebookReference, NotebookReferenceVersion, NotebookReferenceModule,
+    //   NotebookReferenceRole, NotebookReferenceProject,
+    //   AINotebookReference,
+    //   DocumentTemplate,
+    //   GovernmentSettings, SSSTable, BIRWithholdingTaxTable,
+    //   PayrollCutoffSetting,
+    //   PayrollBankAccount, PayrollBankLedger, PaymentProvider, ReceivingBank
     // ============================================================================
-    // The following core architectural entities are STRICTLY PROTECTED from resets:
-    // 1. ALL VALIDATION RULES (AI Validation Rules, System Rules)
-    // 2. USERS (Accounts, Profiles, Passwords)
-    // 3. USER RIGHTS & PERMISSIONS (RolePermissions Matrix)
-    // 4. SYSTEM ROLES (Role, SystemRole)
-    // 5. DEFINED PROCESSES (Workflows, Module Definitions)
-    // 6. MODULES (System Modules Configuration)
-    // 7. EVERYTHING IN THE KNOWLEDGE CENTER (KnowledgeRecord, KnowledgeReference)
+    // EVERYTHING ELSE is wiped to give a true zero-data fresh start.
     // ============================================================================
 
-    // 2. Perform the deletions in bottom-up order inside a transaction
+    // 2. Perform the deletions in dependency-safe bottom-up order
     await prisma.$transaction(async (tx) => {
-      // AI & Activity Logs
+      // --- PHASE 1: Logs, AI Results, Activity Tracking ---
       await tx.aIValidationLog.deleteMany({});
       await tx.auditLog.deleteMany({});
       await tx.aIValidationEvidence.deleteMany({});
@@ -65,63 +70,42 @@ export async function resetTransactionData(confirmationText: string) {
       await tx.aIValidationRun.deleteMany({});
       await tx.aIWorkerValidationResult.deleteMany({});
       await tx.aIValidationResult.deleteMany({});
-
-      // Subcontracting (Transactional)
-      await tx.subcontractBilling.deleteMany({});
-      await tx.subcontractAccomplishment.deleteMany({});
-      await tx.jobOrder.deleteMany({});
-      // Keep SubcontractPackage and SubcontractorBOQItem? 
-      // Safe to delete if they are considered transactional for the project execution.
-      await tx.subcontractPackage.deleteMany({});
-      await tx.subcontractorBOQItem.deleteMany({});
-      await tx.backCharge.deleteMany({});
-      await tx.accomplishmentRecord.deleteMany({});
-      await tx.paymentRecord.deleteMany({});
-
-      // Banking and Payments
-      await tx.paymentFallbackRecommendation.deleteMany({});
-      await tx.paymentException.deleteMany({});
-      await tx.paymentBatchRow.deleteMany({});
-      await tx.paymentBatch.deleteMany({});
-      await tx.payrollFundingRequest.deleteMany({});
+      await tx.aIReferenceUsageLog.deleteMany({});
+      await tx.aINotification.deleteMany({});
+      await tx.aISearchLog.deleteMany({});
+      await tx.aIAuditFinding.deleteMany({});
+      await tx.aIRiskScore.deleteMany({});
+      await tx.aIValidationOverride.deleteMany({});
+      await tx.aITransactionValidation.deleteMany({});
+      await tx.notebookReferenceApprovalLog.deleteMany({});
+      await tx.notebookReferenceIndexLog.deleteMany({});
+      await tx.userLoginLog.deleteMany({});
       await tx.paymentLog.deleteMany({});
-      // Do NOT delete Banks/Providers as they are static config layout data
-      // await tx.payrollBankLedger.deleteMany({});
-      // await tx.payrollBankAccount.deleteMany({});
-      // await tx.receivingBank.deleteMany({});
-      // await tx.paymentProvider.deleteMany({});
-
-      // KNOWLEDGE BASE (Rules, SOPs, AI rules) MUST BE PRESERVED. DO NOT DELETE.
-      // await tx.knowledgeAuditTrail.deleteMany({});
-      // await tx.knowledgeReference.deleteMany({});
-      // await tx.knowledgeRecord.deleteMany({});
-
-      // Payroll & HR Transactions
       await tx.payrollAuditLog.deleteMany({});
-      await tx.payrollApproval.deleteMany({});
-      await tx.deductionLog.deleteMany({});
-      await tx.deductionLedger.deleteMany({});
-      await tx.payrollDeduction.deleteMany({});
-      await tx.payrollEarning.deleteMany({});
-      await tx.payroll.deleteMany({});
-      await tx.dailyTimeRecord.deleteMany({});
-      await tx.workerDocument.deleteMany({});
-      await tx.payrollPeriod.deleteMany({});
-      await tx.worker.deleteMany({});
 
-      // Petty Cash Transactions
-      await tx.pettyCashExpense.deleteMany({});
-      await tx.pettyCashReplenishment.deleteMany({});
-      // Keep Accounts
+      // --- PHASE 2: Transaction Workflows & Locks ---
+      await tx.revisionRequest.deleteMany({});
+      await tx.lockedRecord.deleteMany({});
+      await tx.transactionWorkflow.deleteMany({});
 
-      // Expenses
-      await tx.expenseApprovalLog.deleteMany({});
-      await tx.expenseAIValidation.deleteMany({});
-      await tx.expenseProofFile.deleteMany({});
-      await tx.expenseBreakdownItem.deleteMany({});
-      await tx.expense.deleteMany({});
+      // --- PHASE 3: Canvassing & Procurement ---
+      await tx.quotationItem.deleteMany({});
+      await tx.supplierQuotation.deleteMany({});
+      await tx.canvassItem.deleteMany({});
+      await tx.canvassForm.deleteMany({});
+      await tx.purchaseOrderItem.deleteMany({});
+      await tx.purchaseOrder.deleteMany({});
+      await tx.materialRequestItem.deleteMany({});
+      await tx.materialRequest.deleteMany({});
 
-      // Procurement & Inventory Transactions
+      // --- PHASE 4: Delivery, Inventory & Equipment ---
+      await tx.equipmentAIValidation.deleteMany({});
+      await tx.equipmentTelemetry.deleteMany({});
+      await tx.equipmentMaintenance.deleteMany({});
+      await tx.equipmentUtilization.deleteMany({});
+      await tx.equipmentDeployment.deleteMany({});
+      await tx.equipment.deleteMany({});
+
       await tx.accountsPayable.deleteMany({});
       await tx.deliveryItem.deleteMany({});
       await tx.delivery.deleteMany({});
@@ -131,12 +115,49 @@ export async function resetTransactionData(confirmationText: string) {
       await tx.materialReturn.deleteMany({});
       await tx.issuanceItem.deleteMany({});
       await tx.materialIssuance.deleteMany({});
-      await tx.purchaseOrderItem.deleteMany({});
-      await tx.purchaseOrder.deleteMany({});
-      await tx.materialRequestItem.deleteMany({});
-      await tx.materialRequest.deleteMany({});
 
-      // Project Accomplishment, Billing, & Variation Orders
+      // --- PHASE 5: Expenses & Petty Cash ---
+      await tx.expenseApprovalLog.deleteMany({});
+      await tx.expenseAIValidation.deleteMany({});
+      await tx.expenseProofFile.deleteMany({});
+      await tx.expenseBreakdownItem.deleteMany({});
+      await tx.pettyCashExpense.deleteMany({});
+      await tx.pettyCashReplenishment.deleteMany({});
+      await tx.expense.deleteMany({});
+      await tx.pettyCashAccount.deleteMany({});
+
+      // --- PHASE 6: Subcontracting ---
+      await tx.subcontractBilling.deleteMany({});
+      await tx.subcontractAccomplishment.deleteMany({});
+      await tx.jobOrder.deleteMany({});
+      await tx.subcontractPackage.deleteMany({});
+      await tx.subcontractorBOQItem.deleteMany({});
+      await tx.programOfWorks.deleteMany({});
+      await tx.backCharge.deleteMany({});
+      await tx.accomplishmentRecord.deleteMany({});
+      await tx.paymentRecord.deleteMany({});
+
+      // --- PHASE 7: Payments & Banking Transactions ---
+      await tx.paymentFallbackRecommendation.deleteMany({});
+      await tx.paymentException.deleteMany({});
+      await tx.paymentBatchRow.deleteMany({});
+      await tx.paymentBatch.deleteMany({});
+      await tx.payrollFundingRequest.deleteMany({});
+
+      // --- PHASE 8: Payroll & HR (ALL workers deleted per user instruction) ---
+      await tx.payrollApproval.deleteMany({});
+      await tx.deductionLog.deleteMany({});
+      await tx.deductionLedger.deleteMany({});
+      await tx.payrollDeduction.deleteMany({});
+      await tx.payrollEarning.deleteMany({});
+      await tx.allowance.deleteMany({});
+      await tx.payroll.deleteMany({});
+      await tx.dailyTimeRecord.deleteMany({});
+      await tx.workerDocument.deleteMany({});
+      await tx.payrollPeriod.deleteMany({});
+      await tx.worker.deleteMany({});  // Workers are wiped — admin can re-add manually
+
+      // --- PHASE 9: Accomplishments, Billings, Variation Orders ---
       await tx.projectAccomplishmentAIFinding.deleteMany({});
       await tx.projectAccomplishmentFileVersion.deleteMany({});
       await tx.projectAccomplishmentFile.deleteMany({});
@@ -148,55 +169,71 @@ export async function resetTransactionData(confirmationText: string) {
       await tx.billingItem.deleteMany({});
       await tx.billing.deleteMany({});
       await tx.payment.deleteMany({});
-      
-      // Variation Orders (New Models)
       await tx.aIVariationOrderValidation.deleteMany({});
       await tx.variationOrderDocument.deleteMany({});
       await tx.variationOrderApproval.deleteMany({});
       await tx.variationOrderItem.deleteMany({});
       await tx.variationOrder.deleteMany({});
 
+      // --- PHASE 10: Documents & Evidence ---
       await tx.evidenceFile.deleteMany({});
       await tx.projectCamera.deleteMany({});
       await tx.liveCameraSnapshot.deleteMany({});
-      
-      // Delete user-uploaded project documents, but preserve DocumentTemplates (seeded UI data)
-      await tx.document.deleteMany({});
-      
-      // Delete the actual foundational project data so the system is totally blank for a new start.
+
+
+      // --- PHASE 11: Core Master Data (Projects, BOQs, Suppliers, Subcontractors) ---
       await tx.bOQMapping.deleteMany({});
       await tx.awardedBOQItem.deleteMany({});
       await tx.consolidatedBOQItem.deleteMany({});
       await tx.project.deleteMany({});
-      
-      // DO NOT delete DocumentTemplate or the Knowledge Base (Roles, SOPs, AI rules)!
+      await tx.supplier.deleteMany({});
+      await tx.subcontractor.deleteMany({});
 
-      // Finally, log this massive reset action into AuditLog
+      // ============================================================================
+      // PROTECTED (NOT deleted):
+      //   User, UserRole, SystemRole, Role, RolePermission, Module,
+      //   WorkflowTemplate, WorkflowStep, RoleConflictRule,
+      //   AIValidationRule, AIModulePrompt,
+      //   KnowledgeRecord, KnowledgeReference, KnowledgeAuditTrail,
+      //   KnowledgeRuleReference, KnowledgeRuleAuditLog,
+      //   NotebookReference*, AINotebookReference,
+      //   DocumentTemplate,
+      //   GovernmentSettings, SSSTable, BIRWithholdingTaxTable,
+      //   PayrollCutoffSetting,
+      //   PayrollBankAccount, PayrollBankLedger, PaymentProvider, ReceivingBank
+      // ============================================================================
+
+      // Log the reset action
       await tx.auditLog.create({
         data: {
           user: { connect: { id: currentUser.id } },
-          remarks: 'ZERO_DATA_RESET: Transactional data has been successfully cleared via System Reset.',
+          remarks: 'MASTER RESET: All transactional and master data wiped. Only Users, System Roles, Access Matrix, and Knowledge Base preserved.',
           moduleName: 'SYSTEM_SETTINGS',
           actionType: 'DELETE'
         }
       });
     }, {
-      timeout: 30000 // Allow up to 30s for the transaction
+      timeout: 60000 // Allow up to 60s for the transaction
     });
 
     // 3. Clear all physical uploaded files
     const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
     if (fs.existsSync(uploadsDir)) {
-      const foldersToClear = ['accomplishments', 'documents', 'payrolls', 'receipts'];
-      for (const folder of foldersToClear) {
-        const targetPath = path.join(uploadsDir, folder);
-        if (fs.existsSync(targetPath)) {
-          const files = fs.readdirSync(targetPath);
-          for (const file of files) {
-            fs.unlinkSync(path.join(targetPath, file));
+      const clearFolder = (dirPath: string) => {
+        if (!fs.existsSync(dirPath)) return;
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dirPath, entry.name);
+          if (entry.isDirectory()) {
+            if (entry.name === 'documents') continue; // PROTECT Centralized Documents
+            clearFolder(fullPath);
+          } else {
+            fs.unlinkSync(fullPath);
           }
         }
-      }
+      };
+      clearFolder(uploadsDir);
+      console.log('Cleared all uploaded files.');
     }
 
     const { revalidatePath } = require('next/cache');

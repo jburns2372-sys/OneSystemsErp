@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 const ALL_ROLES = [
-  { id: 'SYSTEM_ADMIN', label: 'System Admin', archetype: 'EXECUTIVE' },
+  { id: 'SUPER_ADMIN', label: 'System Admin', archetype: 'EXECUTIVE' },
   { id: 'PROJECT_DIRECTOR', label: 'Project Director', archetype: 'EXECUTIVE' },
   { id: 'DIRECTORS', label: 'Directors', archetype: 'EXECUTIVE' },
   { id: 'ADMINISTRATOR', label: 'Administrator', archetype: 'EXECUTIVE' },
@@ -47,7 +47,7 @@ const ROLE_BOUNDARIES: Record<string, string> = {
   'PROJECT_DIRECTOR': 'You have Executive Approval rights. You can approve POs, MRFs, Payments, and BOQ locking. You have full read access to all financial and project data.',
   'PROJECT_MANAGER': 'You have Project Review rights. You can recommend approvals, track accomplishments, and review site requisitions. You CANNOT give final executive approval or process payments.',
   'FINANCE_OFFICER': 'You have Financial Authority. You can process payables, replenish petty cash, and manage payroll. You CANNOT originate site materials requests or PO drafts.',
-  'SYSTEM_ADMIN': 'You have Full System Access. You can manage users, roles, and global configurations.',
+  'SUPER_ADMIN': 'You have Full System Access. You can manage users, roles, and global configurations.',
   'EXECUTIVE': 'Executive access with broad overview and approval authorities.',
   'PM': 'Project Management access with operational review and tracking capabilities.',
   'FINANCE': 'Financial access for processing payments, payroll, and ledgers.',
@@ -174,7 +174,7 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
           </div>
           <div className={styles.statCard}>
             <h3>Accomplishments Tracked</h3>
-            <p className={styles.statValue}>Live</p>
+            <p className={styles.statValue}>{stats.totalAccomplishments ?? 0}</p>
             <Link href="/progress-billings" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>View Accomplishments ➔</Link>
           </div>
           <div className={styles.statCard}>
@@ -212,22 +212,22 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
           <div className={styles.statsGrid}>
             <div className={styles.statCard}>
               <h3>Pending MRFs to Source</h3>
-              <p className={styles.statValue} style={{ color: '#f97316' }}>{stats.pendingMRFs || 5}</p>
+              <p className={styles.statValue} style={{ color: '#f97316' }}>{stats.pendingMRFs ?? 0}</p>
               <Link href="/material-requests" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>View Requests ➔</Link>
             </div>
             <div className={styles.statCard}>
               <h3>Open Canvassing Requests</h3>
-              <p className={styles.statValue}>12</p>
+              <p className={styles.statValue}>{stats.openCanvassing ?? 0}</p>
               <Link href="#" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Manage Canvassing ➔</Link>
             </div>
             <div className={styles.statCard}>
               <h3>Active Purchase Orders</h3>
-              <p className={styles.statValue}>{stats.activePurchaseOrders || 3}</p>
+              <p className={styles.statValue}>{stats.activePurchaseOrders ?? 0}</p>
               <Link href="/procurement/purchase-orders" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Manage POs ➔</Link>
             </div>
             <div className={styles.statCard}>
               <h3>Pending Supplier Deliveries</h3>
-              <p className={styles.statValue} style={{ color: '#22c55e' }}>8</p>
+              <p className={styles.statValue} style={{ color: '#22c55e' }}>{stats.expectedDeliveries ?? 0}</p>
               <Link href="/deliveries" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Track Deliveries ➔</Link>
             </div>
           </div>
@@ -261,17 +261,17 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
             <h3>Expected Deliveries</h3>
-            <p className={styles.statValue} style={{ color: '#22c55e' }}>{stats.expectedDeliveries} POs</p>
+            <p className={styles.statValue} style={{ color: '#22c55e' }}>{stats.expectedDeliveries ?? 0} POs</p>
             <Link href="/deliveries/new" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Log New Delivery ➔</Link>
           </div>
           <div className={styles.statCard}>
-            <h3>Material Issuance</h3>
-            <p className={styles.statValue}>Active</p>
+            <h3>Material Issuances</h3>
+            <p className={styles.statValue}>{stats.totalIssuances ?? 0}</p>
             <Link href="/material-issuance" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Issue Materials ➔</Link>
           </div>
           <div className={styles.statCard}>
-            <h3>Inventory Overview</h3>
-            <p className={styles.statValue}>Live</p>
+            <h3>Suppliers</h3>
+            <p className={styles.statValue}>{stats.totalSuppliers ?? 0}</p>
             <Link href="/inventory" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Check Stocks ➔</Link>
           </div>
         </div>
@@ -287,12 +287,12 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
           </div>
           <div className={styles.statCard}>
             <h3>Workers Database</h3>
-            <p className={styles.statValue}>{stats.totalUsers}</p>
+            <p className={styles.statValue}>{stats.totalWorkers ?? 0}</p>
             <Link href="/workers" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Manage Workers ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>System Users</h3>
-            <p className={styles.statValue}>{stats.totalUsers}</p>
+            <p className={styles.statValue}>{stats.totalUsers ?? 0}</p>
             <Link href="/users" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>User Directory ➔</Link>
           </div>
         </div>
@@ -303,7 +303,7 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
             <h3>System Audit Logs</h3>
-            <p className={styles.statValue} style={{ color: '#9b59b6' }}>Live</p>
+            <p className={styles.statValue} style={{ color: '#9b59b6' }}>{stats.totalAuditLogs ?? 0}</p>
             <Link href="/system-audit" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>View Audit Trail ➔</Link>
           </div>
           <div className={styles.statCard}>
@@ -318,13 +318,13 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
       {archetype === 'FIELD' && (
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
-            <h3>Daily Logs</h3>
-            <p className={styles.statValue} style={{ color: '#27ae60' }}>Active</p>
+            <h3>Daily Time Records</h3>
+            <p className={styles.statValue} style={{ color: '#27ae60' }}>{stats.totalDailyLogs ?? 0}</p>
             <Link href="/progress-billings" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Update Accomplishments ➔</Link>
           </div>
           <div className={styles.statCard}>
-            <h3>Project Reports</h3>
-            <p className={styles.statValue}>View Only</p>
+            <h3>Active Job Orders</h3>
+            <p className={styles.statValue}>{stats.totalJobOrders ?? 0}</p>
             <Link href="/reports" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Open Reports ➔</Link>
           </div>
         </div>

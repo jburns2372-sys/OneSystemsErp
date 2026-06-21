@@ -31,9 +31,13 @@ export default async function BOQConsolidationTab({
   const consolidatedItems = await prisma.consolidatedBOQItem.findMany({
     where: { 
       projectId,
-      totalCost: { gt: 0 }
+      OR: [
+        { totalCost: { gt: 0 } },
+        { isVariationItem: true }
+      ]
     },
     orderBy: [
+      { isVariationItem: 'asc' },
       { category: 'asc' },
       { description: 'asc' }
     ]

@@ -6,7 +6,7 @@ import {
   FileEdit, AlertTriangle, CheckCircle, 
   Clock, PlusCircle 
 } from 'lucide-react';
-import { getAllVariationOrders } from '@/app/actions/variationOrderActions';
+import { getAllClientVariationOrders } from '@/app/actions/variationOrderActions';
 import styles from './variation.module.css';
 
 export default function VariationOrderDashboard() {
@@ -20,7 +20,7 @@ export default function VariationOrderDashboard() {
 
   const fetchData = async () => {
     try {
-      const data = await getAllVariationOrders();
+      const data = await getAllClientVariationOrders();
       setVos(data);
     } catch (e) {
       console.error(e);

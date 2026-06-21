@@ -30,7 +30,10 @@ export default async function NewMRFPage({ searchParams }: { searchParams: Promi
 
   const items = await prisma.consolidatedBOQItem.findMany({
     where: { projectId },
-    orderBy: { itemCode: 'asc' }
+    orderBy: [
+      { isVariationItem: 'asc' },
+      { itemCode: 'asc' }
+    ]
   });
 
   const users = await prisma.user.findMany({

@@ -4,11 +4,16 @@ import Link from 'next/link';
 export default async function CanvassingDashboard() {
   const mrfForCanvass = await prisma.materialRequest.findMany({
     where: { status: 'APPROVED' },
-    include: { project: true, items: true }
+    include: { project: true, items: true, canvassForms: true }
   });
 
-  // Mock active canvass forms since CanvassForm model doesn't exist in schema yet
-  const activeCanvassForms: any[] = [];
+  const activeCanvassForms = await prisma.canvassForm.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      mr: true,
+      quotations: true
+    }
+  });
 
   return (
     <div>
@@ -44,16 +49,27 @@ export default async function CanvassingDashboard() {
                     <td style={{ padding: '12px 8px', color: 'var(--text-secondary)' }}>{mr.project.name}</td>
                     <td style={{ padding: '12px 8px' }}>{mr.items.length}</td>
                     <td style={{ padding: '12px 8px' }}>
-                      <Link href={`/procurement/canvassing/new?mrId=${mr.id}`}>
-                        <button style={{
-                          background: 'rgba(0, 240, 255, 0.1)',
-                          border: '1px solid var(--accent-color)',
-                          color: 'var(--accent-color)',
+                      {mr.canvassForms && mr.canvassForms.length > 0 ? (
+                        <button disabled style={{
+                          background: 'transparent',
+                          border: '1px solid var(--glass-border)',
+                          color: 'var(--text-secondary)',
                           padding: '6px 12px',
                           borderRadius: '4px',
-                          cursor: 'pointer'
-                        }}>Start Canvass</button>
-                      </Link>
+                          cursor: 'not-allowed'
+                        }}>Canvass Created</button>
+                      ) : (
+                        <Link href={`/procurement/canvassing/new?mrId=${mr.id}`}>
+                          <button style={{
+                            background: 'rgba(0, 240, 255, 0.1)',
+                            border: '1px solid var(--accent-color)',
+                            color: 'var(--accent-color)',
+                            padding: '6px 12px',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}>Start Canvass</button>
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -44,14 +44,28 @@ export async function approveTransaction(
 ) {
   await requirePermission(userId, moduleName, 'canApprove');
 
-  const workflow = await prisma.transactionWorkflow.findFirst({
+  let workflow = await prisma.transactionWorkflow.findFirst({
     where: { moduleName, transactionId }
   });
 
-  if (!workflow) throw new Error("Transaction workflow not found.");
+  if (!workflow) {
+    // Dynamically create the workflow if it doesn't exist
+    workflow = await prisma.transactionWorkflow.create({
+      data: {
+        id: `${moduleName}_${transactionId}`,
+        moduleName,
+        transactionId,
+        preparedBy: userId, // fallback
+        preparedByRole: userRole,
+        currentStatus: 'SUBMITTED',
+        currentStage: 'REVIEW',
+        datePrepared: new Date()
+      }
+    });
+  }
   
   // Maker-Checker-Approver Rules
-  if (workflow.preparedBy === userId && userRole !== 'SYSTEM_ADMIN' && userRole !== 'ADMIN') {
+  if (workflow.preparedBy === userId && userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
     throw new Error("Self-approval is strictly prohibited by system rules.");
   }
 

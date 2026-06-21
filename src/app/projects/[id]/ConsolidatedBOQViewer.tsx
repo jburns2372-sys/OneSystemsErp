@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import LockConsolidatedBOQButton from './LockConsolidatedBOQButton';
 import GenerateMRFModal from './GenerateMRFModal';
 
@@ -9,6 +9,7 @@ interface ConsolidatedBOQViewerProps {
   isLocked: boolean;
   consolidatedItems: any[];
   totalItems: number;
+  totalAmount: number;
   users?: { id: string; name: string | null }[];
   canCreateMRF?: boolean;
   canLock?: boolean;
@@ -27,6 +28,26 @@ export default function ConsolidatedBOQViewer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showRevised, setShowRevised] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement && containerRef.current) {
+      containerRef.current.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen();
+    }
+  }
 
   function toggleSelection(id: string) {
     const newSet = new Set(selectedItemIds);
@@ -48,16 +69,54 @@ export default function ConsolidatedBOQViewer({
 
   const selectedItemsList = consolidatedItems.filter(item => selectedItemIds.has(item.id));
 
+  // Calculate summary totals
+  const hasAnyVOImpact = consolidatedItems.some(
+    i => i.voAdditiveQty > 0 || i.voDeductiveQty > 0 || i.isVariationItem
+  );
+  const totalOriginalValue = consolidatedItems.reduce((sum: number, item: any) => sum + item.totalCost, 0);
+  const totalVOAdditive = consolidatedItems.reduce((sum: number, item: any) => sum + (item.voAdditiveCost || 0), 0);
+  const totalVODeductive = consolidatedItems.reduce((sum: number, item: any) => sum + (item.voDeductiveCost || 0), 0);
+  const totalRevisedValue = consolidatedItems.reduce((sum: number, item: any) => {
+    return sum + (item.revisedTotalCost > 0 ? item.revisedTotalCost : item.totalCost);
+  }, 0);
+
   return (
-    <div className={isFullscreen ? "fullscreen-wrapper" : "normal-wrapper"}>
+    <div ref={containerRef} className={isFullscreen ? "fullscreen-wrapper" : "normal-wrapper"}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
         <div>
-          <h2 style={{ color: isFullscreen ? '#fff' : 'var(--text-primary)', margin: 0 }}>Consolidated Master List Overview</h2>
+          <h2 style={{ color: isFullscreen ? '#fff' : 'var(--text-primary)', margin: 0 }}>
+            {showRevised && hasAnyVOImpact ? 'Revised Consolidated BOQ' : 'Consolidated Master List Overview'}
+          </h2>
           <p style={{ margin: '8px 0 0 0', color: isFullscreen ? '#aaa' : 'var(--text-secondary)', fontSize: '0.95rem' }}>
-            {totalItems} grouped items &bull; Total Value: ₱ {totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {totalItems} grouped items &bull; 
+            {showRevised && hasAnyVOImpact ? (
+              <>
+                {' '}Original: ₱ {totalOriginalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {' '}&bull; Revised: <strong style={{ color: 'var(--accent-color)' }}>₱ {totalRevisedValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              </>
+            ) : (
+              <> Total Value: ₱ {totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
+            )}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {hasAnyVOImpact && (
+            <button
+              onClick={() => setShowRevised(!showRevised)}
+              style={{
+                backgroundColor: showRevised ? 'rgba(0, 200, 83, 0.15)' : 'transparent',
+                color: showRevised ? '#00c853' : 'var(--text-secondary)',
+                border: `1px solid ${showRevised ? '#00c853' : 'var(--glass-border)'}`,
+                padding: '8px 16px',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              {showRevised ? '✓ Revised View' : '○ Original View'}
+            </button>
+          )}
           {isLocked && selectedItemIds.size > 0 && canCreateMRF && (
             <button 
               onClick={() => setIsModalOpen(true)}
@@ -75,7 +134,7 @@ export default function ConsolidatedBOQViewer({
             <LockConsolidatedBOQButton projectId={projectId} isLocked={isLocked} />
           )}
           <button 
-            onClick={() => setIsFullscreen(!isFullscreen)}
+            onClick={toggleFullscreen}
             className="btn-secondary"
             style={{ 
               backgroundColor: isFullscreen ? 'var(--accent-color)' : 'transparent', 
@@ -99,16 +158,48 @@ export default function ConsolidatedBOQViewer({
         />
       )}
 
+      {/* VO Impact Summary Banner */}
+      {showRevised && hasAnyVOImpact && (
+        <div style={{
+          display: 'flex',
+          gap: '20px',
+          padding: '12px 20px',
+          marginBottom: '15px',
+          background: 'linear-gradient(135deg, rgba(0,200,83,0.08), rgba(255,82,82,0.08))',
+          borderRadius: '8px',
+          border: '1px solid rgba(255,255,255,0.1)',
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ flex: 1, minWidth: '140px' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Original Contract</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>₱ {totalOriginalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+          </div>
+          <div style={{ flex: 1, minWidth: '140px' }}>
+            <div style={{ fontSize: '0.75rem', color: '#00c853', textTransform: 'uppercase', letterSpacing: '0.5px' }}>+ VO Additive</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#00c853' }}>₱ {totalVOAdditive.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+          </div>
+          <div style={{ flex: 1, minWidth: '140px' }}>
+            <div style={{ fontSize: '0.75rem', color: '#ff5252', textTransform: 'uppercase', letterSpacing: '0.5px' }}>- VO Deductive</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#ff5252' }}>₱ {totalVODeductive.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+          </div>
+          <div style={{ flex: 1, minWidth: '140px', borderLeft: '2px solid rgba(255,255,255,0.15)', paddingLeft: '20px' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Revised Contract</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent-color)' }}>₱ {totalRevisedValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+          </div>
+        </div>
+      )}
+
       <div className="table-scroll-container" style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
         <style dangerouslySetInnerHTML={{__html: `
           .fullscreen-wrapper {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100vw;
+            height: 100vh;
             background-color: var(--bg-dark);
-            z-index: 9999999;
             padding: 20px;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
           }
           .normal-wrapper {
             position: relative;
@@ -116,7 +207,7 @@ export default function ConsolidatedBOQViewer({
           .table-scroll-container {
             overflow: auto;
             flex-grow: 1;
-            max-height: ${isFullscreen ? 'calc(100vh - 120px)' : '600px'};
+            max-height: ${isFullscreen ? 'calc(100vh - 200px)' : '600px'};
           }
           .consolidation-table { 
             width: 100%; 
@@ -148,6 +239,24 @@ export default function ConsolidatedBOQViewer({
           .consolidation-table th:first-child {
             z-index: 11;
           }
+          .vo-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+            color: #2e7d32;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            white-space: nowrap;
+          }
+          .vo-impact-row {
+            background-color: rgba(0, 200, 83, 0.03) !important;
+          }
+          .vo-item-row {
+            background-color: rgba(0, 200, 83, 0.06) !important;
+          }
         `}} />
         <table className="consolidation-table">
           <thead>
@@ -164,63 +273,130 @@ export default function ConsolidatedBOQViewer({
               <th>Item Code</th>
               <th>Category</th>
               <th>Description</th>
-              <th style={{ textAlign: 'center' }}>Sync Status</th>
-              <th style={{ textAlign: 'right' }}>Total Qty</th>
+              <th style={{ textAlign: 'center' }}>Source</th>
+              <th style={{ textAlign: 'right' }}>Orig Qty</th>
+              {showRevised && hasAnyVOImpact && (
+                <>
+                  <th style={{ textAlign: 'right', color: '#2e7d32' }}>+ VO Qty</th>
+                  <th style={{ textAlign: 'right', color: '#c62828' }}>- VO Qty</th>
+                  <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Rev Qty</th>
+                </>
+              )}
               <th>Unit</th>
               <th style={{ textAlign: 'right' }}>Unit Cost</th>
-              <th style={{ textAlign: 'right' }}>Total Value</th>
+              <th style={{ textAlign: 'right' }}>Orig Value</th>
+              {showRevised && hasAnyVOImpact && (
+                <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Revised Value</th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {consolidatedItems.map((item) => (
-              <tr key={item.id} style={{ backgroundColor: selectedItemIds.has(item.id) ? 'rgba(0, 255, 163, 0.05)' : 'transparent' }}>
-                {isLocked && (
-                  <td style={{ textAlign: 'center' }}>
-                    <input 
-                      type="checkbox"
-                      checked={selectedItemIds.has(item.id)}
-                      onChange={() => toggleSelection(item.id)}
-                    />
+            {consolidatedItems.map((item) => {
+              const hasVOImpact = item.voAdditiveQty > 0 || item.voDeductiveQty > 0;
+              const rowClass = item.isVariationItem ? 'vo-item-row' : (hasVOImpact ? 'vo-impact-row' : '');
+
+              return (
+                <tr key={item.id} className={rowClass} style={{ backgroundColor: selectedItemIds.has(item.id) ? 'rgba(0, 255, 163, 0.05)' : undefined }}>
+                  {isLocked && (
+                    <td style={{ textAlign: 'center' }}>
+                      <input 
+                        type="checkbox"
+                        checked={selectedItemIds.has(item.id)}
+                        onChange={() => toggleSelection(item.id)}
+                      />
+                    </td>
+                  )}
+                  <td style={{ fontWeight: 'bold' }}>
+                    {item.itemCode}
+                    {item.isVariationItem && (
+                      <span className="vo-badge" style={{ marginLeft: '6px' }}>
+                        ⚡ New via VO
+                      </span>
+                    )}
                   </td>
-                )}
-                <td style={{ fontWeight: 'bold' }}>{item.itemCode}</td>
-                <td style={{ color: 'var(--text-secondary)' }}>{item.category || 'N/A'}</td>
-                <td>{item.description}</td>
-                <td style={{ textAlign: 'center' }}>
-                  <span style={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    gap: '4px', 
-                    backgroundColor: '#dcfce7', 
-                    color: '#166534', 
-                    padding: '2px 8px', 
-                    borderRadius: '12px', 
-                    fontSize: '0.75rem',
-                    fontWeight: 'bold'
-                  }}>
-                    ✓ AI Mapped
-                  </span>
-                </td>
-                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
-                  {item.quantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </td>
-                <td>{item.unit}</td>
-                <td style={{ textAlign: 'right' }}>
-                  ₱ {item.unitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-                <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-color)' }}>
-                  ₱ {item.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-              </tr>
-            ))}
+                  <td style={{ color: 'var(--text-secondary)' }}>{item.category || 'N/A'}</td>
+                  <td>{item.description}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    {item.isVariationItem || hasVOImpact ? (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        backgroundColor: '#e8f5e9',
+                        color: '#2e7d32',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {item.sourceVoNumber || 'VO Applied'}
+                      </span>
+                    ) : (
+                      <span style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '4px', 
+                        backgroundColor: '#dcfce7', 
+                        color: '#166534', 
+                        padding: '2px 8px', 
+                        borderRadius: '12px', 
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold'
+                      }}>
+                        ✓ AI Mapped
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                    {item.quantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </td>
+                  {showRevised && hasAnyVOImpact && (
+                    <>
+                      <td style={{ textAlign: 'right', color: item.voAdditiveQty > 0 ? '#2e7d32' : '#999', fontWeight: item.voAdditiveQty > 0 ? 'bold' : 'normal' }}>
+                        {item.voAdditiveQty > 0 ? `+${item.voAdditiveQty.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', color: item.voDeductiveQty > 0 ? '#c62828' : '#999', fontWeight: item.voDeductiveQty > 0 ? 'bold' : 'normal' }}>
+                        {item.voDeductiveQty > 0 ? `-${item.voDeductiveQty.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: (item.revisedQuantity !== item.quantity && item.revisedQuantity > 0) ? 'var(--accent-color)' : '#000' }}>
+                        {(item.revisedQuantity > 0 ? item.revisedQuantity : item.quantity).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </td>
+                    </>
+                  )}
+                  <td>{item.unit}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    ₱ {item.unitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    ₱ {item.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  {showRevised && hasAnyVOImpact && (
+                    <td style={{ textAlign: 'right', fontWeight: 'bold', color: (item.revisedTotalCost > 0 && item.revisedTotalCost !== item.totalCost) ? 'var(--accent-color)' : '#000' }}>
+                      ₱ {(item.revisedTotalCost > 0 ? item.revisedTotalCost : item.totalCost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr>
-              <th colSpan={isLocked ? 8 : 7} style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.05rem', padding: '15px 10px', backgroundColor: '#e0e0e0', position: 'sticky', bottom: 0, zIndex: 10, borderTop: '2px solid #ccc' }}>
-                GRAND TOTAL:
+              <th colSpan={showRevised && hasAnyVOImpact ? (isLocked ? 11 : 10) : (isLocked ? 8 : 7)} style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.05rem', padding: '15px 10px', backgroundColor: '#e0e0e0', position: 'sticky', bottom: 0, zIndex: 10, borderTop: '2px solid #ccc' }}>
+                {showRevised && hasAnyVOImpact ? (
+                  <span>
+                    Original: ₱ {totalOriginalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    <span style={{ color: '#2e7d32', margin: '0 12px' }}>+ ₱ {totalVOAdditive.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span style={{ color: '#c62828' }}>- ₱ {totalVODeductive.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span style={{ margin: '0 12px' }}>=</span>
+                    REVISED TOTAL:
+                  </span>
+                ) : (
+                  'GRAND TOTAL:'
+                )}
               </th>
               <th style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.05rem', padding: '15px 10px', color: 'var(--accent-color)', backgroundColor: '#e0e0e0', position: 'sticky', bottom: 0, zIndex: 10, borderTop: '2px solid #ccc' }}>
-                ₱ {totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₱ {(showRevised && hasAnyVOImpact ? totalRevisedValue : totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </th>
             </tr>
           </tfoot>

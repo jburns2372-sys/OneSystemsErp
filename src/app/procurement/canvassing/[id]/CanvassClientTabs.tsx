@@ -381,6 +381,11 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
                   <p style={{ margin: '5px 0', color: 'var(--text-secondary)' }}>Total: <strong style={{ color: '#fff' }}>₱{q.totalAmount.toLocaleString()}</strong></p>
                   <p style={{ margin: '5px 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Delivery: {q.deliveryPeriod || 'N/A'} | Payment: {q.paymentTerms || 'N/A'}</p>
                   <p style={{ margin: '5px 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Status: {q.status}</p>
+                  {q.fileUrl && (
+                    <a href={q.fileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '10px', fontSize: '0.85rem', color: '#3b82f6', textDecoration: 'underline' }}>
+                      📄 View Original Quotation
+                    </a>
+                  )}
                 </div>
               ))}
             </div>

@@ -14,6 +14,10 @@ interface ConsolidatedItem {
   unitCost: number;
   totalCost: number;
   deliveredQty: number;
+  isVariationItem?: boolean;
+  sourceVoNumber?: string | null;
+  revisedQuantity?: number;
+  voAdditiveQty?: number;
 }
 
 interface Props {
@@ -262,11 +266,15 @@ export default function NewMRFForm({ projectId, items, users }: Props) {
             }}
           >
             <option value="">-- Select an item to add --</option>
-            {filteredDropdownItems.map(item => (
-              <option key={item.id} value={item.id} disabled={selectedItems.has(item.id)}>
-                {item.itemCode} | {item.category || 'Uncategorized'} - {item.description} (Awarded Qty: {item.quantity} {item.unit}) {selectedItems.has(item.id) ? '✓ Added' : ''}
-              </option>
-            ))}
+            {filteredDropdownItems.map(item => {
+              const effectiveQty = (item.revisedQuantity && item.revisedQuantity > 0) ? item.revisedQuantity : item.quantity;
+              const isVO = item.isVariationItem;
+              return (
+                <option key={item.id} value={item.id} disabled={selectedItems.has(item.id)}>
+                  {isVO ? '⚡ [VO] ' : ''}{item.itemCode} | {item.category || 'Uncategorized'} - {item.description} ({isVO ? 'VO' : 'Awarded'} Qty: {effectiveQty} {item.unit}){isVO && item.sourceVoNumber ? ` [${item.sourceVoNumber}]` : ''} {selectedItems.has(item.id) ? '✓ Added' : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -286,12 +294,19 @@ export default function NewMRFForm({ projectId, items, users }: Props) {
               </thead>
               <tbody>
                 {selectedItemsList.map(item => {
-                  const balance = Math.max(0, item.quantity - item.deliveredQty);
+                  const effectiveQty = (item.revisedQuantity && item.revisedQuantity > 0) ? item.revisedQuantity : item.quantity;
+                  const balance = Math.max(0, effectiveQty - item.deliveredQty);
                   const isOverRequest = typeof quantities[item.id] === 'number' && (quantities[item.id] as number) > balance;
+                  const isVO = item.isVariationItem;
 
                   return (
-                    <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '12px', color: 'var(--text-primary)', fontWeight: 'bold' }}>{item.itemCode}</td>
+                    <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', backgroundColor: isVO ? 'rgba(0,200,83,0.05)' : undefined }}>
+                      <td style={{ padding: '12px', color: 'var(--text-primary)', fontWeight: 'bold' }}>
+                        {item.itemCode}
+                        {isVO && (
+                          <span style={{ marginLeft: '6px', fontSize: '0.65rem', background: 'rgba(0,200,83,0.2)', color: '#00c853', padding: '2px 6px', borderRadius: '8px', fontWeight: 'bold' }}>VO</span>
+                        )}
+                      </td>
                       <td style={{ padding: '12px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{item.description}</td>
                       <td style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)' }}>{item.unit}</td>
                       <td style={{ padding: '12px', textAlign: 'right', color: 'var(--text-primary)', fontWeight: 'bold' }}>

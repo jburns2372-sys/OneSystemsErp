@@ -2,12 +2,13 @@ import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 
 const MASTER_ADMIN_MODULES = [
-  'DASHBOARD', 'PROJECT_SETUP', 'AI_VALIDATION', 'PROCUREMENT', 'INVENTORY', 'MATERIAL_ISSUANCE',
-  'FINANCE', 'SUBCONTRACTING', 'PROJECT_ACCOMPLISHMENT', 'PAYROLL', 'VARIATION_ORDER', 'REPORTS',
-  'DOCUMENT_ATTACHMENTS', 'AI_NOTEBOOK_REFERENCE_CENTER', 'USER_MANAGEMENT', 'SYSTEM_SETTINGS',
-  'WORKER_DATABASE', 'SYSTEM_ROLES', 'PURCHASE_ORDER', 'PAYMENT_ISSUANCE', 'MATERIAL_REQUEST',
-  'EXPENSE', 'JOB_ORDER', 'DTR', 'BILLING', 'ACCOMPLISHMENT', 'EQUIPMENT', 'PETTY_CASH', 'PROJECT_DATABASE',
-  'DOCUMENTS'
+  // Sidebar module keys
+  'DASHBOARD', 'PROJECT_MANAGEMENT', 'AI_COMMAND_CENTER', 'PROCUREMENT', 'INVENTORY',
+  'MATERIAL_ISSUANCE', 'FINANCE', 'SUBCONTRACTING', 'ACCOMPLISHMENTS', 'PAYROLL',
+  'EQUIPMENT', 'VARIATION_ORDERS', 'REPORTS', 'DOCUMENTS', 'KNOWLEDGE_CENTER',
+  'SYSTEM_ROLES', 'SYSTEM_SETTINGS',
+  // Functional modules
+  'WORKER_DATABASE', 'DELIVERY_RECEIVING', 'PURCHASE_ORDER',
 ];
 
 export async function getUserPermissions(userId: string) {
@@ -73,7 +74,7 @@ export async function getUserPermissions(userId: string) {
     });
   });
 
-  if (user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR') {
+  if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR') {
     aggregatedPermissions['IS_ADMIN'] = true;
 
     // Auto-populate commonly checked modules to bypass manual checks in frontend
@@ -92,8 +93,11 @@ export async function getUserPermissions(userId: string) {
 export async function getPermissionsForRole(roleCode: string) {
   const aggregatedPermissions: Record<string, any> = {};
 
+  // Handle legacy SYSTEM_ADMIN cookie mapped to SUPER_ADMIN
+  const effectiveRoleCode = roleCode === 'SYSTEM_ADMIN' ? 'SUPER_ADMIN' : roleCode;
+
   const roleRecord = await prisma.role.findFirst({
-    where: { OR: [{ roleName: roleCode }, { roleCode: roleCode }] },
+    where: { OR: [{ roleName: effectiveRoleCode }, { roleCode: effectiveRoleCode }] },
     include: { rolePermissions: true }
   });
 
@@ -103,7 +107,7 @@ export async function getPermissionsForRole(roleCode: string) {
     });
   }
 
-  if (roleCode === 'SYSTEM_ADMIN' || roleCode === 'ADMIN' || roleCode === 'PROJECT_DIRECTOR') {
+  if (effectiveRoleCode === 'SUPER_ADMIN' || effectiveRoleCode === 'ADMIN' || effectiveRoleCode === 'PROJECT_DIRECTOR') {
     aggregatedPermissions['IS_ADMIN'] = true;
     MASTER_ADMIN_MODULES.forEach(mod => {
       if (!aggregatedPermissions[mod]) aggregatedPermissions[mod] = {};

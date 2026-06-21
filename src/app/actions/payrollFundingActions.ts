@@ -77,7 +77,7 @@ export async function approveFundingRequest(requestId: string, userId: string) {
       await requirePermission(currentUser.id, 'PAYROLL', 'canApprove');
       
       // Enforce Maker-Checker
-      if (request.preparedById === userId && currentUser.role !== 'SYSTEM_ADMIN' && currentUser.role !== 'ADMIN') {
+      if (request.preparedById === userId && currentUser.role !== 'SUPER_ADMIN' && currentUser.role !== 'ADMIN') {
         throw new Error('Self-approval is strictly prohibited. The Maker cannot be the Approver.');
       }
       

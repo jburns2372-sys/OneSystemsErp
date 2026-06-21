@@ -130,7 +130,7 @@ export async function approvePurchaseOrder(poId: string) {
   if (!po) throw new Error('PO not found');
 
   // Maker-Checker specific to PO logic
-  if (po.preparerId === currentUser.id && currentUser.role !== 'SYSTEM_ADMIN' && currentUser.role !== 'ADMIN') {
+  if (po.preparerId === currentUser.id && currentUser.role !== 'SUPER_ADMIN' && currentUser.role !== 'ADMIN') {
     throw new Error('Self-approval blocked by Workflow Engine.');
   }
 

@@ -26,7 +26,7 @@ export default function SubcontractPaymentForm({
 
   const isPaid = billing.paymentStatus === 'PAID' || billing.status === 'PAID';
   const isEndorsed = billing.endorsedForPayment;
-  const isDirector = userRole === 'PROJECT_DIRECTOR' || userRole === 'SYSTEM_ADMIN';
+  const isDirector = userRole === 'PROJECT_DIRECTOR' || userRole === 'SUPER_ADMIN';
 
   const handleEndorse = async (e: React.FormEvent) => {
     e.preventDefault();

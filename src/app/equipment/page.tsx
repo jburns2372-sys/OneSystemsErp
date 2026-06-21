@@ -1,14 +1,5 @@
-import styles from '../page.module.css';
+import { redirect } from 'next/navigation';
 
-export default function EquipmentPage() {
-  return (
-    <div className={styles.pageContainer}>
-      <header className={styles.header}>
-        <div className={styles.headerTitle}>
-          <h1>Equipment</h1>
-          <p>This module is currently under construction.</p>
-        </div>
-      </header>
-    </div>
-  );
+export default function EquipmentRoot() {
+  redirect('/equipment/dashboard');
 }

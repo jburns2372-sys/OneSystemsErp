@@ -37,26 +37,29 @@ export default function Sidebar({ permissions = {}, user }: { permissions?: Reco
 
   const links: SidebarLink[] = [
     { name: 'Dashboard', href: '/', icon: '⌂', moduleKey: 'DASHBOARD' },
-    { name: 'Projects', href: '/projects', icon: '🏗️', moduleKey: 'PROJECT_SETUP' },
-    { name: 'AI Command Center', href: '/ai-command-center', icon: '🤖', moduleKey: 'AI_VALIDATION' },
+    { name: 'Executive', href: '/executive/home', icon: '👑', moduleKey: 'PROJECT_MANAGEMENT' },
+    { name: 'Projects', href: '/projects', icon: '🏗️', moduleKey: 'PROJECT_MANAGEMENT' },
+    { name: 'AI Command Center', href: '/ai-command-center', icon: '🤖', moduleKey: 'AI_COMMAND_CENTER' },
     { name: 'Procurement', href: '/procurement', icon: '🛒', moduleKey: 'PROCUREMENT' },
     { name: 'Inventory', href: '/inventory', icon: '📦', moduleKey: 'INVENTORY' },
     { name: 'Material Issuance', href: '/material-issuance', icon: '📤', moduleKey: 'MATERIAL_ISSUANCE' },
     { name: 'Finance', href: '/finance', icon: '💰', moduleKey: 'FINANCE' },
     { name: 'Subcontracting', href: '/subcontracting', icon: '👷', moduleKey: 'SUBCONTRACTING' },
-    { name: 'Accomplishments', href: '/accomplishments', icon: '📈', moduleKey: 'PROJECT_ACCOMPLISHMENT' },
+    { name: 'Accomplishments', href: '/accomplishments', icon: '📈', moduleKey: 'ACCOMPLISHMENTS' },
     { name: 'Payroll', href: '/payroll', icon: '👥', moduleKey: 'PAYROLL' },
-    { name: 'Equipment', href: '/equipment', icon: '🚜', moduleKey: 'INVENTORY' },
-    { name: 'Variation Orders', href: '/variation-orders', icon: '🔄', moduleKey: 'VARIATION_ORDER' },
+    { name: 'Equipment', href: '/equipment', icon: '🚜', moduleKey: 'EQUIPMENT' },
+    { name: 'Variation Orders', href: '/variation-orders', icon: '🔄', moduleKey: 'VARIATION_ORDERS' },
     { name: 'Reports', href: '/reports', icon: '📊', moduleKey: 'REPORTS' },
-    { name: 'Documents', href: '/documents', icon: '📂', moduleKey: 'DOCUMENT_ATTACHMENTS' },
-    { name: 'Knowledge Center', href: '/knowledge-center', icon: '🧠', moduleKey: 'AI_NOTEBOOK_REFERENCE_CENTER' },
-    { name: 'AI ERP Assistant', href: '/ai/erp-assistant', icon: '💬', moduleKey: 'AI_NOTEBOOK_REFERENCE_CENTER' },
-    { name: 'Users', href: '/users', icon: '👤', moduleKey: 'USER_MANAGEMENT' },
+    { name: 'Documents', href: '/documents', icon: '📂', moduleKey: 'DOCUMENTS' },
+    { name: 'Knowledge Center', href: '/knowledge-center', icon: '🧠', moduleKey: 'KNOWLEDGE_CENTER' },
+    { name: 'AI ERP Assistant', href: '/ai/erp-assistant', icon: '💬', moduleKey: 'KNOWLEDGE_CENTER' },
+    { name: 'Users', href: '/users', icon: '👤', moduleKey: 'SYSTEM_ROLES' },
     { name: 'Settings', href: '/settings', icon: '⚙️', moduleKey: 'SYSTEM_SETTINGS' },
   ];
 
   const visibleLinks = links.filter(link => {
+    if (link.moduleKey === 'DASHBOARD') return true;
+    if (permissions?.IS_ADMIN) return true;
     if (!link.moduleKey) return true;
     return permissions[link.moduleKey]?.canView;
   });
@@ -120,9 +123,11 @@ export default function Sidebar({ permissions = {}, user }: { permissions?: Reco
         borderBottom: '1px solid var(--glass-border)'
       }}>
         {!isCollapsed && (
-          <h2 style={{ margin: 0, color: 'var(--accent-color)', fontSize: '1.25rem', letterSpacing: '1px', textShadow: '0 0 10px var(--accent-color)' }}>
-            OneSystemsErp
-          </h2>
+          <Link href="/" style={{ textDecoration: 'none' }}>
+            <h2 style={{ margin: 0, color: 'var(--accent-color)', fontSize: '1.25rem', letterSpacing: '1px', textShadow: '0 0 10px var(--accent-color)', cursor: 'pointer' }}>
+              OneSystemsErp
+            </h2>
+          </Link>
         )}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}

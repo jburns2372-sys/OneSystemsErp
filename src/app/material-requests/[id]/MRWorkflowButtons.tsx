@@ -14,7 +14,7 @@ export default function MRWorkflowButtons({ mrId, status, currentUser }: Props) 
   
   const role = currentUser?.role || '';
   if (role === 'GUEST_USER') return null;
-  const isSimAdmin = role === 'SYSTEM_ADMIN' || role === 'ADMIN' || role === 'PROJECT_DIRECTOR';
+  const isSimAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'PROJECT_DIRECTOR';
 
   function handleAIValidation() {
     startTransition(async () => {

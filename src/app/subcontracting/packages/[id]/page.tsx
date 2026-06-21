@@ -29,15 +29,15 @@ export default async function ViewSubcontractPackagePage({ params }: { params: P
       // Only Project Director or System Admin can unlock
       canUnlock = user?.email === 'pd@gmail.com' ||
         user?.role === 'PROJECT_DIRECTOR' ||
-        user?.role === 'SYSTEM_ADMIN' ||
-        user?.userRoles?.some(ur => ['SYSTEM_ADMIN', 'PROJECT_DIRECTOR'].includes(ur.role.roleCode)) || false;
+        user?.role === 'SUPER_ADMIN' ||
+        user?.userRoles?.some(ur => ['SUPER_ADMIN', 'PROJECT_DIRECTOR'].includes(ur.role.roleCode)) || false;
     } else {
       // Project Manager can also unlock
       canUnlock = user?.email === 'pd@gmail.com' ||
         user?.role === 'PROJECT_DIRECTOR' ||
         user?.role === 'PROJECT_MANAGER' ||
-        user?.role === 'SYSTEM_ADMIN' ||
-        user?.userRoles?.some(ur => ['SYSTEM_ADMIN', 'PROJECT_DIRECTOR', 'PROJECT_MANAGER'].includes(ur.role.roleCode)) || false;
+        user?.role === 'SUPER_ADMIN' ||
+        user?.userRoles?.some(ur => ['SUPER_ADMIN', 'PROJECT_DIRECTOR', 'PROJECT_MANAGER'].includes(ur.role.roleCode)) || false;
     }
   }
 

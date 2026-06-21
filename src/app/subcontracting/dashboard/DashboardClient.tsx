@@ -4,14 +4,21 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import SubcontractListClient from './SubcontractListClient';
 import JobOrderListClient from '@/app/job-orders/dashboard/JobOrderListClient';
+import SubcontractVariationListClient from './SubcontractVariationListClient';
 
 import { useRouter } from 'next/navigation';
 
-export default function DashboardClient({ subModules, joModules, packages, jobOrders }: { subModules: any[], joModules: any[], packages: any[], jobOrders: any[] }) {
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'SUBCONTRACTING' | 'JOB_ORDERS'>('SUBCONTRACTING');
+const voModules = [
+  { name: 'Create Variation Order', href: '/variation-orders/create?category=SUBCONTRACTOR', icon: '⚡', description: 'Draft new subcontractor variation order' },
+  { name: 'AI Validation Pipeline', href: '/variation-orders', icon: '🤖', description: 'Review VO AI Risk assessments' },
+  { name: 'VO Reports', href: '/variation-orders/reports', icon: '📊', description: 'Variation order cost analytics' }
+];
 
-  const currentModules = activeTab === 'SUBCONTRACTING' ? subModules : joModules;
+export default function DashboardClient({ subModules, joModules, packages, jobOrders, variationOrders }: { subModules: any[], joModules: any[], packages: any[], jobOrders: any[], variationOrders?: any[] }) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'SUBCONTRACTING' | 'JOB_ORDERS' | 'VARIATION_ORDERS'>('SUBCONTRACTING');
+
+  const currentModules = activeTab === 'SUBCONTRACTING' ? subModules : (activeTab === 'JOB_ORDERS' ? joModules : voModules);
 
   return (
     <>
@@ -78,10 +85,17 @@ export default function DashboardClient({ subModules, joModules, packages, jobOr
           <span style={{ fontSize: '2rem' }}>⚡</span>
           Job Order Modules
         </button>
+        <button 
+          className={`tab-btn ${activeTab === 'VARIATION_ORDERS' ? 'active' : ''}`}
+          onClick={() => setActiveTab('VARIATION_ORDERS')}
+        >
+          <span style={{ fontSize: '2rem' }}>🔄</span>
+          Variation Order Modules
+        </button>
       </div>
 
       <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '20px', color: 'var(--text-primary)' }}>
-        {activeTab === 'SUBCONTRACTING' ? 'Subcontracting Modules' : 'Job Order Modules'}
+        {activeTab === 'SUBCONTRACTING' ? 'Subcontracting Modules' : (activeTab === 'JOB_ORDERS' ? 'Job Order Modules' : 'Variation Order Modules')}
       </h2>
       
       <div style={{ 
@@ -115,8 +129,10 @@ export default function DashboardClient({ subModules, joModules, packages, jobOr
       <div style={{ marginTop: '40px' }}>
         {activeTab === 'SUBCONTRACTING' ? (
           <SubcontractListClient packages={packages} />
-        ) : (
+        ) : activeTab === 'JOB_ORDERS' ? (
           <JobOrderListClient jobOrders={jobOrders} />
+        ) : (
+          <SubcontractVariationListClient vos={variationOrders || []} />
         )}
       </div>
     </>

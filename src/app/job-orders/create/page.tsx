@@ -5,7 +5,7 @@ import styles from '../../page.module.css';
 
 export default async function CreateJobOrderPage() {
   const projects = await prisma.project.findMany({ select: { id: true, name: true, contractNumber: true } });
-  const subcontractors = await prisma.subcontractor.findMany({ select: { id: true, name: true, tradeCategory: true } });
+  const subcontractors = await prisma.subcontractor.findMany({ select: { id: true, name: true, /* tradeCategory removed */ } });
 
   return (
     <div className={styles.dashboardContainer}>

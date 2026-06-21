@@ -20,7 +20,7 @@ export default function PackageWorkflowControls({ packageId, currentStatus, isLo
   const [error, setError] = useState('');
 
   const role = currentUser?.role || '';
-  const isSimAdmin = role === 'SYSTEM_ADMIN' || role === 'ADMIN' || role === 'PROJECT_DIRECTOR';
+  const isSimAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'PROJECT_DIRECTOR';
 
   const handleUpdateStatus = async (newStatus: string) => {
     setLoading(true);

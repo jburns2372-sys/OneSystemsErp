@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { createVariationOrder } from '@/app/actions/variationOrderActions';
+import { getGlobalProjectsAndContext } from '@/app/actions/executiveContextActions';
+import { getSubcontractPackages } from '@/app/actions/subcontractingActions';
 import { ArrowLeft, Save, Bot } from 'lucide-react';
 import styles from '../variation.module.css';
 
@@ -11,12 +13,17 @@ export default function CreateVariationOrderPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId') || '';
+  const categoryParam = searchParams.get('category') || '';
   
   const [loading, setLoading] = useState(false);
+  const [packagesLoading, setPackagesLoading] = useState(false);
+  const [projects, setProjects] = useState<{id: string, name: string}[]>([]);
+  const [packages, setPackages] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     projectId,
+    subcontractPackageId: '',
     variationType: 'Change Order',
-    variationCategory: '',
+    variationCategory: categoryParam,
     sourceOfVariation: '',
     reasonForVariation: '',
     detailedDescription: '',
@@ -25,6 +32,25 @@ export default function CreateVariationOrderPage() {
     additionalCalendarDaysRequested: 0,
     technicalJustification: '',
   });
+
+  useEffect(() => {
+    getGlobalProjectsAndContext().then(res => {
+      setProjects(res.projects);
+      if (!projectId && res.currentProjectId !== 'ALL' && res.currentProjectId) {
+        setFormData(prev => ({ ...prev, projectId: res.currentProjectId }));
+      }
+    });
+  }, [projectId]);
+
+  useEffect(() => {
+    if (formData.variationCategory === 'SUBCONTRACTOR' && formData.projectId) {
+      setPackagesLoading(true);
+      getSubcontractPackages(formData.projectId).then(res => {
+        setPackages(res);
+        setPackagesLoading(false);
+      });
+    }
+  }, [formData.projectId, formData.variationCategory]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,21 +86,48 @@ export default function CreateVariationOrderPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '2rem' }}>
         <form onSubmit={handleSubmit} className={styles.formGrid}>
+          
           <div className={styles.formGroup}>
-            <label>Variation Type</label>
+            <label>Project *</label>
             <select 
+              required
               className={styles.input}
-              value={formData.variationType}
-              onChange={e => setFormData({...formData, variationType: e.target.value})}
+              value={formData.projectId}
+              onChange={e => setFormData({...formData, projectId: e.target.value})}
             >
-              <option>Change Order</option>
-              <option>Extra Work Order</option>
-              <option>Additive Variation</option>
-              <option>Deductive Variation</option>
-              <option>Reclassification</option>
-              <option>Emergency Variation</option>
+              <option value="">Select Project</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
             </select>
           </div>
+          
+          {formData.variationCategory === 'SUBCONTRACTOR' && formData.projectId && (
+            <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+              <label>Subcontract Package *</label>
+              {packagesLoading ? (
+                <div style={{ padding: '10px', color: 'var(--text-secondary)' }}>Loading packages...</div>
+              ) : packages.length === 0 ? (
+                <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '8px', border: '1px solid #ef4444' }}>
+                  <strong>Error:</strong> No Subcontract Packages found for this project. You must create Subcontracting Works first before drafting a Subcontractor Variation Order.
+                </div>
+              ) : (
+                <select 
+                  required
+                  className={styles.input}
+                  value={formData.subcontractPackageId}
+                  onChange={e => setFormData({...formData, subcontractPackageId: e.target.value})}
+                >
+                  <option value="">Select Package</option>
+                  {packages.map(pkg => (
+                    <option key={pkg.id} value={pkg.id}>
+                      {pkg.packageNumber} - {pkg.scopeOfWork} (₱{pkg.contractAmount.toLocaleString()})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
 
           <div className={styles.formGroup}>
             <label>Source of Variation</label>
@@ -91,16 +144,7 @@ export default function CreateVariationOrderPage() {
             </select>
           </div>
 
-          <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-            <label>Reason for Variation</label>
-            <input 
-              required
-              className={styles.input} 
-              placeholder="Brief reason (e.g., Design change per RFI-021)"
-              value={formData.reasonForVariation}
-              onChange={e => setFormData({...formData, reasonForVariation: e.target.value})}
-            />
-          </div>
+
 
           <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
             <label>Detailed Description</label>
@@ -138,8 +182,32 @@ export default function CreateVariationOrderPage() {
           </div>
 
           <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-            <button type="submit" disabled={loading} className={styles.createButton}>
-              {loading ? 'Creating...' : <><Save size={16}/> Save Draft & Proceed to BOQ</>}
+            <label>Upload Plans & Documents</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--surface-light)', padding: '1.5rem', borderRadius: '8px', border: '1px dashed var(--border)' }}>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                Attach plans, drawings, or evidence related to additive, deductive, or additional new work items.
+              </p>
+              <input 
+                type="file" 
+                multiple 
+                className={styles.input} 
+                style={{ padding: '1rem', border: 'none', background: 'transparent' }}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    toast.success(`${e.target.files.length} file(s) selected for upload.`);
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+            <button 
+              type="submit" 
+              className={styles.submitButton} 
+              disabled={loading || (formData.variationCategory === 'SUBCONTRACTOR' && packages.length === 0)}
+            >
+              {loading ? 'Creating...' : <><Save size={18} /> Save & Open AI Pipeline</>}
             </button>
           </div>
         </form>

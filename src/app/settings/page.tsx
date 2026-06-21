@@ -88,18 +88,59 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* DANGER ZONE */}
-        {userRole === 'SYSTEM_ADMIN' && (
-        <div style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '1px solid var(--glass-border)', maxWidth: '600px' }}>
+        {/* STANDARD OPERATIONS - MASTER RESET */}
+        {userRole === 'SUPER_ADMIN' && (
+        <div style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '1px solid var(--glass-border)', maxWidth: '700px' }}>
           <h2 style={{ color: '#ef4444', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>⚠️</span> Danger Zone
+            <span>⚠️</span> Standard Operations — Master Reset
           </h2>
           <div style={{ background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '1.5rem', borderRadius: '8px' }}>
-            <h3 style={{ color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Master Reset</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: '1.5' }}>
-              Safely remove seeded data and transactional records so the app starts from scratch. 
-              <strong> Knowledge Center Rules, SOPs, AI Validations, and User accounts will be PROTECTED and preserved.</strong>
+            <h3 style={{ color: 'var(--text-primary)', marginBottom: '0.75rem' }}>🔄 Master Data Reset</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: '1.6' }}>
+              This standard operation <strong>completely erases ALL operational data</strong> across every module so the system starts from absolute zero. Use this when you need a clean slate for a new project cycle or fresh simulation.
             </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              {/* WILL BE CLEARED */}
+              <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: '6px', padding: '1rem' }}>
+                <h4 style={{ color: '#ef4444', margin: '0 0 0.5rem 0', fontSize: '0.85rem', letterSpacing: '0.5px' }}>🗑️ WILL BE CLEARED</h4>
+                <ul style={{ margin: 0, padding: '0 0 0 1.2rem', color: 'var(--text-secondary)', fontSize: '0.8rem', lineHeight: '1.8' }}>
+                  <li>All Projects & BOQ Data</li>
+                  <li>All Procurement (MRFs, POs, Canvassing)</li>
+                  <li>All Inventory & Deliveries</li>
+                  <li>All Material Issuances & Returns</li>
+                  <li>All Expenses & Petty Cash</li>
+                  <li>All Subcontracts & Job Orders</li>
+                  <li>All Payroll, DTRs & Workers</li>
+                  <li>All Accomplishments & Billings</li>
+                  <li>All Variation Orders</li>
+                  <li>All Documents & Evidence Files</li>
+                  <li>All Suppliers & Subcontractors</li>
+                  <li>All AI Logs & Audit Trails</li>
+                  <li>All Uploaded Files</li>
+                </ul>
+              </div>
+
+              {/* WILL BE PRESERVED */}
+              <div style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.15)', borderRadius: '6px', padding: '1rem' }}>
+                <h4 style={{ color: '#22c55e', margin: '0 0 0.5rem 0', fontSize: '0.85rem', letterSpacing: '0.5px' }}>🛡️ WILL BE PRESERVED</h4>
+                <ul style={{ margin: 0, padding: '0 0 0 1.2rem', color: 'var(--text-secondary)', fontSize: '0.8rem', lineHeight: '1.8' }}>
+                  <li>System Users & Accounts</li>
+                  <li>System Roles (all 31 roles)</li>
+                  <li>Access Rights Matrix (359 rules)</li>
+                  <li>Modules & Workflow Templates</li>
+                  <li>Knowledge Center & AI Rules</li>
+                  <li>Document Templates</li>
+                  <li>Government Tax Tables (SSS, BIR)</li>
+                  <li>Bank Accounts & Payment Providers</li>
+                </ul>
+              </div>
+            </div>
+
+            <p style={{ color: '#f97316', fontSize: '0.85rem', fontWeight: '600', marginBottom: '1rem', background: 'rgba(249, 115, 22, 0.1)', padding: '0.5rem 0.75rem', borderRadius: '4px', border: '1px solid rgba(249, 115, 22, 0.2)' }}>
+              ⚡ A database backup will be automatically created before the reset.
+            </p>
+            
             <button 
               onClick={() => setIsResetModalOpen(true)}
               style={{
@@ -113,10 +154,11 @@ export default function SettingsPage() {
                 transition: 'background 0.2s',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.5rem'
+                gap: '0.5rem',
+                fontSize: '0.95rem'
               }}
             >
-              Master Reset
+              🔄 Execute Master Reset
             </button>
           </div>
         </div>
@@ -137,35 +179,43 @@ export default function SettingsPage() {
         }}>
           <div style={{
             background: 'var(--bg-primary)',
-            border: '1px solid var(--glass-border)',
+            border: '2px solid #ef4444',
             padding: '2rem',
             borderRadius: '12px',
-            maxWidth: '500px',
-            width: '90%'
+            maxWidth: '520px',
+            width: '90%',
+            boxShadow: '0 20px 60px rgba(239, 68, 68, 0.3)'
           }}>
-            <h2 style={{ color: '#ef4444', marginBottom: '1rem' }}>Caution: Master Reset</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: '1.5' }}>
-              <strong>WARNING:</strong> This action will erase all existing data entries, including projects, POs, MRFs, payroll, expenses, and seeded data. 
-              You will be starting entirely from scratch. Master data, User accounts, and Knowledge Center configurations will be protected.
+            <h2 style={{ color: '#ef4444', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              ⚠️ Confirm Master Reset
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '0.75rem', lineHeight: '1.6', fontSize: '0.95rem' }}>
+              This will <strong style={{ color: '#ef4444' }}>permanently erase ALL data</strong> across every module — projects, procurement, payroll, subcontracting, inventory, accomplishments, and more. 
+            </p>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: '1.6', fontSize: '0.95rem' }}>
+              Only <strong style={{ color: '#22c55e' }}>System Users, System Roles, and the Access Rights Matrix</strong> will be preserved. Everything else goes to zero.
             </p>
             <p style={{ color: 'var(--text-primary)', marginBottom: '1rem', fontWeight: '600' }}>
-              To confirm, please type exactly: <span style={{ color: '#ef4444', background: 'rgba(239, 68, 68, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>RESET TRANSACTION DATA ONLY</span>
+              To confirm, type exactly: <span style={{ color: '#ef4444', background: 'rgba(239, 68, 68, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontFamily: 'monospace' }}>RESET TRANSACTION DATA ONLY</span>
             </p>
             
             <input 
               type="text" 
               value={resetConfirmation}
               onChange={(e) => setResetConfirmation(e.target.value)}
-              placeholder="RESET TRANSACTION DATA ONLY"
+              placeholder="Type confirmation here..."
               style={{ 
                 width: '100%', 
                 padding: '0.75rem', 
                 borderRadius: '6px', 
-                border: '1px solid var(--glass-border)', 
+                border: resetConfirmation === 'RESET TRANSACTION DATA ONLY' ? '2px solid #ef4444' : '1px solid var(--glass-border)', 
                 background: 'var(--bg-secondary)', 
                 color: 'var(--text-primary)',
                 marginBottom: '1.5rem',
-                fontSize: '1rem'
+                fontSize: '1rem',
+                fontFamily: 'monospace',
+                letterSpacing: '0.5px',
+                boxSizing: 'border-box'
               }} 
             />
 
@@ -199,10 +249,13 @@ export default function SettingsPage() {
                   borderRadius: '6px',
                   fontWeight: '600',
                   cursor: (resetLoading || resetConfirmation !== 'RESET TRANSACTION DATA ONLY') ? 'not-allowed' : 'pointer',
-                  opacity: (resetLoading || resetConfirmation !== 'RESET TRANSACTION DATA ONLY') ? 0.5 : 1
+                  opacity: (resetLoading || resetConfirmation !== 'RESET TRANSACTION DATA ONLY') ? 0.5 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
                 }}
               >
-                {resetLoading ? 'Clearing Data...' : 'Confirm Reset'}
+                {resetLoading ? '⏳ Clearing All Data...' : '🔄 Confirm Master Reset'}
               </button>
             </div>
           </div>

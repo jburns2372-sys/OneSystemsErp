@@ -19,6 +19,7 @@ export default async function MaterialRequestDetailsPage({ params }: { params: P
       checker: true,
       approver: true,
       purchaseOrders: true,
+      canvassForms: true,
       items: {
         include: {
           consolidatedBoqItem: true
@@ -221,6 +222,38 @@ export default async function MaterialRequestDetailsPage({ params }: { params: P
 
         </div>
 
+      </div>
+
+      <h2 style={{ color: 'var(--text-primary)', marginTop: '40px', marginBottom: '20px', maxWidth: '1000px', margin: '40px auto 20px auto' }}>Related Canvass Forms</h2>
+      <div className={styles.tableContainer} style={{ maxWidth: '1000px', margin: '0 auto' }}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Canvass Number</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!mr.canvassForms || mr.canvassForms.length === 0 ? (
+              <tr>
+                <td colSpan={4} className={styles.emptyState}>No canvass forms generated for this MR yet.</td>
+              </tr>
+            ) : mr.canvassForms.map((cf: any) => (
+              <tr key={cf.id}>
+                <td>{cf.canvassNumber}</td>
+                <td>{new Date(cf.createdAt).toLocaleDateString()}</td>
+                <td>{cf.status}</td>
+                <td>
+                  <Link href={`/procurement/canvassing/${cf.id}`} style={{ color: '#3b82f6', textDecoration: 'underline', fontWeight: 'bold' }}>
+                    View Canvass Form
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <h2 style={{ color: 'var(--text-primary)', marginTop: '40px', marginBottom: '20px', maxWidth: '1000px', margin: '40px auto 20px auto' }}>Related Purchase Orders</h2>
