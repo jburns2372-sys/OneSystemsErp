@@ -11,7 +11,6 @@ async function main() {
     project = await prisma.project.create({
       data: {
         name: "PGH Expansion Building",
-        projectCode: "PRJ-2026-001",
         location: "Manila",
         client: "Department of Health",
         contractAmount: 500000000,
