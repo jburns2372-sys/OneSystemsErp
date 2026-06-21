@@ -187,7 +187,7 @@ export default function JobOrderFormClient({ projects, subcontractors, initialDa
       if (masterItem) {
         const cost = (parseFloat(masterItem.quantity) || 0) * (parseFloat(masterItem.combinedUnitCost) || 0);
         masterTotals[sel.id] = cost;
-        (grandMasterTotal || 0) += cost;
+        grandMasterTotal += cost;
       }
     });
 
