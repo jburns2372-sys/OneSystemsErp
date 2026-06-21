@@ -40,7 +40,6 @@ async function main() {
       data: {
         name: `${spec.category} Experts Inc.`,
         businessType: "CORPORATION",
-        tradeCategory: spec.category,
         contactPerson: "Seeded Contact",
         contactNumber: "0917000000" + index,
         accreditation: "APPROVED"

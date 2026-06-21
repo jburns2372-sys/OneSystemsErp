@@ -10,7 +10,7 @@ export default function ManagerAssigner({
   canEdit 
 }: { 
   projectId: string; 
-  currentManager?: { id: string; name: string } | null;
+  currentManager?: { id: string; name: string | null } | null;
   users: { id: string; name: string; role: string }[];
   canEdit: boolean;
 }) {
