@@ -54,7 +54,7 @@ export default function VariationOrderDetailPage() {
   const handleRunAIPreCheck = async () => {
     setActionLoading(true);
     try {
-      const res = await preCheckVariationOrder(voId);
+      const res = await preCheckVariationOrder(voId, 'SYSTEM');
       toast.success('AI Pre-check complete!');
       fetchVO();
     } catch (e: any) {

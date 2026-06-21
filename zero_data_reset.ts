@@ -50,7 +50,7 @@ async function main() {
     if (!isSuperAdmin && !hasAdminRole) {
       try {
         await prisma.user.delete({ where: { id: user.id } });
-        console.log(`Deleted user: ${user.email || user.name}`);
+        console.log(`Deleted user: ${user.email || user.roleName}`);
       } catch (e: any) {
         console.warn(`Failed to delete user ${user.email}. Error: ${e.message}`);
       }

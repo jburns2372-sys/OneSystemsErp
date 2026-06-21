@@ -70,8 +70,8 @@ export default async function SubcontractPayableDetailsPage({
             <p style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '10px 0', color: 'var(--text-primary)' }}>
               {billing.subcontractor?.name || 'Unknown Subcontractor'}
             </p>
-            {billing.subcontractor?.tradeCategory && <p style={{ margin: '5px 0', color: 'var(--text-secondary)' }}>Category: {billing.subcontractor.tradeCategory}</p>}
-            {billing.subcontractor?.vatStatus && <p style={{ margin: '5px 0', color: 'var(--text-secondary)' }}>VAT Status: {billing.subcontractor.vatStatus}</p>}
+            {billing.subcontractor?.tradeCategory && <p style={{ margin: '5px 0', color: 'var(--text-secondary)' }}>Category: {billing.(subcontractor as any).tradeCategory}</p>}
+            {billing.subcontractor?.vatStatus && <p style={{ margin: '5px 0', color: 'var(--text-secondary)' }}>VAT Status: {billing.(subcontractor as any).vatStatus}</p>}
           </div>
 
           <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>

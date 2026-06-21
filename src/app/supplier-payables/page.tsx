@@ -193,14 +193,14 @@ export default async function UnifiedPayablesPage() {
                   <Link href={`/supplier-payables/subcontract/${bill.id}`}>
                     <button style={{
                       padding: '6px 12px',
-                      background: bill.endorsedForPayment ? 'rgba(245, 158, 11, 0.15)' : 'var(--accent-color)',
-                      color: bill.endorsedForPayment ? '#fbbf24' : '#000',
-                      border: bill.endorsedForPayment ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
+                      background: (bill as any).endorsedForPayment ? 'rgba(245, 158, 11, 0.15)' : 'var(--accent-color)',
+                      color: (bill as any).endorsedForPayment ? '#fbbf24' : '#000',
+                      border: (bill as any).endorsedForPayment ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
                       borderRadius: '4px',
                       fontWeight: 'bold',
                       cursor: 'pointer'
                     }}>
-                      {bill.endorsedForPayment ? 'Review Endorsement' : 'Issue Payment'}
+                      {(bill as any).endorsedForPayment ? 'Review Endorsement' : 'Issue Payment'}
                     </button>
                   </Link>
                 </td>
@@ -246,14 +246,14 @@ export default async function UnifiedPayablesPage() {
                   <Link href={`/supplier-payables/subcontract/${bill.id}`}>
                     <button style={{
                       padding: '6px 12px',
-                      background: bill.endorsedForPayment ? 'rgba(245, 158, 11, 0.15)' : 'var(--accent-color)',
-                      color: bill.endorsedForPayment ? '#fbbf24' : '#000',
-                      border: bill.endorsedForPayment ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
+                      background: (bill as any).endorsedForPayment ? 'rgba(245, 158, 11, 0.15)' : 'var(--accent-color)',
+                      color: (bill as any).endorsedForPayment ? '#fbbf24' : '#000',
+                      border: (bill as any).endorsedForPayment ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
                       borderRadius: '4px',
                       fontWeight: 'bold',
                       cursor: 'pointer'
                     }}>
-                      {bill.endorsedForPayment ? 'Review Endorsement' : 'Issue Payment'}
+                      {(bill as any).endorsedForPayment ? 'Review Endorsement' : 'Issue Payment'}
                     </button>
                   </Link>
                 </td>

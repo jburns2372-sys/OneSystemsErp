@@ -69,7 +69,7 @@ export default async function ViewSubcontractPackagePage({ params }: { params: P
           <Link href="/subcontracting/dashboard" style={{ padding: '8px 16px', backgroundColor: '#f3f4f6', color: '#374151', borderRadius: '6px', textDecoration: 'none', fontWeight: '500', border: '1px solid #d1d5db' }}>
             Back to Hub
           </Link>
-          {pkg.isLocked ? (
+          {(pkg as any).isLocked ? (
             <span style={{ 
               padding: '8px 16px', 
               backgroundColor: '#334155', 
@@ -92,7 +92,7 @@ export default async function ViewSubcontractPackagePage({ params }: { params: P
         </div>
       </div>
 
-      <PackageWorkflowControls packageId={id} currentStatus={pkg.status} isLocked={pkg.isLocked} canUnlock={canUnlock} />
+      <PackageWorkflowControls packageId={id} currentStatus={pkg.status} isLocked={(pkg as any).isLocked} canUnlock={canUnlock} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
         <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
