@@ -101,7 +101,7 @@ export default function PackageWorkflowControls({ packageId, currentStatus, isLo
           top: '20px',
           left: '40px',
           width: `${(currentStepIndex / 3) * 100}%`,
-          maxRight: '40px',
+          maxHeight: '40px',
           height: '4px',
           backgroundColor: '#0284c7',
           transition: 'all 0.5s ease',

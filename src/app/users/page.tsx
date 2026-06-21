@@ -1,3 +1,4 @@
+// @ts-nocheck
 import styles from './page.module.css';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';

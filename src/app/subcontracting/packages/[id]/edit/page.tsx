@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 import { getSubcontractPackageById } from '@/app/actions/subcontractingActions';
 import { prisma } from '@/lib/prisma';

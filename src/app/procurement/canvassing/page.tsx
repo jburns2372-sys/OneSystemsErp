@@ -100,7 +100,7 @@ export default async function CanvassingDashboard() {
                 {activeCanvassForms.map(cf => (
                   <tr key={cf.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     <td style={{ padding: '12px 8px', color: '#fff', fontWeight: 'bold' }}>{cf.canvassNumber}</td>
-                    <td style={{ padding: '12px 8px', color: 'var(--text-secondary)' }}>{cf.mr.mrNumber}</td>
+                    <td style={{ padding: '12px 8px', color: 'var(--text-secondary)' }}>{cf.mr?.mrNumber}</td>
                     <td style={{ padding: '12px 8px' }}>{cf.quotations.length}</td>
                     <td style={{ padding: '12px 8px' }}>
                       <span style={{

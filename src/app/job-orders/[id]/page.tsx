@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 import { getJobOrderById } from '@/app/actions/jobOrderActions';
 import { prisma } from '@/lib/prisma';

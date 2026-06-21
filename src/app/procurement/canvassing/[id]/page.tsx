@@ -37,7 +37,7 @@ export default async function CanvassDetailsPage({ params }: { params: Promise<{
             Canvass #{canvass.canvassNumber}
           </h1>
           <p style={{ color: 'var(--text-secondary)', margin: '5px 0 0 0' }}>
-            Based on MRF: {canvass.mr.mrNumber} | Project: {canvass.project?.name}
+            Based on MRF: {canvass.mr?.mrNumber} | Project: {canvass.project?.name}
           </p>
         </div>
         <div style={{

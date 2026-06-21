@@ -11,7 +11,6 @@ async function main() {
     project = await prisma.project.create({
       data: {
         name: "PGH Expansion Building",
-        projectCode: "PRJ-2026-001",
         location: "Manila",
         client: "Department of Health",
         contractAmount: 500000000,
@@ -26,7 +25,6 @@ async function main() {
     data: {
       name: "Acme Concrete Works",
       businessType: "CORPORATION",
-      tradeCategory: "Concreting",
       contactPerson: "John Doe",
       contactNumber: "09171234567",
       accreditation: "APPROVED"
@@ -38,7 +36,6 @@ async function main() {
     data: {
       name: "Fast Paint Co.",
       businessType: "SOLE_PROPRIATOR",
-      tradeCategory: "Painting",
       contactPerson: "Jane Smith",
       contactNumber: "09181234567",
       accreditation: "APPROVED"
