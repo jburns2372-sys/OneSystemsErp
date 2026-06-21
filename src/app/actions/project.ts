@@ -107,3 +107,10 @@ export async function getDashboardStats() {
     totalVariationOrders
   };
 }
+
+export async function assignProjectManager(projectId: string, managerId: string | null) {
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { managerId }
+  });
+}

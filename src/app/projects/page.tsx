@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import PermissionGuard from '@/components/PermissionGuard';
 import { getUserPermissions } from '@/lib/permissions';
 import NewProjectButton from './NewProjectButton';
+import ManagerAssigner from './ManagerAssigner';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,15 @@ export default async function ProjectsPage() {
     orderBy: { createdAt: 'desc' },
     include: { manager: true }
   });
+
+  const canAssignManager = permissions?.PROJECT_MANAGEMENT?.canUpdate || false;
+  let users: any[] = [];
+  if (canAssignManager) {
+    users = await prisma.user.findMany({ 
+      select: { id: true, name: true, role: true },
+      orderBy: { name: 'asc' }
+    });
+  }
 
   return (
     <div className={styles.container}>
@@ -60,7 +70,14 @@ export default async function ProjectsPage() {
                 <td className={styles.amount}>
                   ₱ {project.contractAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </td>
-                <td>{project.manager?.name || 'Unassigned'}</td>
+                <td>
+                  <ManagerAssigner 
+                    projectId={project.id} 
+                    currentManager={project.manager} 
+                    users={users} 
+                    canEdit={canAssignManager} 
+                  />
+                </td>
                 <td>
                   <Link href={`/projects/${project.id}`} className={styles.actionLink}>View Details</Link>
                 </td>
