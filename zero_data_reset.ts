@@ -40,11 +40,11 @@ async function main() {
   for (const user of users) {
     const isSuperAdmin = user.email === 'pd@gmail.com' || 
                          user.role === 'PROJECT_DIRECTOR' || 
-                         user.role === 'SYSTEM_ADMIN';
+                         user.role === 'SUPER_ADMIN';
                          
     const hasAdminRole = user.userRoles?.some(ur => 
-      ur.role?.roleCode === 'SYSTEM_ADMIN' || 
-      ur.role?.name === 'SYSTEM_ADMIN'
+      ur.role?.roleCode === 'SUPER_ADMIN' || 
+      ur.role?.name === 'SUPER_ADMIN'
     );
     
     if (!isSuperAdmin && !hasAdminRole) {

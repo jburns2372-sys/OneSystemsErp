@@ -8,8 +8,6 @@ interface PackageWorkflowControlsProps {
   currentStatus: string;
   isLocked: boolean;
   canUnlock: boolean;
-}
-
   currentUser?: { role: string };
 }
 

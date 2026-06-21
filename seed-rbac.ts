@@ -12,14 +12,14 @@ async function main() {
   // Define the Strict Master Rules by roleCode
   const permissionsData = [
     // --- SYSTEM ADMIN ---
-    { roleCode: 'SYSTEM_ADMIN', module: 'SYSTEM_ROLES', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
-    { roleCode: 'SYSTEM_ADMIN', module: 'PROCUREMENT', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
-    { roleCode: 'SYSTEM_ADMIN', module: 'WORKER_DATABASE', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
-    { roleCode: 'SYSTEM_ADMIN', module: 'DELIVERY_RECEIVING', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
-    { roleCode: 'SYSTEM_ADMIN', module: 'PURCHASE_ORDER', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
-    { roleCode: 'SYSTEM_ADMIN', module: 'PAYROLL', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
-    { roleCode: 'SYSTEM_ADMIN', module: 'FINANCE', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
-    { roleCode: 'SYSTEM_ADMIN', module: 'INVENTORY', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
+    { roleCode: 'SUPER_ADMIN', module: 'SYSTEM_ROLES', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
+    { roleCode: 'SUPER_ADMIN', module: 'PROCUREMENT', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
+    { roleCode: 'SUPER_ADMIN', module: 'WORKER_DATABASE', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
+    { roleCode: 'SUPER_ADMIN', module: 'DELIVERY_RECEIVING', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
+    { roleCode: 'SUPER_ADMIN', module: 'PURCHASE_ORDER', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
+    { roleCode: 'SUPER_ADMIN', module: 'PAYROLL', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
+    { roleCode: 'SUPER_ADMIN', module: 'FINANCE', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
+    { roleCode: 'SUPER_ADMIN', module: 'INVENTORY', canView: true, canCreate: true, canEditDraft: true, canDeleteDraft: true, canApprove: true },
 
     // --- MATERIALS ENGINEER ---
     { roleCode: 'MATERIALS_ENGINEER', module: 'PROCUREMENT', canView: true, canCreate: true, canEditDraft: false, canDeleteDraft: false, canApprove: false },

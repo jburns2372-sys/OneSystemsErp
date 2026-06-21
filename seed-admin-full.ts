@@ -2,14 +2,14 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Granting FULL access to SYSTEM_ADMIN...');
+  console.log('Granting FULL access to SUPER_ADMIN...');
 
   const adminRole = await prisma.role.findFirst({
-    where: { roleCode: 'SYSTEM_ADMIN' }
+    where: { roleCode: 'SUPER_ADMIN' }
   });
 
   if (!adminRole) {
-    console.error('SYSTEM_ADMIN role not found');
+    console.error('SUPER_ADMIN role not found');
     return;
   }
 
@@ -68,7 +68,7 @@ async function main() {
     });
   }
 
-  console.log('SYSTEM_ADMIN has been granted absolute FULL access to all current and future modules!');
+  console.log('SUPER_ADMIN has been granted absolute FULL access to all current and future modules!');
 }
 
 main().catch(e => { console.error(e); process.exit(1); }).finally(async () => { await prisma.$disconnect(); });

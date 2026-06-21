@@ -2,7 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 const roles = [
-  { name: 'SYSTEM_ADMIN', code: 'SYSTEM_ADMIN', description: 'Full system control.' },
+  { name: 'SUPER_ADMIN', code: 'SUPER_ADMIN', description: 'Full system control.' },
   { name: 'PROJECT_DIRECTOR', code: 'PROJECT_DIRECTOR', description: 'Executive oversight and final approvals.' },
   { name: 'PROJECT_MANAGER', code: 'PROJECT_MANAGER', description: 'Day-to-day project execution.' },
   { name: 'PROJECT_ACCOUNTANT', code: 'PROJECT_ACCOUNTANT', description: 'Prepares accounting documents.' },

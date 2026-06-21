@@ -7,7 +7,7 @@
       "password": "Junixsys_001",
       "emailVerified": null,
       "image": null,
-      "role": "SYSTEM_ADMIN",
+      "role": "SUPER_ADMIN",
       "createdAt": "2026-06-10T05:25:40.443Z",
       "updatedAt": "2026-06-10T08:48:33.172Z",
       "passwordHash": null,
@@ -52,7 +52,7 @@
   "SystemRole": [
     {
       "id": "cmq7u3y0o0000vc2wyjnavm5u",
-      "name": "SYSTEM_ADMIN",
+      "name": "SUPER_ADMIN",
       "createdAt": "2026-06-10T08:56:26.615Z"
     },
     {
@@ -18333,8 +18333,8 @@
   "Role": [
     {
       "id": "cmq7w8dzx0000vce0xf16z36o",
-      "roleName": "SYSTEM_ADMIN",
-      "roleCode": "SYSTEM_ADMIN",
+      "roleName": "SUPER_ADMIN",
+      "roleCode": "SUPER_ADMIN",
       "description": "Full system control.",
       "isActive": true,
       "createdAt": "2026-06-10T09:55:53.181Z",

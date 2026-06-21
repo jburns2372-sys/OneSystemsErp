@@ -9,7 +9,7 @@ async function main() {
   console.log(JSON.stringify(user, null, 2));
 
   const adminRole = await prisma.role.findFirst({
-    where: { roleCode: 'SYSTEM_ADMIN' },
+    where: { roleCode: 'SUPER_ADMIN' },
     include: { rolePermissions: true }
   });
   console.log('Admin Role Perms:', JSON.stringify(adminRole?.rolePermissions, null, 2));

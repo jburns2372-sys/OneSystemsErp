@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const roles = [
-    'SYSTEM_ADMIN', 'MATERIALS_ENGINEER', 'PURCHASING_OFFICER', 'PROJECT_DIRECTOR',
+    'SUPER_ADMIN', 'MATERIALS_ENGINEER', 'PURCHASING_OFFICER', 'PROJECT_DIRECTOR',
     'PROJECT_MANAGER', 'FINANCE_OFFICER', 'STOCKMAN', 'PROJECT_ACCOUNTANT', 'COST_OFFICER', 'GUEST_USER'
   ];
   for (const r of roles) {

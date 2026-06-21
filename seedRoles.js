@@ -2,7 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 const roles = [
-  "SYSTEM_ADMIN",
+  "SUPER_ADMIN",
   "PROJECT_ENGINEER",
   "PROCUREMENT_OFFICER",
   "WAREHOUSEMAN",

@@ -128,7 +128,7 @@ async function main() {
       await tx.project.deleteMany({});
       
       // Finally, log this massive reset action into AuditLog
-      const systemAdmin = await tx.user.findFirst({ where: { role: 'SYSTEM_ADMIN' } });
+      const systemAdmin = await tx.user.findFirst({ where: { role: 'SUPER_ADMIN' } });
       const auditLogData: any = {
         remarks: 'ZERO_DATA_RESET: Transactional data has been successfully cleared via CLI script.',
         moduleName: 'SYSTEM_SETTINGS',

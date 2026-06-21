@@ -27,11 +27,11 @@ async function main() {
   console.log("Seeding matrix permissions...");
 
   // SYSTEM ADMIN
-  await grant("SYSTEM_ADMIN", "USER_MANAGEMENT", canAllAdmin);
-  await grant("SYSTEM_ADMIN", "AWARDED_BOQ_UPLOAD", canAllAdmin);
-  await grant("SYSTEM_ADMIN", "SYSTEM_SETTINGS", canAllAdmin);
-  await grant("SYSTEM_ADMIN", "AUDIT_LOGS", canAllAdmin);
-  await grant("SYSTEM_ADMIN", "ROLE_MANAGEMENT", canAllAdmin);
+  await grant("SUPER_ADMIN", "USER_MANAGEMENT", canAllAdmin);
+  await grant("SUPER_ADMIN", "AWARDED_BOQ_UPLOAD", canAllAdmin);
+  await grant("SUPER_ADMIN", "SYSTEM_SETTINGS", canAllAdmin);
+  await grant("SUPER_ADMIN", "AUDIT_LOGS", canAllAdmin);
+  await grant("SUPER_ADMIN", "ROLE_MANAGEMENT", canAllAdmin);
 
   // PROJECT DIRECTOR
   const pdModules = ["AWARDED_BOQ_UPLOAD", "BOQ_CONSOLIDATION", "MATERIALS_REQUEST", "PURCHASE_ORDER", "EXPENSE_LEDGER", "PETTY_CASH", "PAYROLL", "WORKER_DATABASE", "SUBCONTRACTING", "PROJECT_ACCOMPLISHMENT", "PROGRESS_BILLING", "REPORTS", "VARIATION_ORDERS"];
