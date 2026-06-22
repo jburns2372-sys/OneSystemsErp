@@ -14,7 +14,7 @@ export default function ProjectCostLedgerTab({ projectId }: { projectId: string 
         // Assume getProjectCostLedger exists, we will create it next.
         const res = await getProjectCostLedger(projectId);
         if (res.success) {
-          setEntries(res.data);
+          setEntries(res.data || []);
         } else {
           setError(res.error || 'Failed to fetch ledger');
         }
@@ -65,11 +65,11 @@ export default function ProjectCostLedgerTab({ projectId }: { projectId: string 
           <tbody>
             {entries.map((entry) => (
               <tr key={entry.id}>
-                <td>{new Date(entry.postingDate).toLocaleDateString()}</td>
-                <td>{entry.referenceNumber}</td>
-                <td>{entry.payeeName}</td>
-                <td>{entry.costCode || 'UNCODED'}</td>
-                <td style={{ maxWidth: '300px', whiteSpace: 'normal' }}>{entry.description}</td>
+                <td>{new Date(entry.costDate).toLocaleDateString()}</td>
+                <td>{entry.referenceDocumentNo || entry.referenceDocumentType || 'N/A'}</td>
+                <td>{entry.supplierName || entry.subcontractorName || entry.workerName || 'N/A'}</td>
+                <td>{entry.costCategory || 'UNCODED'}</td>
+                <td style={{ maxWidth: '300px', whiteSpace: 'normal' }}>{entry.costType}</td>
                 <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#ef4444' }}>
                   ₱ {entry.netAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
