@@ -145,6 +145,7 @@ export async function createVariationOrder(data: any) {
     const newVo = await prisma.variationOrder.create({
       data: {
         ...data,
+        subcontractPackageId: data.subcontractPackageId || null,
         voNumber,
         originalContractAmount,
       }
