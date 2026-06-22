@@ -314,7 +314,6 @@ export default function CreateVariationOrderPage() {
         <div style={{ gridColumn: 'span 12', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Detailed Description</label>
           <input 
-            required
             style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
             placeholder="Provide complete details..."
             value={formData.detailedDescription}
