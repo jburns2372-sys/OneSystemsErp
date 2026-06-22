@@ -130,11 +130,6 @@ export default function CreateVariationOrderPage() {
       i.voItemNumber && i.description && i.unit && Number(i.proposedQuantity) > 0
     );
 
-    if (itemsToAdjust.length === 0 && validAdditionalItems.length === 0) {
-      toast.error('Please enter at least one BOQ adjustment or new additional work item.');
-      return;
-    }
-
     setLoading(true);
     try {
       // 1. Create the Variation Order Header
@@ -196,8 +191,8 @@ export default function CreateVariationOrderPage() {
         });
       }
 
-      toast.success('Variation Order & Items Saved Successfully!');
-      router.push(`/variation-orders/${vo.id}`);
+      toast.success('Variation Order Saved Successfully!');
+      router.push(`/variation-orders`);
     } catch (error: any) {
       toast.error('Submission failed: ' + error.message);
     } finally {
@@ -211,7 +206,7 @@ export default function CreateVariationOrderPage() {
   );
 
   return (
-    <div style={{ height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', padding: '16px 32px', maxWidth: '100%', margin: '0 auto', background: 'var(--bg-primary)' }}>
+    <form onSubmit={handleSubmit} style={{ height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', padding: '16px 32px', maxWidth: '100%', margin: '0 auto', background: 'var(--bg-primary)' }}>
       
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -222,7 +217,7 @@ export default function CreateVariationOrderPage() {
         </div>
         
         <button 
-          onClick={handleSubmit} 
+          type="submit"
           disabled={loading || (formData.variationCategory === 'SUBCONTRACTOR' && packages.length === 0)}
           style={{ padding: '10px 24px', fontSize: '0.9rem', display: 'flex', gap: '8px', alignItems: 'center', background: 'var(--accent-color, #4caf50)', color: '#000', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(76, 175, 80, 0.2)', transition: 'transform 0.1s ease' }}
         >
@@ -484,6 +479,6 @@ export default function CreateVariationOrderPage() {
           )}
         </div>
       </div>
-    </div>
+    </form>
   );
 }
