@@ -120,7 +120,11 @@ export default function CreateVariationOrderPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.projectId) {
-      toast.error('Project ID is required.');
+      toast.error('Project ID is required. Please scroll up and select a project.');
+      return;
+    }
+    if (formData.variationCategory === 'SUBCONTRACTOR' && !formData.subcontractPackageId) {
+      toast.error('Subcontract Package is required. Please select a package.');
       return;
     }
     
@@ -238,7 +242,6 @@ export default function CreateVariationOrderPage() {
         <div style={{ gridColumn: 'span 4', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Project *</label>
           <select 
-            required
             style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none', transition: 'border-color 0.2s ease' }}
             value={formData.projectId}
             onChange={e => setFormData({...formData, projectId: e.target.value})}
@@ -285,7 +288,6 @@ export default function CreateVariationOrderPage() {
               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '10px 12px' }}>Loading packages...</div>
             ) : (
               <select 
-                required
                 style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
                 value={formData.subcontractPackageId}
                 onChange={e => setFormData({...formData, subcontractPackageId: e.target.value})}
