@@ -191,9 +191,10 @@ export default function CreateVariationOrderPage() {
         });
       }
 
-      toast.success('Variation Order Saved Successfully!');
-      window.alert('Success: Variation Request has been created and saved!');
-      router.push(`/variation-orders`);
+      toast.success('Success: Variation Request has been created and saved!');
+      setTimeout(() => {
+        router.push(`/variation-orders`);
+      }, 800);
     } catch (error: any) {
       toast.error('Submission failed: ' + error.message);
     } finally {
