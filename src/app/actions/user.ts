@@ -31,37 +31,42 @@ export async function deleteSystemRole(roleName: string) {
 }
 
 export async function updateSystemRole(oldName: string, newName: string) {
-  const normalizedNew = newName.toUpperCase().trim();
-  
-  if (!normalizedNew) throw new Error("Role name cannot be empty");
+  try {
+    const normalizedNew = newName.toUpperCase().trim();
+    
+    if (!normalizedNew) return { success: false, error: "Role name cannot be empty" };
 
-  const existing = await prisma.systemRole.findUnique({
-    where: { name: normalizedNew }
-  });
-  
-  if (existing) throw new Error("A role with this name already exists");
-
-  await prisma.systemRole.update({
-    where: { name: oldName },
-    data: { name: normalizedNew }
-  });
-  
-  const rbac = await prisma.role.findFirst({
-    where: {
-      OR: [
-        { roleName: oldName },
-        { roleCode: oldName }
-      ]
-    }
-  });
-  if (rbac) {
-    await prisma.role.update({
-      where: { id: rbac.id },
-      data: { roleName: normalizedNew, roleCode: normalizedNew }
+    const existing = await prisma.systemRole.findUnique({
+      where: { name: normalizedNew }
     });
+    
+    if (existing) return { success: false, error: "A role with this name already exists" };
+
+    await prisma.systemRole.update({
+      where: { name: oldName },
+      data: { name: normalizedNew }
+    });
+    
+    const rbac = await prisma.role.findFirst({
+      where: {
+        OR: [
+          { roleName: oldName },
+          { roleCode: oldName }
+        ]
+      }
+    });
+    if (rbac) {
+      await prisma.role.update({
+        where: { id: rbac.id },
+        data: { roleName: normalizedNew, roleCode: normalizedNew }
+      });
+    }
+    
+    revalidatePath('/users');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'An error occurred while updating the role.' };
   }
-  
-  revalidatePath('/users');
 }
 
 export async function createSystemRole(roleName: string) {
@@ -100,72 +105,88 @@ export async function createSystemRole(roleName: string) {
 }
 
 export async function createUser(data: { name: string, email: string, role: string }) {
-  if (!data.name || !data.email || !data.role) {
-    throw new Error('All fields are required.');
-  }
-
-  const existingUser = await prisma.user.findUnique({
-    where: { email: data.email }
-  });
-
-  if (existingUser) {
-    throw new Error('A user with this email already exists.');
-  }
-
-  const finalRole = await createSystemRole(data.role);
-
-  await prisma.user.create({
-    data: {
-      name: data.name,
-      email: data.email,
-      role: finalRole,
-      password: 'admin001',
+  try {
+    if (!data.name || !data.email || !data.role) {
+      return { success: false, error: 'All fields are required.' };
     }
-  });
 
-  revalidatePath('/users');
+    const existingUser = await prisma.user.findUnique({
+      where: { email: data.email }
+    });
+
+    if (existingUser) {
+      return { success: false, error: 'A user with this email already exists.' };
+    }
+
+    const finalRole = await createSystemRole(data.role);
+
+    await prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        role: finalRole,
+        password: 'admin001',
+      }
+    });
+
+    revalidatePath('/users');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'An unexpected database error occurred.' };
+  }
 }
 
 export async function updateUser(id: string, data: { name: string, email: string, role: string, password?: string }) {
-  if (!id || !data.name || !data.email || !data.role) {
-    throw new Error('Name, Email, and Role are required.');
+  try {
+    if (!id || !data.name || !data.email || !data.role) {
+      return { success: false, error: 'Name, Email, and Role are required.' };
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: data.email }
+    });
+
+    if (existingUser && existingUser.id !== id) {
+      return { success: false, error: 'A different user with this email already exists.' };
+    }
+
+    const finalRole = await createSystemRole(data.role);
+
+    const updateData: any = {
+      name: data.name,
+      email: data.email,
+      role: finalRole,
+    };
+
+    if (data.password && data.password.trim() !== '') {
+      updateData.password = data.password;
+    }
+
+    await prisma.user.update({
+      where: { id },
+      data: updateData
+    });
+
+    revalidatePath('/users');
+    revalidatePath(`/users/${id}`);
+    
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'An unexpected database error occurred.' };
   }
-
-  const existingUser = await prisma.user.findUnique({
-    where: { email: data.email }
-  });
-
-  if (existingUser && existingUser.id !== id) {
-    throw new Error('A different user with this email already exists.');
-  }
-
-  const finalRole = await createSystemRole(data.role);
-
-  const updateData: any = {
-    name: data.name,
-    email: data.email,
-    role: finalRole,
-  };
-
-  if (data.password && data.password.trim() !== '') {
-    updateData.password = data.password;
-  }
-
-  await prisma.user.update({
-    where: { id },
-    data: updateData
-  });
-
-  revalidatePath('/users');
-  revalidatePath(`/users/${id}`);
 }
 
 export async function deleteUser(id: string) {
-  if (!id) throw new Error('User ID is required');
-  
-  await prisma.user.delete({
-    where: { id }
-  });
-  
-  revalidatePath('/users');
+  try {
+    if (!id) return { success: false, error: 'User ID is required' };
+    
+    await prisma.user.delete({
+      where: { id }
+    });
+    
+    revalidatePath('/users');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'An unexpected database error occurred.' };
+  }
 }

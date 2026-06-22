@@ -10,9 +10,12 @@ export default function DeleteUserButton({ userId, userName, actionClass }: { us
     if (confirm(`Are you sure you want to completely remove user "${userName}"? This action cannot be undone.`)) {
       startTransition(async () => {
         try {
-          await deleteUser(userId);
-        } catch (error) {
-          alert('Failed to delete user.');
+          const res = await deleteUser(userId);
+          if (res && !res.success) {
+            alert(res.error || 'Failed to delete user.');
+          }
+        } catch (error: any) {
+          alert(error.message || 'Failed to delete user.');
         }
       });
     }

@@ -27,6 +27,8 @@ export default function PayrollPeriodClient({ period, workers, boqItems = [], ba
   const [selectedBoqId, setSelectedBoqId] = useState<string>('');
   const [selectedBankAccountId, setSelectedBankAccountId] = useState<string>('');
 
+  const totalRequiredFunding = period.payrolls?.reduce((sum: number, p: any) => sum + p.netPay, 0) || 0;
+
   const uploadedFiles = Array.from(new Set(
     (period.dtrs || [])
       .map((dtr: any) => dtr.sourceFile)

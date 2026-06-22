@@ -117,7 +117,7 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
 
     const res = await uploadAndAnalyzeQuotationsBulk(canvass.id, formData);
     if (res.success) {
-      setUploadAIResults(res.results);
+      setUploadAIResults(res.results as any || []);
       router.refresh(); 
     } else {
       alert(res.error);

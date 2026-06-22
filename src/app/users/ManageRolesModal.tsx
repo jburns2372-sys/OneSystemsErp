@@ -64,7 +64,11 @@ export default function ManageRolesModal({ onClose, roles, rbacRoles = [], modul
     setError('');
     startTransition(async () => {
       try {
-        await updateSystemRole(selectedRole, editValue);
+        const res = await updateSystemRole(selectedRole, editValue);
+        if (res && !res.success) {
+          setError(res.error || 'Failed to update role');
+          return;
+        }
         setSelectedRole(editValue);
         setIsEditingName(false);
       } catch (err: any) {
@@ -79,7 +83,11 @@ export default function ManageRolesModal({ onClose, roles, rbacRoles = [], modul
     setError('');
     startTransition(async () => {
       try {
-        await deleteSystemRole(selectedRole);
+        const res = await deleteSystemRole(selectedRole);
+        if (res && !res.success) {
+          setError(res.error || 'Failed to delete role');
+          return;
+        }
         setSelectedRole(roles.find(r => r !== selectedRole) || null);
       } catch (err: any) {
         setError(err.message || 'Failed to delete role');
@@ -93,8 +101,12 @@ export default function ManageRolesModal({ onClose, roles, rbacRoles = [], modul
     startTransition(async () => {
       try {
         const added = await createSystemRole(newRoleName);
+        if (added && typeof added === 'object' && !(added as any).success) {
+          setError((added as any).error || 'Failed to create role');
+          return;
+        }
         setNewRoleName('');
-        setSelectedRole(added);
+        setSelectedRole(typeof added === 'string' ? added : (added as any).name || newRoleName);
       } catch (err: any) {
         setError(err.message || 'Failed to create role');
       }

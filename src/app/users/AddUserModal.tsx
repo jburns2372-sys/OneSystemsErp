@@ -16,17 +16,21 @@ export default function AddUserModal({ onClose, roles = [] }: { onClose: () => v
     e.preventDefault();
     setError('');
 
-    const finalRole = role.trim().toUpperCase().replace(/ /g, '_');
-    if (!finalRole) {
-      return setError('Please specify a role.');
-    }
-
     startTransition(async () => {
       try {
-        await createUser({ name, email, role: finalRole });
+        const finalRole = role === 'OTHER' ? customRole.trim().toUpperCase().replace(/ /g, '_') : role;
+        if (role === 'OTHER' && !finalRole) {
+          setError('Please specify a custom role.');
+          return;
+        }
+        const res = await createUser({ name, email, role: finalRole });
+        if (res && !res.success) {
+          setError(res.error || 'Failed to create user.');
+          return;
+        }
         onClose();
       } catch (err: any) {
-        setError(err.message || 'Failed to create user');
+        setError(err.message || 'An error occurred.');
       }
     });
   };

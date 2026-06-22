@@ -43,7 +43,12 @@ export default function EditUserClient({ user, roles = [] }: { user: UserData, r
     }
 
     try {
-      await updateUser(user.id, { ...formData, role: finalRole });
+      const res = await updateUser(user.id, { ...formData, role: finalRole });
+      if (res && !res.success) {
+        setError(res.error || 'Failed to update user.');
+        setIsLoading(false);
+        return;
+      }
       alert('User successfully updated!');
       router.push('/users');
       router.refresh();
