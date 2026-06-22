@@ -152,6 +152,7 @@ export async function createVariationOrder(data: any) {
     });
     
     revalidatePath(`/projects/${data.projectId}`);
+    revalidatePath(`/variation-orders`);
     return newVo;
   } catch (error: any) {
     throw new Error('Failed to create Variation Order: ' + error.message);
