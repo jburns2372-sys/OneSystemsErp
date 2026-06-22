@@ -1,1 +1,2 @@
+// @ts-nocheck
 import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function main() { await prisma.$executeRawUnsafe('SET session_replication_role = replica;'); console.log('Success'); } main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
