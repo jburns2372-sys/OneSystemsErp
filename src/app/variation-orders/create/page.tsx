@@ -10,7 +10,7 @@ import {
 } from '@/app/actions/variationOrderActions';
 import { getGlobalProjectsAndContext } from '@/app/actions/executiveContextActions';
 import { getSubcontractPackages } from '@/app/actions/subcontractingActions';
-import { ArrowLeft, Save, Search, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Search, Plus, Trash2, Box, PenTool } from 'lucide-react';
 import styles from '../variation.module.css';
 
 export default function CreateVariationOrderPage() {
@@ -211,216 +211,222 @@ export default function CreateVariationOrderPage() {
   );
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-      <header className={styles.header} style={{ marginBottom: '1rem', paddingBottom: '0.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button type="button" onClick={() => router.back()} className={styles.backButton}>
-            <ArrowLeft size={20} />
+    <div style={{ height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', padding: '16px 32px', maxWidth: '100%', margin: '0 auto', background: 'var(--bg-primary)' }}>
+      
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button type="button" onClick={() => router.back()} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px', cursor: 'pointer', color: 'var(--text-primary)', transition: 'all 0.2s ease' }}>
+            <ArrowLeft size={18} />
           </button>
-          <div>
-            <h1 className={styles.title} style={{ fontSize: '1.4rem' }}>Create Variation Request</h1>
-          </div>
+          <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '700', letterSpacing: '-0.02em', color: '#fff' }}>Create Variation Request</h1>
         </div>
+        
+        <button 
+          onClick={handleSubmit} 
+          disabled={loading || (formData.variationCategory === 'SUBCONTRACTOR' && packages.length === 0)}
+          style={{ padding: '10px 24px', fontSize: '0.9rem', display: 'flex', gap: '8px', alignItems: 'center', background: 'var(--accent-color, #4caf50)', color: '#000', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(76, 175, 80, 0.2)', transition: 'transform 0.1s ease' }}
+        >
+          {loading ? 'Processing Transaction...' : <><Save size={18}/> Submit Variation</>}
+        </button>
       </header>
 
-      <form onSubmit={handleSubmit}>
-        {/* COMPRESSED HEADER FORM */}
-        <div style={{ 
-          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', 
-          background: 'var(--surface)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)',
-          marginBottom: '1rem'
-        }}>
-          
-          <div className={styles.formGroup} style={{ marginBottom: 0 }}>
-            <label style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Project *</label>
-            <select 
-              required
-              className={styles.input}
-              style={{ padding: '6px', fontSize: '0.9rem' }}
-              value={formData.projectId}
-              onChange={e => setFormData({...formData, projectId: e.target.value})}
-            >
-              <option value="">Select Project</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className={styles.formGroup} style={{ marginBottom: 0 }}>
-            <label style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Variation Type</label>
-            <select 
-              className={styles.input}
-              style={{ padding: '6px', fontSize: '0.9rem' }}
-              value={formData.variationType}
-              onChange={e => setFormData({...formData, variationType: e.target.value})}
-            >
-              <option>Change Order</option>
-              <option>Extra Work Order</option>
-              <option>Additive Variation</option>
-              <option>Deductive Variation</option>
-              <option>Reclassification</option>
-              <option>Emergency Variation</option>
-            </select>
-          </div>
-
-          <div className={styles.formGroup} style={{ marginBottom: 0 }}>
-            <label style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Source</label>
-            <select 
-              className={styles.input}
-              style={{ padding: '6px', fontSize: '0.9rem' }}
-              value={formData.sourceOfVariation}
-              onChange={e => setFormData({...formData, sourceOfVariation: e.target.value})}
-            >
-              <option value="">Select Source...</option>
-              <option>Client-Initiated</option>
-              <option>Consultant-Initiated</option>
-              <option>Contractor-Requested</option>
-              <option>Internal Cost Adjustment</option>
-            </select>
-          </div>
-
-          <div className={styles.formGroup} style={{ marginBottom: 0 }}>
-            <label style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Time Impact</label>
-            <select 
-              className={styles.input}
-              style={{ padding: '6px', fontSize: '0.9rem' }}
-              value={formData.timeImpact}
-              onChange={e => setFormData({...formData, timeImpact: e.target.value})}
-            >
-              <option value="TO_BE_EVALUATED">To Be Evaluated</option>
-              <option value="YES">Yes</option>
-              <option value="NO">No</option>
-            </select>
-          </div>
-
-          <div className={styles.formGroup} style={{ gridColumn: '1 / 3', marginBottom: 0 }}>
-            <label style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Detailed Description</label>
-            <input 
-              required
-              className={styles.input} 
-              style={{ padding: '6px', fontSize: '0.9rem' }}
-              placeholder="Provide complete details..."
-              value={formData.detailedDescription}
-              onChange={e => setFormData({...formData, detailedDescription: e.target.value})}
-            />
-          </div>
-
-          <div className={styles.formGroup} style={{ gridColumn: '3 / 5', marginBottom: 0 }}>
-            <label style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Affected Location</label>
-            <input 
-              className={styles.input} 
-              style={{ padding: '6px', fontSize: '0.9rem' }}
-              placeholder="e.g., Tower 1, Level 5"
-              value={formData.affectedLocation}
-              onChange={e => setFormData({...formData, affectedLocation: e.target.value})}
-            />
-          </div>
-
-          {formData.variationCategory === 'SUBCONTRACTOR' && (
-            <div className={styles.formGroup} style={{ gridColumn: '1 / -1', marginBottom: 0 }}>
-              <label style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Subcontract Package *</label>
-              {packagesLoading ? (
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Loading packages...</div>
-              ) : (
-                <select 
-                  required
-                  className={styles.input}
-                  style={{ padding: '6px', fontSize: '0.9rem' }}
-                  value={formData.subcontractPackageId}
-                  onChange={e => setFormData({...formData, subcontractPackageId: e.target.value})}
-                >
-                  <option value="">Select Package</option>
-                  {packages.map(pkg => (
-                    <option key={pkg.id} value={pkg.id}>
-                      {pkg.packageNumber} - {pkg.scopeOfWork}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
+      {/* COMPRESSED HEADER FORM */}
+      <div style={{ 
+        display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '16px', 
+        background: 'rgba(255, 255, 255, 0.02)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)',
+        marginBottom: '16px', backdropFilter: 'blur(10px)', boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+      }}>
+        
+        <div style={{ gridColumn: 'span 3', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Project *</label>
+          <select 
+            required
+            style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none', transition: 'border-color 0.2s ease' }}
+            value={formData.projectId}
+            onChange={e => setFormData({...formData, projectId: e.target.value})}
+          >
+            <option value="">Select Project</option>
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
         </div>
 
-        {/* ITEMS BUILDER */}
-        <div style={{ background: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '55vh' }}>
-          
-          <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', borderTopLeftRadius: '8px', borderTopRightRadius: '8px' }}>
-            <button 
-              type="button"
-              onClick={() => setClassification('BOQ_ADJUSTMENT')}
-              style={{ 
-                flex: 1, padding: '12px', border: 'none', cursor: 'pointer', fontWeight: 'bold', borderTopLeftRadius: '8px',
-                background: classification === 'BOQ_ADJUSTMENT' ? 'var(--primary-dark)' : 'transparent',
-                color: classification === 'BOQ_ADJUSTMENT' ? '#fff' : 'var(--text-secondary)'
-              }}
-            >
-              Modify Existing BOQ (Additive / Deductive)
-            </button>
-            <button 
-              type="button"
-              onClick={() => setClassification('ADDITIONAL_WORKS')}
-              style={{ 
-                flex: 1, padding: '12px', border: 'none', cursor: 'pointer', fontWeight: 'bold', borderTopRightRadius: '8px',
-                background: classification === 'ADDITIONAL_WORKS' ? 'var(--primary-dark)' : 'transparent',
-                color: classification === 'ADDITIONAL_WORKS' ? '#fff' : 'var(--text-secondary)'
-              }}
-            >
-              New Work Items
-            </button>
+        <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Variation Type</label>
+          <select 
+            style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
+            value={formData.variationType}
+            onChange={e => setFormData({...formData, variationType: e.target.value})}
+          >
+            <option>Change Order</option>
+            <option>Extra Work Order</option>
+            <option>Additive Variation</option>
+            <option>Deductive Variation</option>
+            <option>Reclassification</option>
+            <option>Emergency Variation</option>
+          </select>
+        </div>
+
+        <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source</label>
+          <select 
+            style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
+            value={formData.sourceOfVariation}
+            onChange={e => setFormData({...formData, sourceOfVariation: e.target.value})}
+          >
+            <option value="">Select Source...</option>
+            <option>Client-Initiated</option>
+            <option>Consultant-Initiated</option>
+            <option>Contractor-Requested</option>
+            <option>Internal Cost Adjustment</option>
+          </select>
+        </div>
+
+        <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Time Impact</label>
+          <select 
+            style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
+            value={formData.timeImpact}
+            onChange={e => setFormData({...formData, timeImpact: e.target.value})}
+          >
+            <option value="TO_BE_EVALUATED">To Be Evaluated</option>
+            <option value="YES">Yes</option>
+            <option value="NO">No</option>
+          </select>
+        </div>
+
+        <div style={{ gridColumn: 'span 3', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Affected Location</label>
+          <input 
+            style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
+            placeholder="e.g., Tower 1, Level 5"
+            value={formData.affectedLocation}
+            onChange={e => setFormData({...formData, affectedLocation: e.target.value})}
+          />
+        </div>
+
+        {formData.variationCategory === 'SUBCONTRACTOR' && (
+          <div style={{ gridColumn: 'span 12', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Subcontract Package *</label>
+            {packagesLoading ? (
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '10px 12px' }}>Loading packages...</div>
+            ) : (
+              <select 
+                required
+                style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
+                value={formData.subcontractPackageId}
+                onChange={e => setFormData({...formData, subcontractPackageId: e.target.value})}
+              >
+                <option value="">Select Package</option>
+                {packages.map(pkg => (
+                  <option key={pkg.id} value={pkg.id}>
+                    {pkg.packageNumber} - {pkg.scopeOfWork}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
+        )}
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-            {classification === 'BOQ_ADJUSTMENT' && (
-              <>
-                <div style={{ position: 'relative', marginBottom: '12px' }}>
-                  <Search size={16} style={{ position: 'absolute', left: '10px', top: '8px', color: 'var(--text-secondary)' }} />
-                  <input 
-                    placeholder="Search existing BOQ items..." 
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    style={{ width: '100%', padding: '8px 8px 8px 32px', background: 'var(--bg-color)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', fontSize: '0.9rem' }}
-                  />
-                </div>
+        <div style={{ gridColumn: 'span 12', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Detailed Description</label>
+          <input 
+            required
+            style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
+            placeholder="Provide complete details..."
+            value={formData.detailedDescription}
+            onChange={e => setFormData({...formData, detailedDescription: e.target.value})}
+          />
+        </div>
+      </div>
 
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-                  <thead style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0, zIndex: 10 }}>
+      {/* ITEMS BUILDER - FLEX TO FILL REMAINING SPACE */}
+      <div style={{ flex: 1, background: 'var(--surface)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+        
+        <div style={{ display: 'flex', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <button 
+            type="button"
+            onClick={() => setClassification('BOQ_ADJUSTMENT')}
+            style={{ 
+              flex: 1, padding: '14px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '0.95rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              background: classification === 'BOQ_ADJUSTMENT' ? 'rgba(76, 175, 80, 0.1)' : 'transparent',
+              color: classification === 'BOQ_ADJUSTMENT' ? 'var(--accent-color, #4caf50)' : 'var(--text-secondary)',
+              borderBottom: classification === 'BOQ_ADJUSTMENT' ? '2px solid var(--accent-color, #4caf50)' : '2px solid transparent',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Box size={18} /> Modify Existing BOQ (Additive / Deductive)
+          </button>
+          <button 
+            type="button"
+            onClick={() => setClassification('ADDITIONAL_WORKS')}
+            style={{ 
+              flex: 1, padding: '14px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '0.95rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              background: classification === 'ADDITIONAL_WORKS' ? 'rgba(33, 150, 243, 0.1)' : 'transparent',
+              color: classification === 'ADDITIONAL_WORKS' ? '#2196f3' : 'var(--text-secondary)',
+              borderBottom: classification === 'ADDITIONAL_WORKS' ? '2px solid #2196f3' : '2px solid transparent',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <PenTool size={18} /> New Work Items
+          </button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column' }}>
+          {classification === 'BOQ_ADJUSTMENT' && (
+            <>
+              <div style={{ position: 'relative', marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', color: 'var(--text-secondary)' }} />
+                <input 
+                  placeholder="Search existing BOQ items..." 
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  style={{ width: '100%', padding: '12px 12px 12px 40px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px', fontSize: '0.95rem', outline: 'none' }}
+                />
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                  <thead style={{ background: 'rgba(0,0,0,0.4)', position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(8px)' }}>
                     <tr>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Item No.</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Description</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Unit</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Quantity</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Unit Cost</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)', width: '120px' }}>Qty Adj (+/-)</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Net Impact</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)' }}>Item No.</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)' }}>Description</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)' }}>Unit</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)' }}>Quantity</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)' }}>Unit Cost</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)', width: '140px' }}>Qty Adj (+/-)</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)' }}>Net Impact</th>
                     </tr>
                   </thead>
                   <tbody>
                     {fetchingBoq ? (
-                      <tr><td colSpan={7} style={{ padding: '2rem', textAlign: 'center' }}>Loading BOQ...</td></tr>
+                      <tr><td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading BOQ...</td></tr>
                     ) : filteredBoq.map(item => {
                       const originalUnitCost = item.combinedUnitCost || item.totalCost / item.quantity || 0;
                       const adj = adjustments[item.id] || 0;
                       const impact = adj * originalUnitCost;
                       
                       return (
-                        <tr key={item.id} style={{ borderBottom: '1px solid var(--border)', background: adj !== 0 ? 'rgba(var(--primary-rgb), 0.1)' : 'transparent' }}>
-                          <td style={{ padding: '8px', fontWeight: 'bold' }}>{item.category || item.itemCode}</td>
-                          <td style={{ padding: '8px' }}>{item.description}</td>
-                          <td style={{ padding: '8px' }}>{item.unit}</td>
-                          <td style={{ padding: '8px' }}>{item.quantity}</td>
-                          <td style={{ padding: '8px' }}>{originalUnitCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                          <td style={{ padding: '8px' }}>
+                        <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: adj !== 0 ? 'rgba(76, 175, 80, 0.05)' : 'transparent', transition: 'background 0.2s ease' }}>
+                          <td style={{ padding: '12px 16px', fontWeight: 'bold' }}>{item.category || item.itemCode}</td>
+                          <td style={{ padding: '12px 16px', color: 'var(--text-primary)' }}>{item.description}</td>
+                          <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>{item.unit}</td>
+                          <td style={{ padding: '12px 16px' }}>{item.quantity}</td>
+                          <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>{originalUnitCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                          <td style={{ padding: '8px 16px' }}>
                             <input 
                               type="number" 
                               step="0.01"
                               placeholder="0"
                               value={adjustments[item.id] === 0 ? '' : adjustments[item.id] || ''}
                               onChange={e => handleAdjustmentChange(item.id, e.target.value)}
-                              style={{ width: '100%', padding: '4px', background: 'var(--bg-color)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', fontSize: '0.85rem' }}
+                              style={{ width: '100%', padding: '8px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
                             />
                           </td>
-                          <td style={{ padding: '8px', fontWeight: 'bold', color: impact > 0 ? 'var(--success-color)' : impact < 0 ? 'var(--danger-color)' : 'inherit' }}>
+                          <td style={{ padding: '12px 16px', fontWeight: 'bold', color: impact > 0 ? '#4caf50' : impact < 0 ? '#f44336' : 'inherit' }}>
                             {impact !== 0 ? (impact > 0 ? '+ ' : '- ') + '₱ ' + Math.abs(impact).toLocaleString() : '-'}
                           </td>
                         </tr>
@@ -428,21 +434,23 @@ export default function CreateVariationOrderPage() {
                     })}
                   </tbody>
                 </table>
-              </>
-            )}
+              </div>
+            </>
+          )}
 
-            {classification === 'ADDITIONAL_WORKS' && (
-              <>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-                  <thead style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0, zIndex: 10 }}>
+          {classification === 'ADDITIONAL_WORKS' && (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <div style={{ flex: 1, overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                  <thead style={{ background: 'rgba(0,0,0,0.4)', position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(8px)' }}>
                     <tr>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)', width: '15%' }}>Item No.</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)', width: '30%' }}>Description</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)', width: '10%' }}>Unit</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)', width: '15%' }}>Quantity</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)', width: '15%' }}>Unit Cost</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>Impact</th>
-                      <th style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}></th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)', width: '15%' }}>Item No.</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)', width: '30%' }}>Description</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)', width: '10%' }}>Unit</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)', width: '15%' }}>Quantity</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)', width: '15%' }}>Unit Cost</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: '600', color: 'var(--text-secondary)' }}>Impact</th>
+                      <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -451,29 +459,29 @@ export default function CreateVariationOrderPage() {
                       const pQty = Number(item.proposedQuantity) || 0;
                       
                       return (
-                        <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                          <td style={{ padding: '8px' }}>
-                            <input value={item.voItemNumber || ''} onChange={e => handleAdditionalItemChange(item.id, 'voItemNumber', e.target.value)} placeholder="e.g. EX-01" style={{ width: '100%', padding: '6px', background: 'var(--bg-color)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', fontSize: '0.85rem' }} />
+                        <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s ease', background: 'transparent' }}>
+                          <td style={{ padding: '8px 16px' }}>
+                            <input value={item.voItemNumber || ''} onChange={e => handleAdditionalItemChange(item.id, 'voItemNumber', e.target.value)} placeholder="e.g. EX-01" style={{ width: '100%', padding: '8px 12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }} />
                           </td>
-                          <td style={{ padding: '8px' }}>
-                            <input value={item.description || ''} onChange={e => handleAdditionalItemChange(item.id, 'description', e.target.value)} placeholder="Description" style={{ width: '100%', padding: '6px', background: 'var(--bg-color)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', fontSize: '0.85rem' }} />
+                          <td style={{ padding: '8px 16px' }}>
+                            <input value={item.description || ''} onChange={e => handleAdditionalItemChange(item.id, 'description', e.target.value)} placeholder="Description" style={{ width: '100%', padding: '8px 12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }} />
                           </td>
-                          <td style={{ padding: '8px' }}>
-                            <input value={item.unit || ''} onChange={e => handleAdditionalItemChange(item.id, 'unit', e.target.value)} placeholder="Unit" style={{ width: '100%', padding: '6px', background: 'var(--bg-color)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', fontSize: '0.85rem' }} />
+                          <td style={{ padding: '8px 16px' }}>
+                            <input value={item.unit || ''} onChange={e => handleAdditionalItemChange(item.id, 'unit', e.target.value)} placeholder="Unit" style={{ width: '100%', padding: '8px 12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }} />
                           </td>
-                          <td style={{ padding: '8px' }}>
-                            <input type="number" min="0.01" step="0.01" value={item.proposedQuantity === undefined ? '' : item.proposedQuantity} onChange={e => handleAdditionalItemChange(item.id, 'proposedQuantity', parseFloat(e.target.value) || '')} placeholder="Qty" style={{ width: '100%', padding: '6px', background: 'var(--bg-color)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', fontSize: '0.85rem' }} />
+                          <td style={{ padding: '8px 16px' }}>
+                            <input type="number" min="0.01" step="0.01" value={item.proposedQuantity === undefined ? '' : item.proposedQuantity} onChange={e => handleAdditionalItemChange(item.id, 'proposedQuantity', parseFloat(e.target.value) || '')} placeholder="Qty" style={{ width: '100%', padding: '8px 12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }} />
                           </td>
-                          <td style={{ padding: '8px' }}>
-                            <input type="number" min="0" step="0.01" value={item.proposedUnitCost === undefined ? '' : item.proposedUnitCost} onChange={e => handleAdditionalItemChange(item.id, 'proposedUnitCost', parseFloat(e.target.value) || '')} placeholder="Cost" style={{ width: '100%', padding: '6px', background: 'var(--bg-color)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', fontSize: '0.85rem' }} />
+                          <td style={{ padding: '8px 16px' }}>
+                            <input type="number" min="0" step="0.01" value={item.proposedUnitCost === undefined ? '' : item.proposedUnitCost} onChange={e => handleAdditionalItemChange(item.id, 'proposedUnitCost', parseFloat(e.target.value) || '')} placeholder="Cost" style={{ width: '100%', padding: '8px 12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }} />
                           </td>
-                          <td style={{ padding: '8px', fontWeight: 'bold', color: 'var(--success-color)' }}>
+                          <td style={{ padding: '12px 16px', fontWeight: 'bold', color: '#2196f3' }}>
                             + ₱ {(pQty * proposedUnitCost).toLocaleString(undefined, {minimumFractionDigits: 2})}
                           </td>
-                          <td style={{ padding: '8px', textAlign: 'center' }}>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                             {additionalItems.length > 1 && (
-                              <button type="button" onClick={() => removeAdditionalRow(item.id)} style={{ background: 'transparent', border: 'none', color: 'var(--danger-color)', cursor: 'pointer', opacity: 0.7 }}>
-                                <Trash2 size={16} />
+                              <button type="button" onClick={() => removeAdditionalRow(item.id)} style={{ background: 'transparent', border: 'none', color: '#f44336', cursor: 'pointer', opacity: 0.8, transition: 'opacity 0.2s' }}>
+                                <Trash2 size={18} />
                               </button>
                             )}
                           </td>
@@ -482,27 +490,16 @@ export default function CreateVariationOrderPage() {
                     })}
                   </tbody>
                 </table>
-                <div style={{ marginTop: '12px' }}>
-                  <button type="button" onClick={addAdditionalRow} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'rgba(255,255,255,0.05)', border: '1px dashed var(--border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>
-                    <Plus size={14} /> Add Row
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+              </div>
+              <div style={{ marginTop: '16px', display: 'flex' }}>
+                <button type="button" onClick={addAdditionalRow} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: 'rgba(33, 150, 243, 0.1)', border: '1px dashed rgba(33, 150, 243, 0.4)', color: '#2196f3', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem', fontWeight: '600', transition: 'all 0.2s ease' }}>
+                  <Plus size={16} /> Add New Row
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-
-        <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
-          <button 
-            type="submit" 
-            className={styles.createButton} 
-            disabled={loading || (formData.variationCategory === 'SUBCONTRACTOR' && packages.length === 0)}
-            style={{ padding: '12px 32px', fontSize: '1rem', display: 'flex', gap: '8px', alignItems: 'center' }}
-          >
-            {loading ? 'Processing Transaction...' : <><Save size={20}/> Submit Variation Request & Items</>}
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 }
