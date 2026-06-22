@@ -127,7 +127,7 @@ export default function CreateVariationOrderPage() {
     // Validation
     const itemsToAdjust = Object.keys(adjustments).filter(id => adjustments[id] !== 0);
     const validAdditionalItems = additionalItems.filter(i => 
-      i.description && i.unit && Number(i.proposedQuantity) > 0
+      Number(i.proposedQuantity) > 0 || Number(i.proposedUnitCost) > 0 || i.description
     );
 
     setLoading(true);
@@ -173,8 +173,8 @@ export default function CreateVariationOrderPage() {
         await addVariationOrderItem(vo.id, {
           voItemNumber: item.voItemNumber || 'NEW',
           itemClassification: 'ADDITIONAL_WORKS',
-          description: item.description,
-          unit: item.unit,
+          description: item.description || 'New Work Item',
+          unit: item.unit || 'lot',
           originalQuantity: 0,
           currentProposedQuantity: pQty,
           revisedQuantity: pQty,
@@ -193,6 +193,7 @@ export default function CreateVariationOrderPage() {
 
       toast.success('Success: Variation Request has been created and saved!');
       setTimeout(() => {
+        router.refresh();
         router.push(`/variation-orders`);
       }, 800);
     } catch (error: any) {
