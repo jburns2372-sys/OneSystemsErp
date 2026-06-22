@@ -127,7 +127,7 @@ export default function CreateVariationOrderPage() {
     // Validation
     const itemsToAdjust = Object.keys(adjustments).filter(id => adjustments[id] !== 0);
     const validAdditionalItems = additionalItems.filter(i => 
-      i.voItemNumber && i.description && i.unit && Number(i.proposedQuantity) > 0
+      i.description && i.unit && Number(i.proposedQuantity) > 0
     );
 
     setLoading(true);
@@ -171,7 +171,7 @@ export default function CreateVariationOrderPage() {
         const totalCost = pQty * proposedUnitCost;
 
         await addVariationOrderItem(vo.id, {
-          voItemNumber: item.voItemNumber,
+          voItemNumber: item.voItemNumber || 'NEW',
           itemClassification: 'ADDITIONAL_WORKS',
           description: item.description,
           unit: item.unit,
