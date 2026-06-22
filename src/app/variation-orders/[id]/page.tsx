@@ -65,11 +65,16 @@ export default function VariationOrderDetailPage() {
   };
 
   const handleDeleteVO = async () => {
-    if (!confirm('Are you sure you want to delete this Variation Order? This cannot be undone.')) return;
+    if (vo.currentStatus === 'APPROVED') {
+      if (!confirm('SUPER ADMIN WARNING: Force Deleting an APPROVED Variation Order will permanently revert all associated BOQ entries and contract amounts! Are you absolutely sure you want to proceed?')) return;
+    } else {
+      if (!confirm('Are you sure you want to delete this Variation Order? This cannot be undone.')) return;
+    }
+    
     setActionLoading(true);
     try {
       await deleteVariationOrder(voId);
-      toast.success('Variation Order deleted.');
+      toast.success(vo.currentStatus === 'APPROVED' ? 'Variation Order Force Deleted & Reverted.' : 'Variation Order deleted.');
       router.push('/variation-orders');
     } catch (e: any) {
       toast.error(e.message);
@@ -292,12 +297,6 @@ export default function VariationOrderDetailPage() {
               <Edit size={15} /> Edit
             </button>
             <button 
-              onClick={handleDeleteVO} disabled={actionLoading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer', background: 'rgba(255,82,82,0.08)', color: '#ff5252', border: '1px solid rgba(255,82,82,0.3)' }}
-            >
-              <Trash2 size={15} /> Delete
-            </button>
-            <button 
               onClick={async () => { await submitVariationOrder(voId); fetchVO(); }}
               disabled={actionLoading}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer', background: 'linear-gradient(135deg, #00ffa3, #00cc82)', color: '#000', border: 'none' }}
@@ -324,6 +323,13 @@ export default function VariationOrderDetailPage() {
             <Briefcase size={15} /> Create MRF
           </button>
         )}
+
+        <button 
+          onClick={handleDeleteVO} disabled={actionLoading}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer', background: 'rgba(255,82,82,0.08)', color: '#ff5252', border: '1px solid rgba(255,82,82,0.3)', marginLeft: 'auto' }}
+        >
+          <Trash2 size={15} /> {vo.currentStatus === 'APPROVED' ? 'Force Delete' : 'Delete'}
+        </button>
       </div>
 
       {/* COLLAPSIBLE APPROVAL HISTORY */}
