@@ -237,7 +237,7 @@ export default function CreateVariationOrderPage() {
         marginBottom: '16px', backdropFilter: 'blur(10px)', boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
       }}>
         
-        <div style={{ gridColumn: 'span 3', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ gridColumn: 'span 4', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Project *</label>
           <select 
             required
@@ -252,23 +252,7 @@ export default function CreateVariationOrderPage() {
           </select>
         </div>
 
-        <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Variation Type</label>
-          <select 
-            style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
-            value={formData.variationType}
-            onChange={e => setFormData({...formData, variationType: e.target.value})}
-          >
-            <option>Change Order</option>
-            <option>Extra Work Order</option>
-            <option>Additive Variation</option>
-            <option>Deductive Variation</option>
-            <option>Reclassification</option>
-            <option>Emergency Variation</option>
-          </select>
-        </div>
-
-        <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ gridColumn: 'span 4', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source</label>
           <select 
             style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
@@ -283,7 +267,7 @@ export default function CreateVariationOrderPage() {
           </select>
         </div>
 
-        <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ gridColumn: 'span 4', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Time Impact</label>
           <select 
             style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
@@ -294,16 +278,6 @@ export default function CreateVariationOrderPage() {
             <option value="YES">Yes</option>
             <option value="NO">No</option>
           </select>
-        </div>
-
-        <div style={{ gridColumn: 'span 3', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Affected Location</label>
-          <input 
-            style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
-            placeholder="e.g., Tower 1, Level 5"
-            value={formData.affectedLocation}
-            onChange={e => setFormData({...formData, affectedLocation: e.target.value})}
-          />
         </div>
 
         {formData.variationCategory === 'SUBCONTRACTOR' && (
@@ -328,6 +302,16 @@ export default function CreateVariationOrderPage() {
             )}
           </div>
         )}
+
+        <div style={{ gridColumn: 'span 12', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Affected Location</label>
+          <input 
+            style={{ padding: '10px 12px', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', outline: 'none' }}
+            placeholder="e.g., Tower 1, Level 5"
+            value={formData.affectedLocation}
+            onChange={e => setFormData({...formData, affectedLocation: e.target.value})}
+          />
+        </div>
 
         <div style={{ gridColumn: 'span 12', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Detailed Description</label>
