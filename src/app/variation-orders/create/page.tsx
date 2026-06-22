@@ -129,6 +129,22 @@ export default function CreateVariationOrderPage() {
             </div>
           )}
 
+                    <div className={styles.formGroup}>
+            <label>Variation Type</label>
+            <select 
+              className={styles.input}
+              value={formData.variationType}
+              onChange={e => setFormData({...formData, variationType: e.target.value})}
+            >
+              <option>Change Order</option>
+              <option>Extra Work Order</option>
+              <option>Additive Variation</option>
+              <option>Deductive Variation</option>
+              <option>Reclassification</option>
+              <option>Emergency Variation</option>
+            </select>
+          </div>
+
           <div className={styles.formGroup}>
             <label>Source of Variation</label>
             <select 
@@ -145,6 +161,17 @@ export default function CreateVariationOrderPage() {
           </div>
 
 
+
+                    <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+            <label>Reason for Variation</label>
+            <input 
+              required
+              className={styles.input} 
+              placeholder="Brief reason (e.g., Design change per RFI-021)"
+              value={formData.reasonForVariation}
+              onChange={e => setFormData({...formData, reasonForVariation: e.target.value})}
+            />
+          </div>
 
           <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
             <label>Detailed Description</label>
@@ -207,7 +234,7 @@ export default function CreateVariationOrderPage() {
               className={styles.submitButton} 
               disabled={loading || (formData.variationCategory === 'SUBCONTRACTOR' && packages.length === 0)}
             >
-              {loading ? 'Creating...' : <><Save size={18} /> Save & Open AI Pipeline</>}
+              {loading ? 'Creating...' : <><Save size={16}/> Save Draft & Proceed to BOQ</>}
             </button>
           </div>
         </form>
