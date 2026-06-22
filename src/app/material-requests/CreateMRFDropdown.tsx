@@ -17,7 +17,7 @@ export default function CreateMRFDropdown({ projects }: { projects: Project[] })
       <button 
         className="btn-primary" 
         style={{ opacity: 0.6, cursor: 'not-allowed' }}
-        title="No projects have a locked Consolidated BOQ yet."
+        title="No projects have a locked Procurement Benchmark BOQ yet."
         disabled
       >
         + Create MRF (No Locked BOQs)

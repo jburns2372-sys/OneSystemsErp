@@ -111,7 +111,7 @@ export async function approveDelivery(deliveryId: string) {
         include: { consolidatedBoqItem: true }
       },
       po: {
-        include: { supplier: true, items: true }
+        include: { supplier: true, items: true, mr: true }
       }
     }
   });
@@ -131,14 +131,40 @@ export async function approveDelivery(deliveryId: string) {
     });
 
     for (const item of delivery.items) {
+      const poItem = delivery.po.items.find(i => i.consolidatedBoqItemId === item.consolidatedBoqItemId);
+      const unitCost = poItem ? poItem.unitCost : item.consolidatedBoqItem.unitCost;
+      const actualLineCost = item.quantity * unitCost;
+
       await tx.consolidatedBOQItem.update({
         where: { id: item.consolidatedBoqItemId },
         data: {
           deliveredQty: {
             increment: item.quantity
+          },
+          actualCost: {
+            increment: actualLineCost
           }
         }
       });
+
+      // [HOOK] Create ProjectCostLedger entry for actual material cost incurred
+      if (delivery.po.mr && delivery.po.mr.projectId) {
+        await tx.projectCostLedger.create({
+          data: {
+            projectId: delivery.po.mr.projectId,
+            consolidatedBoqItemId: item.consolidatedBoqItemId,
+            costDate: new Date(),
+            costCategory: 'MATERIALS',
+            referenceDocumentType: 'DELIVERY_RECEIPT',
+            referenceDocumentNo: delivery.receiptNumber,
+            supplierName: delivery.po.supplier.name,
+            grossAmount: actualLineCost,
+            netAmount: actualLineCost,
+            paymentStatus: 'UNPAID',
+            approvalStatus: 'APPROVED'
+          }
+        });
+      }
     }
 
     // Calculate total payable amount based on actual quantities delivered and PO unit costs

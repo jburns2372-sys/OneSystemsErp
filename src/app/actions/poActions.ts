@@ -126,7 +126,14 @@ export async function approvePurchaseOrder(poId: string) {
 
   await requirePermission(currentUser.id, 'PURCHASE_ORDER', 'canApprove');
 
-  const po = await prisma.purchaseOrder.findUnique({ where: { id: poId } });
+  const po = await prisma.purchaseOrder.findUnique({
+    where: { id: poId },
+    include: {
+      items: true,
+      mr: true,
+      supplier: true
+    }
+  });
   if (!po) throw new Error('PO not found');
 
   // Maker-Checker specific to PO logic
@@ -141,6 +148,35 @@ export async function approvePurchaseOrder(poId: string) {
       approverId: currentUser.id
     }
   });
+
+  // [HOOK] Create CommitmentLedger entries for each item
+  if (po.mr && po.mr.projectId) {
+    for (const item of po.items) {
+      if (item.consolidatedBoqItemId) {
+        // Also update the committedCost on the Procurement Benchmark
+        const lineTotal = item.quantity * item.unitCost;
+        
+        await prisma.commitmentLedger.create({
+          data: {
+            projectId: po.mr.projectId,
+            consolidatedBoqItemId: item.consolidatedBoqItemId,
+            commitmentType: 'PURCHASE_ORDER',
+            supplierName: po.supplier?.name || '',
+            approvedAmount: lineTotal,
+            remainingCommitment: lineTotal,
+            status: 'ACTIVE'
+          }
+        });
+
+        await prisma.consolidatedBOQItem.update({
+          where: { id: item.consolidatedBoqItemId },
+          data: {
+            committedCost: { increment: lineTotal }
+          }
+        });
+      }
+    }
+  }
 
   await approveTransaction(currentUser.id, currentUser.role || 'PROJECT_DIRECTOR', 'PURCHASE_ORDER', po.id, 'Approved PO digitally');
 

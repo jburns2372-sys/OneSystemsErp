@@ -55,9 +55,9 @@ export default async function BOQConsolidationTab({
     if (isPurchasingOfficer) {
       return (
         <div style={{ textAlign: 'center', padding: '40px', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-          <h3 style={{ color: '#ef4444' }}>BOQ Not Consolidated</h3>
+          <h3 style={{ color: '#ef4444' }}>Benchmark BOQ Not Generated</h3>
           <p style={{ color: 'var(--text-secondary)' }}>
-            The Bill of Quantities has not been consolidated yet. Only a Project Manager or Project Director can consolidate the BOQ.
+            The Procurement Benchmark BOQ has not been generated yet. Only a Project Manager or Project Director can generate the Benchmark.
           </p>
         </div>
       );

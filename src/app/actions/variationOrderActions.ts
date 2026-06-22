@@ -338,6 +338,27 @@ async function applyVariationOrderToSubcontractPackage(voId: string) {
       contractAmount: newContractAmount
     }
   });
+
+  // [HOOK] Create CommitmentLedger for Subcontractor VO
+  if (pkg.consolidatedBoqItemId && (vo.netVariationAmount || 0) !== 0) {
+    await prisma.commitmentLedger.create({
+      data: {
+        projectId: vo.projectId,
+        consolidatedBoqItemId: pkg.consolidatedBoqItemId,
+        commitmentType: 'SUBCONTRACT',
+        approvedAmount: vo.netVariationAmount || 0,
+        remainingCommitment: vo.netVariationAmount || 0,
+        status: 'ACTIVE'
+      }
+    });
+
+    await prisma.consolidatedBOQItem.update({
+      where: { id: pkg.consolidatedBoqItemId },
+      data: {
+        committedCost: { increment: vo.netVariationAmount || 0 }
+      }
+    });
+  }
 }
 
 /**

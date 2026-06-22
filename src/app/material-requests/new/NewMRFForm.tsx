@@ -287,7 +287,7 @@ export default function NewMRFForm({ projectId, items, users }: Props) {
                   <th style={{ padding: '12px', textAlign: 'left', color: 'var(--text-secondary)', borderBottom: '1px solid var(--glass-border)' }}>Code</th>
                   <th style={{ padding: '12px', textAlign: 'left', color: 'var(--text-secondary)', borderBottom: '1px solid var(--glass-border)' }}>Description</th>
                   <th style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)', borderBottom: '1px solid var(--glass-border)' }}>Unit</th>
-                  <th style={{ padding: '12px', textAlign: 'right', color: 'var(--text-secondary)', borderBottom: '1px solid var(--glass-border)' }}>Balance</th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: 'var(--text-secondary)', borderBottom: '1px solid var(--glass-border)' }}>Benchmark Balance</th>
                   <th style={{ padding: '12px', textAlign: 'right', color: 'var(--accent-color)', borderBottom: '1px solid var(--glass-border)', fontWeight: 'bold', width: '120px' }}>Request Qty</th>
                   <th style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)', borderBottom: '1px solid var(--glass-border)', width: '60px' }}></th>
                 </tr>

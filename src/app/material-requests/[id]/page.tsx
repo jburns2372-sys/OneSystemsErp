@@ -114,7 +114,7 @@ export default async function MaterialRequestDetailsPage({ params }: { params: P
               <th style={{ padding: '10px', border: '1px solid #d1d5db', textAlign: 'left' }}>Item Code</th>
               <th style={{ padding: '10px', border: '1px solid #d1d5db', textAlign: 'left' }}>Description</th>
               <th style={{ padding: '10px', border: '1px solid #d1d5db', textAlign: 'center' }}>Unit</th>
-              <th style={{ padding: '10px', border: '1px solid #d1d5db', textAlign: 'right' }}>BOQ Balance</th>
+              <th style={{ padding: '10px', border: '1px solid #d1d5db', textAlign: 'right' }}>Benchmark Balance</th>
               <th style={{ padding: '10px', border: '1px solid #d1d5db', textAlign: 'right', backgroundColor: '#e5e7eb', fontWeight: 'bold' }}>Requested Qty</th>
             </tr>
           </thead>

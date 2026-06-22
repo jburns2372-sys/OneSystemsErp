@@ -397,7 +397,11 @@ export async function approveSubcontractPayment(billingId: string) {
 
     const billing: any = await prisma.subcontractBilling.findUnique({
       where: { id: billingId },
-      include: { subcontractor: true }
+      include: { 
+        subcontractor: true,
+        package: true,
+        jobOrder: true
+      }
     });
     if (!billing) throw new Error('Billing record not found');
 
@@ -458,6 +462,30 @@ export async function approveSubcontractPayment(billingId: string) {
           }
         }
       });
+
+      // [HOOK] Create ProjectCostLedger Entry for Actual Subcontract Cost
+      const consolidatedBoqItemId = billing.jobOrder?.consolidatedBoqItemId || billing.package?.consolidatedBoqItemId;
+      if (consolidatedBoqItemId) {
+        await tx.projectCostLedger.create({
+          data: {
+            projectId: billing.projectId,
+            consolidatedBoqItemId: consolidatedBoqItemId,
+            type: 'SUBCONTRACT',
+            referenceId: billing.id,
+            referenceNumber: billing.billingNumber,
+            supplierId: billing.subcontractorId,
+            amount: billing.netPayable,
+            status: 'RECORDED'
+          }
+        });
+
+        await tx.consolidatedBOQItem.update({
+          where: { id: consolidatedBoqItemId },
+          data: {
+            actualCost: { increment: billing.netPayable }
+          }
+        });
+      }
 
       if (billing.jobOrderId) {
         const allBillings = await tx.subcontractBilling.findMany({

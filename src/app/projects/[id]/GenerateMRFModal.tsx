@@ -117,7 +117,7 @@ export default function GenerateMRFModal({ projectId, items, users, onClose, def
             📋 Generate Material Request Form
           </h2>
           <p style={{ margin: '6px 0 0', color: 'var(--text-secondary, #aaa)', fontSize: '0.9rem' }}>
-            {items.length} item{items.length !== 1 ? 's' : ''} selected from Consolidated BOQ
+            {items.length} item{items.length !== 1 ? 's' : ''} selected from Procurement Benchmark BOQ
           </p>
         </div>
 

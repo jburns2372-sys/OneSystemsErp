@@ -11,6 +11,7 @@ import AwardedBOQViewer from './AwardedBOQViewer';
 import BOQConsolidationTab from './BOQConsolidationTab';
 import ProjectVariationOrdersTab from './ProjectVariationOrdersTab';
 import ModuleKnowledgeTab from '@/app/knowledge-center/ModuleKnowledgeTab';
+import ProfitabilityTab from './ProfitabilityTab';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,13 +98,16 @@ export default async function ProjectDetailsPage({
       {/* TABS NAVIGATION */}
       <div style={{ display: 'flex', gap: '20px', borderBottom: '1px solid var(--glass-border)', marginTop: '20px', marginBottom: '20px' }}>
         <Link href={`/projects/${project.id}?tab=awarded-boq`} style={{ padding: '10px 15px', textDecoration: 'none', color: tab === 'awarded-boq' ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: tab === 'awarded-boq' ? '3px solid var(--accent-color)' : '3px solid transparent', fontWeight: tab === 'awarded-boq' ? 'bold' : 'normal' }}>
-          Awarded BOQ
+          Contract BOQ (Awarded)
         </Link>
         <Link href={`/projects/${project.id}?tab=consolidation`} style={{ padding: '10px 15px', textDecoration: 'none', color: tab === 'consolidation' ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: tab === 'consolidation' ? '3px solid var(--accent-color)' : '3px solid transparent', fontWeight: tab === 'consolidation' ? 'bold' : 'normal' }}>
-          BOQ Consolidation
+          Procurement Benchmark (Forecast)
         </Link>
         <Link href={`/projects/${project.id}?tab=variation-orders`} style={{ padding: '10px 15px', textDecoration: 'none', color: tab === 'variation-orders' ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: tab === 'variation-orders' ? '3px solid var(--accent-color)' : '3px solid transparent', fontWeight: tab === 'variation-orders' ? 'bold' : 'normal' }}>
           Variation Orders
+        </Link>
+        <Link href={`/projects/${project.id}?tab=profitability`} style={{ padding: '10px 15px', textDecoration: 'none', color: tab === 'profitability' ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: tab === 'profitability' ? '3px solid var(--accent-color)' : '3px solid transparent', fontWeight: tab === 'profitability' ? 'bold' : 'normal' }}>
+          Profitability Engine
         </Link>
         <Link href={`/projects/${project.id}?tab=knowledge`} style={{ padding: '10px 15px', textDecoration: 'none', color: tab === 'knowledge' ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: tab === 'knowledge' ? '3px solid var(--accent-color)' : '3px solid transparent', fontWeight: tab === 'knowledge' ? 'bold' : 'normal' }}>
           Knowledge Reference
@@ -114,7 +118,7 @@ export default async function ProjectDetailsPage({
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
             <div>
-              <h2 style={{ color: 'var(--text-primary)', margin: 0 }}>Awarded Bill of Quantities</h2>
+              <h2 style={{ color: 'var(--text-primary)', margin: 0 }}>Contract BOQ (Awarded)</h2>
               <div style={{ display: 'flex', gap: '20px', marginTop: '8px' }}>
                 <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '1rem' }}>
                   Original Contract: ₱ {project.contractAmount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
@@ -162,6 +166,10 @@ export default async function ProjectDetailsPage({
 
       {tab === 'variation-orders' && (
         <ProjectVariationOrdersTab projectId={project.id} />
+      )}
+
+      {tab === 'profitability' && (
+        <ProfitabilityTab projectId={project.id} />
       )}
 
       {tab === 'knowledge' && (

@@ -8,7 +8,7 @@ export default function LockConsolidatedBOQButton({ projectId, isLocked }: { pro
 
   const handleToggle = async () => {
     const actionName = isLocked ? 'UNLOCK' : 'LOCK';
-    if (confirm(`Are you sure you want to ${actionName} this Consolidated BOQ?`)) {
+    if (confirm(`Are you sure you want to ${actionName} this Procurement Benchmark BOQ?`)) {
       setIsLoading(true);
       await toggleConsolidatedBOQLock(projectId, !isLocked);
       setIsLoading(false);

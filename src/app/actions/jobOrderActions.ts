@@ -175,6 +175,7 @@ export async function updateJobOrder(id: string, data: any) {
     const result = await prisma.jobOrder.update({ where: { id }, data: prismaData });
     revalidatePath('/job-orders/dashboard');
     return { success: true, data: result };
+
   } catch (error: any) {
     console.error("Update Job Order Error:", error);
     return { success: false, error: error.message };
@@ -196,15 +197,41 @@ export async function deleteJobOrder(id: string) {
 export async function updateJobOrderStatus(id: string, newStatus: any) {
   try {
     const data: any = { status: newStatus };
-    // Temporarily bypassing isLocked write to prevent PrismaClientValidationError
-    // until the user restarts their Next.js server.
-    // if (newStatus === 'APPROVED') {
-    //   data.isLocked = true;
-    // }
+    
+    const jo = await prisma.jobOrder.findUnique({
+      where: { id },
+      include: { project: true }
+    });
+    
+    if (!jo) throw new Error("Job order not found");
+
     const result = await prisma.jobOrder.update({
       where: { id },
       data
     });
+
+    const isApproved = newStatus === 'APPROVED';
+    if (isApproved && jo.status !== 'APPROVED' && jo.consolidatedBoqItemId) {
+      await prisma.commitmentLedger.create({
+        data: {
+          projectId: jo.projectId,
+          consolidatedBoqItemId: jo.consolidatedBoqItemId,
+          commitmentType: 'SUBCONTRACT',
+          subcontractorName: jo.subcontractor?.name || '',
+          approvedAmount: jo.contractAmount,
+          remainingCommitment: jo.contractAmount,
+          status: 'ACTIVE'
+        }
+      });
+
+      await prisma.consolidatedBOQItem.update({
+        where: { id: jo.consolidatedBoqItemId },
+        data: {
+          committedCost: { increment: jo.contractAmount }
+        }
+      });
+    }
+
     revalidatePath(`/job-orders/${id}`);
     return { success: true, data: result };
   } catch (error: any) {
@@ -215,8 +242,6 @@ export async function updateJobOrderStatus(id: string, newStatus: any) {
 
 export async function unlockJobOrder(id: string) {
   try {
-    // Temporarily bypassing isLocked write. Just changing status back to FOR_FINANCIAL_REVIEW
-    // to simulate an unlock without crashing Prisma.
     const result = await prisma.jobOrder.update({
       where: { id },
       data: { status: 'FOR_FINANCIAL_REVIEW' }
@@ -228,4 +253,3 @@ export async function unlockJobOrder(id: string) {
     return { success: false, error: error.message };
   }
 }
-

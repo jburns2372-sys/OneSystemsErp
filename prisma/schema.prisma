@@ -159,6 +159,11 @@ model Project {
   projectEvidencePacks            ValidationEvidencePack[]         @relation("ProjectEvidencePacks")
   variationOrders                 VariationOrder[]
   workers                         Worker[]                         @relation("ProjectWorkers")
+  projectCostLedgers              ProjectCostLedger[]              @relation("ProjectCostLedgers")
+  commitmentLedgers               CommitmentLedger[]               @relation("ProjectCommitmentLedgers")
+  subcontractorVariationOrders    SubcontractorVariationOrder[]    @relation("ProjectSubcontractorVOs")
+  clientVariationOrders           ClientVariationOrder[]           @relation("ProjectClientVOs")
+  valueEngineeringRecords         ValueEngineeringRecord[]         @relation("ProjectVERecords")
 }
 
 model AwardedBOQItem {
@@ -179,6 +184,14 @@ model AwardedBOQItem {
   percentageAccomplished         Float                  @default(0)
   amountAccomplished             Float                  @default(0)
   balanceAmount                  Float                  @default(0)
+  approvedClientVoQuantity       Float                  @default(0)
+  revisedContractQuantity        Float                  @default(0)
+  revisedContractUnitPrice       Float                  @default(0)
+  revisedContractAmount          Float                  @default(0)
+  previousBilledQuantity         Float                  @default(0)
+  currentBillingQuantity         Float                  @default(0)
+  totalBilledQuantity            Float                  @default(0)
+  revenueRecognized              Float                  @default(0)
   actualOrderedQuantity          Float                  @default(0)
   actualDeliveredQuantity        Float                  @default(0)
   actualInstalledQuantity        Float                  @default(0)
@@ -206,6 +219,11 @@ model AwardedBOQItem {
   pettyCashExpenses              PettyCashExpense[]
   subcontractorBOQItems          SubcontractorBOQItem[]
   variationOrderItems            VariationOrderItem[]
+  projectCostLedgers             ProjectCostLedger[]              @relation("AwardedCostLedgers")
+  commitmentLedgers              CommitmentLedger[]               @relation("AwardedCommitmentLedgers")
+  subcontractorVariationOrders   SubcontractorVariationOrder[]    @relation("AwardedSubcontractorVOs")
+  clientVariationOrders          ClientVariationOrder[]           @relation("AwardedClientVOs")
+  valueEngineeringRecords        ValueEngineeringRecord[]         @relation("AwardedVERecords")
 }
 
 model ConsolidatedBOQItem {
@@ -227,6 +245,23 @@ model ConsolidatedBOQItem {
   voAdditiveCost    Float                 @default(0)
   voDeductiveCost   Float                 @default(0)
   revisedTotalCost  Float                 @default(0)
+  wasteAllowance          Float                 @default(0)
+  revisedBenchmarkUnitCost Float                @default(0)
+  requestedQuantity       Float                 @default(0)
+  purchasedQuantity       Float                 @default(0)
+  issuedQuantity          Float                 @default(0)
+  subcontractedQuantity   Float                 @default(0)
+  jobOrderQuantity        Float                 @default(0)
+  subcontractorVoQuantity Float                 @default(0)
+  remainingBenchmarkQuantity Float              @default(0)
+  actualUnitCost          Float                 @default(0)
+  actualCost              Float                 @default(0)
+  committedCost           Float                 @default(0)
+  quantityVariance        Float                 @default(0)
+  costVariance            Float                 @default(0)
+  savings                 Float                 @default(0)
+  overrun                 Float                 @default(0)
+  valueEngineeringSavings Float                 @default(0)
   isVariationItem   Boolean               @default(false)
   sourceVoNumber    String?
   createdAt         DateTime              @default(now())
@@ -242,6 +277,12 @@ model ConsolidatedBOQItem {
   pettyCashExpenses PettyCashExpense[]
   poItems           PurchaseOrderItem[]
   returnItems       ReturnItem[]
+  projectCostLedgers             ProjectCostLedger[]              @relation("ConsolidatedCostLedgers")
+  commitmentLedgers              CommitmentLedger[]               @relation("ConsolidatedCommitmentLedgers")
+  subcontractorVariationOrders   SubcontractorVariationOrder[]    @relation("ConsolidatedSubcontractorVOs")
+  valueEngineeringRecords        ValueEngineeringRecord[]         @relation("ConsolidatedVERecords")
+  subcontractPackages            SubcontractPackage[]             @relation("ConsolidatedSubcontractPackages")
+  jobOrders                      JobOrder[]                       @relation("ConsolidatedJobOrders")
 }
 
 model BOQMapping {
@@ -1697,6 +1738,8 @@ model SubcontractPackage {
   billings            SubcontractBilling[]
   subcontractor       Subcontractor               @relation(fields: [subcontractorId], references: [id])
   project             Project                     @relation(fields: [projectId], references: [id])
+  consolidatedBoqItemId String?
+  consolidatedBoqItem   ConsolidatedBOQItem?      @relation("ConsolidatedSubcontractPackages", fields: [consolidatedBoqItemId], references: [id])
   variationOrders     VariationOrder[]
 }
 
@@ -1729,6 +1772,8 @@ model JobOrder {
   package                    SubcontractPackage?         @relation(fields: [packageId], references: [id])
   subcontractor              Subcontractor?              @relation(fields: [subcontractorId], references: [id])
   project                    Project                     @relation(fields: [projectId], references: [id])
+  consolidatedBoqItemId      String?
+  consolidatedBoqItem        ConsolidatedBOQItem?        @relation("ConsolidatedJobOrders", fields: [consolidatedBoqItemId], references: [id])
   subcontractAccomplishments SubcontractAccomplishment[]
   subcontractBillings        SubcontractBilling[]
 }
@@ -3352,4 +3397,136 @@ enum BackChargeStatus {
 enum DeductionStatus {
   PENDING
   DEDUCTED
+}
+
+model ProjectCostLedger {
+  id                    String                @id @default(cuid())
+  projectId             String
+  costDate              DateTime
+  costCategory          String
+  costType              String                @default("DIRECT")
+  directIndirect        String                @default("DIRECT")
+  supplierName          String?
+  subcontractorName     String?
+  workerName            String?
+  referenceDocumentType String?
+  referenceDocumentNo   String?
+  quantity              Float                 @default(0)
+  unitCost              Float                 @default(0)
+  grossAmount           Float                 @default(0)
+  vatAmount             Float                 @default(0)
+  withholdingTaxAmount  Float                 @default(0)
+  netAmount             Float                 @default(0)
+  paidAmount            Float                 @default(0)
+  unpaidBalance         Float                 @default(0)
+  paymentStatus         String                @default("UNPAID")
+  approvalStatus        String                @default("APPROVED")
+  encodedById           String?
+  approvedById          String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  consolidatedBoqItemId String?
+  awardedBoqItemId      String?
+
+  project             Project               @relation("ProjectCostLedgers", fields: [projectId], references: [id], onDelete: Cascade)
+  consolidatedBoqItem ConsolidatedBOQItem?  @relation("ConsolidatedCostLedgers", fields: [consolidatedBoqItemId], references: [id])
+  awardedBoqItem      AwardedBOQItem?       @relation("AwardedCostLedgers", fields: [awardedBoqItemId], references: [id])
+}
+
+model CommitmentLedger {
+  id                    String                @id @default(cuid())
+  projectId             String
+  commitmentType        String
+  supplierName          String?
+  subcontractorName     String?
+  workerName            String?
+  approvedAmount        Float                 @default(0)
+  deliveredAmount       Float                 @default(0)
+  billedAmount          Float                 @default(0)
+  paidAmount            Float                 @default(0)
+  remainingCommitment   Float                 @default(0)
+  status                String                @default("ACTIVE")
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  consolidatedBoqItemId String?
+  awardedBoqItemId      String?
+
+  project             Project               @relation("ProjectCommitmentLedgers", fields: [projectId], references: [id], onDelete: Cascade)
+  consolidatedBoqItem ConsolidatedBOQItem?  @relation("ConsolidatedCommitmentLedgers", fields: [consolidatedBoqItemId], references: [id])
+  awardedBoqItem      AwardedBOQItem?       @relation("AwardedCommitmentLedgers", fields: [awardedBoqItemId], references: [id])
+}
+
+model SubcontractorVariationOrder {
+  id                    String                @id @default(cuid())
+  svoNumber             String                @unique
+  projectId             String
+  originalSubcontractId String?
+  originalBenchmarkQty  Float                 @default(0)
+  originalBenchmarkAmt  Float                 @default(0)
+  originalSubcontractQty Float                @default(0)
+  originalSubcontractAmt Float                @default(0)
+  proposedAdditionalQty Float                 @default(0)
+  proposedAdditionalAmt Float                 @default(0)
+  revisedSubcontractQty Float                 @default(0)
+  revisedSubcontractAmt Float                 @default(0)
+  reason                String?
+  costImpact            String?
+  scheduleImpact        String?
+  profitabilityImpact   String?
+  approvalStatus        String                @default("PENDING")
+  preparedById          String?
+  reviewedById          String?
+  approvedById          String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  consolidatedBoqItemId String?
+  awardedBoqItemId      String?
+
+  project             Project               @relation("ProjectSubcontractorVOs", fields: [projectId], references: [id], onDelete: Cascade)
+  consolidatedBoqItem ConsolidatedBOQItem?  @relation("ConsolidatedSubcontractorVOs", fields: [consolidatedBoqItemId], references: [id])
+  awardedBoqItem      AwardedBOQItem?       @relation("AwardedSubcontractorVOs", fields: [awardedBoqItemId], references: [id])
+}
+
+model ClientVariationOrder {
+  id                    String                @id @default(cuid())
+  cvoNumber             String                @unique
+  projectId             String
+  status                String                @default("PENDING")
+  description           String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  awardedBoqItemId      String?
+
+  project             Project               @relation("ProjectClientVOs", fields: [projectId], references: [id], onDelete: Cascade)
+  awardedBoqItem      AwardedBOQItem?       @relation("AwardedClientVOs", fields: [awardedBoqItemId], references: [id])
+}
+
+model ValueEngineeringRecord {
+  id                    String                @id @default(cuid())
+  veNumber              String                @unique
+  projectId             String
+  description           String?
+  currentCost           Float                 @default(0)
+  proposedCost          Float                 @default(0)
+  estimatedSavings      Float                 @default(0)
+  actualSavingsAchieved Float                 @default(0)
+  qualityImpact         String?
+  safetyImpact          String?
+  contractImpact        String?
+  requiredApproval      String?
+  aiRecommendation      String?
+  humanReviewStatus     String                @default("PENDING")
+  finalApprovalStatus   String                @default("PENDING")
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  consolidatedBoqItemId String?
+  awardedBoqItemId      String?
+
+  project             Project               @relation("ProjectVERecords", fields: [projectId], references: [id], onDelete: Cascade)
+  consolidatedBoqItem ConsolidatedBOQItem?  @relation("ConsolidatedVERecords", fields: [consolidatedBoqItemId], references: [id])
+  awardedBoqItem      AwardedBOQItem?       @relation("AwardedVERecords", fields: [awardedBoqItemId], references: [id])
 }

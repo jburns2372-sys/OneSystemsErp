@@ -330,6 +330,15 @@ export async function updateFullSubcontractPackage(id: string, packageData: any,
 export async function updateSubcontractPackageStatus(id: string, status: string) {
   try {
     const isApproved = status === 'APPROVED';
+    
+    // Fetch package details to check previous status and get references for Ledger
+    const pkg = await prisma.subcontractPackage.findUnique({
+      where: { id },
+      include: { project: true }
+    });
+    
+    if (!pkg) throw new Error("Package not found");
+
     const result = await prisma.subcontractPackage.update({
       where: { id },
       data: { 
@@ -337,6 +346,29 @@ export async function updateSubcontractPackageStatus(id: string, status: string)
         isLocked: isApproved ? true : undefined
       }
     });
+
+    // [HOOK] Create CommitmentLedger for Subcontracting when APPROVED
+    // Ensure we don't duplicate commitment if it was already approved
+    if (isApproved && pkg.status !== 'APPROVED' && pkg.consolidatedBoqItemId) {
+      await prisma.commitmentLedger.create({
+        data: {
+          projectId: pkg.projectId,
+          consolidatedBoqItemId: pkg.consolidatedBoqItemId,
+          commitmentType: 'SUBCONTRACT',
+          subcontractorName: pkg.subcontractor?.name || '',
+          approvedAmount: pkg.contractAmount,
+          remainingCommitment: pkg.contractAmount,
+          status: 'ACTIVE'
+        }
+      });
+
+      await prisma.consolidatedBOQItem.update({
+        where: { id: pkg.consolidatedBoqItemId },
+        data: {
+          committedCost: { increment: pkg.contractAmount }
+        }
+      });
+    }
     revalidatePath(`/subcontracting/packages/${id}`);
     revalidatePath('/subcontracting/packages');
     revalidatePath('/subcontracting/dashboard');
