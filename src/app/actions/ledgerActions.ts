@@ -6,7 +6,7 @@ export async function getProjectCostLedger(projectId: string) {
   try {
     const entries = await prisma.projectCostLedger.findMany({
       where: { projectId },
-      orderBy: { postingDate: 'desc' }
+      orderBy: { costDate: 'desc' }
     });
 
     return { success: true, data: entries };
