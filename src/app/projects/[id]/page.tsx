@@ -12,6 +12,29 @@ import BOQConsolidationTab from './BOQConsolidationTab';
 import ProjectVariationOrdersTab from './ProjectVariationOrdersTab';
 import ModuleKnowledgeTab from '@/app/knowledge-center/ModuleKnowledgeTab';
 import ProfitabilityTab from './ProfitabilityTab';
+import ProcurementBenchmarkTab from './ProcurementBenchmarkTab';
+import ProjectCostLedgerTab from './ProjectCostLedgerTab';
+
+const PROJECT_TABS = [
+  { id: 'summary', label: 'Project Summary', group: 'Overview' },
+  { id: 'awarded-boq', label: 'Contract Value & BOQ', group: 'Planning' },
+  { id: 'benchmark', label: 'Procurement Benchmark', group: 'Planning' },
+  { id: 'consolidation', label: 'Master Materials List', group: 'Planning' },
+  { id: 'profitability', label: 'Profitability Center (Cash Flow & Variance)', group: 'Financials' },
+  { id: 'actual-cost', label: 'Actual Cost Ledger', group: 'Financials' },
+  { id: 'expense-ledger', label: 'Expense Ledger', group: 'Financials' },
+  { id: 'payroll-cost', label: 'Payroll Cost', group: 'Financials' },
+  { id: 'materials-control', label: 'Materials Control', group: 'Execution' },
+  { id: 'subcontracting', label: 'Subcontracting Control', group: 'Execution' },
+  { id: 'job-orders', label: 'Job Order Control', group: 'Execution' },
+  { id: 'accomplishment', label: 'Accomplishment & Earned Value', group: 'Billing' },
+  { id: 'billing', label: 'Billing & Collection', group: 'Billing' },
+  { id: 'variation-orders', label: 'Variation Orders', group: 'Management' },
+  { id: 'reports', label: 'Reports', group: 'Management' },
+  { id: 'audit-trail', label: 'Audit Trail', group: 'Management' },
+  { id: 'ai-assistant', label: 'AI Assistant', group: 'Management' },
+  { id: 'knowledge', label: 'Knowledge Base', group: 'Management' },
+];
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +53,7 @@ export default async function ProjectDetailsPage({
     include: {
       materialRequests: true,
       awardedBoqItems: true,
+      procurementBenchmarkItems: true,
       variationOrders: {
         where: { currentStatus: 'APPROVED' }
       }
@@ -95,23 +119,29 @@ export default async function ProjectDetailsPage({
         </div>
       </header>
 
-      {/* TABS NAVIGATION */}
-      <div style={{ display: 'flex', gap: '20px', borderBottom: '1px solid var(--glass-border)', marginTop: '20px', marginBottom: '20px' }}>
-        <Link href={`/projects/${project.id}?tab=awarded-boq`} style={{ padding: '10px 15px', textDecoration: 'none', color: tab === 'awarded-boq' ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: tab === 'awarded-boq' ? '3px solid var(--accent-color)' : '3px solid transparent', fontWeight: tab === 'awarded-boq' ? 'bold' : 'normal' }}>
-          Contract BOQ (Awarded)
-        </Link>
-        <Link href={`/projects/${project.id}?tab=consolidation`} style={{ padding: '10px 15px', textDecoration: 'none', color: tab === 'consolidation' ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: tab === 'consolidation' ? '3px solid var(--accent-color)' : '3px solid transparent', fontWeight: tab === 'consolidation' ? 'bold' : 'normal' }}>
-          Procurement Benchmark (Forecast)
-        </Link>
-        <Link href={`/projects/${project.id}?tab=variation-orders`} style={{ padding: '10px 15px', textDecoration: 'none', color: tab === 'variation-orders' ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: tab === 'variation-orders' ? '3px solid var(--accent-color)' : '3px solid transparent', fontWeight: tab === 'variation-orders' ? 'bold' : 'normal' }}>
-          Variation Orders
-        </Link>
-        <Link href={`/projects/${project.id}?tab=profitability`} style={{ padding: '10px 15px', textDecoration: 'none', color: tab === 'profitability' ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: tab === 'profitability' ? '3px solid var(--accent-color)' : '3px solid transparent', fontWeight: tab === 'profitability' ? 'bold' : 'normal' }}>
-          Profitability Engine
-        </Link>
-        <Link href={`/projects/${project.id}?tab=knowledge`} style={{ padding: '10px 15px', textDecoration: 'none', color: tab === 'knowledge' ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: tab === 'knowledge' ? '3px solid var(--accent-color)' : '3px solid transparent', fontWeight: tab === 'knowledge' ? 'bold' : 'normal' }}>
-          Knowledge Reference
-        </Link>
+      {/* TABS NAVIGATION OVERHAUL */}
+      <div style={{ marginBottom: '30px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', paddingBottom: '15px', borderBottom: '1px solid var(--glass-border)' }}>
+          {PROJECT_TABS.map((t) => (
+            <Link 
+              key={t.id} 
+              href={`/projects/${project.id}?tab=${t.id}`} 
+              style={{ 
+                padding: '8px 14px', 
+                textDecoration: 'none', 
+                fontSize: '0.85rem',
+                borderRadius: '20px',
+                backgroundColor: tab === t.id ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)',
+                color: tab === t.id ? '#000' : 'var(--text-secondary)', 
+                fontWeight: tab === t.id ? 'bold' : 'normal',
+                border: tab === t.id ? 'none' : '1px solid var(--glass-border)',
+                transition: 'all 0.2s'
+              }}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </div>
       </div>
 
       {tab === 'awarded-boq' && (
@@ -160,8 +190,18 @@ export default async function ProjectDetailsPage({
         </>
       )}
 
+      {tab === 'benchmark' && (
+        <ProcurementBenchmarkTab 
+          projectId={project.id} 
+          isLocked={project.procurementBenchmarkLocked}
+          items={project.procurementBenchmarkItems || []}
+          totalItems={(project.procurementBenchmarkItems || []).length}
+          totalAmount={(project.procurementBenchmarkItems || []).reduce((acc: number, cur: any) => acc + cur.totalCost, 0)}
+        />
+      )}
+
       {tab === 'consolidation' && (
-        <BOQConsolidationTab projectId={project.id} isLocked={project.boqLocked} />
+        <BOQConsolidationTab projectId={project.id} isBenchmarkLocked={project.procurementBenchmarkLocked} />
       )}
 
       {tab === 'variation-orders' && (
@@ -175,6 +215,19 @@ export default async function ProjectDetailsPage({
       {tab === 'knowledge' && (
         <ModuleKnowledgeTab moduleId={project.id} moduleType="projectId" />
       )}
+      
+      {tab === 'actual-cost' && (
+        <ProjectCostLedgerTab projectId={project.id} />
+      )}
+
+      {/* Placeholders for unimplemented tabs */}
+      {['summary', 'expense-ledger', 'payroll-cost', 'materials-control', 'subcontracting', 'job-orders', 'accomplishment', 'billing', 'reports', 'audit-trail', 'ai-assistant'].includes(tab) && (
+        <div style={{ padding: '40px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', border: '1px dashed var(--glass-border)' }}>
+          <h3 style={{ color: 'var(--text-secondary)', marginBottom: '10px' }}>Module Under Construction</h3>
+          <p style={{ color: 'var(--text-secondary)' }}>This module is scheduled for the next deployment phase of the Command Center.</p>
+        </div>
+      )}
+
     </div>
   );
 }

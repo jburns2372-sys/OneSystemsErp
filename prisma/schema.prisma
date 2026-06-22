@@ -106,6 +106,7 @@ model Project {
   paymentTerms                    String?
   boqLocked                       Boolean                          @default(false)
   consolidatedBOQLocked           Boolean                          @default(false)
+  procurementBenchmarkLocked      Boolean                          @default(false)
   contractNumber                  String?
   client                          String?
   contractor                      String?
@@ -127,6 +128,7 @@ model Project {
   aiValidationRuns                AIValidationRun[]
   accomplishments                 Accomplishment[]
   awardedBoqItems                 AwardedBOQItem[]
+  procurementBenchmarkItems       ProcurementBenchmarkItem[]
   backCharges                     BackCharge[]
   billings                        Billing[]
   canvassForms                    CanvassForm[]
@@ -226,6 +228,20 @@ model AwardedBOQItem {
   valueEngineeringRecords        ValueEngineeringRecord[]         @relation("AwardedVERecords")
 }
 
+model ProcurementBenchmarkItem {
+  id                String    @id @default(cuid())
+  itemCode          String
+  category          String?
+  description       String
+  unit              String
+  quantity          Float
+  unitCost          Float
+  totalCost         Float
+  status            String    @default("PENDING")
+  projectId         String
+  project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
 model ConsolidatedBOQItem {
   id                String                @id @default(cuid())
   itemCode          String
@@ -313,6 +329,7 @@ model Supplier {
   website         String?
   plantLocation   String?
   isVatable       Boolean             @default(true)
+  isSeedData      Boolean             @default(false)
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   accountsPayable AccountsPayable[]
@@ -677,6 +694,7 @@ model Worker {
   paymentProfileStatus            String?                         @default("Pending")
   paymentRemarks                  String?
   payrollCategory                 String?                         @default("Other")
+  isSeedData                      Boolean                         @default(false)
   aiValidationResults             AIWorkerValidationResult[]
   allowances                      Allowance[]
   dtrs                            DailyTimeRecord[]
@@ -1620,6 +1638,8 @@ model Subcontractor {
   bankAccountNumber     String?
   specialization        Json?
   accreditation         AccreditationStatus    @default(PENDING)
+  contractType          String                 @default("SUBCONTRACTOR")
+  isSeedData            Boolean                @default(false)
   requiredDocs          Json?
   docExpiries           Json?
   safetyRecords         Json?

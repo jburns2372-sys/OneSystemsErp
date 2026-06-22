@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:workers": "tsx prisma/seeders/seed-workers.ts",
+    "seed:suppliers": "tsx prisma/seeders/seed-suppliers.ts",
+    "seed:subcontractors": "tsx prisma/seeders/seed-subcontractors.ts",
+    "seed:master": "tsx prisma/seeders/seed-master-data.ts",
+    "clear:seed": "tsx prisma/seeders/clear-seed-data.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.80",

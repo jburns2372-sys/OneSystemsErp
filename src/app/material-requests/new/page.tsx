@@ -28,12 +28,17 @@ export default async function NewMRFPage({ searchParams }: { searchParams: Promi
     );
   }
 
-  const items = await prisma.consolidatedBOQItem.findMany({
+  const allItems = await prisma.consolidatedBOQItem.findMany({
     where: { projectId },
     orderBy: [
       { isVariationItem: 'asc' },
       { itemCode: 'asc' }
     ]
+  });
+
+  const items = allItems.filter(item => {
+    const isLot = item.unit?.toLowerCase().includes('lot') || false;
+    return !isLot;
   });
 
   const users = await prisma.user.findMany({

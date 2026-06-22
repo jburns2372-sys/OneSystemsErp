@@ -127,6 +127,97 @@ export default function ProfitabilityTab({ projectId }: Props) {
             </p>
           )}
         </div>
+        
+        {/* NEW: Cash Flow Section */}
+        <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.1)', margin: '30px 0' }} />
+        <h2 style={{ margin: '0 0 20px 0', color: 'var(--text-primary)', fontSize: '1.4rem' }}>Cash Flow Snapshot</h2>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+          <div style={{ background: 'var(--bg-dark)', padding: '20px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+            <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 'bold' }}>Total Billed</p>
+            <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.5rem' }}>
+              ₱ {data.cashFlow.totalBilled.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h3>
+          </div>
+          
+          <div style={{ background: 'var(--bg-dark)', padding: '20px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+            <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 'bold' }}>Total Collected</p>
+            <h3 style={{ margin: 0, color: '#10b981', fontSize: '1.5rem' }}>
+              ₱ {data.cashFlow.totalCollected.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h3>
+          </div>
+          
+          <div style={{ background: 'var(--bg-dark)', padding: '20px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+            <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 'bold' }}>Uncollected Billing</p>
+            <h3 style={{ margin: 0, color: '#f59e0b', fontSize: '1.5rem' }}>
+              ₱ {data.cashFlow.uncollectedBilling.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h3>
+          </div>
+          
+          <div style={{ background: 'var(--bg-dark)', padding: '20px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+            <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 'bold' }}>Total Payables</p>
+            <h3 style={{ margin: 0, color: '#ef4444', fontSize: '1.5rem' }}>
+              ₱ {data.cashFlow.totalPayables.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h3>
+          </div>
+          
+          <div style={{ background: 'var(--bg-dark)', padding: '20px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+            <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 'bold' }}>Cash Surplus/Deficit</p>
+            <h3 style={{ margin: 0, color: data.cashFlow.cashSurplus >= 0 ? '#10b981' : '#ef4444', fontSize: '1.5rem' }}>
+              ₱ {data.cashFlow.cashSurplus.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h3>
+          </div>
+        </div>
+
+        {/* NEW: BOQ-Level Profitability Section */}
+        <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.1)', margin: '40px 0' }} />
+        <h2 style={{ margin: '0 0 20px 0', color: 'var(--text-primary)', fontSize: '1.4rem' }}>BOQ-Level Profitability</h2>
+        
+        <div className="table-container" style={{ marginTop: '20px' }}>
+          <table className="glass-table">
+            <thead>
+              <tr>
+                <th>Item Code</th>
+                <th>Description</th>
+                <th style={{ textAlign: 'right' }}>Awarded Value</th>
+                <th style={{ textAlign: 'right' }}>Execution Cost (Act+Com)</th>
+                <th style={{ textAlign: 'right' }}>Variance (Profit)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.boqLevelDetails.map((item: any) => (
+                <tr key={item.id}>
+                  <td>{item.itemCode || '-'}</td>
+                  <td style={{ maxWidth: '250px', whiteSpace: 'normal' }}>{item.description}</td>
+                  <td style={{ textAlign: 'right' }}>₱{item.awardedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td style={{ textAlign: 'right' }}>₱{item.actualCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td style={{ textAlign: 'right', color: item.variance >= 0 ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
+                    ₱{item.variance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td>
+                    <span style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold',
+                      backgroundColor: item.status === 'PROFITABLE' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                      color: item.status === 'PROFITABLE' ? '#10b981' : '#ef4444'
+                    }}>
+                      {item.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {data.boqLevelDetails.length === 0 && (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>No BOQ items found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
       </div>
     </div>
   );

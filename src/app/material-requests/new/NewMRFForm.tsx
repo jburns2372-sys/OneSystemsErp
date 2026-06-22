@@ -39,21 +39,23 @@ export default function NewMRFForm({ projectId, items, users }: Props) {
   // Default to today
   const [dateNeeded, setDateNeeded] = useState(() => new Date().toISOString().split('T')[0]);
   
-  const [remarks, setRemarks] = useState('');
   const [requesterId, setRequesterId] = useState(users[0]?.id || '');
   const [error, setError] = useState('');
   
   // Dropdown states
-  const [selectedDropdownId, setSelectedDropdownId] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter 1 lot items out
-  const validBOQItems = items.filter(item => {
-    const is1Lot = item.unit.toLowerCase() === 'lot' && item.quantity === 1;
-    return !is1Lot;
-  });
+  // Items are already filtered in page.tsx, but just to be safe
+  const validBOQItems = items.filter(item => !(item.unit?.toLowerCase().includes('lot') || false));
 
-  // We no longer filter by search query
-  const filteredDropdownItems = validBOQItems;
+  // Filter for the dropdown search
+  const filteredDropdownItems = validBOQItems.filter(item => 
+    !selectedItems.has(item.id) &&
+    (item.itemCode?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+     item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     item.category?.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   function handleQuantityChange(itemId: string, value: string) {
     if (value === '') {
@@ -71,9 +73,6 @@ export default function NewMRFForm({ projectId, items, users }: Props) {
     const newSet = new Set(selectedItems);
     newSet.add(itemId);
     setSelectedItems(newSet);
-    
-    // Reset dropdown so user can keep picking
-    setSelectedDropdownId('');
   }
 
   function handleRemoveItem(itemId: string) {
@@ -119,7 +118,7 @@ export default function NewMRFForm({ projectId, items, users }: Props) {
           priority,
           locationOfUse,
           dateNeeded,
-          remarks,
+          remarks: '',
           items: validItemsToSubmit,
         });
         router.push(`/material-requests/${mrId}`);
@@ -228,22 +227,6 @@ export default function NewMRFForm({ projectId, items, users }: Props) {
               }}
             />
           </div>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: '600' }}>
-              Remarks
-            </label>
-            <textarea
-              value={remarks}
-              onChange={e => setRemarks(e.target.value)}
-              placeholder="Additional notes..."
-              rows={2}
-              style={{
-                width: '100%', padding: '10px 12px', borderRadius: '8px',
-                border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)',
-                color: 'var(--text-primary)', fontSize: '0.9rem', resize: 'vertical',
-              }}
-            />
-          </div>
         </div>
       </div>
 
@@ -256,26 +239,104 @@ export default function NewMRFForm({ projectId, items, users }: Props) {
       }}>
         <h2 style={{ margin: '0 0 20px 0', color: 'var(--text-primary)', fontSize: '1.2rem' }}>Material Selection</h2>
 
-        <div style={{ marginBottom: '20px' }}>
-          <select
-            value={selectedDropdownId}
-            onChange={e => handleItemSelect(e.target.value)}
-            style={{
-              width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)',
-              backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)', fontSize: '0.9rem'
-            }}
-          >
-            <option value="">-- Select an item to add --</option>
-            {filteredDropdownItems.map(item => {
-              const effectiveQty = (item.revisedQuantity && item.revisedQuantity > 0) ? item.revisedQuantity : item.quantity;
-              const isVO = item.isVariationItem;
-              return (
-                <option key={item.id} value={item.id} disabled={selectedItems.has(item.id)}>
-                  {isVO ? '⚡ [VO] ' : ''}{item.itemCode} | {item.category || 'Uncategorized'} - {item.description} ({isVO ? 'VO' : 'Awarded'} Qty: {effectiveQty} {item.unit}){isVO && item.sourceVoNumber ? ` [${item.sourceVoNumber}]` : ''} {selectedItems.has(item.id) ? '✓ Added' : ''}
-                </option>
-              );
-            })}
-          </select>
+        <div style={{ marginBottom: '20px', position: 'relative' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              type="text"
+              placeholder="Search by Code, Category, or Description to select material..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsDropdownOpen(true);
+              }}
+              onFocus={() => setIsDropdownOpen(true)}
+              style={{
+                width: '100%', padding: '12px 15px', borderRadius: '8px', border: '1px solid var(--glass-border)',
+                backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)', fontSize: '0.95rem'
+              }}
+            />
+            <button 
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              style={{ 
+                padding: '12px 15px', borderRadius: '8px', border: '1px solid var(--glass-border)',
+                backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)', cursor: 'pointer', whiteSpace: 'nowrap'
+              }}
+            >
+              {isDropdownOpen ? 'Close List' : 'Browse All'}
+            </button>
+          </div>
+
+          {isDropdownOpen && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '8px',
+              backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.5)', zIndex: 50,
+              maxHeight: '400px', overflowY: 'auto'
+            }}>
+              {filteredDropdownItems.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  No matching items available.
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead style={{ position: 'sticky', top: 0, backgroundColor: '#1a1a2e', zIndex: 51 }}>
+                    <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                      <th style={{ padding: '10px 15px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 'bold' }}>Code</th>
+                      <th style={{ padding: '10px 15px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 'bold' }}>Category</th>
+                      <th style={{ padding: '10px 15px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 'bold' }}>Description</th>
+                      <th style={{ padding: '10px 15px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 'bold' }}>Awarded Qty</th>
+                      <th style={{ padding: '10px 15px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 'bold' }}>Unit</th>
+                      <th style={{ padding: '10px 15px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 'bold' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredDropdownItems.map(item => {
+                      const effectiveQty = (item.revisedQuantity && item.revisedQuantity > 0) ? item.revisedQuantity : item.quantity;
+                      const isVO = item.isVariationItem;
+                      return (
+                        <tr 
+                          key={item.id} 
+                          onClick={() => {
+                            handleItemSelect(item.id);
+                            setIsDropdownOpen(false);
+                            setSearchQuery('');
+                          }}
+                          style={{ 
+                            borderBottom: '1px solid rgba(255,255,255,0.05)', 
+                            cursor: 'pointer',
+                            backgroundColor: isVO ? 'rgba(0,200,83,0.05)' : 'transparent',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isVO ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.05)'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isVO ? 'rgba(0,200,83,0.05)' : 'transparent'}
+                        >
+                          <td style={{ padding: '12px 15px', color: 'var(--text-primary)', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                            {isVO && <span style={{ marginRight: '6px', fontSize: '0.65rem', background: 'rgba(0,200,83,0.2)', color: '#00c853', padding: '2px 6px', borderRadius: '8px' }}>VO</span>}
+                            {item.itemCode}
+                          </td>
+                          <td style={{ padding: '12px 15px', color: 'var(--text-secondary)' }}>{item.category || '-'}</td>
+                          <td style={{ padding: '12px 15px', color: 'var(--text-primary)' }}>{item.description}</td>
+                          <td style={{ padding: '12px 15px', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 'bold' }}>{effectiveQty}</td>
+                          <td style={{ padding: '12px 15px', color: 'var(--text-secondary)', textAlign: 'center' }}>{item.unit || '-'}</td>
+                          <td style={{ padding: '12px 15px', textAlign: 'center' }}>
+                            <button 
+                              style={{ 
+                                padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--accent-color)', 
+                                backgroundColor: 'transparent', color: 'var(--accent-color)', cursor: 'pointer',
+                                fontSize: '0.75rem', fontWeight: 'bold'
+                              }}
+                            >
+                              + Add
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
 
         {/* SELECTED ITEMS TABLE */}
@@ -308,7 +369,7 @@ export default function NewMRFForm({ projectId, items, users }: Props) {
                         )}
                       </td>
                       <td style={{ padding: '12px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{item.description}</td>
-                      <td style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)' }}>{item.unit}</td>
+                      <td style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)' }}>{item.unit || '-'}</td>
                       <td style={{ padding: '12px', textAlign: 'right', color: 'var(--text-primary)', fontWeight: 'bold' }}>
                         {balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </td>

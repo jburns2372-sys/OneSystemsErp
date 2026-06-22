@@ -116,10 +116,10 @@ export async function createProject(formData: FormData) {
         
         if (h.includes('item')) itemCode = val;
         else if (h.includes('desc')) itemDesc = val;
-        else if (h === 'unit' || h === 'uom') unit = val;
-        else if (h === 'qty' || h === 'quantity') quantity = parseFloat((val || '').toString()) || 0;
         else if (h === 'unit cost' || h.includes('combined') || h.includes('price')) unitCost = parseFloat((val || '').toString()) || 0;
         else if (h === 'total cost' || h === 'amount') totalCost = parseFloat((val || '').toString()) || 0;
+        else if (h.includes('unit') || h.includes('uom')) unit = val;
+        else if (h === 'qty' || h.includes('quantity')) quantity = parseFloat((val || '').toString()) || 0;
       }
       
       quantity = isNaN(quantity) ? 0 : quantity;
@@ -165,6 +165,102 @@ export async function createProject(formData: FormData) {
 
   revalidatePath('/projects');
   revalidatePath('/');
+}
+
+export async function uploadProcurementBenchmark(formData: FormData) {
+  const projectId = formData.get('projectId') as string;
+  const boqFile = formData.get('benchmarkFile') as File | null;
+  if (!boqFile || boqFile.size === 0) {
+    throw new Error('No file uploaded');
+  }
+
+  let parsedItems: any[] = [];
+  const buffer = Buffer.from(await boqFile.arrayBuffer());
+
+  // Parse Excel file
+  const workbook = xlsx.read(buffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  const rows = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+
+  // Extract BOQ Items
+  let headerRowIndex = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row && Array.isArray(row) && row.some(cell => typeof cell === 'string' && (cell.toLowerCase().includes('item no') || cell.toLowerCase().includes('description')))) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+
+  if (headerRowIndex !== -1) {
+    const headers = rows[headerRowIndex].map(h => (h || '').toString().toLowerCase().trim());
+    
+    for (let i = headerRowIndex + 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || !Array.isArray(row) || row.length === 0) continue;
+      
+      let itemCode = '';
+      let itemDesc = '';
+      let unit = '';
+      let quantity = 0;
+      let unitCost = 0;
+      let totalCost = 0;
+      let category = '';
+      
+      for (let j = 0; j < headers.length; j++) {
+        const h = headers[j];
+        const val = row[j];
+        if (!h || val == null) continue;
+        
+        if (h.includes('item')) itemCode = val;
+        else if (h.includes('desc')) itemDesc = val;
+        else if (h === 'unit cost' || h.includes('price')) unitCost = parseFloat((val || '').toString()) || 0;
+        else if (h === 'total cost' || h === 'amount') totalCost = parseFloat((val || '').toString()) || 0;
+        else if (h.includes('unit') || h.includes('uom')) unit = val;
+        else if (h === 'qty' || h.includes('quantity')) quantity = parseFloat((val || '').toString()) || 0;
+        else if (h.includes('cat')) category = val;
+      }
+      
+      quantity = isNaN(quantity) ? 0 : quantity;
+      unitCost = isNaN(unitCost) ? 0 : unitCost;
+      totalCost = isNaN(totalCost) ? 0 : totalCost;
+
+      if (totalCost === 0) totalCost = quantity * unitCost;
+
+      const descUpper = String(itemDesc || '').toUpperCase();
+      if (descUpper.includes('TOTAL PROJECT COST') || descUpper === 'GRAND TOTAL' || descUpper === 'TOTAL') {
+        continue;
+      }
+
+      if (itemDesc && (quantity > 0 || totalCost > 0)) {
+        parsedItems.push({
+          projectId,
+          itemCode: String(itemCode || ''),
+          description: String(itemDesc || ''),
+          category: String(category || ''),
+          unit: String(unit || ''),
+          quantity: quantity,
+          unitCost: unitCost,
+          totalCost: totalCost,
+          status: 'PENDING'
+        });
+      }
+    }
+  }
+
+  // Clear existing un-locked items and insert new ones
+  await prisma.procurementBenchmarkItem.deleteMany({
+    where: { projectId }
+  });
+
+  if (parsedItems.length > 0) {
+    await prisma.procurementBenchmarkItem.createMany({
+      data: parsedItems
+    });
+  }
+
+  revalidatePath(`/projects/${projectId}`);
 }
 
 export async function createMaterialRequest(formData: FormData) {
@@ -375,6 +471,14 @@ export async function toggleConsolidatedBOQLock(id: string, lockState: boolean) 
     data: { consolidatedBOQLocked: lockState }
   });
   revalidatePath(`/projects/${id}`);
+}
+
+export async function lockProcurementBenchmark(projectId: string) {
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { procurementBenchmarkLocked: true }
+  });
+  revalidatePath(`/projects/${projectId}`);
 }
 
 export async function deleteProject(projectId: string) {

@@ -5,18 +5,17 @@ import ConsolidatedBOQViewer from './ConsolidatedBOQViewer';
 
 export default async function BOQConsolidationTab({ 
   projectId, 
-  isLocked 
+  isBenchmarkLocked 
 }: { 
   projectId: string;
-  isLocked: boolean;
+  isBenchmarkLocked: boolean;
 }) {
-  if (!isLocked) {
+  if (!isBenchmarkLocked) {
     return (
       <div style={{ textAlign: 'center', padding: '40px', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-        <h3 style={{ color: '#ef4444' }}>BOQ Not Locked</h3>
+        <h3 style={{ color: '#ef4444' }}>Procurement Benchmark Not Locked</h3>
         <p style={{ color: 'var(--text-secondary)' }}>
-          You must finalize and lock the Awarded BOQ before you can proceed to consolidation. 
-          Please go back to the "Awarded BOQ" tab and click the "Lock BOQ" button.
+          You must upload and lock the Procurement Benchmark (Forecast BOQ) before you can generate the Master Materials List.
         </p>
       </div>
     );
@@ -55,9 +54,9 @@ export default async function BOQConsolidationTab({
     if (isPurchasingOfficer) {
       return (
         <div style={{ textAlign: 'center', padding: '40px', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-          <h3 style={{ color: '#ef4444' }}>Benchmark BOQ Not Generated</h3>
+          <h3 style={{ color: '#ef4444' }}>Master Materials List Not Generated</h3>
           <p style={{ color: 'var(--text-secondary)' }}>
-            The Procurement Benchmark BOQ has not been generated yet. Only a Project Manager or Project Director can generate the Benchmark.
+            The Master Materials List has not been generated yet. Only a Project Manager or Project Director can generate it from the Procurement Benchmark.
           </p>
         </div>
       );

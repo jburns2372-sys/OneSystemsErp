@@ -19,6 +19,8 @@ export default function LogExpenseModal({ projects, users, onClose }: Props) {
   const [projectId, setProjectId] = useState(projects[0]?.id || '');
   const [boqItems, setBoqItems] = useState<any[]>([]);
   const [selectedBoqItemId, setSelectedBoqItemId] = useState('');
+  const [isBoqDropdownOpen, setIsBoqDropdownOpen] = useState(false);
+  const [boqSearchQuery, setBoqSearchQuery] = useState('');
 
   const [voucherNo, setVoucherNo] = useState('');
   const [date, setDate] = useState('');
@@ -78,7 +80,7 @@ export default function LogExpenseModal({ projects, users, onClose }: Props) {
   }, [projectId]);
 
   const selectedItem = boqItems.find(i => i.id === selectedBoqItemId);
-  const isLot = selectedItem?.unit?.toLowerCase().includes('lot') || false;
+  const isLot = selectedItem ? (selectedItem.unit?.toLowerCase().includes('lot') || false) : false;
 
   // Auto-switch to single mode if project changes or no specific item is needed
   useEffect(() => {
@@ -163,7 +165,7 @@ export default function LogExpenseModal({ projects, users, onClose }: Props) {
         borderRadius: '16px',
         border: '1px solid var(--glass-border, rgba(255,255,255,0.1))',
         width: '100%',
-        maxWidth: '900px',
+        maxWidth: '1100px',
         maxHeight: '90vh',
         overflow: 'hidden',
         display: 'flex',
@@ -188,18 +190,101 @@ export default function LogExpenseModal({ projects, users, onClose }: Props) {
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
-            <div>
+            <div style={{ position: 'relative' }}>
               <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.85rem', color: '#aaa' }}>Link to BOQ Item (Optional)</label>
-              <select value={selectedBoqItemId} onChange={e => setSelectedBoqItemId(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', backgroundColor: '#16213e', color: '#fff', border: '1px solid var(--glass-border)' }}>
-                <option value="">-- No specific item --</option>
-                {boqItems
-                  .filter(i => i.unit?.toLowerCase().includes('lot'))
-                  .map(i => (
-                  <option key={i.id} value={i.id}>
-                    {i.category ? `[${i.category}] ` : ''}{i.itemCode} - {i.description} ({i.unit})
-                  </option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <div 
+                  onClick={() => setIsBoqDropdownOpen(!isBoqDropdownOpen)}
+                  style={{ 
+                    flex: 1, padding: '8px 12px', borderRadius: '6px', backgroundColor: '#16213e', 
+                    color: selectedItem ? '#fff' : '#aaa', border: '1px solid var(--glass-border)', cursor: 'pointer',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                  }}
+                >
+                  {selectedItem ? `${selectedItem.itemCode || '-'} | ${selectedItem.category || 'Uncategorized'} - ${selectedItem.description}` : '-- Select a BOQ Item --'}
+                </div>
+                {selectedItem && (
+                  <button type="button" onClick={() => setSelectedBoqItemId('')} style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: 'transparent', border: '1px solid #ef4444', color: '#ef4444', cursor: 'pointer' }}>
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {isBoqDropdownOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: '5px', width: '800px', maxWidth: '90vw',
+                  backgroundColor: '#1a1a2e', border: '1px solid var(--glass-border)', borderRadius: '8px',
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.8)', zIndex: 10000,
+                  display: 'flex', flexDirection: 'column', maxHeight: '450px'
+                }}>
+                  <div style={{ padding: '10px', borderBottom: '1px solid var(--glass-border)' }}>
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Search by code, category, or description..."
+                      value={boqSearchQuery}
+                      onChange={e => setBoqSearchQuery(e.target.value)}
+                      style={{
+                        width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--glass-border)',
+                        backgroundColor: '#16213e', color: '#fff', fontSize: '0.9rem'
+                      }}
+                    />
+                  </div>
+                  <div style={{ overflowY: 'auto', flex: 1 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', color: '#fff' }}>
+                      <thead style={{ position: 'sticky', top: 0, backgroundColor: '#0f172a', zIndex: 1 }}>
+                        <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                          <th style={{ padding: '8px 10px', textAlign: 'left', color: '#aaa' }}>Code</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left', color: '#aaa' }}>Category</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left', color: '#aaa' }}>Description</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'center', color: '#aaa' }}>Unit</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'center', color: '#aaa' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {boqItems
+                          .filter(item => 
+                            item.itemCode?.toLowerCase().includes(boqSearchQuery.toLowerCase()) || 
+                            item.description?.toLowerCase().includes(boqSearchQuery.toLowerCase()) ||
+                            item.category?.toLowerCase().includes(boqSearchQuery.toLowerCase())
+                          )
+                          .map(item => (
+                            <tr 
+                              key={item.id}
+                              onClick={() => {
+                                setSelectedBoqItemId(item.id);
+                                setIsBoqDropdownOpen(false);
+                                setBoqSearchQuery('');
+                              }}
+                              style={{ 
+                                borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer',
+                                backgroundColor: selectedBoqItemId === item.id ? 'rgba(0,255,163,0.1)' : 'transparent'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedBoqItemId === item.id ? 'rgba(0,255,163,0.1)' : 'transparent'}
+                            >
+                              <td style={{ padding: '8px 10px', fontWeight: 'bold' }}>{item.itemCode || '-'}</td>
+                              <td style={{ padding: '8px 10px', color: '#aaa' }}>{item.category || '-'}</td>
+                              <td style={{ padding: '8px 10px' }}>{item.description}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'center', color: '#aaa' }}>{item.unit || '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                                <button style={{ padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--accent-color)', background: 'transparent', color: 'var(--accent-color)', fontSize: '0.7rem', cursor: 'pointer' }}>
+                                  Select
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        }
+                        {boqItems.filter(item => item.itemCode?.toLowerCase().includes(boqSearchQuery.toLowerCase()) || item.description?.toLowerCase().includes(boqSearchQuery.toLowerCase()) || item.category?.toLowerCase().includes(boqSearchQuery.toLowerCase())).length === 0 && (
+                          <tr>
+                            <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#aaa' }}>No matching items</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.85rem', color: '#aaa' }}>Voucher / Ref No. *</label>

@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { put, copy } from "@vercel/blob";
+import fs from "fs";
 import { join } from "path";
 import ExcelJS from "exceljs";
 
@@ -21,11 +21,11 @@ export async function uploadAccomplishmentFileAction(projectId: string, formData
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
     const newFileName = `${uniqueId}-${sanitizedFileName}`;
 
-    // Upload to Vercel Blob
-    const blob = await put(`accomplishments/${newFileName}`, buffer, {
-      access: 'public',
-      addRandomSuffix: false
-    });
+    const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const filePath = join(uploadDir, newFileName);
+    fs.writeFileSync(filePath, buffer);
+    const publicPath = `/uploads/accomplishments/${newFileName}`;
 
     // Optional: get currently logged in user ID if you have an auth system
     // For now, leaving it null or you can pass it from the client
@@ -36,7 +36,7 @@ export async function uploadAccomplishmentFileAction(projectId: string, formData
       data: {
         projectId,
         fileName: file.name,
-        originalFilePath: blob.url,
+        originalFilePath: publicPath,
         fileSize: buffer.length,
         fileType: file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         isLockedOriginal: false,
@@ -137,20 +137,29 @@ export async function createWorkingCopyAction(fileId: string) {
     const sanitizedFileName = fileRecord.fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
     const newFileName = `working-${uniqueId}-${sanitizedFileName}`;
 
-    const copiedBlob = await copy(fileRecord.originalFilePath, `accomplishments/${newFileName}`, {
-      access: 'public',
-      addRandomSuffix: false
-    });
+    const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    
+    let sourcePath = fileRecord.originalFilePath;
+    if (sourcePath.startsWith('/uploads/')) {
+      sourcePath = join(process.cwd(), 'public', sourcePath);
+      fs.copyFileSync(sourcePath, join(uploadDir, newFileName));
+    } else {
+      const res = await fetch(sourcePath);
+      const buf = Buffer.from(await res.arrayBuffer());
+      fs.writeFileSync(join(uploadDir, newFileName), buf);
+    }
+    const publicPath = `/uploads/accomplishments/${newFileName}`;
 
     await prisma.projectAccomplishmentFile.update({
       where: { id: fileId },
       data: {
-        workingFilePath: copiedBlob.url,
+        workingFilePath: publicPath,
       }
     });
 
     revalidatePath("/accomplishments");
-    return { success: true, workingFilePath: copiedBlob.url };
+    return { success: true, workingFilePath: publicPath };
   } catch (error: any) {
     console.error("Error creating working copy:", error);
     return { success: false, error: error.message || "Failed to create working copy" };
@@ -171,11 +180,11 @@ export async function saveFileEditAction(fileId: string, base64Data: string, isL
 
     const buffer = Buffer.from(base64Data, "base64");
     
-    const blob = await put(`accomplishments/${newFileName}`, buffer, {
-      access: 'public',
-      addRandomSuffix: false
-    });
-    const publicPath = blob.url;
+    const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const filePath = join(uploadDir, newFileName);
+    fs.writeFileSync(filePath, buffer);
+    const publicPath = `/uploads/accomplishments/${newFileName}`;
 
     const updatedFile = await prisma.$transaction(async (tx) => {
       const version = await tx.projectAccomplishmentFileVersion.create({
@@ -213,11 +222,11 @@ export async function saveAsNewAccomplishmentFileAction(projectId: string, base6
 
     const buffer = Buffer.from(base64Data, "base64");
     
-    const blob = await put(`accomplishments/${newPhysicalFileName}`, buffer, {
-      access: 'public',
-      addRandomSuffix: false
-    });
-    const publicPath = blob.url;
+    const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const filePath = join(uploadDir, newPhysicalFileName);
+    fs.writeFileSync(filePath, buffer);
+    const publicPath = `/uploads/accomplishments/${newPhysicalFileName}`;
 
     const newFile = await prisma.projectAccomplishmentFile.create({
       data: {
@@ -283,9 +292,13 @@ export async function createSuccessiveBillingAction(projectId: string, templateF
 
     // Automatically carry over Accomplishment To Date (Col 13) to Previous Period (Col 11)
     try {
-      const response = await fetch(fileUrl);
-      const arrayBuffer = await response.arrayBuffer();
-      const sourceBuffer = Buffer.from(arrayBuffer);
+      let sourceBuffer: Buffer;
+      if (fileUrl.startsWith('/uploads/')) {
+        sourceBuffer = fs.readFileSync(join(process.cwd(), 'public', fileUrl));
+      } else {
+        const response = await fetch(fileUrl);
+        sourceBuffer = Buffer.from(await response.arrayBuffer());
+      }
 
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(sourceBuffer as any);
@@ -332,23 +345,24 @@ export async function createSuccessiveBillingAction(projectId: string, templateF
         const uint8Array = await workbook.xlsx.writeBuffer();
         finalBuffer = Buffer.from(uint8Array);
       } else {
-        const response = await fetch(fileUrl);
-        const arrayBuffer = await response.arrayBuffer();
-        finalBuffer = Buffer.from(arrayBuffer);
+        finalBuffer = sourceBuffer;
       }
     } catch (excelError) {
       console.error("Failed to manipulate Excel columns:", excelError);
       // We continue even if excel parsing fails, so the user at least gets the duplicated file.
-      const response = await fetch(fileUrl);
-      const arrayBuffer = await response.arrayBuffer();
-      finalBuffer = Buffer.from(arrayBuffer);
+      if (fileUrl.startsWith('/uploads/')) {
+        finalBuffer = fs.readFileSync(join(process.cwd(), 'public', fileUrl));
+      } else {
+        const response = await fetch(fileUrl);
+        finalBuffer = Buffer.from(await response.arrayBuffer());
+      }
     }
 
-    const blob = await put(`accomplishments/${newPhysicalFileName}`, finalBuffer, {
-      access: 'public',
-      addRandomSuffix: false
-    });
-    const publicPath = blob.url;
+    const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const filePath = join(uploadDir, newPhysicalFileName);
+    fs.writeFileSync(filePath, finalBuffer);
+    const publicPath = `/uploads/accomplishments/${newPhysicalFileName}`;
 
     const newFile = await prisma.projectAccomplishmentFile.create({
       data: {

@@ -604,15 +604,30 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
               });
             } catch (e) { }
 
-            let widthClass = isDescription ? 'w-full min-w-[400px] whitespace-nowrap' : 'whitespace-nowrap';
-
-            let widthStyle: React.CSSProperties = {};
-            if (colSpan === 1) {
-              if (colIndex === 7) widthStyle = { width: '50px', minWidth: '50px', maxWidth: '50px', overflow: 'hidden' };
-              if (colIndex === 8) widthStyle = { width: '50px', minWidth: '50px', maxWidth: '50px', overflow: 'hidden' };
-              if (colIndex === 9) widthStyle = { width: '80px', minWidth: '80px', maxWidth: '80px', overflow: 'hidden' };
-            }
-
+            let widthClass = isDescription ? 'break-words' : 'whitespace-nowrap';
+            
+            const widthMap: Record<number, string> = {
+              0: '2%',    // Item No
+              1: '40%',   // Description
+              2: '2%',    // Unit/s
+              3: '3%',    // Qty
+              4: '5%',    // Unit Cost
+              5: '5%',    // Total Cost
+              6: '4%',    // Weighted %
+              7: '4%',    // Qty This Period
+              8: '2%',    // Unit/s
+              9: '5%',    // Total This Period
+              10: '6%',   // PREVIOUS
+              11: '6%',   // THIS PERIOD
+              12: '7%',   // ACCOMPLISHMENT TO DATE
+              13: '4%',   // %
+              14: '5%'    // Remarks
+            };
+            const targetWidth = widthMap[colIndex] || '0%';
+            const widthStyle: React.CSSProperties = (!colSpan || colSpan === 1) 
+              ? { width: targetWidth, minWidth: targetWidth, maxWidth: targetWidth } 
+              : {};
+            
             let cellContent: React.ReactNode = formattedCell;
 
             if (!isHeader && isOneLot && colIndex === 9 && unitCost > 0) {
@@ -633,7 +648,7 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
                     <div className="flex items-center gap-2 w-full">
                       <input
                         type="number"
-                        className="w-full bg-blue-800/80 text-white font-bold border-2 border-blue-400 rounded px-2 py-1 focus:outline-none focus:border-blue-300 focus:bg-blue-700 focus:ring-2 focus:ring-blue-400 text-right shadow-inner"
+                        className="w-full max-w-[70px] bg-blue-800/80 text-white font-bold border-2 border-blue-400 rounded px-2 py-1 focus:outline-none focus:border-blue-300 focus:bg-blue-700 focus:ring-2 focus:ring-blue-400 text-right shadow-inner"
                         value={displayValue}
                         placeholder="0"
                         step="0.01"
@@ -673,7 +688,7 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
                 } else {
                   cellContent = (
                     <div
-                      className={`w-full h-full min-w-[120px] text-right bg-blue-900/40 border border-blue-500/50 p-1 rounded text-blue-100 ${!isPreviouslyCompleted ? 'cursor-text hover:bg-blue-800/60 transition-colors' : 'font-bold'}`}
+                      className={`w-full h-full min-w-[40px] text-right bg-blue-900/40 border border-blue-500/50 p-1 rounded text-blue-100 ${!isPreviouslyCompleted ? 'cursor-text hover:bg-blue-800/60 transition-colors' : 'font-bold'}`}
                       onClick={() => {
                         if (!isPreviouslyCompleted) {
                           setEditingCell(cellId);
@@ -700,7 +715,7 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
                     <div className="flex items-center gap-2 w-full">
                       <input
                         type="number"
-                        className="w-full bg-blue-800/80 text-white font-bold border-2 border-blue-400 rounded px-2 py-1 focus:outline-none focus:border-blue-300 focus:bg-blue-700 focus:ring-2 focus:ring-blue-400 text-right shadow-inner"
+                        className="w-full max-w-[70px] bg-blue-800/80 text-white font-bold border-2 border-blue-400 rounded px-2 py-1 focus:outline-none focus:border-blue-300 focus:bg-blue-700 focus:ring-2 focus:ring-blue-400 text-right shadow-inner"
                         value={editingCell === cellId ? editingValue : currentInput}
                         placeholder="0"
                         step="0.01"
@@ -739,7 +754,7 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
                 } else {
                   cellContent = (
                     <div
-                      className={`w-full h-full min-w-[120px] text-right bg-blue-900/40 border border-blue-500/50 p-1 rounded font-bold text-blue-100 whitespace-nowrap ${!isPreviouslyCompleted ? 'cursor-text hover:bg-blue-800/60 transition-colors' : ''}`}
+                      className={`w-full h-full min-w-[40px] text-right bg-blue-900/40 border border-blue-500/50 p-1 rounded font-bold text-blue-100 whitespace-nowrap ${!isPreviouslyCompleted ? 'cursor-text hover:bg-blue-800/60 transition-colors' : ''}`}
                       onClick={() => {
                         if (!isPreviouslyCompleted) {
                           setEditingCell(cellId);
@@ -762,7 +777,6 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
                 onClick={() => setSelectedCell({ r: rowIndex, c: colIndex })}
                 style={{
                   border: '1px solid rgba(255,255,255,0.3)',
-                  ...widthStyle,
                   ...(isHeader ? {
                     position: 'sticky',
                     top: rowIndex === 0 ? '0' : '41px',
@@ -771,7 +785,7 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
                     height: rowIndex === 0 ? '41px' : 'auto'
                   } : {})
                 }}
-                className={`px-4 ${isHeader ? 'whitespace-nowrap' : ''} ${isHeader && rowIndex === 0 ? '' : 'py-3'} ${widthClass} ${alignClass} ${colorClass} ${bgClass} ${isHeader ? 'text-xs uppercase tracking-wider font-bold' : 'leading-relaxed'} ${selectedCell?.r === rowIndex && selectedCell?.c === colIndex ? 'ring-2 ring-inset ring-blue-500 bg-blue-900/30' : ''}`}
+                className={`px-1 lg:px-2 ${isHeader ? 'whitespace-nowrap' : (isDescription ? 'break-words' : 'whitespace-nowrap overflow-hidden text-ellipsis')} ${isHeader && rowIndex === 0 ? '' : 'py-1 lg:py-2'} ${alignClass} ${colorClass} ${bgClass} ${isHeader ? 'text-[10px] lg:text-xs uppercase tracking-wider font-bold' : 'text-[11px] leading-snug'} ${selectedCell?.r === rowIndex && selectedCell?.c === colIndex ? 'ring-2 ring-inset ring-blue-500 bg-blue-900/30' : ''}`}
               >
                 {cellContent}
               </td>
@@ -877,19 +891,27 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
           </div>
         ) : (
           <div className="flex-1 border border-gray-800 rounded-lg bg-[#15151e] shadow-2xl relative overflow-auto">
-            <table className="w-full min-w-max text-sm text-left text-gray-300 border-separate border-spacing-0" style={{ tableLayout: 'fixed' }}>
+            <table className="w-full text-[10px] lg:text-xs text-left text-gray-300 border-separate border-spacing-0" style={{ tableLayout: 'fixed' }}>
               <colgroup>
-                {Array.from({ length: 16 }).map((_, i) => {
-                  let w = '100px'; // Default generic width
-                  if (i === 0) w = '50px'; // Item No
-                  if (i === 1) w = '400px'; // Description
-                  if (i === 2) w = '60px'; // Unit
-                  if (i === 3) w = '60px'; // Qty
-                  if (i === 7) w = '60px'; // Qty This Period
-                  if (i === 8) w = '60px'; // Unit This Period
-                  if (i === 9) w = '90px'; // Total This Period (Input)
-                  if (i === 13) w = '70px'; // %
-                  return <col key={i} style={{ width: w, minWidth: w, maxWidth: w }} />;
+                {Array.from({ length: 15 }).map((_, i) => {
+                  const widthMap: Record<number, string> = {
+                    0: '2%',    // Item No
+                    1: '40%',   // Description
+                    2: '2%',    // Unit/s
+                    3: '3%',    // Qty
+                    4: '5%',    // Unit Cost
+                    5: '5%',    // Total Cost
+                    6: '4%',    // Weighted %
+                    7: '4%',    // Qty This Period
+                    8: '2%',    // Unit/s
+                    9: '5%',    // Total This Period
+                    10: '6%',   // PREVIOUS
+                    11: '6%',   // THIS PERIOD
+                    12: '7%',   // ACCOMPLISHMENT TO DATE
+                    13: '4%',   // %
+                    14: '5%'    // Remarks
+                  };
+                  return <col key={i} style={{ width: widthMap[i] || '0%' }} />;
                 })}
               </colgroup>
               <thead className="sticky top-0 z-30 shadow-md bg-[#1e1e2d] [&>tr>td]:bg-[#1e1e2d]">

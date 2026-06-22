@@ -4,14 +4,14 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 export async function autoConsolidateBOQ(projectId: string) {
-  // Check if project is locked
+  // Check if project benchmark is locked
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { boqLocked: true }
+    select: { procurementBenchmarkLocked: true }
   });
 
-  if (!project?.boqLocked) {
-    throw new Error('Project BOQ is not locked. Lock it first before consolidating.');
+  if (!project?.procurementBenchmarkLocked) {
+    throw new Error('Procurement Benchmark is not locked. Lock it first before generating Master Materials List.');
   }
 
   // Check if already consolidated
@@ -23,12 +23,12 @@ export async function autoConsolidateBOQ(projectId: string) {
     throw new Error('BOQ is already consolidated for this project.');
   }
 
-  const awardedItems = await prisma.awardedBOQItem.findMany({
+  const benchmarkItems = await prisma.procurementBenchmarkItem.findMany({
     where: { projectId }
   });
 
-  if (awardedItems.length === 0) {
-    throw new Error('No Awarded BOQ items found to consolidate.');
+  if (benchmarkItems.length === 0) {
+    throw new Error('No Procurement Benchmark items found to consolidate.');
   }
 
   // AI Grouping Logic: We group by category (old item code), description, and unit (ignoring case).
@@ -36,7 +36,7 @@ export async function autoConsolidateBOQ(projectId: string) {
   // but this heuristic accurately simulates grouping identical materials.
   const groups = new Map<string, any>();
 
-  for (const item of awardedItems) {
+  for (const item of benchmarkItems) {
     let oldItemCode = item.itemCode || 'N/A';
     if (oldItemCode === 'N/A' || oldItemCode.trim() === '') {
       oldItemCode = item.description.trim(); // Fallback category to description if missing
@@ -137,15 +137,7 @@ export async function autoConsolidateBOQ(projectId: string) {
         }
       });
 
-      // Create mapping links using createMany to vastly reduce network roundtrips
-      await tx.bOQMapping.createMany({
-        data: group.items.map((item: any) => ({
-          mappingType: group.items.length > 1 ? 'MANY_TO_ONE' : 'ONE_TO_ONE',
-          aiConfidenceScore: 98.5,
-          awardedBoqItemId: item.id,
-          consolidatedBoqItemId: consolidated.id
-        }))
-      });
+      // We no longer create BOQMapping here, as we are generating from ProcurementBenchmark
     }
   }, {
     maxWait: 20000, // 20 seconds to wait for a connection

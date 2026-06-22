@@ -183,15 +183,10 @@ export async function clearAccruedPayment(payableId: string) {
 
 export async function getConsolidatedItemsForProject(projectId: string) {
   const items = await prisma.consolidatedBOQItem.findMany({
-    where: { 
-      projectId,
-      unit: {
-        contains: 'lot'
-      }
-    },
+    where: { projectId },
     orderBy: { itemCode: 'asc' }
   });
-  return items;
+  return items.filter(item => item.unit?.toLowerCase().includes('lot') || false);
 }
 
 export async function logDirectExpense(data: {
