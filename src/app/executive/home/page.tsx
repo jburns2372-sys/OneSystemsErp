@@ -71,6 +71,20 @@ export default async function ExecutiveHomePage() {
         <KpiCard 
           title="Revised Contract Amount" 
           value={formatCurrency(data.revisedContractAmount)} 
+          subValue={
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f3f4f6', paddingTop: '8px' }}>
+                <span style={{ color: '#6b7280' }}>Original Contract:</span>
+                <span style={{ fontWeight: 500, color: '#374151' }}>{formatCurrency(data.totalContractAmount)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b7280' }}>Variation Orders:</span>
+                <span style={{ fontWeight: 500, color: data.totalApprovedVOs > 0 ? '#10b981' : '#374151' }}>
+                  {data.totalApprovedVOs > 0 ? '+' : ''}{formatCurrency(data.totalApprovedVOs)}
+                </span>
+              </div>
+            </div>
+          }
           icon="📋" 
         />
         <KpiCard 
@@ -104,8 +118,22 @@ export default async function ExecutiveHomePage() {
               <span style={{ fontWeight: 600, color: '#f59e0b' }}>{formatCurrency(data.totalOutstandingReceivables)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f3f4f6', paddingTop: '16px' }}>
-              <span style={{ color: '#6b7280' }}>Subcontractor Payables</span>
-              <span style={{ fontWeight: 600, color: '#ef4444' }}>{formatCurrency(data.totalSubcontractPayables)}</span>
+              <span style={{ color: '#374151', fontWeight: 600 }}>Total Project Expenses To Date</span>
+              <span style={{ fontWeight: 700, color: '#ef4444' }}>{formatCurrency(data.totalProjectExpensesToDate)}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '16px', borderLeft: '2px solid #f3f4f6', marginTop: '-4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
+                <span style={{ color: '#6b7280' }}>Supplier Payables</span>
+                <span style={{ color: '#ef4444' }}>{formatCurrency(data.totalSupplierPayables)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
+                <span style={{ color: '#6b7280' }}>Subcon Payables</span>
+                <span style={{ color: '#ef4444' }}>{formatCurrency(data.totalSubcontractPayables)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
+                <span style={{ color: '#6b7280' }}>Job Order Payables</span>
+                <span style={{ color: '#ef4444' }}>{formatCurrency(data.totalJobOrderPayables)}</span>
+              </div>
             </div>
           </div>
         </div>

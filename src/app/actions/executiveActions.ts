@@ -71,7 +71,7 @@ export async function getCompanyOverview(projectId?: string) {
         select: { currentBillingAmount: true, payments: { select: { amountPaid: true } } }
       },
       expenses: {
-        where: { approvalStatus: 'APPROVED' },
+        where: { status: 'APPROVED' },
         select: { netAmount: true }
       },
       payrolls: {
@@ -80,7 +80,19 @@ export async function getCompanyOverview(projectId?: string) {
       },
       subcontractBillings: {
         where: { approvalStatus: 'APPROVED' },
-        select: { currentGross: true, remainingBalance: true }
+        select: { currentGross: true, remainingBalance: true, packageId: true, jobOrderId: true }
+      },
+      materialRequests: {
+        select: {
+          purchaseOrders: {
+            select: {
+              payables: {
+                where: { status: { not: 'PAID' } },
+                select: { amount: true, paidAmount: true, status: true }
+              }
+            }
+          }
+        }
       },
       _count: {
         select: {
@@ -99,6 +111,8 @@ export async function getCompanyOverview(projectId?: string) {
   let totalOutstandingReceivables = 0;
   let totalActualCost = 0;
   let totalSubcontractPayables = 0;
+  let totalJobOrderPayables = 0;
+  let totalSupplierPayables = 0;
   let totalCriticalRisks = 0;
 
   activeProjects.forEach(p => {
@@ -123,8 +137,22 @@ export async function getCompanyOverview(projectId?: string) {
     totalActualCost += (projectExpenses + projectPayrolls + projectSubcontract);
 
     // Payables
-    const subPayables = p.subcontractBillings.reduce((sum, sb) => sum + sb.remainingBalance, 0);
-    totalSubcontractPayables += subPayables;
+    p.subcontractBillings.forEach(sb => {
+      if (sb.packageId) totalSubcontractPayables += sb.remainingBalance;
+      if (sb.jobOrderId) totalJobOrderPayables += sb.remainingBalance;
+    });
+
+    p.materialRequests.forEach(mr => {
+      mr.purchaseOrders.forEach(po => {
+        po.payables.forEach(payable => {
+          if (payable.status === 'ACCRUED') {
+            totalSupplierPayables += payable.amount;
+          } else {
+            totalSupplierPayables += (payable.amount - payable.paidAmount);
+          }
+        });
+      });
+    });
 
     // Risks
     totalCriticalRisks += p._count.projectValidations;
@@ -140,6 +168,9 @@ export async function getCompanyOverview(projectId?: string) {
     totalOutstandingReceivables,
     totalActualCost,
     totalSubcontractPayables,
+    totalJobOrderPayables,
+    totalSupplierPayables,
+    totalProjectExpensesToDate: totalSubcontractPayables + totalJobOrderPayables + totalSupplierPayables,
     totalCriticalRisks,
     
     // Derived Metrics

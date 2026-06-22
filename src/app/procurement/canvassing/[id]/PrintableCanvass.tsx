@@ -19,7 +19,7 @@ export default function PrintableCanvass({ canvass, onClose }: { canvass: any, o
         `}} />
         
         <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '20px' }}>
-          <h1 style={{ margin: 0, fontSize: '24px', letterSpacing: '2px' }}>ONE SYSTEMS ERP</h1>
+          <h1 style={{ margin: 0, fontSize: '24px', letterSpacing: '2px' }}>JEJORS CONSTRUCTION CORPORATION</h1>
           <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#555', textTransform: 'uppercase' }}>Supplier Canvass Form</p>
         </div>
 
@@ -34,7 +34,8 @@ export default function PrintableCanvass({ canvass, onClose }: { canvass: any, o
           </div>
         </div>
 
-        <p style={{ marginBottom: '20px', fontStyle: 'italic', color: '#444' }}>Please provide your best quotation for the following items. This is a request for pricing, not a Purchase Order.</p>
+        <p style={{ marginBottom: '5px', fontStyle: 'italic', color: '#444' }}>Please provide your best quotation for the following items. This is a request for pricing, not a Purchase Order.</p>
+        <p style={{ marginBottom: '20px', fontWeight: 'bold', color: '#000', fontSize: '15px' }}>PLEASE EMAIL THE QUOTATION TO: procurement@onesystemserp.com</p>
 
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px', fontSize: '14px' }}>
           <thead>

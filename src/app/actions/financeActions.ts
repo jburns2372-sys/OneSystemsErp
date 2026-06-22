@@ -161,7 +161,7 @@ export async function issuePayment(payableId: string, paymentData: {
 
 export async function clearAccruedPayment(payableId: string) {
   const session = await cookies();
-  const userStr = session.get('user')?.value;
+  const userStr = session.get('session')?.value;
   if (!userStr) throw new Error('Unauthorized');
 
   const payable = await prisma.accountsPayable.findUnique({

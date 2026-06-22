@@ -14,6 +14,9 @@ export default async function PayrollPeriodPage({ params }: { params: Promise<{ 
       },
       payrolls: {
         include: { worker: true }
+      },
+      fundingRequests: {
+        include: { destinationAccount: true }
       }
     }
   });
@@ -24,16 +27,17 @@ export default async function PayrollPeriodPage({ params }: { params: Promise<{ 
     orderBy: { lastName: 'asc' }
   });
 
-  const categoryMap: Record<string, string> = {
-    'WEEKLY': 'Weekly Salaried',
-    'SEMI_MONTHLY': 'Semi-Monthly',
-    'MONTHLY': 'Monthly'
-  };
-  const allowedCategory = categoryMap[period.calendarRule];
+  workers = workers.filter(w => w.employmentStatus === 'ACTIVE' && w.subjectToPayrollCutoff === true);
 
-  if (allowedCategory) {
-    workers = workers.filter(w => w.payrollCategory === allowedCategory);
-  }
+  const boqItems = await prisma.awardedBOQItem.findMany({
+    where: { itemCode: 'Site Management Work' },
+    orderBy: { description: 'asc' }
+  });
+
+  const bankAccounts = await prisma.payrollBankAccount.findMany({
+    where: { status: 'ACTIVE' },
+    orderBy: { bankName: 'asc' }
+  });
 
   return (
     <div className={styles.pageContainer}>
@@ -46,7 +50,7 @@ export default async function PayrollPeriodPage({ params }: { params: Promise<{ 
             <strong>Cutoff Period:</strong> {new Date(period.startDate).toLocaleDateString()} to {new Date(period.endDate).toLocaleDateString()} &nbsp;|&nbsp; <strong>Payroll Date:</strong> {new Date(period.payrollDate).toLocaleDateString()}
           </p>
         </div>
-        <PayrollPeriodClient period={period} workers={workers} />
+        <PayrollPeriodClient period={period} workers={workers} boqItems={boqItems} bankAccounts={bankAccounts} />
       </header>
     </div>
   );

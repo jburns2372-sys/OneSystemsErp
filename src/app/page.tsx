@@ -32,7 +32,7 @@ export default async function Home() {
 
   if (currentUser) {
     primaryRole = currentUser.role || 'PROJECT_DIRECTOR';
-    isSystemAdmin = primaryRole === 'SUPER_ADMIN' || (currentUser.userRoles && currentUser.userRoles.some((ur: any) => ur.role.String(roleCode) === 'SUPER_ADMIN'));
+    isSystemAdmin = primaryRole === 'SUPER_ADMIN' || primaryRole === 'SYSTEM_ADMIN' || (currentUser.userRoles && currentUser.userRoles.some((ur: any) => ur.role.roleCode === 'SUPER_ADMIN' || ur.role.roleCode === 'SYSTEM_ADMIN'));
   }
 
   // Respect simulated role
@@ -41,7 +41,7 @@ export default async function Home() {
     ? simulatedRole 
     : primaryRole;
 
-  if ((primaryRole === 'PROJECT_DIRECTOR' || primaryRole === 'DIRECTORS') && primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'ADMIN') {
+  if (primaryRole === 'DIRECTORS' && !simulatedRole) {
     redirect('/executive/home');
   }
 

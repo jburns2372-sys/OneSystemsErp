@@ -12,6 +12,7 @@ export async function encodeDelivery(data: {
   receiptNumber: string;
   items: { consolidatedBoqItemId: string; quantity: number; drQuantity: number; remarks: string }[];
   drDocumentText?: string;
+  proofFileUrl?: string;
 }) {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
@@ -72,6 +73,7 @@ export async function encodeDelivery(data: {
       receiptNumber: data.receiptNumber,
       status: 'FOR_ACCOUNTANT_APPROVAL',
       receivedById: user.id,
+      proofFileUrl: data.proofFileUrl,
       isMismatch,
       mismatchNotes,
       items: {
@@ -208,8 +210,10 @@ export async function encodeDeliveryWithFile(formData: FormData) {
     const itemsStr = formData.get('items') as string;
     const items = JSON.parse(itemsStr);
     const file = formData.get('file') as File | null;
+    const noFileReason = formData.get('noFileReason') as string | null;
 
-    let drDocumentText = 'No document uploaded.';
+    let drDocumentText = noFileReason ? `No document uploaded. Reason provided by user: ${noFileReason}` : 'No document uploaded.';
+    let proofFileUrl: string | undefined;
 
     if (file && file.size > 0) {
       // 1. Save file locally
@@ -222,6 +226,8 @@ export async function encodeDeliveryWithFile(formData: FormData) {
       }
       const filePath = path.join(uploadDir, fileName);
       fs.writeFileSync(filePath, buffer);
+      
+      proofFileUrl = `/uploads/deliveries/${fileName}`;
 
       // 2. Prepare data for AI Vision matching
       const po = await prisma.purchaseOrder.findUnique({
@@ -269,7 +275,8 @@ export async function encodeDeliveryWithFile(formData: FormData) {
       poId,
       receiptNumber,
       items,
-      drDocumentText
+      drDocumentText,
+      proofFileUrl
     });
   } catch (error: any) {
     console.error('Error encoding delivery with file:', error);
@@ -277,3 +284,69 @@ export async function encodeDeliveryWithFile(formData: FormData) {
   }
 }
 
+export async function uploadDelayedDeliveryProof(formData: FormData) {
+  try {
+    const deliveryId = formData.get('deliveryId') as string;
+    const file = formData.get('file') as File | null;
+
+    if (!file || file.size === 0) throw new Error('No file provided');
+
+    const delivery = await prisma.delivery.findUnique({
+      where: { id: deliveryId },
+      include: {
+        po: { include: { supplier: true } },
+        items: { include: { consolidatedBoqItem: true } }
+      }
+    });
+
+    if (!delivery) throw new Error('Delivery not found');
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const fileName = `${Date.now()}-delayed-${file.name}`;
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'deliveries');
+    
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const filePath = path.join(uploadDir, fileName);
+    fs.writeFileSync(filePath, buffer);
+
+    const proofFileUrl = `/uploads/deliveries/${fileName}`;
+
+    // Prepare data for AI Vision matching
+    const poDetails = {
+      poNumber: delivery.po.poNumber,
+      supplierName: delivery.po.supplier.name,
+      items: delivery.items.map((i: any) => ({
+        description: i.consolidatedBoqItem.description,
+        quantity: i.quantity,
+        drQuantity: i.drQuantity
+      }))
+    };
+
+    // Call Gemini Vision
+    const visionResult = await verifyDeliveryDocumentWithAI(buffer, file.type, poDetails);
+
+    if (!visionResult.matches) {
+      return { 
+        success: false, 
+        error: `AI Document Mismatch: ${visionResult.findings}`
+      };
+    }
+
+    // Update the delivery with the new proof
+    await prisma.delivery.update({
+      where: { id: deliveryId },
+      data: {
+        proofFileUrl: proofFileUrl,
+        hasProof: true
+      }
+    });
+
+    revalidatePath(`/deliveries/${deliveryId}`);
+    return { success: true, proofFileUrl };
+  } catch (error: any) {
+    console.error('Error uploading delayed delivery proof:', error);
+    return { success: false, error: error.message || 'Failed to process delayed file upload.' };
+  }
+}

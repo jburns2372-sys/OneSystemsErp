@@ -9,11 +9,11 @@ import { approveAndLockPayroll } from '../../actions/payrollAiValidator';
 import ValidationModal from './ValidationModal';
 import PayslipModal from './PayslipModal';
 import AIPayrollAssistant from '../AIPayrollAssistant';
-import { createFundingRequest } from '../../actions/payrollFundingActions';
+import { createFundingRequest, approveFundingRequest } from '../../actions/payrollFundingActions';
 import { generatePaymentBatch } from '../../actions/paymentBatchActions';
 import FileViewerModal from './FileViewerModal';
 
-export default function PayrollPeriodClient({ period, workers }: { period: any, workers: any[] }) {
+export default function PayrollPeriodClient({ period, workers, boqItems = [], bankAccounts = [] }: { period: any, workers: any[], boqItems?: any[], bankAccounts?: any[] }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('DTR');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -24,6 +24,8 @@ export default function PayrollPeriodClient({ period, workers }: { period: any, 
   const [selectedPayroll, setSelectedPayroll] = useState<any>(null);
   const [expandedWorkerId, setExpandedWorkerId] = useState<string | null>(null);
   const [viewingFile, setViewingFile] = useState<string | null>(null);
+  const [selectedBoqId, setSelectedBoqId] = useState<string>('');
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState<string>('');
 
   const uploadedFiles = Array.from(new Set(
     (period.dtrs || [])
@@ -492,12 +494,56 @@ export default function PayrollPeriodClient({ period, workers }: { period: any, 
                   <strong>⚠️ No Funding Request Found</strong>
                   <p style={{ margin: '5px 0 0 0' }}>This payroll is locked but hasn't been funded yet. You must create a funding request before payments can be released.</p>
                 </div>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Funding Source Account</label>
+                  <select
+                    value={selectedBankAccountId}
+                    onChange={(e) => setSelectedBankAccountId(e.target.value)}
+                    style={{ padding: '12px', width: '100%', maxWidth: '400px', borderRadius: '8px', background: 'var(--input-bg)', color: '#fff', border: '1px solid var(--glass-border)' }}
+                  >
+                    <option value="">-- Select Source Account --</option>
+                    {bankAccounts.map((acc: any) => (
+                      <option key={acc.id} value={acc.id}>{acc.bankName} - {acc.accountName} ({acc.accountNumber})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {boqItems.length > 0 && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Charge Payroll to BOQ Item in Awarded Contract (Optional)</label>
+                    <select
+                      value={selectedBoqId}
+                      onChange={(e) => setSelectedBoqId(e.target.value)}
+                      style={{ padding: '12px', width: '100%', maxWidth: '400px', borderRadius: '8px', background: 'var(--input-bg)', color: '#fff', border: '1px solid var(--glass-border)' }}
+                    >
+                      <option value="">-- Do not allocate to BOQ --</option>
+                      {boqItems.map(item => (
+                        <option key={item.id} value={item.id}>{item.description} (Awarded: ₱{item.totalCost?.toLocaleString()})</option>
+                      ))}
+                    </select>
+                    {selectedBoqId && (() => {
+                      const selectedBoq = boqItems.find(i => i.id === selectedBoqId);
+                      if (selectedBoq && totalRequiredFunding > selectedBoq.totalCost) {
+                        return (
+                          <div style={{ marginTop: '10px', padding: '12px', background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', borderRadius: '8px', border: '1px solid #e74c3c', fontSize: '0.9rem' }}>
+                            <strong>⚠️ Overbudget Warning:</strong> The required funding (₱ {totalRequiredFunding.toLocaleString()}) exceeds the awarded amount for this BOQ item (₱ {selectedBoq.totalCost?.toLocaleString()}). Proceeding will require explicit approval from the Project Director.
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                )}
+
                 <button 
                   onClick={async () => {
-                    const accountId = prompt('Enter the Destination Payroll Bank Account ID (For now, paste the CUID manually):');
-                    if (!accountId) return;
+                    if (!selectedBankAccountId) {
+                      alert('Please select a Funding Source Account.');
+                      return;
+                    }
                     
-                    const res = await createFundingRequest(period.id, accountId, 'clxw8xxvj0000vwu4xxw8xxvj');
+                    const res = await createFundingRequest(period.id, selectedBankAccountId, 'clxw8xxvj0000vwu4xxw8xxvj', selectedBoqId || undefined);
                     if (res.success) {
                       alert('Funding Request Created!');
                       router.refresh();
@@ -516,13 +562,32 @@ export default function PayrollPeriodClient({ period, workers }: { period: any, 
                   <div key={fr.id} style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '8px', border: '1px solid var(--glass-border)', marginBottom: '15px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                       <h3 style={{ margin: 0 }}>Request: {fr.fundingRequestNumber}</h3>
-                      <span style={{ 
-                        background: fr.fundingStatus === 'FUNDED' ? 'rgba(46, 204, 113, 0.2)' : 'rgba(241, 196, 15, 0.2)', 
-                        color: fr.fundingStatus === 'FUNDED' ? '#2ecc71' : '#f1c40f', 
-                        padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' 
-                      }}>
-                        {fr.fundingStatus}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {fr.fundingStatus === 'PENDING' && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm('Are you sure you want to approve this funding request?')) return;
+                              const res = await approveFundingRequest(fr.id, 'clxw8xxvj0000vwu4xxw8xxvj');
+                              if (res.success) {
+                                alert('Funding Request Approved!');
+                                router.refresh();
+                              } else {
+                                alert('Failed to approve: ' + res.error);
+                              }
+                            }}
+                            style={{ background: '#2ecc71', color: '#fff', border: 'none', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
+                          >
+                            Approve
+                          </button>
+                        )}
+                        <span style={{ 
+                          background: fr.fundingStatus === 'FUNDED' ? 'rgba(46, 204, 113, 0.2)' : 'rgba(241, 196, 15, 0.2)', 
+                          color: fr.fundingStatus === 'FUNDED' ? '#2ecc71' : '#f1c40f', 
+                          padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' 
+                        }}>
+                          {fr.fundingStatus}
+                        </span>
+                      </div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                       <div>

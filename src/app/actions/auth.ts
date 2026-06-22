@@ -35,11 +35,16 @@ export async function login(formData: FormData) {
     maxAge: 60 * 60 * 24 * 7 // 1 week
   });
 
-  redirect('/');
+  if (user.role === 'DIRECTORS') {
+    redirect('/executive/home');
+  } else {
+    redirect('/');
+  }
 }
 
 export async function logout() {
   const cookieStore = await cookies();
   cookieStore.delete('session');
+  cookieStore.delete('simulatedRole');
   redirect('/login');
 }

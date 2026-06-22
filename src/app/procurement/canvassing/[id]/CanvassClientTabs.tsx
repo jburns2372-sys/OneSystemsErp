@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { addSupplierQuotation, autoGeneratePOFromCanvass, sendCanvassEmail, approveCanvassRecommendation, endorseCanvassRecommendation } from '@/app/actions/canvass';
-import { uploadAndAnalyzeQuotation } from '@/app/actions/aiQuotationActions';
+import { uploadAndAnalyzeQuotationsBulk } from '@/app/actions/aiQuotationActions';
 import PrintableCanvass from './PrintableCanvass';
 
 export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any, suppliers: any[] }) {
@@ -51,8 +51,8 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
 
   // Upload AI states
   const [showUploadAIModal, setShowUploadAIModal] = useState(false);
-  const [uploadAISupplier, setUploadAISupplier] = useState('');
-  const [uploadAIFile, setUploadAIFile] = useState<File | null>(null);
+  const [uploadAIFiles, setUploadAIFiles] = useState<File[]>([]);
+  const [uploadAIResults, setUploadAIResults] = useState<any[] | null>(null);
   const [isUploadingAI, setIsUploadingAI] = useState(false);
 
   const handleRunAI = async () => {
@@ -108,20 +108,17 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
   };
 
   const handleUploadAI = async () => {
-    if (!uploadAISupplier) return alert('Please select a supplier.');
-    if (!uploadAIFile) return alert('Please select a quotation file to upload.');
+    if (uploadAIFiles.length === 0) return alert('Please select quotation files to upload.');
 
     setIsUploadingAI(true);
+    setUploadAIResults(null);
     const formData = new FormData();
-    formData.append('file', uploadAIFile);
+    uploadAIFiles.forEach(f => formData.append('files', f));
 
-    const res = await uploadAndAnalyzeQuotation(canvass.id, uploadAISupplier, formData);
+    const res = await uploadAndAnalyzeQuotationsBulk(canvass.id, formData);
     if (res.success) {
-      alert('AI has successfully analyzed the quotation and automatically encoded it!');
-      setShowUploadAIModal(false);
-      setUploadAIFile(null);
-      setUploadAISupplier('');
-      router.refresh(); // Refresh to see the new quotation
+      setUploadAIResults(res.results);
+      router.refresh(); 
     } else {
       alert(res.error);
     }
@@ -191,42 +188,68 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
 
       {showUploadAIModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div style={{ background: '#1e1e2e', padding: '30px', borderRadius: '12px', width: '500px', border: '1px solid var(--glass-border)', color: '#fff' }}>
+          <div style={{ background: '#1e1e2e', padding: '30px', borderRadius: '12px', width: '550px', border: '1px solid var(--glass-border)', color: '#fff', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ margin: '0 0 20px 0', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              🤖 Upload Quotation (AI Extract)
+              🤖 Bulk Upload Quotations (AI Extract)
             </h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '15px' }}>Upload a scanned PDF or image of the supplier's quotation. Our AI will automatically read and encode the items and unit costs.</p>
             
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'block', marginBottom: '5px' }}>Select Supplier</label>
-              <select 
-                value={uploadAISupplier} 
-                onChange={(e) => setUploadAISupplier(e.target.value)}
-                style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid var(--glass-border)', borderRadius: '4px' }}
-              >
-                <option value="">-- Choose Supplier --</option>
-                {suppliers.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
+            {!uploadAIResults ? (
+              <>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '15px' }}>
+                  Upload scanned PDFs or images of the suppliers' quotations. Our AI will automatically identify the supplier, cross-reference the items, tabulate the costs, and reject any that contain mismatched items.
+                </p>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Quotation Files (Multiple Allowed)</label>
+                  <input 
+                    type="file" 
+                    multiple
+                    accept="application/pdf,image/*"
+                    onChange={(e) => setUploadAIFiles(Array.from(e.target.files || []))}
+                    style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid var(--glass-border)', borderRadius: '4px' }}
+                  />
+                  {uploadAIFiles.length > 0 && (
+                     <p style={{ marginTop: '10px', fontSize: '0.85rem', color: 'var(--accent-color)' }}>
+                       {uploadAIFiles.length} file(s) selected.
+                     </p>
+                  )}
+                </div>
 
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '5px' }}>Quotation File</label>
-              <input 
-                type="file" 
-                accept="application/pdf,image/*"
-                onChange={(e) => setUploadAIFile(e.target.files?.[0] || null)}
-                style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid var(--glass-border)', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button onClick={() => setShowUploadAIModal(false)} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--glass-border)', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
-              <button onClick={handleUploadAI} disabled={isUploadingAI} style={{ padding: '8px 16px', background: 'var(--accent-color)', border: 'none', color: '#000', borderRadius: '4px', cursor: isUploadingAI ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}>
-                {isUploadingAI ? '🤖 Scanning Document...' : 'Upload & Extract'}
-              </button>
-            </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button onClick={() => { setShowUploadAIModal(false); setUploadAIFiles([]); }} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--glass-border)', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={handleUploadAI} disabled={isUploadingAI || uploadAIFiles.length === 0} style={{ padding: '8px 16px', background: 'var(--accent-color)', border: 'none', color: '#000', borderRadius: '4px', cursor: (isUploadingAI || uploadAIFiles.length === 0) ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}>
+                    {isUploadingAI ? '🤖 AI Engine Processing...' : 'Upload & Extract Bulk'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h4 style={{ color: '#fff', marginBottom: '15px', borderBottom: '1px solid #444', paddingBottom: '10px' }}>AI Extraction Results</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                  {uploadAIResults.map((result, idx) => (
+                    <div key={idx} style={{ 
+                      padding: '12px', 
+                      borderRadius: '8px', 
+                      background: result.success ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                      border: `1px solid ${result.success ? '#10b981' : '#ef4444'}`
+                    }}>
+                      <div style={{ fontWeight: 'bold', marginBottom: '5px', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{result.success ? '✅ ' : '❌ '}{result.fileName}</span>
+                        {result.success && <span style={{ color: '#10b981' }}>{result.supplierName}</span>}
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                        {result.success ? result.message : result.error}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setShowUploadAIModal(false); setUploadAIFiles([]); setUploadAIResults(null); }} style={{ padding: '8px 16px', background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                    Done
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

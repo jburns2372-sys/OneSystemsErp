@@ -1684,6 +1684,7 @@ model SubcontractPackage {
   warrantyPeriod      Int?
   attachments         Json?
   status              PackageStatus               @default(DRAFT)
+  isLocked            Boolean                     @default(false)
   remarks             String?
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt

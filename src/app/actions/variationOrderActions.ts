@@ -493,12 +493,12 @@ export async function createSubcontractFromVO(voId: string, itemIds: string[]) {
     // Minimal implementation for demonstration. Full implementation would map items.
     const pkg = await prisma.subcontractPackage.create({
       data: {
-        packageName: `Subcontract for VO: ${vo.voNumber}`,
+        packageNumber: `VO-${vo.voNumber}`,
         projectId: vo.projectId,
-        totalAmount: vo.items.filter(i => itemIds.includes(i.id)).reduce((acc, i) => acc + i.subcontractCost, 0),
+        contractAmount: vo.items.filter(i => itemIds.includes(i.id)).reduce((acc, i) => acc + i.subcontractCost, 0),
         status: 'DRAFT',
-        description: 'Auto-generated from Variation Order'
-      }
+        scopeOfWork: 'Auto-generated from Variation Order'
+      } as any
     });
     return pkg;
   } catch (error: any) {

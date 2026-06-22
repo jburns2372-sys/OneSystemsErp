@@ -5,10 +5,11 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/permissions';
 import { submitTransaction, approveTransaction } from '@/lib/workflow';
 
-export async function createFundingRequest(periodId: string, destinationAccountId: string, userId: string) {
+export async function createFundingRequest(periodId: string, destinationAccountId: string, userId: string, boqItemId?: string) {
   try {
     const currentUser = await prisma.user.findFirst();
     if (currentUser) {
+      userId = currentUser.id;
       await requirePermission(currentUser.id, 'PAYROLL', 'canSubmit');
     }
 
@@ -55,6 +56,32 @@ export async function createFundingRequest(periodId: string, destinationAccountI
       await submitTransaction(currentUser.id, 'HR_OFFICER', 'PAYROLL', request.id);
     }
 
+    if (boqItemId) {
+      const awardedItem = await prisma.awardedBOQItem.findUnique({
+        where: { id: boqItemId }
+      });
+      
+      const targetProjectId = period.projectId || awardedItem?.projectId;
+
+      if (targetProjectId) {
+        await prisma.expense.create({
+          data: {
+            amount: totalRequiredFunding,
+            netAmount: totalNetPay,
+            vatAmount: 0,
+            date: new Date(),
+            category: 'PAYROLL',
+            description: `Payroll Funding Request ${fundingRequestNumber}`,
+            receiptRef: fundingRequestNumber,
+            status: 'PENDING',
+            projectId: targetProjectId,
+            loggedById: userId,
+            awardedBoqItemId: boqItemId
+          }
+        });
+      }
+    }
+
     revalidatePath(`/payroll/${periodId}`);
     return { success: true, requestId: request.id };
   } catch (error: any) {
@@ -74,6 +101,7 @@ export async function approveFundingRequest(requestId: string, userId: string) {
 
     const currentUser = await prisma.user.findFirst();
     if (currentUser) {
+      userId = currentUser.id;
       await requirePermission(currentUser.id, 'PAYROLL', 'canApprove');
       
       // Enforce Maker-Checker
@@ -81,7 +109,7 @@ export async function approveFundingRequest(requestId: string, userId: string) {
         throw new Error('Self-approval is strictly prohibited. The Maker cannot be the Approver.');
       }
       
-      await approveTransaction(currentUser.id, 'PROJECT_MANAGER', 'PAYROLL', request.id, 'Approved Payroll Funding');
+      await approveTransaction(currentUser.id, currentUser.role, 'PAYROLL', request.id, 'Approved Payroll Funding');
     }
 
     // Update account balance
@@ -115,6 +143,12 @@ export async function approveFundingRequest(requestId: string, userId: string) {
         approvedById: userId,
         dateFunded: new Date()
       }
+    });
+
+    // Automatically approve the linked BOQ expense if one exists
+    await prisma.expense.updateMany({
+      where: { receiptRef: request.fundingRequestNumber },
+      data: { status: 'APPROVED', approverId: userId }
     });
 
     revalidatePath(`/payroll/${request.payrollPeriodId}`);

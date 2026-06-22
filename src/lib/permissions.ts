@@ -8,16 +8,12 @@ const MASTER_ADMIN_MODULES = [
   'EQUIPMENT', 'VARIATION_ORDERS', 'REPORTS', 'DOCUMENTS', 'KNOWLEDGE_CENTER',
   'SYSTEM_ROLES', 'SYSTEM_SETTINGS',
   // Functional modules
-  'WORKER_DATABASE', 'DELIVERY_RECEIVING', 'PURCHASE_ORDER',
+  'WORKER_DATABASE', 'DELIVERY_RECEIVING', 'PURCHASE_ORDER', 'PAYMENT_ISSUANCE',
 ];
 
 export async function getUserPermissions(userId: string) {
   const cookieStore = await cookies();
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
-  
-  if (simulatedRole) {
-    return getPermissionsForRole(simulatedRole);
-  }
 
   const [user, userRoles] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
@@ -32,6 +28,12 @@ export async function getUserPermissions(userId: string) {
       }
     })
   ]);
+
+  const isActualAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR' || user?.role === 'DIRECTORS';
+
+  if (simulatedRole && isActualAdmin) {
+    return getPermissionsForRole(simulatedRole);
+  }
 
   // Aggregate permissions across all assigned roles
   // If a user has multiple roles, we grant them the union of permissions (OR logic).
@@ -74,7 +76,7 @@ export async function getUserPermissions(userId: string) {
     });
   });
 
-  if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR') {
+  if (user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR') {
     aggregatedPermissions['IS_ADMIN'] = true;
 
     // Auto-populate commonly checked modules to bypass manual checks in frontend

@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
 import OfflineSyncProvider from "@/components/layout/OfflineSyncProvider";
 import DatePickerEnforcer from "@/components/layout/DatePickerEnforcer";
 import { cookies } from 'next/headers';
 import { getUserPermissions } from '@/lib/permissions';
+import MainContentWrapper from '@/components/layout/MainContentWrapper';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -44,30 +44,14 @@ export default async function RootLayout({
     }));
   }
 
-  // Simulation logic for admins
-  if (user && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS')) {
-    const simulatedRole = cookieStore.get('simulatedRole')?.value;
-    if (simulatedRole && simulatedRole !== user.role) {
-      const { getPermissionsForRole } = await import('@/lib/permissions');
-      permissions = await getPermissionsForRole(simulatedRole);
-    }
-  }
-
-  // Hide the main sidebar strictly for Directors
-  const isDirector = user?.role === 'PROJECT_DIRECTOR' || user?.role === 'DIRECTORS';
-  const sidebarWidthVar = isDirector ? '0px' : 'var(--sidebar-width)';
-
   return (
     <html lang="en">
       <body className={inter.className}>
         <OfflineSyncProvider>
           <DatePickerEnforcer />
-          {!isDirector && <Sidebar permissions={permissions} user={user} />}
-          <div style={{ marginLeft: sidebarWidthVar, display: 'flex', flexDirection: 'column', minHeight: '100vh', transition: 'margin-left 0.3s ease' }}>
-            <main style={{ padding: '30px', flex: 1, backgroundColor: 'var(--bg-primary)' }}>
-              {children}
-            </main>
-          </div>
+          <MainContentWrapper permissions={permissions} user={user}>
+            {children}
+          </MainContentWrapper>
         </OfflineSyncProvider>
       </body>
     </html>

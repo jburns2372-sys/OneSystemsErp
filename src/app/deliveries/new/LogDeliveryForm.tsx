@@ -13,6 +13,8 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
   const [selectedPoId, setSelectedPoId] = useState('');
   const [receiptNumber, setReceiptNumber] = useState('');
   const [drFile, setDrFile] = useState<File | null>(null);
+  const [isNoFile, setIsNoFile] = useState(false);
+  const [noFileReason, setNoFileReason] = useState('');
   
   const [drQuantities, setDrQuantities] = useState<Record<string, number>>({});
   const [actualQuantities, setActualQuantities] = useState<Record<string, number>>({});
@@ -70,6 +72,13 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
       return setError('Please enter quantity for at least one item.');
     }
 
+    if (!isNoFile && !drFile) {
+      return setError('Please upload a DR document or check the box to provide a reason.');
+    }
+    if (isNoFile && !noFileReason.trim()) {
+      return setError('Please provide a reason why documents cannot be uploaded.');
+    }
+
     setError('');
     startTransition(async () => {
       try {
@@ -77,8 +86,12 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
         formData.append('poId', selectedPoId);
         formData.append('receiptNumber', receiptNumber);
         formData.append('items', JSON.stringify(itemsToDeliver));
-        if (drFile) {
+        
+        if (!isNoFile && drFile) {
           formData.append('file', drFile);
+        }
+        if (isNoFile) {
+          formData.append('noFileReason', noFileReason);
         }
 
         const res = await encodeDeliveryWithFile(formData);
@@ -153,17 +166,36 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
         </div>
 
         <div style={{ marginTop: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Upload DR Document (For AI Validation)</label>
-          <input 
-            type="file" 
-            accept=".pdf,.jpg,.jpeg,.png"
-            onChange={e => setDrFile(e.target.files?.[0] || null)}
-            style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-dark)', color: 'white' }}
-            required
-          />
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '5px' }}>
-            The AI engine will perform OCR on this document to cross-reference encoded quantities with the physical receipt.
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <label style={{ color: 'var(--text-secondary)' }}>Upload DR Document (For AI Validation)</label>
+            <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={isNoFile} onChange={e => { setIsNoFile(e.target.checked); setDrFile(null); }} />
+              Cannot upload document right now
+            </label>
+          </div>
+          
+          {!isNoFile ? (
+            <>
+              <input 
+                type="file" 
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={e => setDrFile(e.target.files?.[0] || null)}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-dark)', color: 'white' }}
+                required={!isNoFile}
+              />
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '5px' }}>
+                The AI engine will perform OCR on this document to cross-reference encoded quantities with the physical receipt.
+              </p>
+            </>
+          ) : (
+            <textarea 
+              value={noFileReason}
+              onChange={e => setNoFileReason(e.target.value)}
+              placeholder="Please provide a valid reason why the DR document cannot be uploaded (e.g. Scanner broken, will upload later)..."
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-dark)', color: 'white', minHeight: '80px', resize: 'vertical' }}
+              required={isNoFile}
+            />
+          )}
         </div>
 
         {selectedPo && (

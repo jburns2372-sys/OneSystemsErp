@@ -5,6 +5,7 @@ import styles from '../../projects/page.module.css';
 import Link from 'next/link';
 import DeliveryWorkflowButtons from './DeliveryWorkflowButtons';
 import { getUserPermissions } from '@/lib/permissions';
+import DelayedProofUpload from './DelayedProofUpload';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,6 +103,33 @@ export default async function DeliveryDetailsPage({ params }: { params: Promise<
           <p><strong>Approved By:</strong> {delivery.approvedBy?.name || 'Pending'}</p>
           <p><strong>Approval Date:</strong> {delivery.status === 'APPROVED' ? new Date(delivery.updatedAt).toLocaleString() : '---'}</p>
         </div>
+      </div>
+
+      <div style={{ marginBottom: '30px' }}>
+        <h3 style={{ margin: '0 0 15px 0', color: 'var(--text-secondary)' }}>Document Attachments</h3>
+        {delivery.proofFileUrl ? (
+          <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+            <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)' }}>An official Delivery Receipt was provided and validated by the AI OCR engine.</p>
+            <Link href={delivery.proofFileUrl} target="_blank" style={{ textDecoration: 'none' }}>
+              <button style={{ 
+                padding: '10px 20px', 
+                borderRadius: '8px', 
+                background: '#3b82f6', 
+                color: 'white', 
+                border: 'none', 
+                fontWeight: 'bold', 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                📄 View Attached DR Document
+              </button>
+            </Link>
+          </div>
+        ) : (
+          <DelayedProofUpload deliveryId={delivery.id} />
+        )}
       </div>
 
       <div className={styles.tableContainer}>

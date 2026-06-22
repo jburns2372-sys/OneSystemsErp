@@ -13,6 +13,16 @@ export default async function MaterialRequestsPage() {
   const cookieStore = await cookies();
   const userId = cookieStore.get('session')?.value || '';
   const permissions = await getUserPermissions(userId);
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+  console.log('--- DEBUG PERMS ---');
+  console.log('UserId:', userId);
+  console.log('IS_ADMIN:', permissions.IS_ADMIN);
+  console.log('PROCUREMENT:', permissions.PROCUREMENT);
+  console.log('-------------------');
+  console.log('UserId:', userId);
+  console.log('IS_ADMIN:', permissions.IS_ADMIN);
+  console.log('PROCUREMENT:', permissions.PROCUREMENT);
+  console.log('-------------------');
 
   const requests = await prisma.materialRequest.findMany({
     orderBy: { createdAt: 'desc' },
@@ -26,8 +36,9 @@ export default async function MaterialRequestsPage() {
   });
 
   const lockedProjects = await prisma.project.findMany({
-    where: { consolidatedBOQLocked: true },
-    select: { id: true, name: true }
+    where: permissions.IS_ADMIN ? {} : { consolidatedBOQLocked: true },
+    select: { id: true, name: true },
+    orderBy: { createdAt: 'desc' }
   });
 
   return (
@@ -36,6 +47,11 @@ export default async function MaterialRequestsPage() {
         <div>
           <h1>Material Requests</h1>
           <p>Review and manage material requisitions across all projects.</p>
+          {simulatedRole && (
+            <div style={{ marginTop: '10px', padding: '10px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '4px', fontSize: '0.85rem' }}>
+              <strong>Notice:</strong> You are currently simulating the <strong>{simulatedRole}</strong> role. Some actions like "Create MRF" may be hidden based on this role's permissions. To regain full access, please reset your simulated role to SUPER_ADMIN in the Dashboard.
+            </div>
+          )}
         </div>
         <PermissionGuard permissions={permissions} moduleName="PROCUREMENT" action="canCreate">
           <CreateMRFDropdown projects={lockedProjects} />

@@ -1,9 +1,34 @@
-'use client';
 import React from 'react';
 import Link from 'next/link';
 import PayrollSubNav from '@/components/PayrollSubNav';
+import { prisma } from '@/lib/prisma';
 
-export default function PayrollPaymentDashboard() {
+export default async function PayrollPaymentDashboard() {
+  const bankAccounts = await prisma.payrollBankAccount.aggregate({
+    _sum: { currentAvailableBalance: true }
+  });
+  const totalBalance = bankAccounts._sum.currentAvailableBalance || 0;
+
+  const approvedPayslipsCount = await prisma.payroll.count({
+    where: { 
+      payrollPeriod: { isLocked: true },
+      paymentStatus: 'PENDING'
+    }
+  });
+
+  const processingBatchesCount = await prisma.paymentBatch.count({
+    where: { status: 'PROCESSING' }
+  });
+
+  const paymentExceptionsCount = await prisma.paymentException.count({
+    where: { status: 'OPEN' }
+  });
+
+  const recentBatches = await prisma.paymentBatch.findMany({
+    take: 5,
+    orderBy: { createdAt: 'desc' }
+  });
+
   return (
     <div style={{ padding: '20px', color: '#fff', maxWidth: '1200px', margin: '0 auto' }}>
       <PayrollSubNav />
@@ -33,24 +58,32 @@ export default function PayrollPaymentDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', padding: '24px', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
           <h3 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold' }}>Payroll Bank Balance</h3>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#fff', marginTop: '10px' }}>₱0.00</p>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#fff', marginTop: '10px' }}>
+            ₱{totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '5px' }}>Sufficient for pending batches</p>
         </div>
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', padding: '24px', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
           <h3 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold' }}>Approved Payslips</h3>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3498db', marginTop: '10px', textShadow: '0 0 10px rgba(52, 152, 219, 0.5)' }}>0</p>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3498db', marginTop: '10px', textShadow: '0 0 10px rgba(52, 152, 219, 0.5)' }}>
+            {approvedPayslipsCount}
+          </p>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '5px' }}>Pending Payment</p>
         </div>
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', padding: '24px', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
           <h3 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold' }}>Processing Batches</h3>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#f39c12', marginTop: '10px', textShadow: '0 0 10px rgba(243, 156, 18, 0.5)' }}>0</p>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#f39c12', marginTop: '10px', textShadow: '0 0 10px rgba(243, 156, 18, 0.5)' }}>
+            {processingBatchesCount}
+          </p>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '5px' }}>Awaiting Settlement</p>
         </div>
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', padding: '24px', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
           <h3 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold' }}>Payment Exceptions</h3>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--text-secondary)', marginTop: '10px' }}>0</p>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--text-secondary)', marginTop: '10px' }}>
+            {paymentExceptionsCount}
+          </p>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '5px' }}>
-            No Action Required
+            {paymentExceptionsCount === 0 ? 'No Action Required' : 'Requires Attention'}
           </p>
         </div>
       </div>
@@ -73,11 +106,22 @@ export default function PayrollPaymentDashboard() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                    No recent payment batches found.
-                  </td>
-                </tr>
+                {recentBatches.length > 0 ? (
+                  recentBatches.map(batch => (
+                    <tr key={batch.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                      <td style={{ padding: '15px 20px' }}>{batch.batchNumber}</td>
+                      <td style={{ padding: '15px 20px' }}>{batch.transferRail || 'Manual'}</td>
+                      <td style={{ padding: '15px 20px' }}>₱ {batch.totalAmount.toLocaleString()}</td>
+                      <td style={{ padding: '15px 20px' }}>{batch.status}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                      No recent payment batches found.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
