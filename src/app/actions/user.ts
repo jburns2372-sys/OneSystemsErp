@@ -11,23 +11,28 @@ export async function getSystemRoles() {
 }
 
 export async function deleteSystemRole(roleName: string) {
-  await prisma.systemRole.delete({
-    where: { name: roleName }
-  });
-  
-  const rbac = await prisma.role.findFirst({
-    where: {
-      OR: [
-        { roleName },
-        { roleCode: roleName }
-      ]
+  try {
+    await prisma.systemRole.delete({
+      where: { name: roleName }
+    });
+    
+    const rbac = await prisma.role.findFirst({
+      where: {
+        OR: [
+          { roleName },
+          { roleCode: roleName }
+        ]
+      }
+    });
+    if (rbac) {
+      await prisma.role.delete({ where: { id: rbac.id } });
     }
-  });
-  if (rbac) {
-    await prisma.role.delete({ where: { id: rbac.id } });
+    
+    revalidatePath('/users');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to delete role.' };
   }
-  
-  revalidatePath('/users');
 }
 
 export async function updateSystemRole(oldName: string, newName: string) {
@@ -70,38 +75,41 @@ export async function updateSystemRole(oldName: string, newName: string) {
 }
 
 export async function createSystemRole(roleName: string) {
-  const normalized = roleName.toUpperCase().replace(/\s+/g, '_').trim();
-  const existing = await prisma.systemRole.findUnique({
-    where: { name: normalized }
-  });
-  if (!existing) {
-    await prisma.systemRole.create({
-      data: { name: normalized }
+  try {
+    const normalized = roleName.toUpperCase().replace(/\s+/g, '_').trim();
+    const existing = await prisma.systemRole.findUnique({
+      where: { name: normalized }
     });
-  }
-  
-  // Ensure RBAC Role also exists
-  const existingRbac = await prisma.role.findFirst({
-    where: {
-      OR: [
-        { roleName: normalized },
-        { roleCode: normalized }
-      ]
+    if (!existing) {
+      await prisma.systemRole.create({
+        data: { name: normalized }
+      });
     }
-  });
-  if (!existingRbac) {
-    await prisma.role.create({
-      data: {
-        roleName: normalized,
-        roleCode: normalized,
-        description: normalized
+    
+    // Ensure RBAC Role also exists
+    const existingRbac = await prisma.role.findFirst({
+      where: {
+        OR: [
+          { roleName: normalized },
+          { roleCode: normalized }
+        ]
       }
     });
+    if (!existingRbac) {
+      await prisma.role.create({
+        data: {
+          roleName: normalized,
+          roleCode: normalized,
+          description: normalized
+        }
+      });
+    }
+    
+    revalidatePath('/users');
+    return { success: true, name: normalized };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to create role.' };
   }
-  
-  
-  revalidatePath('/users');
-  return normalized;
 }
 
 export async function createUser(data: { name: string, email: string, role: string }) {
@@ -119,12 +127,15 @@ export async function createUser(data: { name: string, email: string, role: stri
     }
 
     const finalRole = await createSystemRole(data.role);
+    if (!finalRole || !finalRole.success) {
+      return { success: false, error: finalRole?.error || 'Failed to resolve system role.' };
+    }
 
     await prisma.user.create({
       data: {
         name: data.name,
         email: data.email,
-        role: finalRole,
+        role: finalRole.name!,
         password: 'admin001',
       }
     });
@@ -151,11 +162,14 @@ export async function updateUser(id: string, data: { name: string, email: string
     }
 
     const finalRole = await createSystemRole(data.role);
+    if (!finalRole || !finalRole.success) {
+      return { success: false, error: finalRole?.error || 'Failed to resolve system role.' };
+    }
 
     const updateData: any = {
       name: data.name,
       email: data.email,
-      role: finalRole,
+      role: finalRole.name!,
     };
 
     if (data.password && data.password.trim() !== '') {
