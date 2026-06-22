@@ -13,6 +13,13 @@ export default function GlobalProjectSelector({ projects, currentProjectId }: { 
     });
   };
 
+  const selectedProject = projects.find(p => p.id === currentProjectId);
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'TBA';
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '24px', flexShrink: 1, minWidth: 0 }}>
       <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#4b5563', whiteSpace: 'nowrap' }}>Context:</span>
@@ -41,6 +48,13 @@ export default function GlobalProjectSelector({ projects, currentProjectId }: { 
           <option key={p.id} value={p.id}>📁 {p.name}</option>
         ))}
       </select>
+
+      {selectedProject && currentProjectId !== 'ALL' && (
+        <div style={{ display: 'flex', gap: '12px', marginLeft: '16px', fontSize: '0.8rem', color: '#6b7280', whiteSpace: 'nowrap', borderLeft: '1px solid #e5e7eb', paddingLeft: '16px' }}>
+          <span><strong style={{color: '#374151'}}>Start:</strong> {formatDate(selectedProject.startDate)}</span>
+          <span><strong style={{color: '#374151'}}>Target:</strong> {formatDate(selectedProject.endDate)}</span>
+        </div>
+      )}
     </div>
   );
 }

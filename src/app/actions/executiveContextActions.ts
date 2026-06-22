@@ -23,7 +23,7 @@ export async function getGlobalProjectsAndContext() {
   
   const { prisma } = await import('@/lib/prisma');
   const projects = await prisma.project.findMany({
-    select: { id: true, name: true },
+    select: { id: true, name: true, startDate: true, endDate: true },
     orderBy: { createdAt: 'desc' }
   });
 
