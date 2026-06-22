@@ -46,7 +46,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={`${inter.className} ${permissions?.IS_GUEST_USER ? 'is-guest-user' : ''}`}>
         <OfflineSyncProvider>
           <DatePickerEnforcer />
           <MainContentWrapper permissions={permissions} user={user}>

@@ -3,10 +3,16 @@ import Link from 'next/link';
 import ModuleKnowledgeTab from '@/app/knowledge-center/ModuleKnowledgeTab';
 import PaymentProfileControls from './PaymentProfileControls';
 import EditWorkerButton from './EditWorkerButton';
+import { cookies } from 'next/headers';
+import { getUserPermissions } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function WorkerProfilePage({ params }: { params: Promise<{ id: string }> }) {
+  const cookieStore = await cookies();
+  const userId = cookieStore.get('session')?.value || '';
+  const permissions = await getUserPermissions(userId);
+
   const { id } = await params;
   const worker = await prisma.worker.findUnique({
     where: { id },
@@ -53,20 +59,37 @@ export default async function WorkerProfilePage({ params }: { params: Promise<{ 
           <h2 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '10px', marginTop: 0 }}>Compensation & Rate</h2>
           <p><strong>Rate Type:</strong> {worker.rateType.replace(/_/g, ' ')}</p>
           
-          {worker.rateType === 'DAILY_RATE' && <p><strong>Daily Rate:</strong> ₱{worker.dailyRate?.toLocaleString()}</p>}
-          {worker.rateType === 'MONTHLY_SALARY' && <p><strong>Monthly Salary:</strong> ₱{worker.basicMonthlySalary?.toLocaleString()}</p>}
-          {worker.rateType === 'ONE_LOT' && <p><strong>Contract Amount:</strong> ₱{worker.contractAmount?.toLocaleString()}</p>}
-          {worker.rateType === 'PROFESSIONAL_FEE' && <p><strong>Professional Fee:</strong> ₱{worker.professionalFee?.toLocaleString()}</p>}
+          {permissions?.IS_GUEST_USER ? (
+            <p><strong>Compensation Details:</strong> <span style={{ color: 'var(--text-secondary)' }}>Masked for Guest User</span></p>
+          ) : (
+            <>
+              {worker.rateType === 'DAILY_RATE' && <p><strong>Daily Rate:</strong> ₱{worker.dailyRate?.toLocaleString()}</p>}
+              {worker.rateType === 'MONTHLY_SALARY' && <p><strong>Monthly Salary:</strong> ₱{worker.basicMonthlySalary?.toLocaleString()}</p>}
+              {worker.rateType === 'ONE_LOT' && <p><strong>Contract Amount:</strong> ₱{worker.contractAmount?.toLocaleString()}</p>}
+              {worker.rateType === 'PROFESSIONAL_FEE' && <p><strong>Professional Fee:</strong> ₱{worker.professionalFee?.toLocaleString()}</p>}
+            </>
+          )}
           
           <p><strong>Payroll Mode:</strong> {worker.payrollMode}</p>
         </div>
 
         <div style={{ background: 'var(--card-bg)', borderRadius: '12px', padding: '20px', border: '1px solid var(--glass-border)' }}>
           <h2 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '10px', marginTop: 0 }}>Government IDs</h2>
-          <p><strong>TIN:</strong> {worker.tinNumber || <span style={{ color: '#e74c3c' }}>Missing</span>}</p>
-          <p><strong>SSS:</strong> {worker.sssNumber || <span style={{ color: '#f1c40f' }}>Missing</span>}</p>
-          <p><strong>PhilHealth:</strong> {worker.philHealthNumber || <span style={{ color: '#f1c40f' }}>Missing</span>}</p>
-          <p><strong>Pag-IBIG:</strong> {worker.pagIbigNumber || <span style={{ color: '#f1c40f' }}>Missing</span>}</p>
+          {permissions?.IS_GUEST_USER ? (
+            <>
+              <p><strong>TIN:</strong> ****-****-1234</p>
+              <p><strong>SSS:</strong> ****-****-1234</p>
+              <p><strong>PhilHealth:</strong> ****-****-1234</p>
+              <p><strong>Pag-IBIG:</strong> ****-****-1234</p>
+            </>
+          ) : (
+            <>
+              <p><strong>TIN:</strong> {worker.tinNumber || <span style={{ color: '#e74c3c' }}>Missing</span>}</p>
+              <p><strong>SSS:</strong> {worker.sssNumber || <span style={{ color: '#f1c40f' }}>Missing</span>}</p>
+              <p><strong>PhilHealth:</strong> {worker.philHealthNumber || <span style={{ color: '#f1c40f' }}>Missing</span>}</p>
+              <p><strong>Pag-IBIG:</strong> {worker.pagIbigNumber || <span style={{ color: '#f1c40f' }}>Missing</span>}</p>
+            </>
+          )}
         </div>
 
         <div style={{ background: 'var(--card-bg)', borderRadius: '12px', padding: '20px', border: '1px solid var(--glass-border)' }}>

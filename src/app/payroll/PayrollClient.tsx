@@ -132,22 +132,26 @@ export default function PayrollClient({ periods, workers, projects, currentUserI
           )}
           {activeTab === 'WORKERS' && (
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button 
-                onClick={downloadWorkersCSV}
-                style={{ background: '#27ae60', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(39, 174, 96, 0.3)', transition: 'transform 0.2s' }} 
-                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'} 
-                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>⬇️</span> Export CSV
-              </button>
-              <button 
-                onClick={() => { setEditingWorker(null); setIsWorkerModalOpen(true); }}
-                style={{ background: '#3498db', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(52, 152, 219, 0.3)', transition: 'transform 0.2s' }} 
-                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'} 
-                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>+</span> Add New Worker
-              </button>
+              <PermissionGuard permissions={permissions} moduleName="WORKER_DATABASE" action="canExport">
+                <button 
+                  onClick={downloadWorkersCSV}
+                  style={{ background: '#27ae60', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(39, 174, 96, 0.3)', transition: 'transform 0.2s' }} 
+                  onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'} 
+                  onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>⬇️</span> Export CSV
+                </button>
+              </PermissionGuard>
+              <PermissionGuard permissions={permissions} moduleName="WORKER_DATABASE" action="canCreate">
+                <button 
+                  onClick={() => { setEditingWorker(null); setIsWorkerModalOpen(true); }}
+                  style={{ background: '#3498db', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(52, 152, 219, 0.3)', transition: 'transform 0.2s' }} 
+                  onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'} 
+                  onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>+</span> Add New Worker
+                </button>
+              </PermissionGuard>
             </div>
           )}
         </div>
@@ -270,14 +274,18 @@ export default function PayrollClient({ periods, workers, projects, currentUserI
                       {worker.employmentType.replace('_', ' ')}
                     </span>
                   </td>
-                  <td style={{ padding: '15px 20px' }}>₱{worker.dailyRate.toLocaleString()}</td>
+                  <td style={{ padding: '15px 20px' }}>
+                    {permissions?.IS_GUEST_USER ? '****' : `₱${worker.dailyRate?.toLocaleString() || 0}`}
+                  </td>
                   <td style={{ padding: '15px 20px', textAlign: 'right' }}>
-                    <button 
-                      onClick={() => router.push(`/workers/${worker.id}/edit`)}
-                      style={{ background: 'transparent', border: '1px solid #3498db', color: '#3498db', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
-                    >
-                      Edit
-                    </button>
+                    {!permissions?.IS_GUEST_USER && (
+                      <button 
+                        onClick={() => router.push(`/workers/${worker.id}/edit`)}
+                        style={{ background: 'transparent', border: '1px solid #3498db', color: '#3498db', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                      >
+                        Edit
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

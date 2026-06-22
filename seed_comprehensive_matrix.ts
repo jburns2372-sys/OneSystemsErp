@@ -40,7 +40,7 @@ async function main() {
     'AUDITOR',
     'FOREMAN',
     'BILLING_ENGINEER',
-    'GUEST_USER'
+    'GUEST USER'
   ];
 
   // ============================================================================
@@ -288,10 +288,13 @@ async function main() {
   // --- AUDITOR: View-only access to all modules ---
   for (const mod of allModules) await grant('AUDITOR', mod, { ...VIEW_ONLY, canViewAuditLogs: true });
 
-  // --- GUEST_USER: Strictly limited ---
-  await grant('GUEST_USER', 'DASHBOARD', VIEW_ONLY);
-  await grant('GUEST_USER', 'REPORTS', VIEW_ONLY);
-  await grant('GUEST_USER', 'KNOWLEDGE_CENTER', VIEW_ONLY);
+  // --- GUEST_USER: Universal View-Only Access (Excluding Admin Modules) ---
+  const guestExcludedModules = ['SYSTEM_ROLES', 'SYSTEM_SETTINGS'];
+  for (const mod of allModules) {
+    if (!guestExcludedModules.includes(mod)) {
+      await grant('GUEST USER', mod, VIEW_ONLY);
+    }
+  }
 
   console.log(`\nComprehensive Matrix seeded successfully! Total permissions created: ${grantCount}`);
 }

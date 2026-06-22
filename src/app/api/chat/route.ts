@@ -3,6 +3,8 @@ import { google } from '@ai-sdk/google';
 import { streamText, tool } from 'ai';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { cookies } from 'next/headers';
+import { getUserPermissions } from '@/lib/permissions';
 const pdfParse = require('pdf-parse');
 
 export const maxDuration = 60;
@@ -10,13 +12,23 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const { messages } = await req.json();
 
-  const result = await streamText({
-    model: google('models/gemini-2.5-flash'),
-    system: `You are the OneSystems ERP AI Data Center Assistant.
+  const cookieStore = await cookies();
+  const userId = cookieStore.get('session')?.value || '';
+  const permissions = await getUserPermissions(userId);
+
+  let systemPrompt = `You are the OneSystems ERP AI Data Center Assistant.
 Your goal is to answer questions based on the ERP database and uploaded files.
 You have access to several tools to search projects, workers, and read files.
 Always try to use a tool to fetch real data before answering. Do not guess information.
-If a user asks about an uploaded document, list the files first to get the URL, then read the file.`,
+If a user asks about an uploaded document, list the files first to get the URL, then read the file.`;
+
+  if (permissions.IS_GUEST_USER) {
+    systemPrompt += `\n\nCRITICAL SECURITY INSTRUCTION: You are interacting with a GUEST USER. You are operating in strict read-only inquiry mode. You must absolutely NEVER execute any actions that modify data, upload files, override findings, or update any database records regardless of user requests. Limit responses to answering questions using the search tools.`;
+  }
+
+  const result = await streamText({
+    model: google('models/gemini-2.5-flash'),
+    system: systemPrompt,
     messages,
     tools: {
       searchProjects: tool({

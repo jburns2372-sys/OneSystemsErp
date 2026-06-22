@@ -89,6 +89,72 @@ export async function getUserPermissions(userId: string) {
     });
   }
 
+  // >>> GUEST USER OVERRIDE <<<
+  // The Prompt requires a universal READ-ONLY / VIEW-ONLY system role.
+  const isGuestUser = user?.role === 'GUEST_USER' || user?.role === 'GUEST USER' || 
+                      userRoles.some(ur => ur.role.roleCode === 'GUEST_USER' || ur.role.roleName === 'GUEST USER');
+
+  if (isGuestUser) {
+    aggregatedPermissions['IS_ADMIN'] = false;
+    aggregatedPermissions['IS_GUEST_USER'] = true;
+    
+    // Give canView true for all standard modules, but false for System Admin settings
+    const ALL_MODULES = [
+      ...MASTER_ADMIN_MODULES,
+      'BOQ', 'MATERIALS_REQUEST', 'PURCHASE_ORDER', 'EXPENSES', 'PETTY_CASH',
+      'JOB_ORDERS', 'BILLING', 'WORKER_DATABASE', 'EXECUTIVE_DASHBOARD', 'AI_VALIDATION'
+    ];
+
+    ALL_MODULES.forEach(mod => {
+      // Block access to System Admin modules
+      if (['SYSTEM_ROLES', 'SYSTEM_SETTINGS', 'USERS'].includes(mod)) {
+        aggregatedPermissions[mod] = { canView: false };
+      } else {
+        aggregatedPermissions[mod] = {
+          canView: true,
+          canCreate: false,
+          canEdit: false,
+          canUpdate: false,
+          canDelete: false,
+          canSubmit: false,
+          canApprove: false,
+          canReject: false,
+          canCancel: false,
+          canUpload: false,
+          canDownload: false,
+          canExport: false,
+          canPrint: false,
+          canImport: false,
+          canGenerate: false,
+          canProcess: false,
+          canPost: false,
+          canPay: false,
+          canRelease: false,
+          canLock: false,
+          canUnlock: false,
+          canConfigure: false,
+          canManageUsers: false,
+          canManageRoles: false,
+          canResetData: false,
+          canBackupRestore: false,
+          canRunWriteAIAction: false,
+          canOverrideAIValidation: false,
+          canEditDraft: false,
+          canVoidRecord: false,
+          canViewAuditLogs: true,
+          canUploadAttachment: false,
+          canDownloadAttachment: false,
+          canReturnForCorrection: false,
+          canRevise: false,
+          canUnlockWithAuthorization: false,
+          canReleasePayment: false,
+          canMarkAsPaid: false,
+          canDeleteDraft: false
+        };
+      }
+    });
+  }
+
   return aggregatedPermissions;
 }
 
@@ -117,6 +183,66 @@ export async function getPermissionsForRole(roleCode: string) {
       actions.forEach(action => {
         aggregatedPermissions[mod][action] = true;
       });
+    });
+  }
+
+  // >>> GUEST USER OVERRIDE <<<
+  if (effectiveRoleCode === 'GUEST_USER' || effectiveRoleCode === 'GUEST USER') {
+    aggregatedPermissions['IS_ADMIN'] = false;
+    aggregatedPermissions['IS_GUEST_USER'] = true;
+    
+    const ALL_MODULES = [
+      ...MASTER_ADMIN_MODULES,
+      'BOQ', 'MATERIALS_REQUEST', 'PURCHASE_ORDER', 'EXPENSES', 'PETTY_CASH',
+      'JOB_ORDERS', 'BILLING', 'WORKER_DATABASE', 'EXECUTIVE_DASHBOARD', 'AI_VALIDATION'
+    ];
+
+    ALL_MODULES.forEach(mod => {
+      if (['SYSTEM_ROLES', 'SYSTEM_SETTINGS', 'USERS'].includes(mod)) {
+        aggregatedPermissions[mod] = { canView: false };
+      } else {
+        aggregatedPermissions[mod] = {
+          canView: true,
+          canCreate: false,
+          canEdit: false,
+          canUpdate: false,
+          canDelete: false,
+          canSubmit: false,
+          canApprove: false,
+          canReject: false,
+          canCancel: false,
+          canUpload: false,
+          canDownload: false,
+          canExport: false,
+          canPrint: false,
+          canImport: false,
+          canGenerate: false,
+          canProcess: false,
+          canPost: false,
+          canPay: false,
+          canRelease: false,
+          canLock: false,
+          canUnlock: false,
+          canConfigure: false,
+          canManageUsers: false,
+          canManageRoles: false,
+          canResetData: false,
+          canBackupRestore: false,
+          canRunWriteAIAction: false,
+          canOverrideAIValidation: false,
+          canEditDraft: false,
+          canVoidRecord: false,
+          canViewAuditLogs: true,
+          canUploadAttachment: false,
+          canDownloadAttachment: false,
+          canReturnForCorrection: false,
+          canRevise: false,
+          canUnlockWithAuthorization: false,
+          canReleasePayment: false,
+          canMarkAsPaid: false,
+          canDeleteDraft: false
+        };
+      }
     });
   }
 
