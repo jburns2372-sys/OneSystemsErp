@@ -118,7 +118,7 @@ export default async function ProjectDetailsPage({
           unit: item.unit || 'lot',
           quantity: 0,
           totalCost: 0,
-          unitCost: item.combinedUnitCost || item.directCost || 0
+          unitCost: item.unitCost || 0
         });
       }
       const group = groups.get(key);

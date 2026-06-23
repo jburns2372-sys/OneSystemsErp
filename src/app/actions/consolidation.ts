@@ -93,7 +93,7 @@ export async function autoConsolidateBOQ(projectId: string, force: boolean = fal
         unit: finalUnit,
         quantity: 0,
         totalCost: 0,
-        unitCost: item.combinedUnitCost || item.directCost || 0,
+        unitCost: item.unitCost || 0,
         items: []
       });
     }
