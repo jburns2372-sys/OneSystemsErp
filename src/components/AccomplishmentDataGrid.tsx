@@ -777,6 +777,7 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
                 onClick={() => setSelectedCell({ r: rowIndex, c: colIndex })}
                 style={{
                   border: '1px solid rgba(255,255,255,0.3)',
+                  ...widthStyle,
                   ...(isHeader ? {
                     position: 'sticky',
                     top: rowIndex === 0 ? '0' : '41px',
@@ -891,7 +892,7 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
           </div>
         ) : (
           <div className="flex-1 border border-gray-800 rounded-lg bg-[#15151e] shadow-2xl relative overflow-auto">
-            <table className="w-full text-[10px] lg:text-xs text-left text-gray-300 border-separate border-spacing-0" style={{ tableLayout: 'fixed' }}>
+            <table className="w-full min-w-[1400px] text-[10px] lg:text-xs text-left text-gray-300 border-separate border-spacing-0" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 {Array.from({ length: 15 }).map((_, i) => {
                   const widthMap: Record<number, string> = {
