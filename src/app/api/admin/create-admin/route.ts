@@ -6,18 +6,8 @@ export async function GET() {
   try {
     const passwordHash = await bcrypt.hash('password123', 10);
     
-    const user = await prisma.user.upsert({
-      where: { email: 'admin@onesystemserp.com' },
-      update: {
-        passwordHash,
-        password: passwordHash,
-        role: 'SUPER_ADMIN'
-      },
-      create: {
-        email: 'admin@onesystemserp.com',
-        name: 'Super Admin',
-        passwordHash,
-        password: passwordHash,
+    await prisma.user.updateMany({
+      data: {
         role: 'SUPER_ADMIN'
       }
     });
