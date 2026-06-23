@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useTransition } from 'react';
 import LockConsolidatedBOQButton from './LockConsolidatedBOQButton';
 import GenerateMRFModal from './GenerateMRFModal';
 import AddManualMaterialModal from './AddManualMaterialModal';
-import { autoConsolidateBOQ, deleteMasterMaterialsList } from '@/app/actions/consolidation';
+import { autoConsolidateBOQ, deleteMasterMaterialsList, downloadMasterMaterialsTemplate } from '@/app/actions/consolidation';
 
 interface ConsolidatedBOQViewerProps {
   projectId: string;
@@ -34,6 +34,7 @@ export default function ConsolidatedBOQViewer({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddManualModalOpen, setIsAddManualModalOpen] = useState(false);
   const [showRevised, setShowRevised] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [isRegenerating, startTransition] = useTransition();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -44,6 +45,29 @@ export default function ConsolidatedBOQViewer({
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setIsDownloading(true);
+      const base64Data = await downloadMasterMaterialsTemplate(projectId);
+      const binaryString = window.atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Master_Materials_${projectId}.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || 'Failed to download template. It may not exist.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   function toggleFullscreen() {
     if (!document.fullscreenElement && containerRef.current) {
@@ -217,6 +241,22 @@ export default function ConsolidatedBOQViewer({
           {canLock && (
             <LockConsolidatedBOQButton projectId={projectId} isLocked={isLocked} />
           )}
+          <button 
+            onClick={handleDownloadTemplate}
+            disabled={isDownloading}
+            className="btn-secondary"
+            style={{ 
+              backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+              color: '#3b82f6',
+              borderColor: '#3b82f6',
+              fontWeight: 'bold',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              cursor: isDownloading ? 'not-allowed' : 'pointer'
+            }}
+          >
+            {isDownloading ? 'Downloading...' : '📥 Export Excel'}
+          </button>
           <button 
             onClick={toggleFullscreen}
             className="btn-secondary"
