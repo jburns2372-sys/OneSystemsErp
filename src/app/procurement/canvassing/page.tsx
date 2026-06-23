@@ -1,7 +1,21 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import DeleteCanvassButton from './DeleteCanvassButton';
 
 export default async function CanvassingDashboard() {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value || cookieStore.get('userId')?.value;
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+  
+  let isSuperAdmin = false;
+  if (sessionId) {
+    const user = await prisma.user.findUnique({ where: { id: sessionId } });
+    if (user) {
+      const role = simulatedRole || user.role;
+      isSuperAdmin = role === 'SUPER_ADMIN';
+    }
+  }
   const mrfForCanvass = await prisma.materialRequest.findMany({
     where: { status: 'APPROVED' },
     include: { project: true, items: true, canvassForms: true }
@@ -124,6 +138,9 @@ export default async function CanvassingDashboard() {
                           cursor: 'pointer'
                         }}>View</button>
                       </Link>
+                      {isSuperAdmin && (
+                        <DeleteCanvassButton canvassId={cf.id} />
+                      )}
                     </td>
                   </tr>
                 ))}

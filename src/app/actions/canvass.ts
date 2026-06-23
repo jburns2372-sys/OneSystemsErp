@@ -231,3 +231,23 @@ export async function endorseCanvassRecommendation(canvassId: string) {
 }
 
 
+
+export async function deleteCanvass(canvassId: string) {
+  try {
+    const session = await cookies();
+    const sessionId = session.get('session')?.value || session.get('userId')?.value;
+    const simulatedRole = session.get('simulatedRole')?.value;
+    if (!sessionId) throw new Error('Unauthorized');
+    const user = await prisma.user.findUnique({ where: { id: sessionId } });
+    if (!user) throw new Error('User not found');
+    const role = simulatedRole || user.role;
+    if (role !== 'SUPER_ADMIN') throw new Error('Unauthorized: Only SUPER_ADMIN can delete canvass forms');
+    await prisma.canvassForm.delete({ where: { id: canvassId } });
+    const { revalidatePath } = require('next/cache');
+    revalidatePath('/procurement/canvassing');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error deleting canvass:', error);
+    throw new Error(error.message || 'Failed to delete canvass');
+  }
+}
