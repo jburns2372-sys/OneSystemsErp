@@ -6,6 +6,7 @@ import PermissionGuard from '@/components/PermissionGuard';
 import { getUserPermissions } from '@/lib/permissions';
 import NewProjectButton from './NewProjectButton';
 import ManagerAssigner from './ManagerAssigner';
+import DeleteProjectButton from './DeleteProjectButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export default async function ProjectsPage() {
 
   const canAssignManager = permissions?.PROJECT_MANAGEMENT?.canUpdate || false;
   let users: any[] = [];
-  if (canAssignManager) {
+  if (canAssignManager || permissions?.PROJECT_MANAGEMENT?.canCreate) {
     users = await prisma.user.findMany({ 
       select: { id: true, name: true, role: true },
       orderBy: { name: 'asc' }
@@ -36,7 +37,7 @@ export default async function ProjectsPage() {
           <p>Manage and monitor all active construction projects.</p>
         </div>
         <PermissionGuard permissions={permissions} moduleName="PROJECT_MANAGEMENT" action="canCreate">
-          <NewProjectButton />
+          <NewProjectButton users={users} />
         </PermissionGuard>
       </header>
 
@@ -78,8 +79,11 @@ export default async function ProjectsPage() {
                     canEdit={canAssignManager} 
                   />
                 </td>
-                <td>
+                <td style={{ display: 'flex', gap: '15px', alignItems: 'center', height: '100%' }}>
                   <Link href={`/projects/${project.id}`} className={styles.actionLink}>View Details</Link>
+                  <PermissionGuard permissions={permissions} moduleName="PROJECT_MANAGEMENT" action="canDelete">
+                    <DeleteProjectButton projectId={project.id} />
+                  </PermissionGuard>
                 </td>
               </tr>
             ))}

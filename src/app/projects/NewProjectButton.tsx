@@ -1,12 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Modal from '@/components/ui/Modal';
 import { createProject } from '@/app/actions/mutations';
 
-export default function NewProjectButton() {
+export default function NewProjectButton({ users }: { users?: {id: string, name: string}[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, setIsPending] = useState(false);
+
+  const [startDate, setStartDate] = useState<string>('');
+  const [durationDays, setDurationDays] = useState<number | ''>('');
+
+  const computedCompletionDate = useMemo(() => {
+    if (!startDate || !durationDays) return '';
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + Number(durationDays));
+    return date.toISOString().split('T')[0];
+  }, [startDate, durationDays]);
 
   const openModal = () => {
     setIsOpen(true);
@@ -48,6 +58,35 @@ export default function NewProjectButton() {
             <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
               The system will automatically analyze your Excel file to extract the Project Name, Location, and compute the Total Contract Amount.
             </p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', textAlign: 'left', marginBottom: '20px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Project Manager</label>
+                <select name="managerId" style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}>
+                  <option value="">Unassigned</option>
+                  {users?.map(u => (
+                    <option key={u.id} value={u.id}>{u.name || 'Unnamed'}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Project Start Date</label>
+                  <input type="date" name="startDate" value={startDate} onChange={e => setStartDate(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white', colorScheme: 'dark' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Duration (Calendar Days)</label>
+                  <input type="number" name="durationDays" value={durationDays} onChange={e => setDurationDays(e.target.value ? Number(e.target.value) : '')} min={1} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Computed Completion Date</label>
+                <input type="date" value={computedCompletionDate} readOnly style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', colorScheme: 'dark' }} />
+              </div>
+            </div>
+
             <div style={{ 
               border: '2px dashed var(--glass-border)', 
               borderRadius: '8px', 

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useTransition } from 'react';
 import LockConsolidatedBOQButton from './LockConsolidatedBOQButton';
 import GenerateMRFModal from './GenerateMRFModal';
+import { autoConsolidateBOQ } from '@/app/actions/consolidation';
 
 interface ConsolidatedBOQViewerProps {
   projectId: string;
@@ -29,6 +30,7 @@ export default function ConsolidatedBOQViewer({
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showRevised, setShowRevised] = useState(true);
+  const [isRegenerating, startTransition] = useTransition();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,6 +70,19 @@ export default function ConsolidatedBOQViewer({
   }
 
   const selectedItemsList = consolidatedItems.filter(item => selectedItemIds.has(item.id));
+
+  const handleRegenerate = () => {
+    if (confirm('Are you sure you want to REGENERATE the Master Materials List? This will discard the current list and re-analyze the Procurement Benchmark from scratch.')) {
+      startTransition(async () => {
+        try {
+          await autoConsolidateBOQ(projectId, true);
+          setSelectedItemIds(new Set());
+        } catch (err: any) {
+          alert(err.message || 'Error regenerating Master Materials List');
+        }
+      });
+    }
+  };
 
   // Calculate summary totals
   const hasAnyVOImpact = consolidatedItems.some(
@@ -128,6 +143,24 @@ export default function ConsolidatedBOQViewer({
               }}
             >
               📋 Generate MRF ({selectedItemIds.size})
+            </button>
+          )}
+          {!isLocked && (
+            <button 
+              onClick={handleRegenerate}
+              disabled={isRegenerating}
+              className="btn-secondary"
+              style={{
+                backgroundColor: 'transparent',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--glass-border)',
+                fontWeight: 'bold',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                cursor: isRegenerating ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isRegenerating ? 'Regenerating...' : '⚡ Regenerate List'}
             </button>
           )}
           {canLock && (

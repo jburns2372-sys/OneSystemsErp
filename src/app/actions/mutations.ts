@@ -9,6 +9,10 @@ import * as path from 'path';
 
 export async function createProject(formData: FormData) {
   const boqFile = formData.get('boqFile') as File | null;
+  const managerId = formData.get('managerId') as string | null;
+  const startDateStr = formData.get('startDate') as string | null;
+  const durationDaysStr = formData.get('durationDays') as string | null;
+
   if (!boqFile || boqFile.size === 0) {
     throw new Error('No file uploaded');
   }
@@ -150,6 +154,21 @@ export async function createProject(formData: FormData) {
 
   description = `${description}\n\nBOQ File Uploaded: ${fileName}`;
 
+  let startDate: Date | null = null;
+  let endDate: Date | null = null;
+  let originalContractDuration: number | null = null;
+
+  if (startDateStr) {
+    startDate = new Date(startDateStr);
+  }
+  if (durationDaysStr) {
+    originalContractDuration = parseInt(durationDaysStr);
+    if (startDate && originalContractDuration) {
+      endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + originalContractDuration);
+    }
+  }
+
   const project = await prisma.project.create({
     data: {
       name,
@@ -157,6 +176,11 @@ export async function createProject(formData: FormData) {
       location,
       contractAmount,
       status: 'ACTIVE',
+      managerId: managerId || null,
+      startDate,
+      endDate,
+      originalContractDuration,
+      originalCompletionDate: endDate,
       awardedBoqItems: {
         create: parsedItems
       }

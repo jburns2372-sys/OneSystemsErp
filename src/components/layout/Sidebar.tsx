@@ -46,6 +46,7 @@ export default function Sidebar({ permissions = {}, user }: { permissions?: Reco
     { name: 'Finance', href: '/finance', icon: '💰', moduleKey: 'FINANCE' },
     { name: 'Subcontracting', href: '/subcontracting', icon: '👷', moduleKey: 'SUBCONTRACTING' },
     { name: 'Accomplishments', href: '/accomplishments', icon: '📈', moduleKey: 'ACCOMPLISHMENTS' },
+    { name: 'Project Scheduling', href: '/scheduling', icon: '📅', moduleKey: 'PROJECT_MANAGEMENT' },
     { name: 'Payroll', href: '/payroll', icon: '👥', moduleKey: 'PAYROLL' },
     { name: 'Equipment', href: '/equipment', icon: '🚜', moduleKey: 'EQUIPMENT' },
     { name: 'Variation Orders', href: '/variation-orders', icon: '🔄', moduleKey: 'VARIATION_ORDERS' },

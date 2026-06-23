@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
-export async function autoConsolidateBOQ(projectId: string) {
+export async function autoConsolidateBOQ(projectId: string, force: boolean = false) {
   // Check if project benchmark is locked
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -20,7 +20,14 @@ export async function autoConsolidateBOQ(projectId: string) {
   });
 
   if (existing > 0) {
-    throw new Error('BOQ is already consolidated for this project.');
+    if (!force) {
+      throw new Error('BOQ is already consolidated for this project.');
+    } else {
+      // Delete existing to allow regeneration
+      await prisma.consolidatedBOQItem.deleteMany({
+        where: { projectId }
+      });
+    }
   }
 
   const benchmarkItems = await prisma.procurementBenchmarkItem.findMany({
