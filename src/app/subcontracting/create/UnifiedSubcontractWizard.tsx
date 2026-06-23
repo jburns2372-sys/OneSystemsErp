@@ -21,6 +21,7 @@ export default function UnifiedSubcontractWizard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isOneLot, setIsOneLot] = useState(false);
+  const [lotPriceStr, setLotPriceStr] = useState(initialData?.contractAmount ? initialData.contractAmount.toString() : '');
 
   // --- STATE: Step 1 (Package Details) ---
   const [packageData, setPackageData] = useState({
@@ -313,9 +314,16 @@ export default function UnifiedSubcontractWizard({
                     <div style={{ marginTop: '16px' }}>
                       <label style={{ display: 'block', fontSize: '0.85rem', color: '#1e40af', marginBottom: '4px' }}>Total Subcontracting Lot Price (₱)</label>
                       <input 
-                        type="number" 
-                        value={packageData.contractAmount} 
-                        onChange={(e) => setPackageData(prev => ({...prev, contractAmount: parseFloat(e.target.value) || 0}))}
+                        type="text" 
+                        value={lotPriceStr ? lotPriceStr.split('.')[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (lotPriceStr.includes('.') ? '.' + lotPriceStr.split('.')[1] : '') : ''} 
+                        onChange={(e) => {
+                          let val = e.target.value.replace(/,/g, '');
+                          val = val.replace(/[^0-9.]/g, '');
+                          const parts = val.split('.');
+                          if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                          setLotPriceStr(val);
+                          setPackageData(prev => ({...prev, contractAmount: parseFloat(val) || 0}));
+                        }}
                         style={{ width: '100%', maxWidth: '300px', padding: '10px', borderRadius: '6px', border: '1px solid #93c5fd', backgroundColor: '#ffffff', color: '#111827', fontWeight: 'bold' }}
                       />
                     </div>
