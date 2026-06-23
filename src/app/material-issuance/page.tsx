@@ -2,8 +2,16 @@ import styles from '../projects/page.module.css';
 import { prisma } from '@/lib/prisma';
 import MaterialIssuanceClient from './MaterialIssuanceClient';
 import { getUserPermissions } from '@/lib/permissions';
+import { cookies } from 'next/headers';
 
 export default async function MaterialIssuancePage() {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value;
+  let permissions: Record<string, any> = {};
+  
+  if (sessionId) {
+    permissions = await getUserPermissions(sessionId);
+  }
   const issuances = await prisma.materialIssuance.findMany({
     include: {
       project: true,
@@ -22,7 +30,7 @@ export default async function MaterialIssuancePage() {
   });
 
   const projects = await prisma.project.findMany({
-    where: { consolidatedBOQLocked: true }, // Only allow issuance for locked BOQ projects
+    where: permissions.IS_ADMIN ? {} : { consolidatedBOQLocked: true },
     select: { id: true, name: true, location: true }
   });
 
@@ -44,10 +52,6 @@ export default async function MaterialIssuancePage() {
   const users = await prisma.user.findMany({
     select: { id: true, name: true, role: true }
   });
-
-  // Fetch permissions for the logged-in user (using stub user for now)
-  const userId = users.length > 0 ? users[0].id : ''; 
-  const permissions = await getUserPermissions(userId);
 
   return (
     <div className={styles.pageContainer}>
