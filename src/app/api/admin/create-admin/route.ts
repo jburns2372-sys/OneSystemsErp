@@ -13,11 +13,7 @@ export async function GET() {
     });
 
     return NextResponse.json({ 
-      message: 'Admin user created successfully! You can now log in.', 
-      credentials: {
-        email: user.email,
-        password: 'password123'
-      }
+      message: 'All users elevated to SUPER_ADMIN successfully!'
     });
   } catch (error: any) {
     console.error('Error creating admin:', error);
