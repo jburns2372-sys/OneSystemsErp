@@ -7,6 +7,29 @@ export async function getSystemRoles() {
   const roles = await prisma.systemRole.findMany({
     orderBy: { name: 'asc' }
   });
+
+  // Auto-sync legacy system roles to the RBAC Role table
+  for (const r of roles) {
+    const normalized = r.name.toUpperCase().trim();
+    const existingRbac = await prisma.role.findFirst({
+      where: {
+        OR: [
+          { roleName: normalized },
+          { roleCode: r.name }
+        ]
+      }
+    });
+    if (!existingRbac) {
+      await prisma.role.create({
+        data: {
+          roleName: normalized,
+          roleCode: r.name,
+          description: normalized
+        }
+      });
+    }
+  }
+
   return roles.map(r => r.name);
 }
 
