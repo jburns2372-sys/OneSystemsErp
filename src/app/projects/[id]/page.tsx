@@ -84,17 +84,22 @@ export default async function ProjectDetailsPage({
   });
   const revisedContractAmount = (project.contractAmount || 0) + approvedAdditive - approvedDeductive;
 
+  let originalFileUrl = '';
+  if (project.description && project.description.includes('BOQ File Uploaded: ')) {
+    originalFileUrl = project.description.split('BOQ File Uploaded: ')[1].trim();
+  }
+
   if (hasBOQ) {
     let customHtml = '<table><thead><tr style="background: #e0e0e0; font-weight: bold;"><th>Item No.</th><th>Description</th><th>Unit</th><th>Quantity</th><th>Unit Cost</th><th>Total Cost</th></tr></thead><tbody>';
     for (const item of project.awardedBoqItems) {
       const displayUnitCost = item.quantity > 0 ? item.totalCost / item.quantity : 0;
       customHtml += `<tr>
-        <td>${item.itemCode || ''}</td>
-        <td>${item.description || ''}</td>
-        <td>${item.unit || ''}</td>
-        <td>${item.quantity?.toLocaleString() || ''}</td>
-        <td>${displayUnitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-        <td>${item.totalCost?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || ''}</td>
+        <td style="${!item.quantity && !item.totalCost ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${item.itemCode || ''}</td>
+        <td style="${!item.quantity && !item.totalCost ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${item.description || ''}</td>
+        <td style="${!item.quantity && !item.totalCost ? 'background-color: rgba(0,0,0,0.05);' : ''}">${item.unit || ''}</td>
+        <td style="${!item.quantity && !item.totalCost ? 'background-color: rgba(0,0,0,0.05);' : ''}">${item.quantity > 0 ? item.quantity.toLocaleString() : ''}</td>
+        <td style="${!item.quantity && !item.totalCost ? 'background-color: rgba(0,0,0,0.05);' : ''}">${displayUnitCost > 0 ? displayUnitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+        <td style="${!item.quantity && !item.totalCost ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${item.totalCost > 0 ? item.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}</td>
       </tr>`;
     }
     customHtml += '</tbody></table>';
@@ -231,7 +236,12 @@ export default async function ProjectDetailsPage({
               )}
             </div>
           </div>
-          <AwardedBOQViewer htmlTable={htmlTable} consolidatedHtmlTable={consolidatedHtmlTable} />
+          <AwardedBOQViewer 
+            htmlTable={htmlTable} 
+            consolidatedHtmlTable={consolidatedHtmlTable} 
+            originalFileUrl={originalFileUrl}
+            projectName={project.name}
+          />
         </>
       )}
 

@@ -56,7 +56,7 @@ export default function CreateMRFDropdown({ projects }: { projects: Project[] })
               key={p.id}
               onClick={() => {
                 setIsOpen(false);
-                router.push(`/material-requests/new?projectId=${p.id}`);
+                router.push(`/material-requests/create?projectId=${p.id}`);
               }}
               style={{
                 padding: '12px 15px',

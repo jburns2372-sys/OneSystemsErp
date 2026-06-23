@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useTransition } from 'react';
 import LockConsolidatedBOQButton from './LockConsolidatedBOQButton';
 import GenerateMRFModal from './GenerateMRFModal';
-import { autoConsolidateBOQ } from '@/app/actions/consolidation';
+import AddManualMaterialModal from './AddManualMaterialModal';
+import { autoConsolidateBOQ, deleteMasterMaterialsList } from '@/app/actions/consolidation';
 
 interface ConsolidatedBOQViewerProps {
   projectId: string;
@@ -14,6 +15,7 @@ interface ConsolidatedBOQViewerProps {
   users?: { id: string; name: string | null }[];
   canCreateMRF?: boolean;
   canLock?: boolean;
+  isSuperAdmin?: boolean;
 }
 
 export default function ConsolidatedBOQViewer({ 
@@ -24,11 +26,13 @@ export default function ConsolidatedBOQViewer({
   totalAmount,
   users = [],
   canCreateMRF = true,
-  canLock = true
+  canLock = true,
+  isSuperAdmin = false
 }: ConsolidatedBOQViewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddManualModalOpen, setIsAddManualModalOpen] = useState(false);
   const [showRevised, setShowRevised] = useState(true);
   const [isRegenerating, startTransition] = useTransition();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -79,6 +83,18 @@ export default function ConsolidatedBOQViewer({
           setSelectedItemIds(new Set());
         } catch (err: any) {
           alert(err.message || 'Error regenerating Master Materials List');
+        }
+      });
+    }
+  };
+
+  const handleDelete = () => {
+    if (confirm('🚨 SUPER ADMIN ACTION: Are you sure you want to completely DELETE the Master Materials List? This action cannot be undone.')) {
+      startTransition(async () => {
+        try {
+          await deleteMasterMaterialsList(projectId);
+        } catch (err: any) {
+          alert(err.message || 'Error deleting Master Materials List');
         }
       });
     }
@@ -163,6 +179,41 @@ export default function ConsolidatedBOQViewer({
               {isRegenerating ? 'Regenerating...' : '⚡ Regenerate List'}
             </button>
           )}
+          {!isLocked && (
+            <button
+              onClick={() => setIsAddManualModalOpen(true)}
+              className="btn-secondary"
+              style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                color: '#10b981',
+                border: '1px solid #10b981',
+                fontWeight: 'bold',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              ➕ Add Material Manually
+            </button>
+          )}
+          {isSuperAdmin && (
+            <button
+              onClick={handleDelete}
+              disabled={isRegenerating}
+              className="btn-secondary"
+              style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#ef4444',
+                border: '1px solid #ef4444',
+                fontWeight: 'bold',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                cursor: isRegenerating ? 'not-allowed' : 'pointer'
+              }}
+            >
+              🗑️ Delete Materials List
+            </button>
+          )}
           {canLock && (
             <LockConsolidatedBOQButton projectId={projectId} isLocked={isLocked} />
           )}
@@ -188,6 +239,13 @@ export default function ConsolidatedBOQViewer({
           items={selectedItemsList}
           users={users}
           onClose={() => setIsModalOpen(false)}
+        />
+      )}
+
+      {isAddManualModalOpen && (
+        <AddManualMaterialModal 
+          projectId={projectId}
+          onClose={() => setIsAddManualModalOpen(false)}
         />
       )}
 
@@ -304,7 +362,6 @@ export default function ConsolidatedBOQViewer({
                 </th>
               )}
               <th>Item Code</th>
-              <th>Category</th>
               <th>Description</th>
               <th style={{ textAlign: 'center' }}>Source</th>
               <th style={{ textAlign: 'right' }}>Orig Qty</th>
@@ -347,7 +404,6 @@ export default function ConsolidatedBOQViewer({
                       </span>
                     )}
                   </td>
-                  <td style={{ color: 'var(--text-secondary)' }}>{item.category || 'N/A'}</td>
                   <td>{item.description}</td>
                   <td style={{ textAlign: 'center' }}>
                     {item.isVariationItem || hasVOImpact ? (

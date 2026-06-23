@@ -25,9 +25,10 @@ const Workbook = dynamic(() => import("@fortune-sheet/react").then((mod) => mod.
 interface SpreadsheetViewerProps {
   fileRecord: any;
   onClose: () => void;
+  readOnly?: boolean;
 }
 
-export default function SpreadsheetEditor({ fileRecord, onClose }: SpreadsheetViewerProps) {
+export default function SpreadsheetEditor({ fileRecord, onClose, readOnly = false }: SpreadsheetViewerProps) {
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -95,6 +96,15 @@ export default function SpreadsheetEditor({ fileRecord, onClose }: SpreadsheetVi
                 }
               });
             }
+          }
+
+          // CRITICAL FIX: luckyexcel outputs images as an object, but fortune-sheet expects an array (or vice versa).
+          // This causes `_context$insertedImgs.map is not a function`. We delete images to prevent crashes.
+          if (sheet.images) {
+            delete sheet.images;
+          }
+          if (sheet.calcChain) {
+            delete sheet.calcChain;
           }
 
           return sheet;
@@ -226,7 +236,9 @@ export default function SpreadsheetEditor({ fileRecord, onClose }: SpreadsheetVi
 
         {/* Action Toolbar */}
         <div className="h-12 flex items-center px-4 gap-4 overflow-x-auto">
-          {!isEditMode ? (
+          {readOnly ? (
+            <span className="text-gray-400 text-xs italic">Viewing Original File Format</span>
+          ) : !isEditMode ? (
             <button 
               onClick={handleEditWorkingCopy}
               className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded shadow-sm text-xs font-semibold whitespace-nowrap"

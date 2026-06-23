@@ -180,7 +180,7 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
           <div className={styles.statCard}>
             <h3>Site Requisitions (MRF)</h3>
             <p className={styles.statValue} style={{ color: '#f97316' }}>{stats.pendingMRFs}</p>
-            <Link href="/material-requests/new" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Request Materials ➔</Link>
+            <Link href="/material-requests/create" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Request Materials ➔</Link>
           </div>
         </div>
       )}

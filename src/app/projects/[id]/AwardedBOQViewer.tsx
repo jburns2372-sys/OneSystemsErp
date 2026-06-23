@@ -2,17 +2,20 @@
 
 import { useState } from 'react';
 
-export default function AwardedBOQViewer({ htmlTable, consolidatedHtmlTable }: { htmlTable: string, consolidatedHtmlTable?: string }) {
+interface AwardedBOQViewerProps {
+  htmlTable: string;
+  consolidatedHtmlTable?: string;
+  originalFileUrl?: string;
+  projectName?: string;
+}
+
+export default function AwardedBOQViewer({ htmlTable, consolidatedHtmlTable, originalFileUrl, projectName }: AwardedBOQViewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isConsolidatedView, setIsConsolidatedView] = useState(false);
 
-  if (!htmlTable) {
-    return <p style={{ color: 'var(--text-secondary)' }}>No original Excel file found to display. Please upload one from the Projects screen.</p>;
-  }
-
   return (
     <div className={isFullscreen ? "fullscreen-wrapper" : "normal-wrapper"}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
         {consolidatedHtmlTable && (
           <button
             onClick={() => setIsConsolidatedView(!isConsolidatedView)}
@@ -109,10 +112,19 @@ export default function AwardedBOQViewer({ htmlTable, consolidatedHtmlTable }: {
             background: #d0d0d0;
           }
         `}} />
-        <div 
-          className="excel-table-wrapper"
-          dangerouslySetInnerHTML={{ __html: isConsolidatedView && consolidatedHtmlTable ? consolidatedHtmlTable : htmlTable }} 
-        />
+        {htmlTable ? (
+          <div 
+            className="excel-table-wrapper"
+            dangerouslySetInnerHTML={{ __html: isConsolidatedView && consolidatedHtmlTable ? consolidatedHtmlTable : htmlTable }} 
+          />
+        ) : (
+          <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+            <h3 style={{ color: '#ef4444', marginBottom: '15px' }}>⚠️ BOQ Data Not Extracted</h3>
+            <p style={{ color: '#4b5563', marginBottom: '20px' }}>
+              The system could not automatically parse the BOQ line items because the Excel format didn't match the expected structure.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
