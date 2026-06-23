@@ -74,7 +74,33 @@ export async function getProjectReport() {
 }
 
 export async function getInventoryReport() {
-  // Inventory tracking is calculated via Delivery and Issuance.
-  // Returning an empty array for now until a dedicated Inventory views are built.
-  return [];
+  const items = await prisma.consolidatedBOQItem.findMany({
+    where: {
+      deliveredQty: {
+        gt: prisma.consolidatedBOQItem.fields.consumedQty
+      }
+    },
+    select: {
+      id: true,
+      category: true,
+      description: true,
+      unitCost: true,
+      deliveredQty: true,
+      consumedQty: true,
+    }
+  });
+
+  const report = items.map(item => {
+    const qoh = item.deliveredQty - item.consumedQty;
+    return {
+      stockId: item.id,
+      category: item.category || 'Uncategorized',
+      description: item.description,
+      quantityOnHand: qoh,
+      estimatedUnitCost: item.unitCost,
+      totalEstimatedValue: qoh * item.unitCost
+    };
+  });
+
+  return report;
 }
