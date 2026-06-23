@@ -3,7 +3,9 @@ import { seedWorkers } from '../../../../../prisma/seeders/seed-workers';
 import { seedSuppliers } from '../../../../../prisma/seeders/seed-suppliers';
 import { seedSubcontractors } from '../../../../../prisma/seeders/seed-subcontractors';
 
-export async function POST() {
+export const dynamic = 'force-dynamic';
+
+export async function GET() {
   try {
     // Add simple authentication check here if needed (e.g. check for admin session)
     
