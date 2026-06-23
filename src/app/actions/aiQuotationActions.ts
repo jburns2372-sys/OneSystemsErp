@@ -17,15 +17,15 @@ export async function uploadAndAnalyzeQuotationsBulk(canvassId: string, formData
     const canvass = await prisma.canvassForm.findUnique({
       where: { id: canvassId },
       include: {
-        items: { include: { consolidatedBoqItem: true } },
-        invitedSuppliers: { include: { supplier: true } }
+        items: { include: { consolidatedBoqItem: true } }
       }
     });
 
     if (!canvass) throw new Error('Canvass not found');
 
-    const expectedSuppliersText = canvass.invitedSuppliers.map(s => `- ID: ${s.supplierId}, Name: ${s.supplier.name}`).join('\n');
-    const expectedItemsText = canvass.items.map(i => `- Item ID: ${i.id}, Description: ${i.consolidatedBoqItem.description}, Qty Required: ${i.quantityRequired}`).join('\n');
+    const allSuppliers = await prisma.supplier.findMany();
+    const expectedSuppliersText = allSuppliers.map(s => `- ID: ${s.id}, Name: ${s.name}`).join('\n');
+    const expectedItemsText = canvass.items.map(i => `- Item ID: ${i.id}, Description: ${i.consolidatedBoqItem?.description || 'Unknown'}, Qty Required: ${i.quantityRequired}`).join('\n');
 
     const results = [];
 
@@ -166,12 +166,12 @@ Return EXACTLY the following JSON format. Do not use markdown blocks. Just the r
         });
 
         // Get supplier name for success message
-        const supplierObj = canvass.invitedSuppliers.find(s => s.supplierId === aiData.supplierId);
+        const supplierObj = allSuppliers.find(s => s.id === aiData.supplierId);
 
         return {
           fileName: file.name,
           success: true,
-          supplierName: supplierObj?.supplier.name || 'Unknown Supplier',
+          supplierName: supplierObj?.name || 'Unknown Supplier',
           message: aiData.findings || 'Successfully extracted and encoded.'
         };
 
