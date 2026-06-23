@@ -251,3 +251,31 @@ export async function deleteCanvass(canvassId: string) {
     throw new Error(error.message || 'Failed to delete canvass');
   }
 }
+
+export async function updateSupplierQuotation(quotationId: string, supplierId: string, items: any[]) {
+  try {
+    await prisma.quotationItem.deleteMany({ where: { quotationId } });
+    const totalAmount = items.reduce((acc, item) => acc + (item.unitCost * item.quantityAvailable), 0);
+    await prisma.supplierQuotation.update({
+      where: { id: quotationId },
+      data: {
+        supplierId,
+        totalAmount,
+        items: {
+          create: items.map(item => ({
+            canvassItemId: item.canvassItemId,
+            unitCost: item.unitCost,
+            quantityAvailable: item.quantityAvailable,
+            totalCost: item.unitCost * item.quantityAvailable,
+            brand: item.brand,
+            remarks: item.remarks
+          }))
+        }
+      }
+    });
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating quotation:', error);
+    return { success: false, error: error.message || 'Failed to update quotation' };
+  }
+}

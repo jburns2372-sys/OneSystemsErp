@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { addSupplierQuotation, autoGeneratePOFromCanvass, sendCanvassEmail, approveCanvassRecommendation, endorseCanvassRecommendation } from '@/app/actions/canvass';
+import { addSupplierQuotation, updateSupplierQuotation, autoGeneratePOFromCanvass, sendCanvassEmail, approveCanvassRecommendation, endorseCanvassRecommendation } from '@/app/actions/canvass';
 import { uploadAndAnalyzeQuotationsBulk } from '@/app/actions/aiQuotationActions';
 import PrintableCanvass from './PrintableCanvass';
 
@@ -40,6 +40,7 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
 
   // Form states for new quotation
   const [showAddQuote, setShowAddQuote] = useState(false);
+  const [editQuotationId, setEditQuotationId] = useState<string | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [quoteItems, setQuoteItems] = useState<Record<string, { unitCost: number, quantityAvailable: number }>>({});
   
@@ -84,13 +85,36 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
       quantityAvailable: quoteItems[item.id]?.quantityAvailable || item.quantityRequired
     }));
 
-    const res = await addSupplierQuotation(canvass.id, selectedSupplier, items);
+    const res = editQuotationId 
+      ? await updateSupplierQuotation(editQuotationId, selectedSupplier, items)
+      : await addSupplierQuotation(canvass.id, selectedSupplier, items);
+
     if (res.success) {
       setShowAddQuote(false);
+      setEditQuotationId(null);
+      setQuoteItems({});
+      setSelectedSupplier('');
       router.refresh();
     } else {
       alert(res.error);
     }
+  };
+
+  const handleEditQuotation = (q: any) => {
+    setEditQuotationId(q.id);
+    setSelectedSupplier(q.supplierId);
+    
+    const initialQuoteItems: Record<string, { unitCost: number, quantityAvailable: number }> = {};
+    q.items.forEach((item: any) => {
+      initialQuoteItems[item.canvassItemId] = {
+        unitCost: item.unitCost,
+        quantityAvailable: item.quantityAvailable
+      };
+    });
+    setQuoteItems(initialQuoteItems);
+    setShowAddQuote(true);
+    // Scroll to top to see form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSendEmail = async () => {
@@ -336,17 +360,26 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
               🤖 Upload Quotation (AI Extract)
             </button>
             <button 
-              onClick={() => setShowAddQuote(!showAddQuote)}
+              onClick={() => {
+                setShowAddQuote(!showAddQuote);
+                if (!showAddQuote) {
+                  setEditQuotationId(null);
+                  setSelectedSupplier('');
+                  setQuoteItems({});
+                }
+              }}
               style={{
                 background: 'transparent', color: 'var(--accent-color)', padding: '8px 16px', borderRadius: '4px', border: '1px solid var(--accent-color)', cursor: 'pointer', fontWeight: 'bold'
               }}>
-              + Encode Quotation
+              {showAddQuote ? 'Cancel Encoding' : '+ Encode Quotation'}
             </button>
           </div>
 
           {showAddQuote && (
             <div style={{ background: 'rgba(0,0,0,0.3)', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid var(--glass-border)' }}>
-              <h4 style={{ margin: '0 0 15px 0', color: 'var(--accent-color)' }}>New Supplier Quotation</h4>
+              <h4 style={{ margin: '0 0 15px 0', color: 'var(--accent-color)' }}>
+                {editQuotationId ? 'Edit Supplier Quotation' : 'New Supplier Quotation'}
+              </h4>
               <select 
                 value={selectedSupplier} 
                 onChange={e => setSelectedSupplier(e.target.value)}
@@ -383,7 +416,7 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
               </table>
 
               <button onClick={handleSubmitQuotation} style={{ background: '#4ade80', color: '#000', padding: '8px 16px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
-                Submit Quotation
+                {editQuotationId ? 'Update Quotation' : 'Submit Quotation'}
               </button>
             </div>
           )}
@@ -404,11 +437,21 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
                   <p style={{ margin: '5px 0', color: 'var(--text-secondary)' }}>Total: <strong style={{ color: '#fff' }}>₱{q.totalAmount.toLocaleString()}</strong></p>
                   <p style={{ margin: '5px 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Delivery: {q.deliveryPeriod || 'N/A'} | Payment: {q.paymentTerms || 'N/A'}</p>
                   <p style={{ margin: '5px 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Status: {q.status}</p>
-                  {q.fileUrl && (
-                    <a href={q.fileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '10px', fontSize: '0.85rem', color: '#3b82f6', textDecoration: 'underline' }}>
-                      📄 View Original Quotation
-                    </a>
-                  )}
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                    {q.fileUrl ? (
+                      <a href={q.fileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', fontSize: '0.85rem', color: '#3b82f6', textDecoration: 'underline' }}>
+                        📄 View Original Quotation
+                      </a>
+                    ) : (
+                      <span></span>
+                    )}
+                    <button 
+                      onClick={() => handleEditQuotation(q)}
+                      style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      ✏️ Edit
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
