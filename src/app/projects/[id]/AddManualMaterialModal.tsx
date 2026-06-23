@@ -14,6 +14,7 @@ export default function AddManualMaterialModal({ projectId, onClose }: AddManual
 
   const [formData, setFormData] = useState({
     itemCode: '',
+    category: '',
     description: '',
     unit: 'lot',
     quantity: 1,
@@ -77,6 +78,19 @@ export default function AddManualMaterialModal({ projectId, onClose }: AddManual
               onChange={handleChange}
               className="form-input"
               placeholder="e.g. C001"
+              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #334155', background: '#0f172a', color: '#fff' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', color: '#cbd5e1' }}>Category (Optional)</label>
+            <input 
+              type="text" 
+              name="category" 
+              value={formData.category} 
+              onChange={handleChange}
+              className="form-input"
+              placeholder="e.g. Electrical"
               style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #334155', background: '#0f172a', color: '#fff' }}
             />
           </div>
