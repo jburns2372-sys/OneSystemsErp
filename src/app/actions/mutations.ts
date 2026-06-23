@@ -40,13 +40,18 @@ export async function createProject(formData: FormData) {
     fileUrl = blob.url;
   } catch (err: any) {
     console.warn('Vercel Blob upload failed, falling back to local storage:', err.message);
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'boq');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    try {
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'boq');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      const filePath = path.join(uploadDir, fileName);
+      fs.writeFileSync(filePath, buffer);
+      fileUrl = `/uploads/boq/${fileName}`;
+    } catch (fsErr: any) {
+      console.warn('Local storage fallback also failed (likely Vercel read-only filesystem). Proceeding without saving file physically.');
+      fileUrl = 'Unsaved_Memory_Only';
     }
-    const filePath = path.join(uploadDir, fileName);
-    fs.writeFileSync(filePath, buffer);
-    fileUrl = `/uploads/boq/${fileName}`;
   }
   
   description = `BOQ File Uploaded: ${fileUrl}`;
