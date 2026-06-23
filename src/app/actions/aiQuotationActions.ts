@@ -34,13 +34,30 @@ export async function uploadAndAnalyzeQuotationsBulk(canvassId: string, formData
       try {
         const buffer = Buffer.from(await file.arrayBuffer());
         const fileName = `${Date.now()}-${file.name}`;
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'quotations');
-        
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
+        let fileUrl = '';
+        try {
+          const { put } = await import('@vercel/blob');
+          const blob = await put(`quotations/${fileName}`, buffer, {
+            access: 'public',
+            addRandomSuffix: false,
+            token: process.env.BLOB_READ_WRITE_TOKEN
+          });
+          fileUrl = blob.url;
+        } catch (blobErr: any) {
+          console.warn('Vercel Blob upload failed, falling back to local storage:', blobErr.message);
+          try {
+            const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'quotations');
+            if (!fs.existsSync(uploadDir)) {
+              fs.mkdirSync(uploadDir, { recursive: true });
+            }
+            const filePath = path.join(uploadDir, fileName);
+            fs.writeFileSync(filePath, buffer);
+            fileUrl = `/uploads/quotations/${fileName}`;
+          } catch (fsErr: any) {
+            console.warn('Local storage fallback failed (Vercel read-only fs):', fsErr.message);
+            fileUrl = 'Unsaved_Memory_Only';
+          }
         }
-        const filePath = path.join(uploadDir, fileName);
-        fs.writeFileSync(filePath, buffer);
 
         // Define Prompt
         const prompt = `Act as an AI Procurement Data Extractor.
@@ -158,7 +175,7 @@ Return EXACTLY the following JSON format. Do not use markdown blocks. Just the r
             totalAmount: totalAmount,
             deliveryPeriod: aiData.deliveryPeriod || 'N/A',
             paymentTerms: aiData.paymentTerms || 'N/A',
-            fileUrl: `/uploads/quotations/${fileName}`,
+            fileUrl: fileUrl,
             items: {
               create: itemsData
             }
