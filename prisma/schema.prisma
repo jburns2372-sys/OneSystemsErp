@@ -365,7 +365,7 @@ model MaterialRequest {
   checker           User?                 @relation("CheckedBy", fields: [checkerId], references: [id])
   preparer          User?                 @relation("PreparedBy", fields: [preparerId], references: [id])
   requester         User                  @relation("RequestedBy", fields: [requesterId], references: [id])
-  project           Project               @relation(fields: [projectId], references: [id])
+  project           Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   items             MaterialRequestItem[]
   purchaseOrders    PurchaseOrder[]
 }
@@ -452,7 +452,7 @@ model Expense {
   consolidatedBoqItem   ConsolidatedBOQItem?   @relation(fields: [consolidatedBoqItemId], references: [id])
   awardedBoqItem        AwardedBOQItem?        @relation(fields: [awardedBoqItemId], references: [id])
   loggedBy              User                   @relation("ExpenseLoggedBy", fields: [loggedById], references: [id])
-  project               Project                @relation(fields: [projectId], references: [id])
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   aiValidation          ExpenseAIValidation?
   approvalLogs          ExpenseApprovalLog[]
   breakdownItems        ExpenseBreakdownItem[]
@@ -542,7 +542,7 @@ model PettyCashAccount {
   reviewer             User?                    @relation("PCReviewer", fields: [reviewerId], references: [id])
   approver             User?                    @relation("PCApprover", fields: [approverId], references: [id])
   custodian            User                     @relation("PCCustodian", fields: [custodianId], references: [id])
-  project              Project?                 @relation(fields: [projectId], references: [id])
+  project              Project?                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   expenses             PettyCashExpense[]
   replenishments       PettyCashReplenishment[]
 }
@@ -712,7 +712,7 @@ model Worker {
   paymentExceptions               PaymentException[]
   paymentFallbackRecommendations  PaymentFallbackRecommendation[]
   payrolls                        Payroll[]
-  project                         Project?                        @relation("ProjectWorkers", fields: [projectId], references: [id])
+  project                         Project?                        @relation("ProjectWorkers", fields: [projectId], references: [id], onDelete: Cascade)
   documents                       WorkerDocument[]
 }
 
@@ -771,7 +771,7 @@ model DailyTimeRecord {
   updatedAt        DateTime       @updatedAt
   payrollPeriod    PayrollPeriod? @relation(fields: [payrollPeriodId], references: [id])
   encodedBy        User?          @relation("DtrEncoder", fields: [encodedById], references: [id])
-  project          Project?       @relation(fields: [projectId], references: [id])
+  project          Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   worker           Worker         @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@unique([workerId, date])
@@ -813,7 +813,7 @@ model PayrollPeriod {
   fundingRequests     PayrollFundingRequest[]
   approvedBy          User?                   @relation("PayrollApprover", fields: [approvedById], references: [id])
   createdBy           User?                   @relation("PayrollCreator", fields: [createdById], references: [id])
-  project             Project?                @relation(fields: [projectId], references: [id])
+  project             Project?                @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model Payroll {
@@ -870,7 +870,7 @@ model Payroll {
   updatedAt               DateTime           @updatedAt
   transactionReference    String?
   paymentBatchRows        PaymentBatchRow[]
-  project                 Project?           @relation(fields: [projectId], references: [id])
+  project                 Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   payrollPeriod           PayrollPeriod      @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
   worker                  Worker             @relation(fields: [workerId], references: [id], onDelete: Cascade)
   deductions              PayrollDeduction[]
@@ -1034,7 +1034,7 @@ model Document {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   uploader   User?    @relation("DocumentUploader", fields: [uploaderId], references: [id])
-  project    Project? @relation(fields: [projectId], references: [id])
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model Delivery {
@@ -1113,7 +1113,7 @@ model MaterialIssuance {
   accountant     User?            @relation("MISAccountant", fields: [accountantId], references: [id])
   warehouseman   User?            @relation("MISWarehouseman", fields: [warehousemanId], references: [id])
   foreman        User             @relation("MISForeman", fields: [foremanId], references: [id])
-  project        Project          @relation(fields: [projectId], references: [id])
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   returns        MaterialReturn[]
 }
 
@@ -1142,7 +1142,7 @@ model MaterialReturn {
   updatedAt      DateTime         @updatedAt
   warehouseman   User?            @relation("MRSWarehouseman", fields: [warehousemanId], references: [id])
   foreman        User             @relation("MRSForeman", fields: [foremanId], references: [id])
-  project        Project          @relation(fields: [projectId], references: [id])
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   issuance       MaterialIssuance @relation(fields: [issuanceId], references: [id])
   items          ReturnItem[]
 }
@@ -1506,7 +1506,7 @@ model EvidenceFile {
   aiValidationRuns AIValidationEvidence[]
   accomplishment   Accomplishment?        @relation(fields: [accomplishmentId], references: [id])
   boqItem          AwardedBOQItem?        @relation(fields: [boqItemId], references: [id])
-  project          Project                @relation(fields: [projectId], references: [id])
+  project          Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model ProjectCamera {
@@ -1763,7 +1763,7 @@ model SubcontractPackage {
   accomplishments       SubcontractAccomplishment[]
   billings              SubcontractBilling[]
   subcontractor         Subcontractor               @relation(fields: [subcontractorId], references: [id])
-  project               Project                     @relation(fields: [projectId], references: [id])
+  project               Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   consolidatedBoqItemId String?
   consolidatedBoqItem   ConsolidatedBOQItem?        @relation("ConsolidatedSubcontractPackages", fields: [consolidatedBoqItemId], references: [id])
   variationOrders       VariationOrder[]
@@ -1797,7 +1797,7 @@ model JobOrder {
   accomplishmentRecords      AccomplishmentRecord[]
   package                    SubcontractPackage?         @relation(fields: [packageId], references: [id])
   subcontractor              Subcontractor?              @relation(fields: [subcontractorId], references: [id])
-  project                    Project                     @relation(fields: [projectId], references: [id])
+  project                    Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   consolidatedBoqItemId      String?
   consolidatedBoqItem        ConsolidatedBOQItem?        @relation("ConsolidatedJobOrders", fields: [consolidatedBoqItemId], references: [id])
   subcontractAccomplishments SubcontractAccomplishment[]
@@ -1867,7 +1867,7 @@ model SubcontractBilling {
   jobOrder              JobOrder?           @relation(fields: [jobOrderId], references: [id])
   package               SubcontractPackage? @relation(fields: [packageId], references: [id])
   subcontractor         Subcontractor       @relation(fields: [subcontractorId], references: [id])
-  project               Project             @relation(fields: [projectId], references: [id])
+  project               Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model BackCharge {
@@ -1893,7 +1893,7 @@ model BackCharge {
   updatedAt        DateTime             @updatedAt
   package          SubcontractPackage?  @relation(fields: [packageId], references: [id])
   subcontractor    Subcontractor        @relation(fields: [subcontractorId], references: [id])
-  project          Project              @relation(fields: [projectId], references: [id])
+  project          Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model PayrollCutoffSetting {
@@ -1948,7 +1948,7 @@ model KnowledgeReference {
   createdAt         DateTime        @default(now())
   payrollPeriod     PayrollPeriod?  @relation(fields: [payrollPeriodId], references: [id])
   worker            Worker?         @relation(fields: [workerId], references: [id])
-  project           Project?        @relation(fields: [projectId], references: [id])
+  project           Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   knowledgeRecord   KnowledgeRecord @relation(fields: [knowledgeRecordId], references: [id], onDelete: Cascade)
 }
 
@@ -2202,7 +2202,7 @@ model DocumentTemplate {
   projectId    String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  project      Project? @relation(fields: [projectId], references: [id])
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   uploadedBy   User?    @relation("DocumentTemplateUploader", fields: [uploadedById], references: [id])
 }
 
@@ -2226,7 +2226,7 @@ model ProjectAccomplishmentFile {
   findings         ProjectAccomplishmentAIFinding[]
   user             User?                              @relation(fields: [userId], references: [id])
   uploadedBy       User?                              @relation("AccomplishmentFileUploader", fields: [uploadedById], references: [id])
-  project          Project                            @relation(fields: [projectId], references: [id])
+  project          Project                            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   versions         ProjectAccomplishmentFileVersion[]
 }
 
@@ -2253,7 +2253,7 @@ model ProjectAccomplishmentAIFinding {
   severity       String                    @default("INFO")
   recommendation String?
   createdAt      DateTime                  @default(now())
-  project        Project                   @relation(fields: [projectId], references: [id])
+  project        Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   file           ProjectAccomplishmentFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
 }
 
@@ -2742,7 +2742,7 @@ model CanvassForm {
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
   preparedBy            User?               @relation("CanvassPreparedBy", fields: [preparedById], references: [id])
-  project               Project             @relation(fields: [projectId], references: [id])
+  project               Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   mr                    MaterialRequest?    @relation(fields: [mrId], references: [id])
   items                 CanvassItem[]
   purchaseOrders        PurchaseOrder[]
@@ -3022,7 +3022,7 @@ model FleetTrip {
   updatedAt            DateTime            @updatedAt
   subcontractPackageId String?
   subcontractPackage   SubcontractPackage? @relation(fields: [subcontractPackageId], references: [id])
-  project              Project?            @relation(fields: [projectId], references: [id])
+  project              Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   driver               Worker?             @relation(fields: [driverId], references: [id])
   equipment            Equipment           @relation(fields: [equipmentId], references: [id])
 }
@@ -3041,7 +3041,7 @@ model Geofence {
   updatedAt            DateTime            @updatedAt
   subcontractPackageId String?
   subcontractPackage   SubcontractPackage? @relation(fields: [subcontractPackageId], references: [id])
-  project              Project?            @relation(fields: [projectId], references: [id])
+  project              Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model FleetAIReview {

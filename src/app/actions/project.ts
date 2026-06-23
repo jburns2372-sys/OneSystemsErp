@@ -115,8 +115,22 @@ export async function assignProjectManager(projectId: string, managerId: string 
   });
 }
 
+import { cookies } from 'next/headers';
+
 export async function deleteProject(projectId: string) {
   try {
+    const cookieStore = await cookies();
+    const userId = cookieStore.get('session')?.value;
+    
+    if (!userId) {
+      throw new Error('Unauthorized: Please log in');
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'SUPER_ADMIN') {
+      throw new Error('Unauthorized: Only SUPER_ADMIN can delete projects');
+    }
+
     await prisma.project.delete({
       where: { id: projectId }
     });
