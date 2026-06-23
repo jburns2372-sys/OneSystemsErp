@@ -12,10 +12,14 @@ export default function DeleteProjectButton({ projectId }: { projectId: string }
     if (confirm('Are you sure you want to delete this project? This action cannot be undone and will delete all associated schedules, tasks, and BOQ items.')) {
       startTransition(async () => {
         try {
-          await deleteProject(projectId);
-          router.refresh();
+          const res = await deleteProject(projectId);
+          if (res && res.error) {
+            alert('Failed to delete: ' + res.error);
+          } else {
+            router.refresh();
+          }
         } catch (error: any) {
-          alert(error.message || 'Error deleting project');
+          alert('Error: ' + (error.message || 'Error deleting project'));
         }
       });
     }

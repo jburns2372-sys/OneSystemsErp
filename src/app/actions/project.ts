@@ -123,12 +123,12 @@ export async function deleteProject(projectId: string) {
     const userId = cookieStore.get('session')?.value;
     
     if (!userId) {
-      throw new Error('Unauthorized: Please log in');
+      return { success: false, error: 'Unauthorized: Please log in' };
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user || user.role !== 'SUPER_ADMIN') {
-      throw new Error('Unauthorized: Only SUPER_ADMIN can delete projects');
+      return { success: false, error: 'Unauthorized: Only SUPER_ADMIN can delete projects' };
     }
 
     await prisma.project.delete({
@@ -137,6 +137,6 @@ export async function deleteProject(projectId: string) {
     return { success: true };
   } catch (error: any) {
     console.error('Error deleting project:', error);
-    throw new Error('Failed to delete project');
+    return { success: false, error: error.message || 'Failed to delete project' };
   }
 }
