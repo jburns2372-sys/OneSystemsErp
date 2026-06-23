@@ -2,8 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import fs from "fs";
-import { join } from "path";
+import { put } from '@vercel/blob';
 import ExcelJS from "exceljs";
 
 export async function uploadAccomplishmentFileAction(projectId: string, formData: FormData) {
@@ -21,11 +20,11 @@ export async function uploadAccomplishmentFileAction(projectId: string, formData
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
     const newFileName = `${uniqueId}-${sanitizedFileName}`;
 
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    const filePath = join(uploadDir, newFileName);
-    fs.writeFileSync(filePath, buffer);
-    const publicPath = `/uploads/accomplishments/${newFileName}`;
+    const blob = await put(`accomplishments/${newFileName}`, buffer, {
+      access: 'public',
+      contentType: file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const publicPath = blob.url;
 
     // Optional: get currently logged in user ID if you have an auth system
     // For now, leaving it null or you can pass it from the client
@@ -137,19 +136,22 @@ export async function createWorkingCopyAction(fileId: string) {
     const sanitizedFileName = fileRecord.fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
     const newFileName = `working-${uniqueId}-${sanitizedFileName}`;
 
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    
     let sourcePath = fileRecord.originalFilePath;
+    let sourceBuffer: Buffer;
     if (sourcePath.startsWith('/uploads/')) {
-      sourcePath = join(process.cwd(), 'public', sourcePath);
-      fs.copyFileSync(sourcePath, join(uploadDir, newFileName));
+      // If it happens to be a local path, fetch from localhost or we can't do much on Vercel
+      // To be safe, we'll try fetching it directly if it's an absolute URL
+      const res = await fetch(`https://${process.env.VERCEL_URL || 'localhost:3000'}${sourcePath}`);
+      sourceBuffer = Buffer.from(await res.arrayBuffer());
     } else {
       const res = await fetch(sourcePath);
-      const buf = Buffer.from(await res.arrayBuffer());
-      fs.writeFileSync(join(uploadDir, newFileName), buf);
+      sourceBuffer = Buffer.from(await res.arrayBuffer());
     }
-    const publicPath = `/uploads/accomplishments/${newFileName}`;
+
+    const blob = await put(`accomplishments/${newFileName}`, sourceBuffer, {
+      access: 'public',
+    });
+    const publicPath = blob.url;
 
     await prisma.projectAccomplishmentFile.update({
       where: { id: fileId },
@@ -180,11 +182,10 @@ export async function saveFileEditAction(fileId: string, base64Data: string, isL
 
     const buffer = Buffer.from(base64Data, "base64");
     
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    const filePath = join(uploadDir, newFileName);
-    fs.writeFileSync(filePath, buffer);
-    const publicPath = `/uploads/accomplishments/${newFileName}`;
+    const blob = await put(`accomplishments/${newFileName}`, buffer, {
+      access: 'public',
+    });
+    const publicPath = blob.url;
 
     const updatedFile = await prisma.$transaction(async (tx) => {
       const version = await tx.projectAccomplishmentFileVersion.create({
@@ -222,11 +223,10 @@ export async function saveAsNewAccomplishmentFileAction(projectId: string, base6
 
     const buffer = Buffer.from(base64Data, "base64");
     
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    const filePath = join(uploadDir, newPhysicalFileName);
-    fs.writeFileSync(filePath, buffer);
-    const publicPath = `/uploads/accomplishments/${newPhysicalFileName}`;
+    const blob = await put(`accomplishments/${newPhysicalFileName}`, buffer, {
+      access: 'public',
+    });
+    const publicPath = blob.url;
 
     const newFile = await prisma.projectAccomplishmentFile.create({
       data: {
@@ -294,7 +294,9 @@ export async function createSuccessiveBillingAction(projectId: string, templateF
     try {
       let sourceBuffer: Buffer;
       if (fileUrl.startsWith('/uploads/')) {
-        sourceBuffer = fs.readFileSync(join(process.cwd(), 'public', fileUrl));
+        const urlToFetch = `http://${process.env.VERCEL_URL || 'localhost:3000'}${fileUrl}`;
+        const res = await fetch(urlToFetch);
+        sourceBuffer = Buffer.from(await res.arrayBuffer());
       } else {
         const response = await fetch(fileUrl);
         sourceBuffer = Buffer.from(await response.arrayBuffer());
@@ -351,18 +353,19 @@ export async function createSuccessiveBillingAction(projectId: string, templateF
       console.error("Failed to manipulate Excel columns:", excelError);
       // We continue even if excel parsing fails, so the user at least gets the duplicated file.
       if (fileUrl.startsWith('/uploads/')) {
-        finalBuffer = fs.readFileSync(join(process.cwd(), 'public', fileUrl));
+        const urlToFetch = `http://${process.env.VERCEL_URL || 'localhost:3000'}${fileUrl}`;
+        const res = await fetch(urlToFetch);
+        finalBuffer = Buffer.from(await res.arrayBuffer());
       } else {
         const response = await fetch(fileUrl);
         finalBuffer = Buffer.from(await response.arrayBuffer());
       }
     }
 
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    const filePath = join(uploadDir, newPhysicalFileName);
-    fs.writeFileSync(filePath, finalBuffer);
-    const publicPath = `/uploads/accomplishments/${newPhysicalFileName}`;
+    const blob = await put(`accomplishments/${newPhysicalFileName}`, finalBuffer, {
+      access: 'public',
+    });
+    const publicPath = blob.url;
 
     const newFile = await prisma.projectAccomplishmentFile.create({
       data: {
