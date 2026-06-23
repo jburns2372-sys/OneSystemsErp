@@ -44,6 +44,7 @@ export default async function ExecutivePortfolioPage() {
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Status</th>
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Revised Contract</th>
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Billed Progress</th>
+                <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Timeline</th>
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>AI Risk Level</th>
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>AI Score</th>
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Action</th>
@@ -52,6 +53,8 @@ export default async function ExecutivePortfolioPage() {
             <tbody>
               {projects.map((project, idx) => {
                 const riskColors = getRiskColor(project.riskLevel);
+                const formatDate = (d: any) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBA';
+                
                 return (
                   <tr key={project.id} style={{ borderBottom: idx === projects.length - 1 ? 'none' : '1px solid #e5e7eb', backgroundColor: '#ffffff', transition: 'background-color 0.2s' }}>
                     <td style={{ padding: '16px 24px' }}>
@@ -75,6 +78,10 @@ export default async function ExecutivePortfolioPage() {
                           {project.progressPercentage.toFixed(1)}%
                         </span>
                       </div>
+                    </td>
+                    <td style={{ padding: '16px 24px', fontSize: '0.8rem', color: '#4b5563', whiteSpace: 'nowrap' }}>
+                      <div><strong style={{color: '#111827'}}>Start:</strong> {formatDate(project.startDate)}</div>
+                      <div style={{ marginTop: '4px' }}><strong style={{color: '#111827'}}>Target:</strong> {formatDate(project.revisedCompletionDate || project.originalCompletionDate)}</div>
                     </td>
                     <td style={{ padding: '16px 24px' }}>
                       <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '4px 8px', borderRadius: '9999px', backgroundColor: riskColors.bg, color: riskColors.text }}>

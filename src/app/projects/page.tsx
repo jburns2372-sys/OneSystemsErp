@@ -48,6 +48,7 @@ export default async function ProjectsPage() {
               <th>Project Name</th>
               <th>Status</th>
               <th>Contract Amount</th>
+              <th>Timeline</th>
               <th>Manager</th>
               <th>Actions</th>
             </tr>
@@ -55,9 +56,11 @@ export default async function ProjectsPage() {
           <tbody>
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={5} className={styles.emptyState}>No projects found.</td>
+                <td colSpan={6} className={styles.emptyState}>No projects found.</td>
               </tr>
-            ) : projects.map(project => (
+            ) : projects.map(project => {
+              const formatDate = (d: any) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBA';
+              return (
               <tr key={project.id}>
                 <td>
                   <div className={styles.projectName}>{project.name}</div>
@@ -70,6 +73,10 @@ export default async function ProjectsPage() {
                 </td>
                 <td className={styles.amount}>
                   ₱ {project.contractAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </td>
+                <td style={{ fontSize: '0.85rem', color: '#4b5563', whiteSpace: 'nowrap' }}>
+                  <div><strong>Start:</strong> {formatDate(project.startDate)}</div>
+                  <div style={{ marginTop: '4px' }}><strong>Target:</strong> {formatDate(project.revisedCompletionDate || project.originalCompletionDate)}</div>
                 </td>
                 <td>
                   <ManagerAssigner 
@@ -86,7 +93,7 @@ export default async function ProjectsPage() {
                   </PermissionGuard>
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
