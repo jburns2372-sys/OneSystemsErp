@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 
-export default function AwardedBOQViewer({ htmlTable }: { htmlTable: string }) {
+export default function AwardedBOQViewer({ htmlTable, consolidatedHtmlTable }: { htmlTable: string, consolidatedHtmlTable?: string }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isConsolidatedView, setIsConsolidatedView] = useState(false);
 
   if (!htmlTable) {
     return <p style={{ color: 'var(--text-secondary)' }}>No original Excel file found to display. Please upload one from the Projects screen.</p>;
@@ -11,7 +12,22 @@ export default function AwardedBOQViewer({ htmlTable }: { htmlTable: string }) {
 
   return (
     <div className={isFullscreen ? "fullscreen-wrapper" : "normal-wrapper"}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px' }}>
+        {consolidatedHtmlTable && (
+          <button
+            onClick={() => setIsConsolidatedView(!isConsolidatedView)}
+            className="btn-primary"
+            style={{
+              background: isConsolidatedView ? 'linear-gradient(135deg, var(--accent-color) 0%, #0891b2 100%)' : 'transparent',
+              color: isConsolidatedView ? '#fff' : 'var(--accent-color)',
+              borderColor: 'var(--accent-color)',
+              fontWeight: 'bold',
+              zIndex: 10000
+            }}
+          >
+            {isConsolidatedView ? 'View Raw Awarded BOQ' : '⚙️ Consolidated BOQ (For Schedule)'}
+          </button>
+        )}
         <button 
           onClick={() => setIsFullscreen(!isFullscreen)}
           className="btn-secondary"
@@ -95,7 +111,7 @@ export default function AwardedBOQViewer({ htmlTable }: { htmlTable: string }) {
         `}} />
         <div 
           className="excel-table-wrapper"
-          dangerouslySetInnerHTML={{ __html: htmlTable }} 
+          dangerouslySetInnerHTML={{ __html: isConsolidatedView && consolidatedHtmlTable ? consolidatedHtmlTable : htmlTable }} 
         />
       </div>
     </div>

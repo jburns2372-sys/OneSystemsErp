@@ -307,30 +307,34 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
               let globalIndex = 0;
 
               return sortedGroups.map(groupName => {
-                const phaseBoqs = new Map<string, { code: string; desc: string; qty: number; cost: number }>();
+                const phaseBoqs = new Map<string, { code: string; desc: string; unit: string; qty: number; cost: number }>();
                 grouped[groupName].forEach(act => {
                   (act.boqMappings || []).forEach((mapping: any) => {
                     const item = mapping.awardedBoqItem;
                     if (!item) return;
                     
-                    const rawCode = (item.itemCode || 'N/A').trim();
-                    const rawDesc = (item.description || '').trim().replace(/\s+/g, ' ');
-                    const key = rawDesc.toLowerCase();
+                    let oldItemCode = item.itemCode || 'N/A';
+                    if (oldItemCode === 'N/A' || oldItemCode.trim() === '') {
+                      oldItemCode = item.description.trim();
+                    }
+                    const normalizedDesc = item.description.trim().toLowerCase();
+                    const normalizedUnit = (item.unit || '').trim().toLowerCase();
+                    const key = `${oldItemCode.toLowerCase()}||${normalizedDesc}||${normalizedUnit}`;
                     
                     if (!phaseBoqs.has(key)) {
-                      phaseBoqs.set(key, { code: rawCode, desc: rawDesc, qty: 0, cost: 0 });
+                      phaseBoqs.set(key, { code: oldItemCode, desc: item.description, unit: item.unit || 'lot', qty: 0, cost: 0 });
                     } else {
                       const existing = phaseBoqs.get(key)!;
-                      if (rawCode !== 'N/A' && existing.code !== 'N/A' && !existing.code.includes(rawCode)) {
-                        existing.code += `, ${rawCode}`;
-                      } else if (existing.code === 'N/A' && rawCode !== 'N/A') {
-                        existing.code = rawCode;
+                      if (oldItemCode !== 'N/A' && existing.code !== 'N/A' && !existing.code.includes(oldItemCode)) {
+                        existing.code += `, ${oldItemCode}`;
+                      } else if (existing.code === 'N/A' && oldItemCode !== 'N/A') {
+                        existing.code = oldItemCode;
                       }
                     }
                     
-                    const unitCost = item.combinedUnitCost || item.directCost || ((item.totalCost || 0) / (item.quantity || 1));
+                    const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (mapping.mappedQuantity / item.quantity) : 0;
                     phaseBoqs.get(key)!.qty += mapping.mappedQuantity;
-                    phaseBoqs.get(key)!.cost += unitCost * mapping.mappedQuantity;
+                    phaseBoqs.get(key)!.cost += proportionalCost;
                   });
                 });
                 const boqList = Array.from(phaseBoqs.values());
@@ -371,30 +375,33 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
                             <thead>
                               <tr style={{ color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                <th style={{ padding: '6px', textAlign: 'left', width: '120px' }}>Item Code</th>
-                                <th style={{ padding: '6px', textAlign: 'left' }}>Description</th>
-                                <th style={{ padding: '6px', textAlign: 'right', width: '100px' }}>Quantity Required</th>
-                                <th style={{ padding: '6px', textAlign: 'right', width: '120px' }}>Allocated Cost</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold' }}>Item Code</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold' }}>Description</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold' }}>Unit</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold' }}>Phase Quantity</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold' }}>Unit Cost</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold' }}>Total Cost Allocated</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {boqList.map((boq, idx) => (
-                                <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                  <td style={{ padding: '6px', fontFamily: 'monospace' }}>{boq.code}</td>
-                                  <td style={{ padding: '6px', color: 'var(--text-primary)' }}>{boq.desc}</td>
-                                  <td style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                                    {boq.qty.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                  </td>
-                                  <td style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold', color: '#10b981' }}>
-                                    ₱{boq.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </td>
-                                </tr>
-                              ))}
+                              {boqList.map((boq, i) => {
+                                const displayUnitCost = boq.qty > 0 ? boq.cost / boq.qty : 0;
+                                return (
+                                  <tr key={i} style={{ borderBottom: '1px solid var(--glass-border)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                                    <td style={{ padding: '6px 12px' }}>{boq.code}</td>
+                                    <td style={{ padding: '6px 12px' }}>{boq.desc}</td>
+                                    <td style={{ padding: '6px 12px' }}>{boq.unit}</td>
+                                    <td style={{ padding: '6px 12px' }}>{boq.qty.toLocaleString()}</td>
+                                    <td style={{ padding: '6px 12px' }}>₱ {displayUnitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td style={{ padding: '6px 12px' }}>₱ {boq.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                             <tfoot>
                               <tr>
-                                <td colSpan={3} style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 'bold', color: 'var(--text-secondary)' }}>Phase Grand Total:</td>
-                                <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 'bold', color: '#10b981', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                                <td colSpan={5} style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 'bold', color: 'var(--text-secondary)' }}>Phase Grand Total:</td>
+                                <td style={{ padding: '10px 6px', textAlign: 'left', fontWeight: 'bold', color: '#10b981', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                                   ₱{phaseGrandTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </td>
                               </tr>

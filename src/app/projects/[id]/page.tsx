@@ -73,6 +73,7 @@ export default async function ProjectDetailsPage({
   const isPurchasingOfficer = currentUser?.userRoles.some(ur => ur.role.roleCode === 'PURCHASING_OFFICER');
 
   let htmlTable = '';
+  let consolidatedHtmlTable = '';
   let hasBOQ = project.awardedBoqItems && project.awardedBoqItems.length > 0;
 
   let approvedAdditive = 0;
@@ -86,17 +87,61 @@ export default async function ProjectDetailsPage({
   if (hasBOQ) {
     let customHtml = '<table><thead><tr style="background: #e0e0e0; font-weight: bold;"><th>Item No.</th><th>Description</th><th>Unit</th><th>Quantity</th><th>Unit Cost</th><th>Total Cost</th></tr></thead><tbody>';
     for (const item of project.awardedBoqItems) {
+      const displayUnitCost = item.quantity > 0 ? item.totalCost / item.quantity : 0;
       customHtml += `<tr>
         <td>${item.itemCode || ''}</td>
         <td>${item.description || ''}</td>
         <td>${item.unit || ''}</td>
         <td>${item.quantity?.toLocaleString() || ''}</td>
-        <td>${item.combinedUnitCost?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || ''}</td>
+        <td>${displayUnitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         <td>${item.totalCost?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || ''}</td>
       </tr>`;
     }
     customHtml += '</tbody></table>';
     htmlTable = customHtml;
+
+    // Generate Consolidated HTML Table for Schedule Verification
+    const groups = new Map<string, any>();
+    for (const item of project.awardedBoqItems) {
+      let oldItemCode = item.itemCode || 'N/A';
+      if (oldItemCode === 'N/A' || oldItemCode.trim() === '') {
+        oldItemCode = item.description.trim();
+      }
+      const normalizedDesc = item.description.trim().toLowerCase();
+      const normalizedUnit = (item.unit || '').trim().toLowerCase();
+      const key = `${oldItemCode.toLowerCase()}||${normalizedDesc}||${normalizedUnit}`;
+      
+      if (!groups.has(key)) {
+        groups.set(key, {
+          itemCode: oldItemCode,
+          description: item.description,
+          unit: item.unit || 'lot',
+          quantity: 0,
+          totalCost: 0,
+          unitCost: item.combinedUnitCost || item.directCost || 0
+        });
+      }
+      const group = groups.get(key);
+      group.quantity += (item.quantity || 1);
+      group.totalCost += (item.totalCost || 0);
+    }
+
+    let consHtml = '<table><thead><tr style="background: #0f172a; color: #38bdf8; font-weight: bold;"><th>Item No.</th><th>Description</th><th>Unit</th><th>Consolidated Quantity</th><th>Unit Cost</th><th>Total Cost</th></tr></thead><tbody>';
+    let grandTotal = 0;
+    for (const group of groups.values()) {
+      grandTotal += group.totalCost;
+      const displayGroupUnitCost = group.quantity > 0 ? group.totalCost / group.quantity : 0;
+      consHtml += `<tr>
+        <td>${group.itemCode || ''}</td>
+        <td>${group.description || ''}</td>
+        <td>${group.unit || ''}</td>
+        <td>${group.quantity?.toLocaleString() || ''}</td>
+        <td>${displayGroupUnitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td>${group.totalCost?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || ''}</td>
+      </tr>`;
+    }
+    consHtml += `</tbody><tfoot><tr style="background: #0f172a; color: #38bdf8; font-weight: bold;"><td colSpan="5" style="text-align: right;">Grand Total:</td><td>₱ ${grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr></tfoot></table>`;
+    consolidatedHtmlTable = consHtml;
   }
 
   return (
@@ -186,7 +231,7 @@ export default async function ProjectDetailsPage({
               )}
             </div>
           </div>
-          <AwardedBOQViewer htmlTable={htmlTable} />
+          <AwardedBOQViewer htmlTable={htmlTable} consolidatedHtmlTable={consolidatedHtmlTable} />
         </>
       )}
 

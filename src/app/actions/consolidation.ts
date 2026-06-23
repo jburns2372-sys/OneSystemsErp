@@ -93,6 +93,7 @@ export async function autoConsolidateBOQ(projectId: string, force: boolean = fal
         unit: finalUnit,
         quantity: 0,
         totalCost: 0,
+        unitCost: item.combinedUnitCost || item.directCost || 0,
         items: []
       });
     }
@@ -122,8 +123,7 @@ export async function autoConsolidateBOQ(projectId: string, force: boolean = fal
   // Use a transaction for safety with an increased timeout for large BOQs
   await prisma.$transaction(async (tx) => {
     for (const group of groups.values()) {
-      // Calculate weighted unit cost. If quantity is 0, fallback to 0.
-      const unitCost = group.quantity > 0 ? group.totalCost / group.quantity : 0;
+      const unitCost = group.unitCost || 0;
       
       const itemCodePrefix = group.itemCodePrefix || 'N/A';
       const consolidatedCode = `C${index.toString().padStart(3, '0')}`;

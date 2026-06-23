@@ -97,12 +97,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
           const prompt = `You are an expert construction project manager. 
 We are building a project schedule for a construction project with a target of ${calendarDays} calendar days.
-I have a list of BOQ (Bill of Quantities) items. 
-Instead of creating a schedule activity for every single item, I want you to HYPER-CONSOLIDATE them into 10 to 15 'Master Activities' (e.g., 'HVAC Piping', 'Equipment Installation', 'Testing').
+I have a pre-consolidated list of BOQ (Bill of Quantities) items. 
+DO NOT CONSOLIDATE THEM FURTHER. Each item in this list MUST become exactly one distinct Schedule Activity.
 Please do the following:
-1. Define 3 to 6 logical construction sub-phases (e.g. Mobilization, Rough-ins, Equipment Installation, Testing). Provide a unique 'code' for each sub-phase. These will be nested under a master 'Construction Phase'.
-2. Define 10 to 15 'Master Activities' that encompass all the work. For each, assign it to the most appropriate sub-phase (wbsCode), estimate a realistic 'durationDays', and provide an array of 3 to 6 distinct 'keywords' that I can use to automatically match and assign the raw BOQ items to this master activity.
-3. Identify logical sequence dependencies between these Master Activities (e.g., Equipment Installation happens after Rough-ins). Use the master activity 'code' to link predecessor and successor.
+1. Define 3 to 6 logical construction sub-phases (e.g. Mobilization, Execution, Testing). Provide a unique 'code' for each sub-phase. These will be nested under a master 'Construction Phase'.
+2. For EACH item in the provided BOQ list, assign it to the most appropriate sub-phase (wbsCode) and estimate a realistic 'durationDays'. You MUST return an activity for every single item provided, using its exact 'id'.
+3. Identify logical sequence dependencies between these items based on their descriptions. Use the item 'id' to link predecessor and successor.
 
 BOQ Items:
 ${JSON.stringify(payload, null, 2)}`;
@@ -122,32 +122,26 @@ ${JSON.stringify(payload, null, 2)}`;
                   }
                 }
               },
-              masterActivities: {
+              activities: {
                 type: Type.ARRAY,
-                description: "Master Activities that encompass the BOQ work",
+                description: "The assigned phases and durations for each BOQ item",
                 items: {
                   type: Type.OBJECT,
                   properties: {
-                    code: { type: Type.STRING, description: "Unique activity code e.g. ACT-1" },
+                    id: { type: Type.STRING, description: "The exact id of the BOQ item e.g. ITEM_0" },
                     wbsCode: { type: Type.STRING, description: "The phase code this activity belongs to" },
-                    name: { type: Type.STRING, description: "Name of the Master Activity" },
-                    durationDays: { type: Type.INTEGER, description: "Estimated duration in days" },
-                    keywords: { 
-                      type: Type.ARRAY, 
-                      items: { type: Type.STRING },
-                      description: "List of keywords to match BOQ items to this activity"
-                    }
+                    durationDays: { type: Type.INTEGER, description: "Estimated duration in days" }
                   }
                 }
               },
               dependencies: {
                 type: Type.ARRAY,
-                description: "Logical dependencies between master activities",
+                description: "Logical dependencies between activities",
                 items: {
                   type: Type.OBJECT,
                   properties: {
-                    predecessorCode: { type: Type.STRING, description: "The code of the predecessor master activity" },
-                    successorCode: { type: Type.STRING, description: "The code of the successor master activity" },
+                    predecessorCode: { type: Type.STRING, description: "The id of the predecessor activity e.g. ITEM_0" },
+                    successorCode: { type: Type.STRING, description: "The id of the successor activity e.g. ITEM_1" },
                     type: { type: Type.STRING, description: "Dependency type: FS, SS, FF, or SF. Default is FS." }
                   }
                 }
@@ -182,7 +176,7 @@ ${JSON.stringify(payload, null, 2)}`;
           const result = JSON.parse(response.text || '{}');
 
           const phases = result.phases || [];
-          const masterActivities = result.masterActivities || [];
+          const activities = result.activities || [];
           const dependencies = result.dependencies || [];
 
           // 1. Create WBS Nodes
@@ -204,19 +198,19 @@ ${JSON.stringify(payload, null, 2)}`;
 
           // Fallback WBS if mapping fails
           let fallbackWbsId = null;
-          if (masterActivities.length > 0 && !wbsMap.size) {
+          if (activities.length > 0 && !wbsMap.size) {
              const fwbs = await prisma.scheduleWBS.create({
                 data: { scheduleId: newSchedule.id, parentId: constructionWbs.id, code: 'GEN', name: 'General', level: 2, orderIndex: 0 }
              });
              fallbackWbsId = fwbs.id;
           }
 
-          // 2. Create Master Activities
+          // 2. Create Activities mapped exactly to BOQ Items
           const activityMap = new Map();
           let startDate = new Date();
           
-          for (let i = 0; i < masterActivities.length; i++) {
-            const act = masterActivities[i];
+          for (let i = 0; i < activities.length; i++) {
+            const act = activities[i];
             
             // Fuzzy match WBS
             let wbsId = wbsMap.get(act.wbsCode);
@@ -233,7 +227,7 @@ ${JSON.stringify(payload, null, 2)}`;
             }
             wbsId = wbsId || Array.from(wbsMap.values())[0] || fallbackWbsId;
 
-            if (!wbsId) continue; // Skip if still no WBS
+            if (!wbsId) continue;
 
             let duration = parseInt(act.durationDays);
             if (isNaN(duration) || duration < 1) duration = 1;
@@ -241,21 +235,38 @@ ${JSON.stringify(payload, null, 2)}`;
             const endDate = new Date(startDate);
             endDate.setDate(endDate.getDate() + duration);
 
+            // Find the consolidated group to pull exact name and code
+            const groupIndex = parseInt(act.id.replace('ITEM_', ''));
+            const group = consolidatedItems[groupIndex];
+            if (!group) continue;
+
             const newAct = await prisma.scheduleActivity.create({
               data: {
                 scheduleId: newSchedule.id,
                 wbsId: wbsId,
-                activityCode: act.code,
-                name: act.name,
+                activityCode: group.itemCode,
+                name: group.description,
                 plannedStartDate: startDate,
                 plannedFinishDate: endDate,
                 plannedDuration: duration,
+                plannedQuantity: group.quantity,
+                unit: group.unit,
                 status: 'NOT_STARTED'
               }
             });
-            activityMap.set(act.code, newAct.id);
+            activityMap.set(act.id, newAct.id);
+
+            // Directly map the exact raw BOQ items from this group
+            for (const item of group.items) {
+              await prisma.scheduleBOQMapping.create({
+                data: {
+                  activityId: newAct.id,
+                  awardedBoqItemId: item.id,
+                  mappedQuantity: item.quantity
+                }
+              });
+            }
             
-            // Advance start date slightly for next item default
             startDate = new Date(endDate);
           }
 
@@ -272,43 +283,6 @@ ${JSON.stringify(payload, null, 2)}`;
                   type: dep.type || 'FS'
                 }
               });
-            }
-          }
-
-          // 4. Map BOQ Items to Master Activities using Keywords
-          let defaultActId = Array.from(activityMap.values())[0]; // Fallback to first activity
-
-          for (const group of consolidatedItems) {
-            // Find best matching master activity
-            let bestMatchActId = defaultActId;
-            let maxMatches = -1;
-            
-            const groupDescLower = group.description.toLowerCase();
-
-            for (const act of masterActivities) {
-              let matches = 0;
-              for (const keyword of (act.keywords || [])) {
-                if (groupDescLower.includes(keyword.toLowerCase())) {
-                  matches++;
-                }
-              }
-              if (matches > maxMatches && matches > 0) {
-                maxMatches = matches;
-                bestMatchActId = activityMap.get(act.code);
-              }
-            }
-
-            if (bestMatchActId) {
-              // Map all items in this group
-              for (const item of group.items) {
-                await prisma.scheduleBOQMapping.create({
-                  data: {
-                    activityId: bestMatchActId,
-                    awardedBoqItemId: item.id,
-                    mappedQuantity: item.quantity
-                  }
-                });
-              }
             }
           }
 
