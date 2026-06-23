@@ -11,14 +11,14 @@ export async function GET() {
       update: {
         passwordHash,
         password: passwordHash,
-        role: 'ADMIN'
+        role: 'SUPER_ADMIN'
       },
       create: {
         email: 'admin@onesystemserp.com',
         name: 'Super Admin',
         passwordHash,
         password: passwordHash,
-        role: 'ADMIN'
+        role: 'SUPER_ADMIN'
       }
     });
 
