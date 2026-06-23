@@ -1806,7 +1806,7 @@ model JobOrder {
 
 model SubcontractAccomplishment {
   id                String               @id @default(uuid())
-  packageId         String
+  packageId         String?
   jobOrderId        String?
   workDescription   String
   location          String
@@ -1831,7 +1831,7 @@ model SubcontractAccomplishment {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   jobOrder          JobOrder?            @relation(fields: [jobOrderId], references: [id])
-  package           SubcontractPackage   @relation(fields: [packageId], references: [id])
+  package           SubcontractPackage?   @relation(fields: [packageId], references: [id])
 }
 
 model SubcontractBilling {
