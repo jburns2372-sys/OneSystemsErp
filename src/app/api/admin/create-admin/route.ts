@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-export async function GET() {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
   try {
     await prisma.user.updateMany({
       data: {
