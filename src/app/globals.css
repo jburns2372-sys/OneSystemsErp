@@ -184,6 +184,6 @@ h1, h2, h3 {
   opacity: 0.7 !important;
 }
 
-.is-guest-user button[type="submit"] {
+.is-guest-user button[type="submit"]:not(.allow-guest) {
   display: none !important;
 }

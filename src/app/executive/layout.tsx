@@ -135,6 +135,7 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
             <form action={logout} style={{ marginLeft: '8px' }}>
               <button 
                 type="submit" 
+                className="allow-guest"
                 style={{ 
                   background: 'none', 
                   border: '1px solid #ef4444', 

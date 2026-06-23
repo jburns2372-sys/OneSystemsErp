@@ -39,6 +39,7 @@ export default async function Topbar() {
             <form action={logout}>
               <button 
                 type="submit"
+                className="allow-guest"
                 style={{
                   background: 'none', border: '1px solid var(--glass-border)', padding: '6px 12px',
                   borderRadius: '6px', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem',

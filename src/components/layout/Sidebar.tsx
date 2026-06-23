@@ -249,7 +249,7 @@ export default function Sidebar({ permissions = {}, user }: { permissions?: Reco
           <form action={logout} style={{ width: '100%' }}>
           <button 
             type="submit"
-            className="collapse-btn"
+            className="collapse-btn allow-guest"
             style={{
               width: '100%',
               background: 'rgba(239, 68, 68, 0.1)',
