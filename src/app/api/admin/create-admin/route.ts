@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
-
 export async function GET() {
   try {
-    const passwordHash = await bcrypt.hash('password123', 10);
-    
     await prisma.user.updateMany({
       data: {
         role: 'SUPER_ADMIN'
