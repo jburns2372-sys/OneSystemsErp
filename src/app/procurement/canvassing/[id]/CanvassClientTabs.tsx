@@ -352,27 +352,31 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
       {activeTab === 'QUOTATIONS' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px', gap: '10px' }}>
-            <button 
-              onClick={() => setShowUploadAIModal(true)}
-              style={{
-                background: 'var(--accent-color)', color: '#000', padding: '8px 16px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold'
-              }}>
-              🤖 Upload Quotation (AI Extract)
-            </button>
-            <button 
-              onClick={() => {
-                setShowAddQuote(!showAddQuote);
-                if (!showAddQuote) {
-                  setEditQuotationId(null);
-                  setSelectedSupplier('');
-                  setQuoteItems({});
-                }
-              }}
-              style={{
-                background: 'transparent', color: 'var(--accent-color)', padding: '8px 16px', borderRadius: '4px', border: '1px solid var(--accent-color)', cursor: 'pointer', fontWeight: 'bold'
-              }}>
-              {showAddQuote ? 'Cancel Encoding' : '+ Encode Quotation'}
-            </button>
+            {canvass.status !== 'COMPLETED' && (
+              <>
+                <button 
+                  onClick={() => setShowUploadAIModal(true)}
+                  style={{
+                    background: 'var(--accent-color)', color: '#000', padding: '8px 16px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold'
+                  }}>
+                  🤖 Upload Quotation (AI Extract)
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowAddQuote(!showAddQuote);
+                    if (!showAddQuote) {
+                      setEditQuotationId(null);
+                      setSelectedSupplier('');
+                      setQuoteItems({});
+                    }
+                  }}
+                  style={{
+                    background: 'transparent', color: 'var(--accent-color)', padding: '8px 16px', borderRadius: '4px', border: '1px solid var(--accent-color)', cursor: 'pointer', fontWeight: 'bold'
+                  }}>
+                  {showAddQuote ? 'Cancel Encoding' : '+ Encode Quotation'}
+                </button>
+              </>
+            )}
           </div>
 
           {showAddQuote && (
@@ -446,11 +450,13 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
                     ) : (
                       <span></span>
                     )}
-                    <button 
-                      onClick={() => handleEditQuotation(q)}
-                      style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>
-                      ✏️ Edit
-                    </button>
+                    {canvass.status !== 'COMPLETED' && (
+                      <button 
+                        onClick={() => handleEditQuotation(q)}
+                        style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                        ✏️ Edit
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
