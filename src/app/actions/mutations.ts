@@ -7,6 +7,7 @@ import { put } from '@vercel/blob';
 import * as fs from 'fs';
 import * as path from 'path';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
+import ExcelJS from 'exceljs';
 
 async function parseBoqWithGemini(buffer: Buffer | null, mimeType: string, rawTextContent?: string) {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -318,6 +319,25 @@ export async function createProject(formData: FormData) {
       }
     }
   });
+
+  // Upload Awarded BOQ Template to Blob Storage
+  if (boqFile.name.endsWith('.xlsx')) {
+    const blob = await put(`templates/${project.id}/awarded-boq-template.xlsx`, buffer, {
+      access: 'public',
+      addRandomSuffix: true,
+    });
+
+    await prisma.document.create({
+      data: {
+        projectId: project.id,
+        title: 'Awarded BOQ Template',
+        category: 'AWARDED_BOQ_TEMPLATE',
+        fileUrl: blob.url,
+        fileType: boqFile.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        fileSize: buffer.length
+      }
+    });
+  }
 
   revalidatePath('/projects');
   revalidatePath('/');
@@ -684,4 +704,94 @@ export async function deleteLotBreakdown(breakdownId: string) {
     where: { id: breakdownId }
   });
   return { success: true };
+}
+
+export async function downloadAwardedBOQTemplate(projectId: string) {
+  const templateDoc = await prisma.document.findFirst({
+    where: { projectId, category: 'AWARDED_BOQ_TEMPLATE' },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  if (!templateDoc) {
+    throw new Error('No Awarded BOQ template found for this project.');
+  }
+
+  const response = await fetch(templateDoc.fileUrl);
+  if (!response.ok) {
+    throw new Error('Failed to fetch template file from storage.');
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(arrayBuffer);
+
+  const sheet = workbook.worksheets[0];
+  
+  const awardedItems = await prisma.awardedBOQItem.findMany({
+    where: { projectId }
+  });
+
+  const itemMap = new Map();
+  awardedItems.forEach(item => {
+    const descClean = item.description.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    itemMap.set(descClean, item);
+  });
+
+  let headerRowIndex = -1;
+  let descColIndex = -1;
+  let qtyColIndex = -1;
+  let costColIndex = -1;
+
+  sheet.eachRow((row, rowNumber) => {
+    if (headerRowIndex === -1) {
+      let hasDesc = false;
+      row.eachCell((cell, colNumber) => {
+        const val = cell.text?.toLowerCase() || '';
+        if (val.includes('desc') || val.includes('item')) {
+          hasDesc = true;
+          descColIndex = colNumber;
+        } else if (val.includes('qty') || val.includes('quantity')) {
+          qtyColIndex = colNumber;
+        } else if (val.includes('unit cost') || val.includes('price')) {
+          costColIndex = colNumber;
+        }
+      });
+      if (hasDesc) {
+        headerRowIndex = rowNumber;
+      }
+    } else {
+      if (descColIndex !== -1) {
+        const descCell = row.getCell(descColIndex);
+        const descVal = descCell.text?.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        if (descVal) {
+          let matchedItem = itemMap.get(descVal);
+          if (!matchedItem) {
+             for (const [key, item] of itemMap.entries()) {
+               if (descVal.length > 10 && key.length > 10 && Math.abs(descVal.length - key.length) <= 2) {
+                 if (descVal.startsWith(key.substring(0, 10)) || key.startsWith(descVal.substring(0, 10))) {
+                   matchedItem = item;
+                   break;
+                 }
+               }
+             }
+          }
+
+          if (matchedItem) {
+            if (qtyColIndex !== -1) {
+              row.getCell(qtyColIndex).value = matchedItem.quantity;
+            }
+            if (costColIndex !== -1) {
+              row.getCell(costColIndex).value = matchedItem.combinedUnitCost;
+            }
+            row.commit();
+          }
+        }
+      }
+    }
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer).toString('base64');
 }

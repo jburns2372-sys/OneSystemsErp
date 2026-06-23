@@ -1,21 +1,62 @@
 'use client';
 
 import { useState } from 'react';
+import { downloadAwardedBOQTemplate } from '@/app/actions/mutations';
 
 interface AwardedBOQViewerProps {
+  projectId: string;
   htmlTable: string;
   consolidatedHtmlTable?: string;
   originalFileUrl?: string;
   projectName?: string;
 }
 
-export default function AwardedBOQViewer({ htmlTable, consolidatedHtmlTable, originalFileUrl, projectName }: AwardedBOQViewerProps) {
+export default function AwardedBOQViewer({ projectId, htmlTable, consolidatedHtmlTable, originalFileUrl, projectName }: AwardedBOQViewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isConsolidatedView, setIsConsolidatedView] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setIsDownloading(true);
+      const base64Data = await downloadAwardedBOQTemplate(projectId);
+      const binaryString = window.atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Awarded_BOQ_${projectId}.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || 'Failed to download template. It may not exist.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   return (
     <div className={isFullscreen ? "fullscreen-wrapper" : "normal-wrapper"}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
+        <button 
+          onClick={handleDownloadTemplate}
+          disabled={isDownloading}
+          className="btn-secondary"
+          style={{ 
+            backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+            color: '#3b82f6',
+            borderColor: '#3b82f6',
+            fontWeight: 'bold',
+            zIndex: 10000,
+            cursor: isDownloading ? 'not-allowed' : 'pointer'
+          }}
+        >
+          {isDownloading ? 'Downloading...' : '📥 Export Exact Excel'}
+        </button>
         {consolidatedHtmlTable && (
           <button
             onClick={() => setIsConsolidatedView(!isConsolidatedView)}

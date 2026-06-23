@@ -237,6 +237,7 @@ export default async function ProjectDetailsPage({
             </div>
           </div>
           <AwardedBOQViewer 
+            projectId={project.id}
             htmlTable={htmlTable} 
             consolidatedHtmlTable={consolidatedHtmlTable} 
             originalFileUrl={originalFileUrl}
