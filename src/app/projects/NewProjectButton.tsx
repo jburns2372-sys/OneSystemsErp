@@ -54,13 +54,13 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
 
       <Modal isOpen={isOpen} onClose={closeModal} title="Upload Awarded BOQ">
         <form onSubmit={handleSubmit} className="modal-form" encType="multipart/form-data">
-          <div style={{ textAlign: 'center', padding: '20px' }}>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+          <div style={{ textAlign: 'center', padding: '10px 20px' }}>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '15px', fontSize: '0.85rem' }}>
               The system will automatically analyze your Excel file to extract the Project Name, Location, and compute the Total Contract Amount.
             </p>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', textAlign: 'left', marginBottom: '20px' }}>
-              <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', textAlign: 'left', marginBottom: '15px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Project Manager</label>
                 <select name="managerId" style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}>
                   <option value="">Unassigned</option>
@@ -70,18 +70,17 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Project Start Date</label>
-                  <input type="date" name="startDate" value={startDate} onChange={e => setStartDate(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white', colorScheme: 'dark' }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Duration (Calendar Days)</label>
-                  <input type="number" name="durationDays" value={durationDays} onChange={e => setDurationDays(e.target.value ? Number(e.target.value) : '')} min={1} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }} />
-                </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Project Start Date</label>
+                <input type="date" name="startDate" value={startDate} onChange={e => setStartDate(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white', colorScheme: 'dark' }} />
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Duration (Days)</label>
+                <input type="number" name="durationDays" value={durationDays} onChange={e => setDurationDays(e.target.value ? Number(e.target.value) : '')} min={1} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }} />
               </div>
 
-              <div>
+              <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Computed Completion Date</label>
                 <input type="date" value={computedCompletionDate} readOnly style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', colorScheme: 'dark' }} />
               </div>
@@ -90,7 +89,7 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
             <div style={{ 
               border: '2px dashed var(--glass-border)', 
               borderRadius: '8px', 
-              padding: '40px 20px',
+              padding: '20px 10px',
               backgroundColor: 'rgba(0, 0, 0, 0.2)'
             }}>
               <label htmlFor="boqFile" style={{ display: 'block', fontSize: '1.2rem', marginBottom: '15px', color: 'var(--text-primary)', cursor: 'pointer' }}>
