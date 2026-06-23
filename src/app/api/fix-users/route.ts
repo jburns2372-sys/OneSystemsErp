@@ -10,13 +10,19 @@ export async function GET() {
     let updatedCount = 0;
 
     for (const user of users) {
-      if (user.email && user.email.endsWith('@demo.com')) {
-        // e.g. "project_engineer@demo.com" -> "PROJECT_ENGINEER"
-        const emailPrefix = user.email.split('@')[0];
-        const correctRole = emailPrefix.toUpperCase();
+      let correctRole = '';
+      
+      if (user.name && user.name.toUpperCase().startsWith('DEMO ')) {
+        // e.g. "DEMO PROCUREMENT OFFICER" -> "PROCUREMENT_OFFICER"
+        correctRole = user.name.substring(5).trim().replace(/\s+/g, '_').toUpperCase();
+      } else if (user.email && user.email.endsWith('@demo.com')) {
+        // Fallback to email: "project_engineer@demo.com" -> "PROJECT_ENGINEER"
+        correctRole = user.email.split('@')[0].toUpperCase();
+      }
 
+      if (correctRole) {
         // Don't touch the actual system admin
-        if (correctRole === 'JBURNS' || correctRole === 'ADMIN') continue;
+        if (correctRole === 'JBURNS' || correctRole === 'ADMIN' || correctRole.includes('SUPER')) continue;
 
         // Ensure the system role exists
         const roleResult = await createSystemRole(correctRole);
