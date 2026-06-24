@@ -12,8 +12,14 @@ export default async function ExecutiveHomePage() {
   const cookieStore = await cookies();
   const currentProjectId = cookieStore.get('executive_projectId')?.value || 'ALL';
 
-  const data = await getCompanyOverview(currentProjectId);
-
+  let data: any = null;
+  let error: string | null = null;
+  
+  try {
+    data = await getCompanyOverview(currentProjectId);
+  } catch (err: any) {
+    error = err.message || "An unknown error occurred while fetching company overview";
+  }
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
   };
@@ -43,8 +49,16 @@ export default async function ExecutiveHomePage() {
         </div>
       </div>
 
+      {/* Error State */}
+      {error && (
+        <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '16px' }}>
+          <h3 style={{ margin: 0, color: '#991b1b', fontSize: '1rem', fontWeight: 600 }}>Failed to load data</h3>
+          <p style={{ margin: '4px 0 0', color: '#b91c1c', fontSize: '0.875rem' }}>{error}</p>
+        </div>
+      )}
+
       {/* Critical AI Alerts Section */}
-      {data.totalCriticalRisks > 0 && (
+      {data && data.totalCriticalRisks > 0 && (
         <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ fontSize: '24px' }}>⚠️</div>
           <div style={{ flex: 1 }}>
@@ -60,8 +74,10 @@ export default async function ExecutiveHomePage() {
       )}
 
       {/* Top Level KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
-        <KpiCard 
+      {data && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+            <KpiCard 
           title="Active Projects" 
           value={data.activeProjectsCount.toString()} 
           icon="🏗️" 
@@ -156,6 +172,8 @@ export default async function ExecutiveHomePage() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
     </div>
   );

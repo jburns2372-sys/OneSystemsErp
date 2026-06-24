@@ -25,7 +25,7 @@ async function checkExecutiveAccess() {
   
   const effectiveRole = (simulatedRole && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS')) 
     ? simulatedRole 
-    : user.role;
+    : (user.role || 'GUEST_USER');
 
   // Check if effective role is in the allowed executive roles list
   const allowedRoles = [
@@ -49,12 +49,22 @@ async function checkExecutiveAccess() {
  * Retrieves the high-level company overview KPIs for the Executive Home Dashboard
  */
 export async function getCompanyOverview(projectId?: string) {
-  await checkExecutiveAccess();
+  const user = await checkExecutiveAccess();
+  const isSuperAdmin = user.role === 'SUPER_ADMIN' || user.role === 'SYSTEM_ADMIN';
 
   // Fetch all active/ongoing projects or the specific selected project
   const projectFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
   if (projectId && projectId !== 'ALL') {
     projectFilter.id = projectId;
+  }
+  
+  if (!isSuperAdmin) {
+    projectFilter.userAssignments = {
+      some: {
+        userId: user.id,
+        assignmentStatus: 'active'
+      }
+    };
   }
 
   const activeProjects = await prisma.project.findMany({
@@ -183,9 +193,18 @@ export async function getCompanyOverview(projectId?: string) {
  * Retrieves the project portfolio list for the executive dashboard
  */
 export async function getProjectPortfolio() {
-  await checkExecutiveAccess();
+  const user = await checkExecutiveAccess();
+  const isSuperAdmin = user.role === 'SUPER_ADMIN' || user.role === 'SYSTEM_ADMIN';
 
   const projects = await prisma.project.findMany({
+    where: isSuperAdmin ? undefined : {
+      userAssignments: {
+        some: {
+          userId: user.id,
+          assignmentStatus: 'active'
+        }
+      }
+    },
     orderBy: { contractAmount: 'desc' },
     select: {
       id: true,
