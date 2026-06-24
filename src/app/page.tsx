@@ -41,9 +41,6 @@ export default async function Home() {
     ? simulatedRole 
     : primaryRole;
 
-  if (primaryRole === 'DIRECTORS' && !simulatedRole) {
-    redirect('/executive/home');
-  }
 
   return (
     <RoleDashboardClient stats={stats} isSystemAdmin={isSystemAdmin} initialRole={primaryRole} />

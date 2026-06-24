@@ -7,9 +7,9 @@ async function main() {
     update: {},
     create: {
       email: 'pd@gmail.com',
-      name: 'Project Director',
+      name: 'System Admin',
       password: 'password123',
-      role: 'PROJECT_DIRECTOR'
+      role: 'SYSTEM_ADMIN'
     }
   });
   console.log('Admin user created/verified successfully!');
