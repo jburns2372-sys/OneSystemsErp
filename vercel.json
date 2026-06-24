@@ -6,5 +6,13 @@
   "installCommand": "npm install",
   "github": {
     "enabled": true
+  },
+  "env": {
+    "DATABASE_URL": "file:./dev.db"
+  },
+  "build": {
+    "env": {
+      "DATABASE_URL": "file:./dev.db"
+    }
   }
 }
