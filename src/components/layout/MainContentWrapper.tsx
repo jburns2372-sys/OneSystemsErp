@@ -17,9 +17,7 @@ export default function MainContentWrapper({
   const isExecutive = pathname?.startsWith('/executive');
   
   // Show main sidebar everywhere except inside the executive command center
-  // DIRECTORS role exclusively uses the Executive Command Center, never the main sidebar
-  const isDirectorsRole = user?.role === 'DIRECTORS';
-  const showMainSidebar = !isExecutive && !isDirectorsRole;
+  const showMainSidebar = !isExecutive;
   const sidebarWidthVar = showMainSidebar ? 'var(--sidebar-width)' : '0px';
 
   return (
