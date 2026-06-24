@@ -20,15 +20,37 @@ export default async function ProcurementPage() {
     }
   }
 
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+
+  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'SYSTEM_ADMIN';
+
+  const baseProjectFilter: any = {};
+  if (!isSuperAdmin) {
+    baseProjectFilter.userAssignments = {
+      some: { userId: sessionId, assignmentStatus: 'active' }
+    };
+  }
+
+  const mrFilter: any = { status: 'APPROVED' };
+  if (!isSuperAdmin) mrFilter.project = baseProjectFilter;
+  if (activeProjectId) mrFilter.projectId = activeProjectId;
+
+  const poFilter: any = {};
+  if (!isSuperAdmin || activeProjectId) {
+    poFilter.mr = { ...(!isSuperAdmin ? { project: baseProjectFilter } : {}) };
+    if (activeProjectId) poFilter.mr.projectId = activeProjectId;
+  }
+
   // Ensure only users with canCreate or canSubmit on PURCHASE_ORDER see the pending MRFs
   const canCreatePO = permissions['PURCHASE_ORDER']?.canCreate || permissions['PURCHASE_ORDER']?.canSubmit;
 
   const pendingMRFs = canCreatePO ? await prisma.materialRequest.findMany({
-    where: { status: 'APPROVED' },
+    where: mrFilter,
     include: { project: true }
   }) : [];
 
   const pos = await prisma.purchaseOrder.findMany({
+    where: poFilter,
     orderBy: { createdAt: 'desc' },
     include: { supplier: true, mr: { include: { project: true } } }
   });

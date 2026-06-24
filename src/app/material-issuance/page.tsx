@@ -12,7 +12,28 @@ export default async function MaterialIssuancePage() {
   if (sessionId) {
     permissions = await getUserPermissions(sessionId);
   }
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || undefined;
+
+  const user = await prisma.user.findUnique({ where: { id: sessionId } });
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
+  const baseFilter: any = {};
+  if (!isSuperAdmin) {
+    baseFilter.project = {
+      userAssignments: {
+        some: { userId: sessionId, assignmentStatus: 'active' }
+      }
+    };
+  }
+
+  const issuancesFilter = { ...baseFilter };
+  if (activeProjectId) issuancesFilter.projectId = activeProjectId;
+
+  const returnsFilter = { ...baseFilter };
+  if (activeProjectId) returnsFilter.projectId = activeProjectId;
+
   const issuances = await prisma.materialIssuance.findMany({
+    where: issuancesFilter,
     include: {
       project: true,
       foreman: true,
@@ -30,11 +51,12 @@ export default async function MaterialIssuancePage() {
   });
 
   const projects = await prisma.project.findMany({
-    where: permissions.IS_ADMIN ? {} : { consolidatedBOQLocked: true },
+    where: activeProjectId ? { id: activeProjectId } : (permissions.IS_ADMIN ? {} : { consolidatedBOQLocked: true }),
     select: { id: true, name: true, location: true }
   });
 
   const returns = await prisma.materialReturn.findMany({
+    where: returnsFilter,
     include: {
       project: true,
       foreman: true,

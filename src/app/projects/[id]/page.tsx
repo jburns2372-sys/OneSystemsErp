@@ -14,9 +14,11 @@ import ModuleKnowledgeTab from '@/app/knowledge-center/ModuleKnowledgeTab';
 import ProfitabilityTab from './ProfitabilityTab';
 import ProcurementBenchmarkTab from './ProcurementBenchmarkTab';
 import ProjectCostLedgerTab from './ProjectCostLedgerTab';
+import ProjectTeamClient from './ProjectTeamClient';
 
 const PROJECT_TABS = [
   { id: 'summary', label: 'Project Summary', group: 'Overview' },
+  { id: 'team-access', label: 'Team Access', group: 'Overview' },
   { id: 'awarded-boq', label: 'Contract Value & BOQ', group: 'Planning' },
   { id: 'benchmark', label: 'Procurement Benchmark', group: 'Planning' },
   { id: 'consolidation', label: 'Master Materials List', group: 'Planning' },
@@ -46,7 +48,7 @@ export default async function ProjectDetailsPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const { id } = await params;
-  const { tab = 'awarded-boq' } = await searchParams;
+  const { tab = 'summary' } = await searchParams;
   
   const project = await prisma.project.findUnique({
     where: { id },
@@ -56,6 +58,10 @@ export default async function ProjectDetailsPage({
       procurementBenchmarkItems: true,
       variationOrders: {
         where: { currentStatus: 'APPROVED' }
+      },
+      userAssignments: {
+        include: { user: { select: { name: true, email: true, role: true, id: true } } },
+        orderBy: { createdAt: 'desc' }
       }
     }
   });
@@ -193,6 +199,13 @@ export default async function ProjectDetailsPage({
           ))}
         </div>
       </div>
+
+      {tab === 'team-access' && (
+        <ProjectTeamClient 
+          projectId={project.id}
+          teamMembers={project.userAssignments || []}
+        />
+      )}
 
       {tab === 'awarded-boq' && (
         <>

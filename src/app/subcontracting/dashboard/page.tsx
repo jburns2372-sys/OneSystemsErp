@@ -28,10 +28,35 @@ const joModules = [
   { name: 'Progress & Payments Hub', href: '/job-orders/progress-hub', icon: '📈', description: 'Unified Accomplishments, Billings & Payments for JOs' },
 ];
 
+import { cookies } from 'next/headers';
+
 export default async function SubcontractingDashboard() {
-  const packages = await getSubcontractPackages();
-  const jobOrders = await getJobOrders();
-  const variationOrders = await getAllSubcontractorVariationOrders();
+  const cookieStore = await cookies();
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || undefined;
+  const sessionId = cookieStore.get('session')?.value || '';
+
+  const { prisma } = await import('@/lib/prisma');
+  const user = await prisma.user.findUnique({ where: { id: sessionId } });
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
+  let allowedProjectIds: string[] | null = null;
+  if (!isSuperAdmin) {
+    const assignments = await prisma.projectUserAssignment.findMany({
+      where: { userId: sessionId, assignmentStatus: 'active' },
+      select: { projectId: true }
+    });
+    allowedProjectIds = assignments.map(a => a.projectId);
+  }
+
+  let packages = await getSubcontractPackages(activeProjectId);
+  let jobOrders = await getJobOrders(activeProjectId);
+  let variationOrders = await getAllSubcontractorVariationOrders(activeProjectId);
+
+  if (allowedProjectIds !== null) {
+    packages = packages.filter((p: any) => allowedProjectIds!.includes(p.projectId));
+    jobOrders = jobOrders.filter((j: any) => allowedProjectIds!.includes(j.projectId));
+    variationOrders = variationOrders.filter((v: any) => allowedProjectIds!.includes(v.projectId));
+  }
 
   return (
     <div className={styles.dashboardContainer} style={{ maxWidth: '1400px' }}>

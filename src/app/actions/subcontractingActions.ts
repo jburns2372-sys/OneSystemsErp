@@ -62,8 +62,23 @@ export async function deleteSubcontractor(id: string) {
 // --- SUBCONTRACT PACKAGE CRUD ---
 
 export async function getSubcontractPackages(projectId?: string) {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value;
+  const user = sessionId ? await prisma.user.findUnique({ where: { id: sessionId } }) : null;
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
+  const baseFilter: any = {};
+  if (!isSuperAdmin && sessionId) {
+    baseFilter.project = {
+      userAssignments: { some: { userId: sessionId, assignmentStatus: 'active' } }
+    };
+  }
+
+  const pkgFilter: any = { ...baseFilter };
+  if (projectId) pkgFilter.projectId = projectId;
+
   return await prisma.subcontractPackage.findMany({
-    where: projectId ? { projectId } : undefined,
+    where: pkgFilter,
     include: {
       subcontractor: true,
       project: true,

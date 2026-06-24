@@ -1,16 +1,27 @@
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { logout } from '@/app/actions/auth';
+import ActiveProjectSelector from './ActiveProjectSelector';
 
 import PageTitle from './PageTitle';
 
 export default async function Topbar() {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
   
   let user = null;
+  let assignments: any[] = [];
+  
   if (sessionId) {
     user = await prisma.user.findUnique({ where: { id: sessionId } });
+    if (user) {
+      assignments = await prisma.projectUserAssignment.findMany({
+        where: { userId: user.id, assignmentStatus: 'active' },
+        include: { project: { select: { name: true } } },
+        orderBy: { project: { name: 'asc' } }
+      });
+    }
   }
 
   return (
@@ -30,25 +41,33 @@ export default async function Topbar() {
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '20px' }}>
         
         {user && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>{user.name}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)' }}>{user.role.replace('_', ' ')}</div>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '25px' }}>
             
-            <form action={logout}>
-              <button 
-                type="submit"
-                className="allow-guest"
-                style={{
-                  background: 'none', border: '1px solid var(--glass-border)', padding: '6px 12px',
-                  borderRadius: '6px', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem',
-                  fontWeight: 'bold', transition: 'all 0.2s'
-                }}
-              >
-                Sign Off
-              </button>
-            </form>
+            <ActiveProjectSelector 
+              assignments={assignments} 
+              activeProjectId={activeProjectId} 
+            />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', borderLeft: '1px solid var(--glass-border)', paddingLeft: '20px' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>{user.name}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)' }}>{user.role.replace(/_/g, ' ')}</div>
+              </div>
+              
+              <form action={logout}>
+                <button 
+                  type="submit"
+                  className="allow-guest"
+                  style={{
+                    background: 'none', border: '1px solid var(--glass-border)', padding: '6px 12px',
+                    borderRadius: '6px', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem',
+                    fontWeight: 'bold', transition: 'all 0.2s'
+                  }}
+                >
+                  Sign Off
+                </button>
+              </form>
+            </div>
           </div>
         )}
 

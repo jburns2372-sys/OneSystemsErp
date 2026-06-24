@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -82,6 +82,7 @@ model User {
   assignedScheduleActivities   ScheduleActivity[]            @relation("ActivityAssignedTo")
   reportedScheduleProgress     ScheduleProgressUpdate[]      @relation("ActivityReportedBy")
   reportedScheduleDelays       ScheduleDelayRecord[]         @relation("DelayReportedBy")
+  projectAssignments           ProjectUserAssignment[]
 }
 
 model SystemRole {
@@ -170,6 +171,30 @@ model Project {
   clientVariationOrders           ClientVariationOrder[]           @relation("ProjectClientVOs")
   valueEngineeringRecords         ValueEngineeringRecord[]         @relation("ProjectVERecords")
   projectSchedule                 ProjectSchedule?
+  userAssignments                 ProjectUserAssignment[]
+}
+
+model ProjectUserAssignment {
+  id               String    @id @default(cuid())
+  userId           String
+  projectId        String
+  projectRole      String    
+  accessLevel      String    
+  assignmentStatus String    @default("active") 
+  assignedBy       String?
+  dateAssigned     DateTime  @default(now())
+  dateRemoved      DateTime?
+  remarks          String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
+  @@index([assignmentStatus])
 }
 
 model AwardedBOQItem {

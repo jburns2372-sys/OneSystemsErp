@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import styles from '../../projects/page.module.css';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +9,26 @@ export default async function StocksPage({ searchParams }: { searchParams: Promi
   const resolvedParams = await searchParams;
   const inStockOnly = resolvedParams?.inStock === 'true';
 
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value;
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+
+  const user = sessionId ? await prisma.user.findUnique({ where: { id: sessionId } }) : null;
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
+  const baseProjectFilter: any = {};
+  if (!isSuperAdmin && sessionId) {
+    baseProjectFilter.userAssignments = {
+      some: { userId: sessionId, assignmentStatus: 'active' }
+    };
+  }
+
+  const itemsFilter: any = {};
+  if (!isSuperAdmin) itemsFilter.project = baseProjectFilter;
+  if (activeProjectId) itemsFilter.projectId = activeProjectId;
+
   const items = await prisma.consolidatedBOQItem.findMany({
+    where: itemsFilter,
     include: {
       project: true
     },

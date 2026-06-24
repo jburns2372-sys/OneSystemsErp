@@ -2,16 +2,46 @@ import styles from '../projects/page.module.css';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import LogExpenseClient from './LogExpenseClient';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ExpensesPage() {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value || '';
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+
+  const user = await prisma.user.findUnique({ where: { id: sessionId } });
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
+  const baseProjectFilter: any = {};
+  if (!isSuperAdmin) {
+    baseProjectFilter.userAssignments = {
+      some: { userId: sessionId, assignmentStatus: 'active' }
+    };
+  }
+
+  const expenseFilter: any = {};
+  if (!isSuperAdmin) expenseFilter.project = baseProjectFilter;
+  if (activeProjectId) expenseFilter.projectId = activeProjectId;
+
   const expenses = await prisma.expense.findMany({
+    where: expenseFilter,
     orderBy: { date: 'desc' },
     include: { project: true, loggedBy: true, breakdownItems: true }
   });
 
-  const projects = await prisma.project.findMany({ select: { id: true, name: true } });
+  const projectsFilter: any = {};
+  if (!isSuperAdmin) {
+    projectsFilter.userAssignments = {
+      some: { userId: sessionId, assignmentStatus: 'active' }
+    };
+  }
+
+  const projects = await prisma.project.findMany({
+    where: projectsFilter,
+    select: { id: true, name: true } 
+  });
   const users = await prisma.user.findMany({ select: { id: true, name: true } });
 
   // Fetch corresponding payables to get the due date

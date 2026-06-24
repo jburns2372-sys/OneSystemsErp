@@ -3,7 +3,24 @@
 import { prisma } from '@/lib/prisma';
 
 export async function getFinancialReport() {
+  const { cookies } = await import('next/headers');
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value || '';
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+
+  const user = sessionId ? await prisma.user.findUnique({ where: { id: sessionId } }) : null;
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
+  const filter: any = {};
+  if (!isSuperAdmin && sessionId) {
+    filter.userAssignments = { some: { userId: sessionId, assignmentStatus: 'active' } };
+  }
+  if (activeProjectId) {
+    filter.id = activeProjectId;
+  }
+
   const projects = await prisma.project.findMany({
+    where: filter,
     select: {
       id: true,
       name: true,
@@ -40,7 +57,24 @@ export async function getFinancialReport() {
 }
 
 export async function getProjectReport() {
+  const { cookies } = await import('next/headers');
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value || '';
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+
+  const user = sessionId ? await prisma.user.findUnique({ where: { id: sessionId } }) : null;
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
+  const filter: any = {};
+  if (!isSuperAdmin && sessionId) {
+    filter.userAssignments = { some: { userId: sessionId, assignmentStatus: 'active' } };
+  }
+  if (activeProjectId) {
+    filter.id = activeProjectId;
+  }
+
   const projects = await prisma.project.findMany({
+    where: filter,
     select: {
       id: true,
       name: true,
@@ -74,12 +108,34 @@ export async function getProjectReport() {
 }
 
 export async function getInventoryReport() {
+  const { cookies } = await import('next/headers');
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value || '';
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+
+  const user = sessionId ? await prisma.user.findUnique({ where: { id: sessionId } }) : null;
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
+  const baseProjectFilter: any = {};
+  if (!isSuperAdmin && sessionId) {
+    baseProjectFilter.userAssignments = { some: { userId: sessionId, assignmentStatus: 'active' } };
+  }
+
+  const filter: any = {
+    deliveredQty: {
+      gt: prisma.consolidatedBOQItem.fields.consumedQty
+    }
+  };
+
+  if (!isSuperAdmin && sessionId) {
+    filter.project = baseProjectFilter;
+  }
+  if (activeProjectId) {
+    filter.projectId = activeProjectId;
+  }
+
   const items = await prisma.consolidatedBOQItem.findMany({
-    where: {
-      deliveredQty: {
-        gt: prisma.consolidatedBOQItem.fields.consumedQty
-      }
-    },
+    where: filter,
     select: {
       id: true,
       category: true,

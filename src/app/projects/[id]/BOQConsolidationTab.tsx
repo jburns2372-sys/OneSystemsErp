@@ -46,7 +46,7 @@ export default async function BOQConsolidationTab({
   if (!currentUser) {
     const email = cookieStore.get('demo_user_email')?.value || 'J.BURNS2372@GMAIL.COM';
     currentUser = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
+      where: { email: { equals: email } },
       include: { userRoles: { include: { role: true } } }
     });
   }

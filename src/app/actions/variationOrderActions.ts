@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { 
   VariationOrder, 
   VariationOrderItem, 
@@ -26,8 +27,12 @@ export async function getAllVariationOrders() {
 
 export async function getAllClientVariationOrders() {
   try {
+    const cookieStore = await cookies();
+    const activeProjectId = cookieStore.get('activeProjectId')?.value;
+
     const vos = await prisma.variationOrder.findMany({
       where: {
+        ...(activeProjectId ? { projectId: activeProjectId } : {}),
         OR: [
           { variationCategory: null },
           { variationCategory: '' },
@@ -47,11 +52,12 @@ export async function getAllClientVariationOrders() {
   }
 }
 
-export async function getAllSubcontractorVariationOrders() {
+export async function getAllSubcontractorVariationOrders(projectId?: string) {
   try {
     const vos = await prisma.variationOrder.findMany({
       where: {
-        variationCategory: 'SUBCONTRACTOR'
+        variationCategory: 'SUBCONTRACTOR',
+        ...(projectId ? { projectId } : {})
       },
       include: {
         items: true,

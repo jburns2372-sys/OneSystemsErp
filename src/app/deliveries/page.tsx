@@ -20,7 +20,18 @@ export default async function DeliveriesPage() {
     }
   }
 
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+
+  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'SYSTEM_ADMIN';
+
+  const deliveriesFilter: any = {};
+  if (!isSuperAdmin || activeProjectId) {
+    deliveriesFilter.po = { mr: { ...(!isSuperAdmin ? { project: { userAssignments: { some: { userId: sessionId, assignmentStatus: 'active' } } } } : {}) } };
+    if (activeProjectId) deliveriesFilter.po.mr.projectId = activeProjectId;
+  }
+
   const deliveries = await prisma.delivery.findMany({
+    where: deliveriesFilter,
     orderBy: { date: 'desc' },
     include: { po: { include: { mr: { include: { project: true } } } } }
   });

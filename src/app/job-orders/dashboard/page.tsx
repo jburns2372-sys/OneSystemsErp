@@ -12,8 +12,31 @@ const joModules = [
   { name: 'Settings', href: '/job-orders/settings', icon: '⚙️', description: 'Module settings' }
 ];
 
+import { cookies } from 'next/headers';
+
 export default async function JobOrderDashboard() {
-  const jobOrders = await getJobOrders();
+  const cookieStore = await cookies();
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || undefined;
+  const sessionId = cookieStore.get('session')?.value || '';
+
+  const { prisma } = await import('@/lib/prisma');
+  const user = await prisma.user.findUnique({ where: { id: sessionId } });
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
+  let allowedProjectIds: string[] | null = null;
+  if (!isSuperAdmin) {
+    const assignments = await prisma.projectUserAssignment.findMany({
+      where: { userId: sessionId, assignmentStatus: 'active' },
+      select: { projectId: true }
+    });
+    allowedProjectIds = assignments.map(a => a.projectId);
+  }
+
+  let jobOrders = await getJobOrders(activeProjectId);
+
+  if (allowedProjectIds !== null) {
+    jobOrders = jobOrders.filter((j: any) => allowedProjectIds!.includes(j.projectId));
+  }
 
   // Basic KPI calculations
   const activeCount = jobOrders.length;

@@ -24,7 +24,25 @@ export default async function MaterialRequestsPage() {
   console.log('PROCUREMENT:', permissions.PROCUREMENT);
   console.log('-------------------');
 
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
+  const whereClause: any = {};
+  if (!isSuperAdmin) {
+    whereClause.project = {
+      userAssignments: {
+        some: { userId, assignmentStatus: 'active' }
+      }
+    };
+  }
+  if (activeProjectId) {
+    whereClause.projectId = activeProjectId;
+  }
+
   const requests = await prisma.materialRequest.findMany({
+    where: whereClause,
     orderBy: { createdAt: 'desc' },
     include: { 
       project: true, 

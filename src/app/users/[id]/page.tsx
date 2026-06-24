@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import { getSystemRoles } from '@/app/actions/user';
 import EditUserClient from './EditUserClient';
+import UserTabs from './UserTabs';
+import ProjectAccessClient from './ProjectAccessClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +12,15 @@ export default async function EditUserPage({ params }: { params: { id: string } 
   const { id } = await params;
 
   const user = await prisma.user.findUnique({
-    where: { id }
+    where: { id },
+    include: {
+      projectAssignments: {
+        include: {
+          project: { select: { id: true, name: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+      }
+    }
   });
 
   if (!user) {
@@ -18,22 +28,40 @@ export default async function EditUserPage({ params }: { params: { id: string } 
   }
 
   const roles = await getSystemRoles();
+  
+  // Fetch active projects for assignment dropdown
+  const availableProjects = await prisma.project.findMany({
+    where: { status: { notIn: ['COMPLETED', 'ARCHIVED'] } },
+    select: { id: true, name: true },
+    orderBy: { createdAt: 'desc' }
+  });
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
+    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '20px' }}>
       <header style={{ marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '1.8rem', color: 'var(--text-primary)', marginBottom: '5px' }}>Edit User Profile</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Update user credentials, roles, and access.</p>
+        <h1 style={{ fontSize: '1.8rem', color: 'var(--text-primary)', marginBottom: '5px' }}>{user.name || 'User Profile'}</h1>
+        <p style={{ color: 'var(--text-secondary)' }}>{user.role} | {user.email}</p>
       </header>
 
-      <EditUserClient 
-        roles={roles}
-        user={{
-          id: user.id,
-          name: user.name || '',
-          email: user.email || '',
-          role: user.role
-        }} 
+      <UserTabs 
+        profileContent={
+          <EditUserClient 
+            roles={roles}
+            user={{
+              id: user.id,
+              name: user.name || '',
+              email: user.email || '',
+              role: user.role
+            }} 
+          />
+        }
+        projectAccessContent={
+          <ProjectAccessClient 
+            userId={user.id}
+            assignments={user.projectAssignments}
+            availableProjects={availableProjects}
+          />
+        }
       />
     </div>
   );

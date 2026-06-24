@@ -16,12 +16,32 @@ export default async function CanvassingDashboard() {
       isSuperAdmin = role === 'SUPER_ADMIN';
     }
   }
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+
+  const baseProjectFilter: any = {};
+  if (!isSuperAdmin) {
+    baseProjectFilter.userAssignments = {
+      some: { userId: sessionId, assignmentStatus: 'active' }
+    };
+  }
+
+  const mrFilter: any = { status: 'APPROVED' };
+  if (!isSuperAdmin) mrFilter.project = baseProjectFilter;
+  if (activeProjectId) mrFilter.projectId = activeProjectId;
+
+  const canvassFilter: any = {};
+  if (!isSuperAdmin || activeProjectId) {
+    canvassFilter.mr = { ...(!isSuperAdmin ? { project: baseProjectFilter } : {}) };
+    if (activeProjectId) canvassFilter.mr.projectId = activeProjectId;
+  }
+
   const mrfForCanvass = await prisma.materialRequest.findMany({
-    where: { status: 'APPROVED' },
+    where: mrFilter,
     include: { project: true, items: true, canvassForms: true }
   });
 
   const activeCanvassForms = await prisma.canvassForm.findMany({
+    where: canvassFilter,
     orderBy: { createdAt: 'desc' },
     include: {
       mr: true,

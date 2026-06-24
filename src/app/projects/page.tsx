@@ -15,7 +15,18 @@ export default async function ProjectsPage() {
   const userId = cookieStore.get('session')?.value || '';
   const permissions = await getUserPermissions(userId);
 
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+
   const projects = await prisma.project.findMany({
+    where: isSuperAdmin ? {} : {
+      userAssignments: {
+        some: {
+          userId: userId,
+          assignmentStatus: 'active'
+        }
+      }
+    },
     orderBy: { createdAt: 'desc' },
     include: { manager: true }
   });
