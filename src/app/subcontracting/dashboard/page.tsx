@@ -35,28 +35,18 @@ export default async function SubcontractingDashboard() {
   const activeProjectId = cookieStore.get('activeProjectId')?.value || undefined;
   const sessionId = cookieStore.get('session')?.value || '';
 
-  const { prisma } = await import('@/lib/prisma');
-  const user = await prisma.user.findUnique({ where: { id: sessionId } });
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
-
-  let allowedProjectIds: string[] | null = null;
-  if (!isSuperAdmin) {
-    const assignments = await prisma.projectUserAssignment.findMany({
-      where: { userId: sessionId, assignmentStatus: 'active' },
-      select: { projectId: true }
-    });
-    allowedProjectIds = assignments.map(a => a.projectId);
+  if (!activeProjectId) {
+    return (
+      <div className={styles.dashboardContainer} style={{ maxWidth: '1400px', textAlign: 'center', padding: '100px 20px' }}>
+        <h2>No Active Project Selected</h2>
+        <p>Please select an Active Project from the top navigation bar to view the Subcontracting Hub.</p>
+      </div>
+    );
   }
 
   let packages = await getSubcontractPackages(activeProjectId);
   let jobOrders = await getJobOrders(activeProjectId);
   let variationOrders = await getAllSubcontractorVariationOrders(activeProjectId);
-
-  if (allowedProjectIds !== null) {
-    packages = packages.filter((p: any) => allowedProjectIds!.includes(p.projectId));
-    jobOrders = jobOrders.filter((j: any) => allowedProjectIds!.includes(j.projectId));
-    variationOrders = variationOrders.filter((v: any) => allowedProjectIds!.includes(v.projectId));
-  }
 
   return (
     <div className={styles.dashboardContainer} style={{ maxWidth: '1400px' }}>

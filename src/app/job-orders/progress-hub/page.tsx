@@ -3,8 +3,22 @@ import Link from 'next/link';
 import { getJobOrders } from '@/app/actions/jobOrderActions';
 import styles from '../../page.module.css';
 
+import { cookies } from 'next/headers';
+
 export default async function JobOrderProgressHubMasterListPage() {
-  const jobOrders = await getJobOrders();
+  const cookieStore = await cookies();
+  const activeProjectId = cookieStore.get('activeProjectId')?.value || undefined;
+
+  if (!activeProjectId) {
+    return (
+      <div className={styles.dashboardContainer} style={{ maxWidth: '1200px', textAlign: 'center', padding: '100px 20px' }}>
+        <h2>No Active Project Selected</h2>
+        <p>Please select an Active Project from the top navigation bar to view its Job Order Progress Hub.</p>
+      </div>
+    );
+  }
+
+  const jobOrders = await getJobOrders(activeProjectId);
 
   return (
     <div className={styles.dashboardContainer} style={{ maxWidth: '1200px' }}>

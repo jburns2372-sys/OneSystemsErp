@@ -23,20 +23,16 @@ export default async function JobOrderDashboard() {
   const user = await prisma.user.findUnique({ where: { id: sessionId } });
   const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
 
-  let allowedProjectIds: string[] | null = null;
-  if (!isSuperAdmin) {
-    const assignments = await prisma.projectUserAssignment.findMany({
-      where: { userId: sessionId, assignmentStatus: 'active' },
-      select: { projectId: true }
-    });
-    allowedProjectIds = assignments.map(a => a.projectId);
+  if (!activeProjectId) {
+    return (
+      <div className={styles.dashboardContainer} style={{ maxWidth: '1400px', textAlign: 'center', padding: '100px 20px' }}>
+        <h2>No Active Project Selected</h2>
+        <p>Please select an Active Project from the top navigation bar to view its Job Orders.</p>
+      </div>
+    );
   }
 
   let jobOrders = await getJobOrders(activeProjectId);
-
-  if (allowedProjectIds !== null) {
-    jobOrders = jobOrders.filter((j: any) => allowedProjectIds!.includes(j.projectId));
-  }
 
   // Basic KPI calculations
   const activeCount = jobOrders.length;

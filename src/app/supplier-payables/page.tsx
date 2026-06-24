@@ -11,28 +11,35 @@ export default async function UnifiedPayablesPage() {
   const sessionId = cookieStore.get('session')?.value || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
+  if (!activeProjectId) {
+    return (
+      <div className={styles.container} style={{ maxWidth: '1400px', margin: '0 auto', padding: '100px 20px', textAlign: 'center' }}>
+        <h2>No Active Project Selected</h2>
+        <p>Please select an Active Project from the top navigation bar to view its Payables.</p>
+      </div>
+    );
+  }
+
   const user = sessionId ? await prisma.user.findUnique({ where: { id: sessionId } }) : null;
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
 
-  const baseProjectFilter: any = {};
-  if (!isSuperAdmin && sessionId) {
-    baseProjectFilter.userAssignments = { some: { userId: sessionId, assignmentStatus: 'active' } };
-  }
+  const payableFilter: any = { 
+    status: { not: 'PAID' },
+    po: { mr: { projectId: activeProjectId } }
+  };
 
-  const payableFilter: any = { status: { not: 'PAID' } };
-  if (!isSuperAdmin && sessionId) payableFilter.po = { mr: { project: baseProjectFilter } };
-  if (activeProjectId) {
-    if (!payableFilter.po) payableFilter.po = { mr: {} };
-    payableFilter.po.mr.projectId = activeProjectId;
-  }
+  const billFilter: any = { 
+    paymentStatus: 'PENDING', 
+    status: 'APPROVED_FOR_PAYMENT', 
+    packageId: { not: null },
+    projectId: activeProjectId
+  };
 
-  const billFilter: any = { paymentStatus: 'PENDING', status: 'APPROVED_FOR_PAYMENT', packageId: { not: null } };
-  if (!isSuperAdmin && sessionId) billFilter.project = baseProjectFilter;
-  if (activeProjectId) billFilter.projectId = activeProjectId;
-
-  const joBillFilter: any = { paymentStatus: 'PENDING', status: 'APPROVED_FOR_PAYMENT', jobOrderId: { not: null } };
-  if (!isSuperAdmin && sessionId) joBillFilter.project = baseProjectFilter;
-  if (activeProjectId) joBillFilter.projectId = activeProjectId;
+  const joBillFilter: any = { 
+    paymentStatus: 'PENDING', 
+    status: 'APPROVED_FOR_PAYMENT', 
+    jobOrderId: { not: null },
+    projectId: activeProjectId
+  };
 
   const payables = await prisma.accountsPayable.findMany({
     where: payableFilter,

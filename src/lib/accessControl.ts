@@ -59,8 +59,12 @@ export async function checkUserAccess(
     }
 
     // 3. Admin / Executive Override Logic (if applicable)
-    // If the user is SUPER_ADMIN, they bypass strict project checks for viewing, but we still log it.
+    // If the user is SUPER_ADMIN, they still need a project ID to avoid cross-project pollution, 
+    // but they bypass the strict `ProjectUserAssignment` database check.
     if (user.role === "SUPER_ADMIN" || user.role === "SYSTEM_ADMIN") {
+      if (!projectId && !["Projects", "Users", "Settings", "Roles", "Executive Dashboard"].includes(moduleName)) {
+         return logAndReturnDenial(userId, user.role, projectId, moduleName, action, "Access Denied: Admins must select an active project before continuing.", requestIp, deviceInfo);
+      }
       await logAccessAllowed(user, null, null, projectId, moduleName, action, transactionId, "Admin Override", requestIp, deviceInfo);
       return {
         allowed: true,
