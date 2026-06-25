@@ -9,7 +9,7 @@ export default async function RagTestCenterPage() {
   const permissions = await getUserPermissions(sessionId);
 
   if (!permissions.IS_ADMIN) {
-    redirect('/dashboard');
+    redirect('/');
   }
 
   return (

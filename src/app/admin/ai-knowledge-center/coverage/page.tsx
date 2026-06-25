@@ -11,7 +11,7 @@ export default async function RagCoveragePage() {
   const permissions = await getUserPermissions(sessionId);
 
   if (!permissions.IS_ADMIN) {
-    redirect('/dashboard');
+    redirect('/');
   }
 
   // 1. Calculate Schema Coverage

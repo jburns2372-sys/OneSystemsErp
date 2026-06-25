@@ -10,7 +10,7 @@ export default async function AIKeywordRegistryPage() {
   const permissions = await getUserPermissions(sessionId);
 
   if (!permissions.IS_ADMIN) {
-    redirect('/dashboard');
+    redirect('/');
   }
 
   // Safe fallback if Prisma client hasn't been regenerated yet

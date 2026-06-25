@@ -10,7 +10,7 @@ export default async function RegistryCleanupPage() {
   const permissions = await getUserPermissions(sessionId);
 
   if (!permissions.IS_ADMIN) {
-    redirect('/dashboard');
+    redirect('/');
   }
 
   // Get current stats

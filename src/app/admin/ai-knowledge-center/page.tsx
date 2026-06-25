@@ -10,7 +10,7 @@ export default async function AiKnowledgeCenterPage() {
   const permissions = await getUserPermissions(sessionId);
 
   if (!permissions.IS_ADMIN) {
-    redirect('/dashboard');
+    redirect('/');
   }
 
   // Fetch initial stats safely (in case Prisma Client hasn't been regenerated yet)
