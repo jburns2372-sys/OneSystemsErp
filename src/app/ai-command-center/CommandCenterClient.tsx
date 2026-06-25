@@ -38,7 +38,7 @@ function renderMessageContent(content: string) {
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip formatter={(val: number) => `$${val.toLocaleString()}`} />
+            <Tooltip formatter={(val: any) => `$${Number(val).toLocaleString()}`} />
             <Legend />
           </PieChart>
         </ResponsiveContainer>
