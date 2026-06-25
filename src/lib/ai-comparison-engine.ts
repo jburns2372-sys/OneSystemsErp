@@ -37,7 +37,7 @@ export async function evaluateComparison(comparisonName: string, projectId?: str
 
     const poTotal = await prisma.purchaseOrder.aggregate({ 
       _sum: { totalAmount: true },
-      where: { projectId }
+      where: { mr: { projectId } }
     });
     
     const subconTotal = await prisma.subcontractPackage.aggregate({
