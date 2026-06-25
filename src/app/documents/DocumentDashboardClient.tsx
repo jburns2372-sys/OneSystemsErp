@@ -120,6 +120,13 @@ export default function DocumentDashboardClient({ initialDocs, projects }: { ini
                     >
                       View
                     </a>
+                    <a 
+                      href={doc.fileUrl} 
+                      download={doc.title}
+                      style={{ padding: '6px 12px', backgroundColor: 'transparent', color: 'var(--accent-color)', border: '1px solid var(--accent-color)', borderRadius: '4px', textDecoration: 'none', fontSize: '0.85rem' }}
+                    >
+                      Download
+                    </a>
                     <button 
                       onClick={() => handleDelete(doc.id)}
                       disabled={isPending}
