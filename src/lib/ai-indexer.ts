@@ -1,12 +1,20 @@
 import OpenAI from 'openai';
 import { prisma } from './prisma';
 
-const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '',
-});
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient() {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY || 'dummy-key-for-build',
+    });
+  }
+  return openaiClient;
+}
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const response = await openaiClient.embeddings.create({
+  const client = getOpenAIClient();
+  const response = await client.embeddings.create({
     model: 'text-embedding-3-small',
     input: text,
   });
