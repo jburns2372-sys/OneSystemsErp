@@ -13,11 +13,11 @@ export default async function AiKnowledgeCenterPage() {
     redirect('/dashboard');
   }
 
-  // Fetch initial stats
-  const knowledgeMapCount = await prisma.aiKnowledgeMap.count();
-  const keywordCount = await prisma.aiRagKeywordRegistry.count();
-  const comparisonCount = await prisma.aiComparisonMap.count();
-  const embeddingCount = await prisma.aiRagEmbedding.count();
+  // Fetch initial stats safely (in case Prisma Client hasn't been regenerated yet)
+  const knowledgeMapCount = await (prisma as any).aiKnowledgeMap?.count() || 0;
+  const keywordCount = await (prisma as any).aiRagKeywordRegistry?.count() || 0;
+  const comparisonCount = await (prisma as any).aiComparisonMap?.count() || 0;
+  const embeddingCount = await (prisma as any).aiRagEmbedding?.count() || 0;
 
   return (
     <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
