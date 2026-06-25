@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/permissions';
 import { cookies } from 'next/headers';
 import { generateEmbedding } from '@/lib/ai-indexer';
+// @ts-ignore - pdf-parse types are broken
 import pdfParse from 'pdf-parse';
 
 export const maxDuration = 60; // Allow enough time for parsing and embedding
