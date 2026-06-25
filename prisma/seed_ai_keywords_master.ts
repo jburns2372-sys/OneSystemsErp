@@ -1,0 +1,432 @@
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+const keywordsToSeed = [
+  // A. SYSTEM, APP, AND DASHBOARD KEYWORDS
+  { keyword: 'system', type: 'module', aliases: 'ERP, OneSystemsERP, app, application, platform, software, system application, business system', table: '', level: 'PUBLIC' },
+  { keyword: 'dashboard', type: 'module', aliases: 'summary screen, management view, overview, main screen, home page, control panel, command center', table: '', level: 'PUBLIC' },
+  { keyword: 'module', type: 'business_term', aliases: 'feature, function, menu, screen, page, section, component, app section', table: '', level: 'PUBLIC' },
+  { keyword: 'workflow', type: 'workflow', aliases: 'process, procedure, flow, approval flow, transaction flow, operating process, business process', table: '', level: 'INTERNAL' },
+  { keyword: 'transaction', type: 'business_term', aliases: 'record, entry, form, submitted record, encoded transaction, system entry', table: '', level: 'INTERNAL' },
+  { keyword: 'settings', type: 'module', aliases: 'configuration, setup, preferences, system settings, admin settings', table: '', level: 'RESTRICTED' },
+  { keyword: 'backup', type: 'module', aliases: 'data backup, restore point, system copy, database backup, file backup', table: '', level: 'RESTRICTED' },
+  { keyword: 'restore', type: 'module', aliases: 'recover, recovery, rollback, reload backup, restore data', table: '', level: 'RESTRICTED' },
+  { keyword: 'import', type: 'workflow', aliases: 'upload, load file, bring in data, Excel upload, CSV upload, batch upload', table: '', level: 'INTERNAL' },
+  { keyword: 'export', type: 'workflow', aliases: 'download, generate file, save as Excel, save as PDF, print report', table: '', level: 'INTERNAL' },
+  { keyword: 'notification', type: 'workflow', aliases: 'alert, reminder, system message, warning, pending notice', table: 'Notification', level: 'INTERNAL' },
+
+  // B. USER, ROLE, AND RBAC KEYWORDS
+  { keyword: 'user', type: 'database_table', aliases: 'account, profile, login account, system user, employee account, staff account', table: 'User', level: 'INTERNAL' },
+  { keyword: 'rbac', type: 'access_control', aliases: 'role access, permission control, user rights, role-based access control, access rights, privileges', table: 'RolePermission', level: 'INTERNAL' },
+  { keyword: 'role', type: 'access_control', aliases: 'user role, position role, system role, designation, access group', table: 'Role', level: 'INTERNAL' },
+  { keyword: 'permission', type: 'access_control', aliases: 'access, privilege, rights, allowed action, authorization, module permission', table: 'RolePermission', level: 'INTERNAL' },
+  { keyword: 'access rights', type: 'access_control', aliases: 'permissions, privileges, allowed modules, user access, role permissions', table: 'RolePermission', level: 'INTERNAL' },
+  { keyword: 'project-based access', type: 'access_control', aliases: 'project access, assigned project, project restriction, project scope, project visibility', table: 'UserProjectAccess', level: 'INTERNAL' },
+  { keyword: 'view only', type: 'access_control', aliases: 'read only, display only, cannot edit, no edit access, guest access', table: 'RolePermission', level: 'PUBLIC' },
+  { keyword: 'super admin', type: 'user_role', aliases: 'system owner, full access admin, highest admin, master admin', table: 'User', level: 'SUPER_ADMIN_ONLY' },
+  { keyword: 'system admin', type: 'user_role', aliases: 'administrator, admin, system administrator, app admin', table: 'User', level: 'RESTRICTED' },
+  { keyword: 'executive', type: 'user_role', aliases: 'CEO, top management, management, owner, board user, executive user', table: 'User', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'project director', type: 'user_role', aliases: 'director, PD, project head, project executive', table: 'User', level: 'RESTRICTED' },
+  { keyword: 'project manager', type: 'user_role', aliases: 'PM, project in charge, project lead, site manager', table: 'User', level: 'INTERNAL' },
+  { keyword: 'project accountant', type: 'user_role', aliases: 'accountant, project accounting, site accountant, accounting staff', table: 'User', level: 'RESTRICTED' },
+  { keyword: 'purchasing officer', type: 'user_role', aliases: 'procurement officer, buyer, purchasing staff, canvasser', table: 'User', level: 'INTERNAL' },
+  { keyword: 'finance officer', type: 'user_role', aliases: 'finance, accounting officer, disbursement officer, cashier', table: 'User', level: 'RESTRICTED' },
+  { keyword: 'payroll officer', type: 'user_role', aliases: 'payroll staff, compensation officer, payroll admin', table: 'User', level: 'CONFIDENTIAL' },
+  { keyword: 'materials engineer', type: 'user_role', aliases: 'materials staff, warehouse checker, material controller, inventory controller', table: 'User', level: 'INTERNAL' },
+  { keyword: 'site admin', type: 'user_role', aliases: 'site accounting, site encoder, admin staff, field admin', table: 'User', level: 'INTERNAL' },
+  { keyword: 'guest user', type: 'user_role', aliases: 'guest, viewer, view only user, read only user', table: 'User', level: 'PUBLIC' },
+
+  // C. PROJECT MANAGEMENT KEYWORDS
+  { keyword: 'project', type: 'database_table', aliases: 'contract, awarded project, live project, site, job site, construction project, project site', table: 'Project', level: 'INTERNAL' },
+  { keyword: 'project code', type: 'database_field', aliases: 'code, project number, contract code, job code, site code', table: 'Project', level: 'INTERNAL' },
+  { keyword: 'project name', type: 'database_field', aliases: 'contract name, site name, project title, job name', table: 'Project', level: 'INTERNAL' },
+  { keyword: 'project status', type: 'project_metric', aliases: 'status, current status, project condition, project standing, active status', table: 'Project', level: 'INTERNAL' },
+  { keyword: 'project cost', type: 'project_metric', aliases: 'contract amount, awarded amount, total project value, contract value, project value, contract price', table: 'Project', level: 'RESTRICTED' },
+  { keyword: 'contract amount', type: 'project_metric', aliases: 'awarded amount, project cost, contract value, original contract amount, awarded contract price', table: 'Project', level: 'RESTRICTED' },
+  { keyword: 'project location', type: 'database_field', aliases: 'site location, address, project address, construction site', table: 'Project', level: 'INTERNAL' },
+  { keyword: 'start date', type: 'database_field', aliases: 'commencement date, project start, beginning date, notice to proceed date, NTP date', table: 'Project', level: 'INTERNAL' },
+  { keyword: 'completion date', type: 'database_field', aliases: 'target completion, finish date, end date, project deadline, contract completion', table: 'Project', level: 'INTERNAL' },
+  { keyword: 'duration', type: 'project_metric', aliases: 'calendar days, working days, project duration, contract duration, number of days', table: 'Project', level: 'INTERNAL' },
+  { keyword: 'project progress', type: 'project_metric', aliases: 'accomplishment, percentage completion, physical progress, actual progress, work progress', table: 'ProjectAccomplishment', level: 'INTERNAL' },
+  { keyword: 'milestone', type: 'project_metric', aliases: 'target milestone, project stage, major activity, key activity, deliverable', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'delay', type: 'project_metric', aliases: 'slippage, overdue, behind schedule, late, delayed activity, schedule variance', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'project health', type: 'project_metric', aliases: 'risk status, overall condition, health score, project KPI, project standing', table: 'Project', level: 'EXECUTIVE_ONLY' },
+
+  // D. BOQ AND QUANTITY MANAGEMENT KEYWORDS
+  { keyword: 'boq', type: 'business_term', aliases: 'bill of quantity, bill of quantities, awarded BOQ, procurement BOQ, quantity list, scope quantity', table: 'AwardedBOQItem', level: 'RESTRICTED' },
+  { keyword: 'awarded boq', type: 'database_table', aliases: 'contract BOQ, billing BOQ, approved BOQ, original BOQ, awarded bill of quantity', table: 'AwardedBOQItem', level: 'RESTRICTED' },
+  { keyword: 'procurement boq', type: 'database_table', aliases: 'benchmark BOQ, forecast BOQ, internal BOQ, procurement benchmark, material BOQ', table: 'ProcurementBenchmarkBOQItem', level: 'RESTRICTED' },
+  { keyword: 'forecast boq', type: 'database_table', aliases: 'procurement BOQ, benchmark BOQ, estimated procurement quantity, internal forecast BOQ', table: 'ProcurementBenchmarkBOQItem', level: 'RESTRICTED' },
+  { keyword: 'consolidated boq', type: 'database_table', aliases: 'grouped BOQ, combined BOQ, merged BOQ, procurement master BOQ', table: 'ConsolidatedBOQItem', level: 'RESTRICTED' },
+  { keyword: 'boq item', type: 'database_field', aliases: 'line item, scope item, work item, item description, quantity item', table: 'AwardedBOQItem', level: 'RESTRICTED' },
+  { keyword: 'item description', type: 'database_field', aliases: 'scope description, work description, BOQ description, item particulars', table: 'AwardedBOQItem', level: 'INTERNAL' },
+  { keyword: 'quantity', type: 'database_field', aliases: 'qty, volume, amount of work, item quantity, required quantity', table: 'AwardedBOQItem', level: 'INTERNAL' },
+  { keyword: 'awarded quantity', type: 'database_field', aliases: 'contract quantity, BOQ quantity, approved quantity, original quantity', table: 'AwardedBOQItem', level: 'RESTRICTED' },
+  { keyword: 'benchmark quantity', type: 'database_field', aliases: 'forecast quantity, procurement quantity, internal quantity, material quantity', table: 'ProcurementBenchmarkBOQItem', level: 'RESTRICTED' },
+  { keyword: 'unit', type: 'database_field', aliases: 'unit of measure, UOM, measurement unit, item unit', table: 'AwardedBOQItem', level: 'INTERNAL' },
+  { keyword: 'unit cost', type: 'database_field', aliases: 'unit price, rate, price per unit, cost per unit', table: 'AwardedBOQItem', level: 'RESTRICTED' },
+  { keyword: 'total cost', type: 'database_field', aliases: 'amount, line total, extended amount, total amount, item amount', table: 'AwardedBOQItem', level: 'RESTRICTED' },
+  { keyword: 'direct cost', type: 'finance_metric', aliases: 'material cost, labor cost, equipment cost, direct work cost', table: 'AwardedBOQItem', level: 'RESTRICTED' },
+  { keyword: 'indirect cost', type: 'finance_metric', aliases: 'overhead, general requirements, indirect expense, preliminaries', table: 'AwardedBOQItem', level: 'RESTRICTED' },
+  { keyword: 'material savings', type: 'computed_metric', aliases: 'quantity savings, cost savings, unused quantity, procurement savings, variance savings', table: 'BOQVariance', level: 'RESTRICTED' },
+  { keyword: 'remaining quantity', type: 'computed_metric', aliases: 'balance quantity, unserved quantity, remaining balance, available quantity', table: 'BOQVariance', level: 'INTERNAL' },
+  { keyword: 'installed quantity', type: 'database_field', aliases: 'accomplished quantity, completed quantity, actual installed, approved installed quantity', table: 'ProjectAccomplishment', level: 'INTERNAL' },
+  { keyword: 'billed quantity', type: 'database_field', aliases: 'quantity billed, claimed quantity, billing quantity', table: 'BillingItem', level: 'RESTRICTED' },
+  { keyword: 'quantity variance', type: 'computed_metric', aliases: 'difference in quantity, BOQ variance, excess quantity, shortage quantity', table: 'BOQVariance', level: 'RESTRICTED' },
+
+  // E. PROCUREMENT KEYWORDS
+  { keyword: 'procurement', type: 'module', aliases: 'purchasing, buying, sourcing, procurement process, purchase management', table: 'PurchaseRequest', level: 'INTERNAL' },
+  { keyword: 'material request', type: 'database_table', aliases: 'MRF, material request form, materials request, request for materials', table: 'MaterialRequest', level: 'INTERNAL' },
+  { keyword: 'purchase request', type: 'database_table', aliases: 'PR, request to purchase, purchasing request, procurement request', table: 'PurchaseRequest', level: 'INTERNAL' },
+  { keyword: 'canvass', type: 'workflow', aliases: 'canvassing, supplier comparison, quotation comparison, price canvass, RFQ comparison', table: 'SupplierQuotation', level: 'INTERNAL' },
+  { keyword: 'rfq', type: 'workflow', aliases: 'request for quotation, quotation request, supplier quote request, price request', table: 'RFQ', level: 'INTERNAL' },
+  { keyword: 'quotation', type: 'database_table', aliases: 'quote, supplier quotation, vendor quotation, price offer, proposal', table: 'SupplierQuotation', level: 'INTERNAL' },
+  { keyword: 'supplier', type: 'database_table', aliases: 'vendor, dealer, provider, seller, supplier company, material supplier', table: 'Supplier', level: 'INTERNAL' },
+  { keyword: 'supplier rating', type: 'procurement_metric', aliases: 'vendor rating, supplier evaluation, supplier score, vendor performance', table: 'SupplierEvaluation', level: 'INTERNAL' },
+  { keyword: 'purchase order', type: 'database_table', aliases: 'PO, order, approved order, supplier order, procurement order', table: 'PurchaseOrder', level: 'RESTRICTED' },
+  { keyword: 'po status', type: 'procurement_metric', aliases: 'purchase order status, order status, procurement status, PO standing', table: 'PurchaseOrder', level: 'INTERNAL' },
+  { keyword: 'pending purchase order', type: 'procurement_metric', aliases: 'pending PO, unapproved PO, PO for approval, waiting approval order', table: 'PurchaseOrder', level: 'INTERNAL' },
+  { keyword: 'undelivered purchase order', type: 'procurement_metric', aliases: 'undelivered PO, pending delivery, PO balance, items not delivered', table: 'PurchaseOrder', level: 'INTERNAL' },
+  { keyword: 'partial delivery', type: 'procurement_metric', aliases: 'incomplete delivery, partially delivered, partial received, balance delivery', table: 'DeliveryReceipt', level: 'INTERNAL' },
+  { keyword: 'complete delivery', type: 'procurement_metric', aliases: 'fully delivered, completed delivery, received in full, complete DR', table: 'DeliveryReceipt', level: 'INTERNAL' },
+  { keyword: 'supplier payable', type: 'finance_metric', aliases: 'supplier AP, vendor payable, unpaid supplier, supplier balance', table: 'AccountsPayable', level: 'RESTRICTED' },
+  { keyword: 'procurement cost', type: 'procurement_metric', aliases: 'purchase cost, material cost, PO total, actual procurement amount', table: 'PurchaseOrder', level: 'RESTRICTED' },
+  { keyword: 'committed cost', type: 'finance_metric', aliases: 'approved PO amount, obligation, committed expense, future payable', table: 'PurchaseOrder', level: 'RESTRICTED' },
+
+  // F. DELIVERY, RECEIVING, AND INVENTORY KEYWORDS
+  { keyword: 'delivery', type: 'database_table', aliases: 'received delivery, supplier delivery, material delivery, item delivery', table: 'DeliveryReceipt', level: 'INTERNAL' },
+  { keyword: 'delivery receipt', type: 'database_table', aliases: 'DR, receiving report, goods receipt, delivery document, received item report', table: 'DeliveryReceipt', level: 'INTERNAL' },
+  { keyword: 'receiving', type: 'workflow', aliases: 'item receiving, material receiving, goods receipt, acceptance, warehouse receiving', table: 'DeliveryReceipt', level: 'INTERNAL' },
+  { keyword: 'inspection', type: 'workflow', aliases: 'checking, material inspection, quality check, receiving inspection, acceptance inspection', table: 'InspectionReport', level: 'INTERNAL' },
+  { keyword: 'invoice', type: 'database_table', aliases: 'billing invoice, sales invoice, supplier invoice, SI, charge invoice', table: 'SupplierInvoice', level: 'RESTRICTED' },
+  { keyword: 'inventory', type: 'module', aliases: 'materials, stock, warehouse, stockroom, material inventory, stocks on hand', table: 'InventoryItem', level: 'INTERNAL' },
+  { keyword: 'stock balance', type: 'inventory_metric', aliases: 'inventory balance, available stock, stock on hand, remaining stock, material balance', table: 'InventoryBalance', level: 'INTERNAL' },
+  { keyword: 'warehouse', type: 'module', aliases: 'storage, stockroom, material storage, warehouse location, inventory area', table: 'Warehouse', level: 'INTERNAL' },
+  { keyword: 'material issuance', type: 'database_table', aliases: 'MIS, issuance slip, material issuance slip, materials issued, release of materials', table: 'MaterialIssuance', level: 'INTERNAL' },
+  { keyword: 'issued materials', type: 'inventory_metric', aliases: 'released materials, withdrawn materials, used materials, materials consumed', table: 'MaterialIssuance', level: 'INTERNAL' },
+  { keyword: 'consumed materials', type: 'inventory_metric', aliases: 'material usage, actual usage, material consumption, utilized materials', table: 'MaterialConsumption', level: 'INTERNAL' },
+  { keyword: 'returned materials', type: 'inventory_metric', aliases: 'material return, returned stock, unused returned item, return to warehouse', table: 'MaterialReturn', level: 'INTERNAL' },
+  { keyword: 'damaged materials', type: 'inventory_metric', aliases: 'defective materials, waste, scrap, rejected materials, damaged stock', table: 'DamagedMaterial', level: 'INTERNAL' },
+  { keyword: 'reorder point', type: 'inventory_metric', aliases: 'minimum stock, reorder level, stock alert level, low stock threshold', table: 'InventoryItem', level: 'INTERNAL' },
+  { keyword: 'shortage', type: 'inventory_metric', aliases: 'lacking materials, insufficient stock, stock shortage, material deficit', table: 'InventoryBalance', level: 'INTERNAL' },
+  { keyword: 'excess materials', type: 'inventory_metric', aliases: 'overstock, surplus materials, excess stock, unused materials', table: 'InventoryBalance', level: 'INTERNAL' },
+
+  // G. SUBCONTRACTING AND JOB ORDER KEYWORDS
+  { keyword: 'subcontractor', type: 'database_table', aliases: 'subcon, subcontract company, trade contractor, specialty contractor', table: 'Subcontractor', level: 'INTERNAL' },
+  { keyword: 'subcontract package', type: 'database_table', aliases: 'subcontract, subcontract agreement, subcontract scope, subcontract contract', table: 'SubcontractPackage', level: 'RESTRICTED' },
+  { keyword: 'subcontract agreement', type: 'document', aliases: 'subcontract contract, subcontract package, subcontract terms, subcontract document', table: 'SubcontractPackage', level: 'RESTRICTED' },
+  { keyword: 'subcontract boq', type: 'database_table', aliases: 'subcontract quantity, subcon BOQ, subcontract scope items, subcontract line items', table: 'SubcontractBOQItem', level: 'RESTRICTED' },
+  { keyword: 'subcontract billing', type: 'billing_metric', aliases: 'subcon billing, subcontractor billing, subcontract progress billing, subcontract claim', table: 'SubcontractBilling', level: 'RESTRICTED' },
+  { keyword: 'subcontract accomplishment', type: 'subcontract_metric', aliases: 'subcon progress, subcontractor progress, subcontract completed work', table: 'SubcontractAccomplishment', level: 'INTERNAL' },
+  { keyword: 'subcontract retention', type: 'finance_metric', aliases: 'retention, holdback, retained amount, subcontract holdback', table: 'SubcontractBilling', level: 'RESTRICTED' },
+  { keyword: 'subcontract payment', type: 'finance_metric', aliases: 'subcon payment, subcontractor payable, subcontract disbursement', table: 'SubcontractPayment', level: 'RESTRICTED' },
+  { keyword: 'job order', type: 'database_table', aliases: 'JO, work order, service order, short subcontract, minor works order', table: 'JobOrder', level: 'RESTRICTED' },
+  { keyword: 'labor-only job order', type: 'subcontract_metric', aliases: 'labor only, manpower job order, labor work order, labor subcontract', table: 'JobOrder', level: 'RESTRICTED' },
+  { keyword: 'painting job order', type: 'subcontract_metric', aliases: 'painting JO, painting works, paint subcontract, paint work order', table: 'JobOrder', level: 'INTERNAL' },
+  { keyword: 'masonry job order', type: 'subcontract_metric', aliases: 'masonry JO, masonry works, block works, concrete works job order', table: 'JobOrder', level: 'INTERNAL' },
+  { keyword: 'drywall job order', type: 'subcontract_metric', aliases: 'drywall JO, gypsum works, partition works, ceiling works', table: 'JobOrder', level: 'INTERNAL' },
+  { keyword: 'waterproofing job order', type: 'subcontract_metric', aliases: 'waterproofing JO, waterproofing works, leak repair works', table: 'JobOrder', level: 'INTERNAL' },
+
+  // H. BILLING AND ACCOMPLISHMENT KEYWORDS
+  { keyword: 'billing', type: 'module', aliases: 'progress billing, project billing, client billing, owner billing, payment claim', table: 'Billing', level: 'RESTRICTED' },
+  { keyword: 'accomplishment', type: 'database_table', aliases: 'progress, completed work, work accomplished, physical accomplishment, project accomplishment', table: 'ProjectAccomplishment', level: 'INTERNAL' },
+  { keyword: 'accomplishment report', type: 'report', aliases: 'progress report, work accomplishment report, SWA, statement of work accomplished', table: 'AccomplishmentReport', level: 'INTERNAL' },
+  { keyword: 'statement of work accomplished', type: 'report', aliases: 'SWA, accomplishment statement, progress statement, completed work statement', table: 'AccomplishmentReport', level: 'INTERNAL' },
+  { keyword: 'progress billing', type: 'billing_metric', aliases: 'billing claim, payment claim, project billing, billing statement', table: 'Billing', level: 'RESTRICTED' },
+  { keyword: 'previous billing', type: 'billing_metric', aliases: 'prior billing, previous claim, earlier billing, past billing', table: 'Billing', level: 'RESTRICTED' },
+  { keyword: 'current billing', type: 'billing_metric', aliases: 'latest billing, present billing, current claim, billing this period', table: 'Billing', level: 'RESTRICTED' },
+  { keyword: 'cumulative billing', type: 'billing_metric', aliases: 'total billing, accumulated billing, billing to date, total claimed amount', table: 'Billing', level: 'RESTRICTED' },
+  { keyword: 'retention', type: 'finance_metric', aliases: 'holdback, retained amount, retention money, withheld amount', table: 'Billing', level: 'RESTRICTED' },
+  { keyword: 'collection', type: 'finance_metric', aliases: 'payment received, collected amount, client payment, receipt, receivable collection', table: 'Collection', level: 'RESTRICTED' },
+  { keyword: 'accounts receivable', type: 'finance_metric', aliases: 'AR, receivable, collectible, unpaid client billing, client balance', table: 'AccountsReceivable', level: 'RESTRICTED' },
+  { keyword: 'billing status', type: 'billing_metric', aliases: 'payment claim status, project billing status, submitted billing, approved billing', table: 'Billing', level: 'RESTRICTED' },
+  { keyword: 'final billing', type: 'billing_metric', aliases: 'final claim, last billing, completion billing, closeout billing', table: 'Billing', level: 'RESTRICTED' },
+
+  // I. VARIATION ORDER KEYWORDS
+  { keyword: 'variation order', type: 'database_table', aliases: 'VO, change order, project variation, contract variation, scope change', table: 'VariationOrder', level: 'RESTRICTED' },
+  { keyword: 'additional works', type: 'variation_metric', aliases: 'additive variation, extra works, added scope, additional scope', table: 'VariationOrder', level: 'RESTRICTED' },
+  { keyword: 'deductive works', type: 'variation_metric', aliases: 'deductive variation, omitted works, reduced scope, deletion works', table: 'VariationOrder', level: 'RESTRICTED' },
+  { keyword: 'change order', type: 'variation_metric', aliases: 'variation order, scope change, contract change, project change', table: 'VariationOrder', level: 'RESTRICTED' },
+  { keyword: 'extension of time', type: 'schedule_metric', aliases: 'EOT, time extension, additional time, extended completion date', table: 'VariationOrder', level: 'RESTRICTED' },
+  { keyword: 'revised contract amount', type: 'computed_metric', aliases: 'adjusted contract amount, updated project cost, contract after variation', table: 'VariationOrder', level: 'RESTRICTED' },
+  { keyword: 'variation billing', type: 'billing_metric', aliases: 'VO billing, change order billing, additional works billing', table: 'VariationBilling', level: 'RESTRICTED' },
+
+  // J. PAYROLL AND DTR KEYWORDS
+  { keyword: 'payroll', type: 'module', aliases: 'salary, wage, workers pay, compensation, payroll computation', table: 'PayrollPeriod', level: 'CONFIDENTIAL' },
+  { keyword: 'worker', type: 'database_table', aliases: 'laborer, employee, manpower, personnel, staff, construction worker', table: 'Worker', level: 'CONFIDENTIAL' },
+  { keyword: 'worker database', type: 'database_table', aliases: 'manpower list, employee list, labor database, worker master list', table: 'Worker', level: 'CONFIDENTIAL' },
+  { keyword: 'dtr', type: 'database_table', aliases: 'daily time record, attendance, biometrics, time record, attendance sheet', table: 'DailyTimeRecord', level: 'CONFIDENTIAL' },
+  { keyword: 'attendance', type: 'payroll_metric', aliases: 'presence, time record, work attendance, biometric record', table: 'DailyTimeRecord', level: 'CONFIDENTIAL' },
+  { keyword: 'time in', type: 'payroll_metric', aliases: 'clock in, login time, entry time, start work time', table: 'DailyTimeRecord', level: 'CONFIDENTIAL' },
+  { keyword: 'time out', type: 'payroll_metric', aliases: 'clock out, logout time, exit time, end work time', table: 'DailyTimeRecord', level: 'CONFIDENTIAL' },
+  { keyword: 'overtime', type: 'payroll_metric', aliases: 'OT, extra hours, overtime hours, extended work', table: 'PayrollDetail', level: 'CONFIDENTIAL' },
+  { keyword: 'undertime', type: 'payroll_metric', aliases: 'short time, lacking hours, early out, under hours', table: 'PayrollDetail', level: 'CONFIDENTIAL' },
+  { keyword: 'late', type: 'payroll_metric', aliases: 'tardy, lateness, late arrival, delayed time in', table: 'DailyTimeRecord', level: 'CONFIDENTIAL' },
+  { keyword: 'absence', type: 'payroll_metric', aliases: 'absent, no attendance, missed work, non-attendance', table: 'DailyTimeRecord', level: 'CONFIDENTIAL' },
+  { keyword: 'daily rate', type: 'payroll_metric', aliases: 'wage rate, daily wage, daily salary, rate per day', table: 'Worker', level: 'CONFIDENTIAL' },
+  { keyword: 'gross pay', type: 'payroll_metric', aliases: 'gross salary, total earnings, salary before deductions', table: 'PayrollDetail', level: 'CONFIDENTIAL' },
+  { keyword: 'net pay', type: 'payroll_metric', aliases: 'take home pay, salary after deductions, payable salary', table: 'PayrollDetail', level: 'CONFIDENTIAL' },
+  { keyword: 'deduction', type: 'payroll_metric', aliases: 'salary deduction, payroll deduction, less amount, withheld amount', table: 'PayrollDeduction', level: 'CONFIDENTIAL' },
+  { keyword: 'cash advance', type: 'payroll_metric', aliases: 'CA, salary advance, worker advance, advance payment', table: 'CashAdvance', level: 'CONFIDENTIAL' },
+  { keyword: 'sss', type: 'payroll_metric', aliases: 'social security, SSS contribution, government deduction', table: 'PayrollDeduction', level: 'CONFIDENTIAL' },
+  { keyword: 'philhealth', type: 'payroll_metric', aliases: 'health contribution, PhilHealth contribution, government deduction', table: 'PayrollDeduction', level: 'CONFIDENTIAL' },
+  { keyword: 'pagibig', type: 'payroll_metric', aliases: 'Pag-IBIG, HDMF, housing contribution, government deduction', table: 'PayrollDeduction', level: 'CONFIDENTIAL' },
+  { keyword: 'withholding tax', type: 'payroll_metric', aliases: 'BIR tax, income tax, tax deduction, withheld tax', table: 'PayrollDeduction', level: 'CONFIDENTIAL' },
+  { keyword: '13th month', type: 'payroll_metric', aliases: 'thirteenth month, 13th month pay, annual bonus', table: 'PayrollPeriod', level: 'CONFIDENTIAL' },
+  { keyword: 'gcash payment', type: 'payroll_metric', aliases: 'GCash salary, mobile wallet payment, worker GCash payment', table: 'PayrollPayment', level: 'CONFIDENTIAL' },
+  { keyword: 'bank payment', type: 'payroll_metric', aliases: 'salary bank transfer, bank payroll, payroll deposit', table: 'PayrollPayment', level: 'CONFIDENTIAL' },
+
+  // K. FINANCE AND ACCOUNTING KEYWORDS
+  { keyword: 'finance', type: 'module', aliases: 'accounting, financials, money, project financials, financial management', table: '', level: 'RESTRICTED' },
+  { keyword: 'accounting', type: 'module', aliases: 'books, bookkeeping, ledger, financial records, accounting system', table: '', level: 'RESTRICTED' },
+  { keyword: 'chart of accounts', type: 'database_table', aliases: 'COA, account list, account codes, accounting codes', table: 'ChartOfAccount', level: 'RESTRICTED' },
+  { keyword: 'journal entry', type: 'database_table', aliases: 'JE, accounting entry, debit credit entry, book entry', table: 'JournalEntry', level: 'RESTRICTED' },
+  { keyword: 'general ledger', type: 'database_table', aliases: 'GL, ledger, account ledger, books of accounts', table: 'GeneralLedger', level: 'RESTRICTED' },
+  { keyword: 'trial balance', type: 'report', aliases: 'TB, account balance report, trial balance report', table: 'TrialBalance', level: 'RESTRICTED' },
+  { keyword: 'balance sheet', type: 'report', aliases: 'statement of financial position, financial position, assets liabilities equity report', table: 'BalanceSheet', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'income statement', type: 'report', aliases: 'profit and loss, P&L, statement of operations, earnings report', table: 'IncomeStatement', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'cash flow', type: 'report', aliases: 'cashflow, cash movement, cash inflow outflow, cash report', table: 'CashFlow', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'accounts payable', type: 'finance_metric', aliases: 'AP, payable, unpaid supplier, unpaid obligation, outstanding payable', table: 'AccountsPayable', level: 'RESTRICTED' },
+  { keyword: 'receivable', type: 'finance_metric', aliases: 'collectible, client balance, amount to collect, unpaid billing', table: 'AccountsReceivable', level: 'RESTRICTED' },
+  { keyword: 'disbursement', type: 'finance_metric', aliases: 'payment, cash out, money released, expense payment', table: 'Disbursement', level: 'RESTRICTED' },
+  { keyword: 'voucher', type: 'database_table', aliases: 'check voucher, cash voucher, payment voucher, disbursement voucher', table: 'Voucher', level: 'RESTRICTED' },
+  { keyword: 'official receipt', type: 'database_table', aliases: 'OR, receipt, collection receipt, payment receipt', table: 'OfficialReceipt', level: 'RESTRICTED' },
+  { keyword: 'vat', type: 'finance_metric', aliases: 'value added tax, input VAT, output VAT, tax', table: 'TaxRecord', level: 'RESTRICTED' },
+  { keyword: 'ewt', type: 'finance_metric', aliases: 'expanded withholding tax, withholding tax, tax withheld', table: 'TaxRecord', level: 'RESTRICTED' },
+  { keyword: 'profitability', type: 'computed_metric', aliases: 'profit, margin, project profit, gross profit, net profit, gain, loss', table: 'ProjectProfitability', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'gross profit', type: 'computed_metric', aliases: 'gross margin, revenue less direct cost, project gross profit', table: 'ProjectProfitability', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'net profit', type: 'computed_metric', aliases: 'net income, bottom line, final profit, profit after expenses', table: 'ProjectProfitability', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'cost to complete', type: 'computed_metric', aliases: 'remaining cost, forecast completion cost, estimated cost to finish', table: 'ProjectProfitability', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'actual cost', type: 'finance_metric', aliases: 'actual expense, cost incurred, expenses incurred, actual spending', table: 'Expense', level: 'RESTRICTED' },
+  { keyword: 'budget variance', type: 'computed_metric', aliases: 'actual vs budget, variance, over budget, under budget', table: 'BudgetVariance', level: 'RESTRICTED' },
+
+  // L. EXPENSE LEDGER AND PETTY CASH KEYWORDS
+  { keyword: 'expense', type: 'database_table', aliases: 'opex, capex, project expense, cost, spending, expenditure', table: 'Expense', level: 'RESTRICTED' },
+  { keyword: 'expense ledger', type: 'database_table', aliases: 'expense record, project expense ledger, cost ledger, expense log', table: 'ExpenseLedger', level: 'RESTRICTED' },
+  { keyword: 'petty cash', type: 'database_table', aliases: 'cash fund, small cash, petty cash fund, site cash', table: 'PettyCash', level: 'RESTRICTED' },
+  { keyword: 'petty cash replenishment', type: 'workflow', aliases: 'replenishment, cash replenishment, petty cash refill, fund replenishment', table: 'PettyCashReplenishment', level: 'RESTRICTED' },
+  { keyword: 'liquidation', type: 'workflow', aliases: 'expense liquidation, cash liquidation, petty cash liquidation, reimbursement report', table: 'Liquidation', level: 'RESTRICTED' },
+  { keyword: 'unliquidated expense', type: 'finance_metric', aliases: 'unliquidated cash, pending liquidation, unreported expense, unsettled cash', table: 'Liquidation', level: 'RESTRICTED' },
+  { keyword: 'reimbursement', type: 'finance_metric', aliases: 'refund, reimbursable expense, expense refund, paid back expense', table: 'Reimbursement', level: 'RESTRICTED' },
+
+  // M. SCHEDULING, GANTT, PERT, AND CPM KEYWORDS
+  { keyword: 'schedule', type: 'module', aliases: 'project schedule, construction schedule, timeline, work schedule, activity schedule', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'gantt chart', type: 'schedule_metric', aliases: 'Gantt, timeline chart, bar chart schedule, project timeline', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'pert', type: 'schedule_metric', aliases: 'PERT diagram, network diagram, task network, project network', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'cpm', type: 'schedule_metric', aliases: 'critical path method, critical path, CPM analysis, schedule critical path', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'critical path', type: 'schedule_metric', aliases: 'CPM, longest path, critical activities, no-float activities', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'task', type: 'database_field', aliases: 'activity, work activity, schedule activity, project task', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'dependency', type: 'schedule_metric', aliases: 'predecessor, successor, linked task, task relationship', table: 'ProjectScheduleDependency', level: 'INTERNAL' },
+  { keyword: 'predecessor', type: 'schedule_metric', aliases: 'previous task, prior activity, dependency before', table: 'ProjectScheduleDependency', level: 'INTERNAL' },
+  { keyword: 'successor', type: 'schedule_metric', aliases: 'next task, following activity, dependency after', table: 'ProjectScheduleDependency', level: 'INTERNAL' },
+  { keyword: 'float', type: 'schedule_metric', aliases: 'slack, allowable delay, free float, total float', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'planned progress', type: 'schedule_metric', aliases: 'planned accomplishment, target progress, scheduled progress', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'actual progress', type: 'schedule_metric', aliases: 'actual accomplishment, real progress, reported progress', table: 'ProjectAccomplishment', level: 'INTERNAL' },
+  { keyword: 'recovery plan', type: 'schedule_metric', aliases: 'catch-up plan, acceleration plan, delay mitigation, corrective schedule', table: 'RecoveryPlan', level: 'INTERNAL' },
+
+  // N. EXECUTIVE DASHBOARD AND KPI KEYWORDS
+  { keyword: 'executive dashboard', type: 'module', aliases: 'command center, management dashboard, CEO dashboard, top management view', table: 'ExecutiveDashboard', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'kpi', type: 'report', aliases: 'key performance indicator, performance metric, management metric, dashboard indicator', table: 'KPIReport', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'executive summary', type: 'report', aliases: 'management summary, CEO summary, board report, project summary', table: 'ExecutiveReport', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'project portfolio', type: 'report', aliases: 'all projects, multi-project dashboard, portfolio summary, project list summary', table: 'ProjectPortfolio', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'risk', type: 'project_metric', aliases: 'issue, warning, alert, concern, project risk, critical item', table: 'RiskRegister', level: 'INTERNAL' },
+  { keyword: 'high-risk project', type: 'project_metric', aliases: 'critical project, troubled project, red flag project, risky project', table: 'RiskRegister', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'delayed project', type: 'project_metric', aliases: 'behind schedule project, late project, project with slippage', table: 'ProjectSchedule', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'cost alert', type: 'finance_metric', aliases: 'over budget alert, cost warning, expense alert, budget warning', table: 'Alert', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'procurement alert', type: 'procurement_metric', aliases: 'purchasing warning, undelivered PO alert, procurement risk', table: 'Alert', level: 'INTERNAL' },
+  { keyword: 'billing alert', type: 'billing_metric', aliases: 'collection warning, unpaid billing alert, billing delay alert', table: 'Alert', level: 'RESTRICTED' },
+
+  // O. AI VALIDATION KEYWORDS
+  { keyword: 'ai validation', type: 'ai_validation_term', aliases: 'validation, AI checking, automated validation, intelligent validation', table: 'AIValidationResult', level: 'INTERNAL' },
+  { keyword: 'photo validation', type: 'ai_validation_term', aliases: 'image validation, site photo checking, photo evidence validation', table: 'AIValidationResult', level: 'INTERNAL' },
+  { keyword: 'satellite validation', type: 'ai_validation_term', aliases: 'satellite check, satellite image validation, remote sensing validation', table: 'AIValidationResult', level: 'RESTRICTED' },
+  { keyword: 'drone validation', type: 'ai_validation_term', aliases: 'drone inspection, aerial validation, drone image validation', table: 'AIValidationResult', level: 'RESTRICTED' },
+  { keyword: 'cctv validation', type: 'ai_validation_term', aliases: 'camera validation, live camera checking, video validation', table: 'AIValidationResult', level: 'RESTRICTED' },
+  { keyword: 'plan validation', type: 'ai_validation_term', aliases: 'drawing validation, submitted plan validation, blueprint validation, construction plan check', table: 'AIValidationResult', level: 'INTERNAL' },
+  { keyword: 'geotag', type: 'ai_validation_term', aliases: 'GPS, coordinates, location tag, photo location, EXIF location', table: 'AIValidationResult', level: 'INTERNAL' },
+  { keyword: 'timestamp', type: 'ai_validation_term', aliases: 'date taken, time taken, photo time, evidence date', table: 'AIValidationResult', level: 'INTERNAL' },
+  { keyword: 'duplicate photo', type: 'ai_validation_term', aliases: 'repeated photo, reused photo, same image, duplicate image evidence', table: 'AIValidationResult', level: 'INTERNAL' },
+  { keyword: 'manipulated photo', type: 'ai_validation_term', aliases: 'edited photo, fake photo, altered image, suspicious image', table: 'AIValidationResult', level: 'RESTRICTED' },
+  { keyword: 'validation score', type: 'ai_validation_term', aliases: 'confidence score, AI score, evidence score, validation rating', table: 'AIValidationResult', level: 'INTERNAL' },
+
+  // P. REPORTS, SOP, MANUALS, AND KNOWLEDGE BASE KEYWORDS
+  { keyword: 'report', type: 'report', aliases: 'summary, generated report, printed report, PDF report, Excel report', table: 'Report', level: 'INTERNAL' },
+  { keyword: 'procurement report', type: 'report', aliases: 'purchasing report, PO report, supplier report, procurement summary', table: 'ProcurementReport', level: 'INTERNAL' },
+  { keyword: 'inventory report', type: 'report', aliases: 'stock report, material report, warehouse report, inventory summary', table: 'InventoryReport', level: 'INTERNAL' },
+  { keyword: 'billing report', type: 'report', aliases: 'progress billing report, client billing report, collection report', table: 'BillingReport', level: 'RESTRICTED' },
+  { keyword: 'payroll report', type: 'report', aliases: 'salary report, payroll summary, payroll register, worker payroll report', table: 'PayrollReport', level: 'CONFIDENTIAL' },
+  { keyword: 'finance report', type: 'report', aliases: 'financial report, accounting report, management financial report', table: 'FinanceReport', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'cost variance report', type: 'report', aliases: 'budget variance report, actual vs budget report, cost comparison report', table: 'CostVarianceReport', level: 'RESTRICTED' },
+  { keyword: 'profitability report', type: 'report', aliases: 'margin report, project profit report, profit and loss report', table: 'ProfitabilityReport', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'delay report', type: 'report', aliases: 'slippage report, schedule variance report, delayed activities report', table: 'DelayReport', level: 'INTERNAL' },
+  { keyword: 'manual', type: 'SOP', aliases: 'operating manual, user guide, training guide, system manual', table: 'KnowledgeBaseDocument', level: 'PUBLIC' },
+  { keyword: 'sop', type: 'SOP', aliases: 'standard operating procedure, procedure, operating procedure, work instruction', table: 'KnowledgeBaseDocument', level: 'INTERNAL' },
+  { keyword: 'checklist', type: 'SOP', aliases: 'task list, process checklist, operating checklist, compliance checklist', table: 'KnowledgeBaseDocument', level: 'INTERNAL' },
+  { keyword: 'knowledge base', type: 'document', aliases: 'document library, reference library, AI knowledge center, help center', table: 'KnowledgeBaseDocument', level: 'PUBLIC' },
+  { keyword: 'notebook', type: 'document', aliases: 'AI notebook, Gemini notebook, reference notebook, knowledge notebook', table: 'KnowledgeBaseDocument', level: 'INTERNAL' },
+
+  // Q. AUDIT, SECURITY, AND APPROVAL KEYWORDS
+  { keyword: 'approval', type: 'workflow', aliases: 'pending, approve, reject, approval process, approval workflow, approval status', table: 'Approval', level: 'INTERNAL' },
+  { keyword: 'pending approval', type: 'approval_metric', aliases: 'for approval, waiting approval, pending review, approval queue', table: 'Approval', level: 'INTERNAL' },
+  { keyword: 'approved', type: 'approval_metric', aliases: 'accepted, authorized, cleared, approved transaction', table: 'Approval', level: 'INTERNAL' },
+  { keyword: 'rejected', type: 'approval_metric', aliases: 'denied, disapproved, returned, not approved', table: 'Approval', level: 'INTERNAL' },
+  { keyword: 'reviewer', type: 'workflow', aliases: 'checker, verifier, reviewing officer, review approver', table: 'Approval', level: 'INTERNAL' },
+  { keyword: 'approver', type: 'workflow', aliases: 'approving officer, final approver, authorized approver', table: 'Approval', level: 'INTERNAL' },
+  { keyword: 'audit trail', type: 'audit_term', aliases: 'logs, activity log, history, transaction history, change history', table: 'AuditLog', level: 'RESTRICTED' },
+  { keyword: 'user log', type: 'audit_term', aliases: 'login history, user activity, access log, account log', table: 'AuditLog', level: 'RESTRICTED' },
+  { keyword: 'edit history', type: 'audit_term', aliases: 'change history, update log, modification history, revised record', table: 'AuditLog', level: 'RESTRICTED' },
+  { keyword: 'deleted record', type: 'audit_term', aliases: 'removed record, deleted transaction, trash record, archived deletion', table: 'AuditLog', level: 'RESTRICTED' },
+  { keyword: 'unauthorized access', type: 'audit_term', aliases: 'access denied, restricted access, permission denied, blocked access', table: 'SecurityLog', level: 'RESTRICTED' },
+  { keyword: 'confidential', type: 'access_control', aliases: 'private, restricted, sensitive, protected information', table: '', level: 'CONFIDENTIAL' },
+
+  // R. DOCUMENT, FILE, AND ATTACHMENT KEYWORDS
+  { keyword: 'document', type: 'document', aliases: 'file, attachment, uploaded file, record file, supporting document', table: 'Document', level: 'INTERNAL' },
+  { keyword: 'attachment', type: 'document', aliases: 'attached file, supporting file, uploaded attachment, proof document', table: 'Attachment', level: 'INTERNAL' },
+  { keyword: 'pdf', type: 'document', aliases: 'PDF file, printable document, scanned document', table: 'Document', level: 'INTERNAL' },
+  { keyword: 'excel', type: 'document', aliases: 'spreadsheet, XLSX, Excel file, workbook, BOQ file', table: 'Document', level: 'INTERNAL' },
+  { keyword: 'csv', type: 'document', aliases: 'CSV file, comma separated file, import file, data file', table: 'Document', level: 'INTERNAL' },
+  { keyword: 'image', type: 'document', aliases: 'photo, picture, site image, uploaded image, proof photo', table: 'Attachment', level: 'INTERNAL' },
+  { keyword: 'video', type: 'document', aliases: 'mp4, cctv clip, drone footage', table: 'Attachment', level: 'INTERNAL' },
+
+  // S. ABBREVIATIONS
+  { keyword: 'MRF', type: 'database_table', aliases: 'material request, material request form, materials request, request for materials', table: 'MaterialRequest', level: 'INTERNAL' },
+  { keyword: 'PR', type: 'database_table', aliases: 'purchase request, procurement request, request to purchase', table: 'PurchaseRequest', level: 'INTERNAL' },
+  { keyword: 'PO', type: 'database_table', aliases: 'purchase order, procurement order, supplier order', table: 'PurchaseOrder', level: 'RESTRICTED' },
+  { keyword: 'RFQ', type: 'workflow', aliases: 'request for quotation, quotation request, supplier quote request', table: 'RFQ', level: 'INTERNAL' },
+  { keyword: 'DR', type: 'database_table', aliases: 'delivery receipt, receiving report, goods receipt', table: 'DeliveryReceipt', level: 'INTERNAL' },
+  { keyword: 'MIS', type: 'database_table', aliases: 'material issuance, material issuance slip, issuance slip', table: 'MaterialIssuance', level: 'INTERNAL' },
+  { keyword: 'SWA', type: 'report', aliases: 'statement of work accomplished, accomplishment report, progress report', table: 'AccomplishmentReport', level: 'INTERNAL' },
+  { keyword: 'VO', type: 'database_table', aliases: 'variation order, change order, project variation, contract variation', table: 'VariationOrder', level: 'RESTRICTED' },
+  { keyword: 'EOT', type: 'schedule_metric', aliases: 'extension of time, time extension, additional time', table: 'VariationOrder', level: 'RESTRICTED' },
+  { keyword: 'JO', type: 'database_table', aliases: 'job order, work order, service order, short subcontract', table: 'JobOrder', level: 'RESTRICTED' },
+  { keyword: 'AP', type: 'finance_metric', aliases: 'accounts payable, payable, unpaid supplier, outstanding payable', table: 'AccountsPayable', level: 'RESTRICTED' },
+  { keyword: 'AR', type: 'finance_metric', aliases: 'accounts receivable, receivable, collectible, client balance', table: 'AccountsReceivable', level: 'RESTRICTED' },
+  { keyword: 'GL', type: 'database_table', aliases: 'general ledger, ledger, account ledger', table: 'GeneralLedger', level: 'RESTRICTED' },
+  { keyword: 'COA', type: 'database_table', aliases: 'chart of accounts, account codes, account list', table: 'ChartOfAccount', level: 'RESTRICTED' },
+  { keyword: 'JE', type: 'database_table', aliases: 'journal entry, accounting entry, debit credit entry', table: 'JournalEntry', level: 'RESTRICTED' },
+  { keyword: 'CV', type: 'database_table', aliases: 'check voucher, cash voucher, payment voucher, disbursement voucher', table: 'Voucher', level: 'RESTRICTED' },
+  { keyword: 'OR', type: 'database_table', aliases: 'official receipt, receipt, collection receipt, payment receipt', table: 'OfficialReceipt', level: 'RESTRICTED' },
+  { keyword: 'OT', type: 'payroll_metric', aliases: 'overtime, extra hours, extended work', table: 'PayrollDetail', level: 'CONFIDENTIAL' },
+  { keyword: 'CA', type: 'payroll_metric', aliases: 'cash advance, salary advance, worker advance', table: 'CashAdvance', level: 'CONFIDENTIAL' },
+  { keyword: 'HDMF', type: 'payroll_metric', aliases: 'Pag-IBIG, Pagibig, housing contribution', table: 'PayrollDeduction', level: 'CONFIDENTIAL' },
+
+  // T. COMMON DATABASE FIELD KEYWORDS
+  { keyword: 'status', type: 'database_field', aliases: 'state, condition, current status, progress state, transaction status', table: '', level: 'INTERNAL' },
+  { keyword: 'approval status', type: 'database_field', aliases: 'approval state, approved status, pending status, review status', table: 'Approval', level: 'INTERNAL' },
+  { keyword: 'date', type: 'database_field', aliases: 'transaction date, record date, document date, encoded date', table: '', level: 'INTERNAL' },
+  { keyword: 'created date', type: 'database_field', aliases: 'created at, encoded date, date created, record creation date', table: '', level: 'INTERNAL' },
+  { keyword: 'updated date', type: 'database_field', aliases: 'updated at, modified date, last update, last modified', table: '', level: 'INTERNAL' },
+  { keyword: 'prepared by', type: 'database_field', aliases: 'encoded by, created by, prepared person, maker', table: '', level: 'INTERNAL' },
+  { keyword: 'reviewed by', type: 'database_field', aliases: 'checked by, verified by, reviewer, reviewed person', table: '', level: 'INTERNAL' },
+  { keyword: 'approved by', type: 'database_field', aliases: 'approver, authorized by, approved person, final approver', table: '', level: 'INTERNAL' },
+  { keyword: 'rejected by', type: 'database_field', aliases: 'disapproved by, denied by, returned by', table: '', level: 'INTERNAL' },
+  { keyword: 'amount', type: 'database_field', aliases: 'total amount, value, cost, price, peso amount', table: '', level: 'RESTRICTED' },
+  { keyword: 'total amount', type: 'database_field', aliases: 'grand total, total cost, total value, total price', table: '', level: 'RESTRICTED' },
+  { keyword: 'balance', type: 'database_field', aliases: 'remaining balance, unpaid balance, unserved balance, outstanding balance', table: '', level: 'RESTRICTED' },
+  { keyword: 'remarks', type: 'database_field', aliases: 'comment, notes, explanation, reason, annotation', table: '', level: 'INTERNAL' },
+  { keyword: 'project id', type: 'database_field', aliases: 'project reference, assigned project, project link', table: '', level: 'INTERNAL' },
+  { keyword: 'supplier id', type: 'database_field', aliases: 'supplier reference, vendor reference, supplier link', table: '', level: 'INTERNAL' },
+  { keyword: 'user id', type: 'database_field', aliases: 'user reference, account reference, actor id', table: '', level: 'RESTRICTED' },
+
+  // U. CROSS-MODULE COMPARISON TERMS
+  { keyword: 'actual vs awarded', type: 'comparison_term', aliases: 'actual against contract, actual cost vs awarded cost, actual versus awarded, actual vs contract', table: 'ProjectProfitability', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'actual vs budget', type: 'comparison_term', aliases: 'budget variance, actual expense vs budget, over budget, under budget', table: 'BudgetVariance', level: 'RESTRICTED' },
+  { keyword: 'awarded vs procurement boq', type: 'comparison_term', aliases: 'awarded BOQ vs procurement BOQ, contract BOQ vs benchmark BOQ, awarded BOQ versus forecast BOQ', table: 'BOQVariance', level: 'RESTRICTED' },
+  { keyword: 'requested vs purchased', type: 'comparison_term', aliases: 'MRF vs PO, material request vs purchase order, requested quantity versus ordered quantity', table: 'ProcurementVariance', level: 'INTERNAL' },
+  { keyword: 'purchased vs delivered', type: 'comparison_term', aliases: 'PO vs DR, ordered versus delivered, purchase order balance', table: 'ProcurementVariance', level: 'INTERNAL' },
+  { keyword: 'delivered vs issued', type: 'comparison_term', aliases: 'DR vs MIS, delivered materials versus issued materials, warehouse balance', table: 'InventoryVariance', level: 'INTERNAL' },
+  { keyword: 'issued vs installed', type: 'comparison_term', aliases: 'MIS vs accomplishment, issued materials versus installed quantity, material issued vs work accomplished', table: 'MaterialUsageVariance', level: 'INTERNAL' },
+  { keyword: 'installed vs billed', type: 'comparison_term', aliases: 'accomplishment vs billing, installed quantity versus billed quantity, completed works vs claimed works', table: 'BillingVariance', level: 'RESTRICTED' },
+  { keyword: 'billed vs collected', type: 'comparison_term', aliases: 'billing versus collection, claims versus payments, receivables balance', table: 'BillingCollectionVariance', level: 'RESTRICTED' },
+  { keyword: 'planned vs actual', type: 'comparison_term', aliases: 'target versus actual, schedule variance, planned progress versus actual progress', table: 'ScheduleVariance', level: 'INTERNAL' },
+
+  // V. USER QUESTION PATTERN KEYWORDS
+  { keyword: 'how much have we spent', type: 'computed_metric', aliases: 'total spent, amount spent, expenses to date, actual expenses, cost incurred, spending so far', table: 'ProjectCostSummary', level: 'RESTRICTED' },
+  { keyword: 'what is our profit', type: 'computed_metric', aliases: 'profitability, profit, margin, net profit, gross profit, project gain, project loss', table: 'ProjectProfitability', level: 'EXECUTIVE_ONLY' },
+  { keyword: 'what is pending', type: 'approval_metric', aliases: 'pending items, pending approvals, waiting action, pending transactions', table: 'Approval', level: 'INTERNAL' },
+  { keyword: 'what is delayed', type: 'schedule_metric', aliases: 'delayed items, late activities, behind schedule, overdue tasks', table: 'ProjectSchedule', level: 'INTERNAL' },
+  { keyword: 'what is unpaid', type: 'finance_metric', aliases: 'unpaid suppliers, unpaid subcontractors, unpaid invoices, outstanding payables', table: 'AccountsPayable', level: 'RESTRICTED' },
+  { keyword: 'what is uncollected', type: 'finance_metric', aliases: 'unpaid billings, client balance, receivables, uncollected amount', table: 'AccountsReceivable', level: 'RESTRICTED' },
+  { keyword: 'who approved', type: 'audit_term', aliases: 'approved by, approving person, approval history, approval trail', table: 'Approval', level: 'INTERNAL' },
+  { keyword: 'who prepared', type: 'audit_term', aliases: 'prepared by, encoded by, created by, maker', table: 'AuditLog', level: 'INTERNAL' }
+];
+
+async function main() {
+  console.log(`Starting massive AI keyword ontology seed with ${keywordsToSeed.length} keywords...`);
+  
+  let inserted = 0;
+  for (const item of keywordsToSeed) {
+    try {
+      const normalizedKeyword = item.keyword.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      
+      await prisma.aiRagKeywordRegistry.upsert({
+        where: { id: normalizedKeyword }, // Use normalized string as ID or create by searching
+        update: {
+          aliases: item.aliases,
+          keywordType: item.type,
+          databaseTable: item.table !== '' ? item.table : null,
+          confidentialityLevel: item.level,
+          sourceType: 'SEEDED'
+        },
+        create: {
+          keyword: item.keyword,
+          normalizedKeyword: normalizedKeyword,
+          keywordType: item.type,
+          aliases: item.aliases,
+          databaseTable: item.table !== '' ? item.table : null,
+          confidentialityLevel: item.level,
+          sourceType: 'SEEDED'
+        }
+      });
+      inserted++;
+    } catch (error) {
+      // If it fails on id matching, fall back to searching by keyword
+      try {
+        const existing = await prisma.aiRagKeywordRegistry.findFirst({
+          where: { keyword: item.keyword }
+        });
+        
+        if (existing) {
+          await prisma.aiRagKeywordRegistry.update({
+            where: { id: existing.id },
+            data: {
+              aliases: item.aliases,
+              keywordType: item.type,
+              databaseTable: item.table !== '' ? item.table : null,
+              confidentialityLevel: item.level,
+              sourceType: 'SEEDED'
+            }
+          });
+        } else {
+          const normalizedKeyword = item.keyword.toLowerCase().replace(/[^a-z0-9]/g, '_');
+          await prisma.aiRagKeywordRegistry.create({
+            data: {
+              keyword: item.keyword,
+              normalizedKeyword: normalizedKeyword,
+              keywordType: item.type,
+              aliases: item.aliases,
+              databaseTable: item.table !== '' ? item.table : null,
+              confidentialityLevel: item.level,
+              sourceType: 'SEEDED'
+            }
+          });
+        }
+        inserted++;
+      } catch (e) {
+        console.error(`Failed to seed ${item.keyword}:`, e);
+      }
+    }
+  }
+  
+  console.log(`Successfully seeded ${inserted} AI keywords into the live database!`);
+}
+
+main()
+  .catch(e => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

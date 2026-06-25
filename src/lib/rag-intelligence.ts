@@ -108,6 +108,16 @@ export async function expandKeywords(userMessage: string): Promise<KeywordExpans
     }
   }
 
+  // Also query Schema Map for field-level matches
+  const schemaMap = await prisma.aiRagSchemaMap.findMany();
+  for (const field of schemaMap) {
+    if (userMessage.toLowerCase().includes(field.fieldName.toLowerCase()) || 
+        (field.fieldAlias && userMessage.toLowerCase().includes(field.fieldAlias.toLowerCase()))) {
+      tablesToSearch.add(field.tableName);
+      if (field.moduleName) modulesToSearch.add(field.moduleName);
+    }
+  }
+
   return {
     originalMessage: userMessage,
     matchedKeywords,

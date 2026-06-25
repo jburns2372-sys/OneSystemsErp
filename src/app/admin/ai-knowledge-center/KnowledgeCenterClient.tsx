@@ -1,12 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function KnowledgeCenterClient({ stats }: { stats: any }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState('');
+  
+  // Document Upload State
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleBulkScan = async () => {
     setIsScanning(true);
@@ -85,11 +91,81 @@ export default function KnowledgeCenterClient({ stats }: { stats: any }) {
         {activeTab === 'documents' && (
           <div>
             <h2>Document Ingestion Pipeline</h2>
-            <p style={{ color: 'var(--text-secondary)' }}>Upload PDFs or SOPs to be automatically chunked and vectorized for RAG retrieval.</p>
-            <input type="file" style={{ display: 'block', marginBottom: '15px' }} />
-            <button style={{ padding: '10px 20px', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-              Upload and Vectorize
+            <p style={{ color: 'var(--text-secondary)' }}>Upload PDFs, Word Documents, or SOPs to be automatically chunked and vectorized for RAG retrieval.</p>
+            
+            <div 
+              style={{
+                border: '2px dashed var(--glass-border)',
+                borderRadius: '12px',
+                padding: '40px',
+                textAlign: 'center',
+                background: 'rgba(0,0,0,0.2)',
+                marginBottom: '20px',
+                cursor: 'pointer'
+              }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept=".pdf,.txt,.md,.csv"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) setFile(e.target.files[0]);
+                }}
+              />
+              <div style={{ fontSize: '40px', marginBottom: '10px' }}>📄</div>
+              {file ? (
+                <div style={{ color: '#69db7c', fontWeight: 'bold' }}>Selected: {file.name} ({(file.size / 1024).toFixed(2)} KB)</div>
+              ) : (
+                <div style={{ color: 'var(--text-secondary)' }}>Click or drag a PDF or Text file here</div>
+              )}
+            </div>
+
+            <button 
+              disabled={!file || isUploading}
+              onClick={async () => {
+                if (!file) return;
+                setIsUploading(true);
+                setUploadResult('Extracting text and generating vectors...');
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('confidentiality', 'PUBLIC');
+
+                try {
+                  const res = await fetch('/api/admin/document-upload', {
+                    method: 'POST',
+                    body: formData
+                  });
+                  const data = await res.json();
+                  setUploadResult(data.message || (data.success ? 'Upload complete!' : 'Upload failed.'));
+                  if (data.success) setFile(null);
+                } catch (e) {
+                  setUploadResult('Error uploading document.');
+                } finally {
+                  setIsUploading(false);
+                }
+              }}
+              style={{ 
+                padding: '12px 24px', 
+                background: (!file || isUploading) ? 'rgba(255,255,255,0.1)' : 'var(--accent-primary)', 
+                color: (!file || isUploading) ? 'var(--text-secondary)' : 'white', 
+                border: 'none', 
+                borderRadius: '6px', 
+                cursor: (!file || isUploading) ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                width: '100%'
+              }}
+            >
+              {isUploading ? 'Vectorizing Document...' : 'Upload and Vectorize'}
             </button>
+            
+            {uploadResult && (
+              <div style={{ marginTop: '20px', padding: '15px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', color: uploadResult.includes('Error') || uploadResult.includes('failed') ? '#ff6b6b' : '#69db7c' }}>
+                {uploadResult}
+              </div>
+            )}
           </div>
         )}
 

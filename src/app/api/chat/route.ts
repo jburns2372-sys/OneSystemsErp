@@ -106,6 +106,7 @@ export async function POST(req: Request) {
         const comparisonResult = await evaluateComparison('Project Profitability', activeProject.id);
         if (comparisonResult) {
           staticContext += `\n\n[Live Database Record: Auto-Computed Comparison Map - Project Profitability]: ${JSON.stringify(comparisonResult)}`;
+          staticContext += `\nIMPORTANT: You MUST include this exact string at the very end of your response so the UI can render a chart: [CHART_DATA: ${JSON.stringify(comparisonResult)}]`;
         }
       }
     } catch(e) { console.error("Comparison Engine Error:", e); }
@@ -148,9 +149,10 @@ export async function POST(req: Request) {
 
   if (tablesToSearch.has('Subcontractor') || tablesToSearch.has('SubcontractPackage') || lastUserMessage.toLowerCase().includes('subcontract')) {
     if (permissions.IS_ADMIN || permissions.SUBCONTRACTING?.canView) {
-      const subcontracts = await prisma.subcontractPackage.findMany({ take: 5, select: { description: true, contractAmount: true, status: true, subcontractor: { select: { name: true } } }});
+      const subcontracts = await prisma.subcontractPackage.findMany({ take: 5, select: { scopeOfWork: true, contractAmount: true, status: true, subcontractor: { select: { name: true } } }});
+      const subcontractorCompanies = await prisma.subcontractor.findMany({ take: 10, select: { name: true, contactPerson: true }});
       const totalSubcontract = await prisma.subcontractPackage.aggregate({ _sum: { contractAmount: true }});
-      staticContext += `\n\n[Live Database Record: Recent Subcontracts]: ${JSON.stringify(subcontracts)}\n[Live Database Record: Total Subcontracted Amount]: ${totalSubcontract._sum.contractAmount || 0}`;
+      staticContext += `\n\n[Live Database Record: Subcontractor Companies]: ${JSON.stringify(subcontractorCompanies)}\n[Live Database Record: Recent Subcontracts]: ${JSON.stringify(subcontracts)}\n[Live Database Record: Total Subcontracted Amount]: ${totalSubcontract._sum.contractAmount || 0}`;
     } else {
       staticContext += `\n\n[Live Database Record: Subcontracts]: Access Denied - Missing Subcontracting Module Access.`;
     }
@@ -169,9 +171,9 @@ export async function POST(req: Request) {
   if (tablesToSearch.has('MaterialIssuance') || modulesToSearch.has('inventory')) {
     if (permissions.IS_ADMIN || permissions.INVENTORY?.canView || permissions.MATERIAL_ISSUANCE?.canView) {
       const materials = await prisma.materialIssuance.findMany({ take: 5, orderBy: { createdAt: 'desc' }, select: { misNumber: true, status: true, activity: true }});
-      staticContext += `\n\n[Live Database Record: Material Issuances]: ${JSON.stringify(materials)}`;
+      staticContext += `\n\n[Live Database Record: Inventory & Material Issuances]: ${JSON.stringify(materials)}`;
     } else {
-      staticContext += `\n\n[Live Database Record: Material Issuances]: Access Denied - Missing Inventory/Materials Module Access.`;
+      staticContext += `\n\n[Live Database Record: Inventory & Material Issuances]: Access Denied - Missing Inventory/Materials Module Access.`;
     }
   }
 

@@ -13,9 +13,10 @@ export default async function AIKeywordRegistryPage() {
     redirect('/dashboard');
   }
 
-  const keywords = await prisma.aiRagKeywordRegistry.findMany({
-    orderBy: { keywordType: 'asc' }
-  });
+  // Safe fallback if Prisma client hasn't been regenerated yet
+  const keywords = await (prisma as any).aiRagKeywordRegistry?.findMany({
+    orderBy: { keyword: 'asc' }
+  }) || [];
 
   return (
     <div style={{ padding: '20px' }}>

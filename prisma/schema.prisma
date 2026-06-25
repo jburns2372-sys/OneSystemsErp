@@ -3935,9 +3935,22 @@ model AiRagKeywordRegistry {
   sourceType                String   @default("MANUAL") // MANUAL, AUTO_GENERATED
   sourcePriority            Int      @default(1)
   isActive                  Boolean  @default(true)
+  
+  // Deduplication Tracking
+  mergedIntoId              String?
+  mergedAt                  DateTime?
+  cleanupNotes              String?
+  sourceOrigin              String?
+  generatedBy               String?
+  adminApproved             Boolean  @default(false)
+  
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
+  mergedInto                AiRagKeywordRegistry?   @relation("KeywordMerges", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedDuplicates          AiRagKeywordRegistry[]  @relation("KeywordMerges")
+
+  @@unique([normalizedKeyword, keywordType])
   @@index([normalizedKeyword])
   @@index([keywordType])
 }
@@ -4041,3 +4054,60 @@ model AiComparisonMap {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
+
+
+model AiUiActionRegistry {
+  id                    String   @id @default(cuid())
+  uiLabel               String
+  normalizedLabel       String
+  componentOrPage       String?
+  actionType            String?  // button, link, title, form_field
+  aliases               String?  // JSON
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([normalizedLabel, actionType])
+}
+
+model AiSystemEnumRegistry {
+  id                    String   @id @default(cuid())
+  enumValue             String
+  normalizedValue       String
+  enumCategory          String?  // e.g., STATUS, RISK_LEVEL, APPROVAL_STATE
+  businessMeaning       String?
+  aliases               String?  // JSON
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([normalizedValue, enumCategory])
+}
+
+model AiRagNoiseExclusion {
+  id                    String   @id @default(cuid())
+  noiseTerm             String
+  normalizedTerm        String   @unique
+  reason                String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model AiRegistryCleanupReport {
+  id                    String   @id @default(cuid())
+  runBy                 String
+  runAt                 DateTime @default(now())
+  totalRowsScanned      Int
+  duplicateGroupsFound  Int
+  rowsMerged            Int
+  aliasesMerged         Int
+  schemaFieldsMoved     Int
+  uiLabelsMoved         Int
+  noiseTermsExcluded    Int
+  acronymsFixed         Int
+  activeRowsRemaining   Int
+  rollbackSupported     Boolean  @default(true)
+  rolledBackAt          DateTime?
+  rolledBackBy          String?
+}
+

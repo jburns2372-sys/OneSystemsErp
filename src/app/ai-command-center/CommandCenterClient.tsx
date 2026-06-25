@@ -1,6 +1,51 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+
+function renderMessageContent(content: string) {
+  const chartRegex = /\[CHART_DATA:\s*({.*?})\]/g;
+  const match = content.match(chartRegex);
+
+  if (!match) return <>{content}</>;
+
+  // Try to parse the chart data (might fail if still streaming)
+  let chartData: any = null;
+  try {
+    const rawData = match[0].replace('[CHART_DATA: ', '').slice(0, -1);
+    chartData = JSON.parse(rawData);
+  } catch (e) {
+    return <>{content}</>;
+  }
+
+  // Format data for Recharts (assuming profitability structure for MVP)
+  const data = [
+    { name: 'Profit', value: chartData.profit || 0, color: '#69db7c' },
+    { name: 'Total Costs', value: chartData.totalCost || 0, color: '#ff6b6b' },
+  ];
+
+  return (
+    <>
+      <div style={{ whiteSpace: 'pre-wrap' }}>
+        {content.replace(chartRegex, '')}
+      </div>
+      <div style={{ width: '100%', height: '300px', marginTop: '20px', background: 'var(--bg-dark)', borderRadius: '12px', padding: '15px', border: '1px solid var(--glass-border)' }}>
+        <h4 style={{textAlign: 'center', margin: '0 0 10px 0', color: 'var(--text-secondary)'}}>Project Financial Split</h4>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={data} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(val: number) => `$${val.toLocaleString()}`} />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </>
+  );
+}
 
 export default function CommandCenterClient() {
   const [messages, setMessages] = useState<any[]>([]);
@@ -151,7 +196,7 @@ export default function CommandCenterClient() {
               <div style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '5px', fontWeight: 'bold' }}>
                 {m.role === 'user' ? 'You' : 'AI Assistant'}
               </div>
-              {m.content}
+              {renderMessageContent(m.content)}
             </div>
           </div>
         ))}
