@@ -83,6 +83,12 @@ export default function CommandCenterClient() {
         body: JSON.stringify({ messages: currentMessages, threadId })
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: `⚠️ ${errorText || 'An error occurred while fetching the response.'}` }]);
+        return;
+      }
+
       if (!response.body) throw new Error('No stream available');
       
       const responseThreadId = response.headers.get('X-Thread-ID');
@@ -107,8 +113,19 @@ export default function CommandCenterClient() {
           return newArr;
         });
       }
+      
+      // Failsafe for completely empty streams (e.g. silent aborts)
+      if (!aiText) {
+        setMessages(prev => {
+          const newArr = [...prev];
+          newArr[newArr.length - 1] = { ...newArr[newArr.length - 1], content: "⚠️ The AI stream was interrupted and returned no content. Please check the server logs." };
+          return newArr;
+        });
+      }
+
     } catch (error) {
       console.error('Chat error:', error);
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: "⚠️ A network or processing error occurred while connecting to the AI Knowledge Center." }]);
     } finally {
       setIsLoading(false);
     }

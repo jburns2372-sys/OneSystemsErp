@@ -29,6 +29,10 @@ export async function POST(req: Request) {
     }
   }
 
+  if (!process.env.OPENAI_API_KEY) {
+    return new Response("System Error: OPENAI_API_KEY is missing in the environment variables. Please configure it in your Vercel dashboard to enable the AI Knowledge Center.", { status: 500 });
+  }
+
   // 1. Generate embedding for user's question
   let questionEmbedding: number[] = [];
   try {
