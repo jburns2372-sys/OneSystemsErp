@@ -7,11 +7,13 @@ import Sidebar from './Sidebar';
 export default function MainContentWrapper({ 
   children, 
   permissions, 
-  user 
+  user,
+  topbar
 }: { 
   children: React.ReactNode, 
   permissions: any, 
-  user: any 
+  user: any,
+  topbar?: React.ReactNode
 }) {
   const pathname = usePathname();
   const isExecutive = pathname?.startsWith('/executive');
@@ -24,6 +26,7 @@ export default function MainContentWrapper({
     <>
       {showMainSidebar && <Sidebar permissions={permissions} user={user} />}
       <div style={{ marginLeft: sidebarWidthVar, display: 'flex', flexDirection: 'column', minHeight: '100vh', transition: 'margin-left 0.3s ease' }}>
+        {showMainSidebar && topbar}
         <main style={{ padding: isExecutive ? '0px' : '30px', flex: 1, backgroundColor: 'var(--bg-primary)' }}>
           {children}
         </main>

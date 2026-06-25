@@ -50,8 +50,7 @@ export default async function RootLayout({
       <body className={`${inter.className} ${permissions?.IS_GUEST_USER ? 'is-guest-user' : ''}`}>
         <OfflineSyncProvider>
           <DatePickerEnforcer />
-          <MainContentWrapper permissions={permissions} user={user}>
-            {userId && <Topbar />}
+          <MainContentWrapper permissions={permissions} user={user} topbar={userId ? <Topbar /> : null}>
             {children}
           </MainContentWrapper>
         </OfflineSyncProvider>
