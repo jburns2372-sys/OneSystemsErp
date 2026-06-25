@@ -3,18 +3,31 @@
 import { useRef, useEffect, useState } from 'react';
 
 export default function CommandCenterClient() {
-  const [safeMessages, setSafeMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [threadId, setThreadId] = useState<string | null>(null);
+
+  const suggestedQuestions = [
+    "What are my pending approvals?",
+    "How do I create a Purchase Order?",
+    "Show me the status of active projects.",
+    "Explain the subcontracting billing workflow."
+  ];
+
+  const handleClearChat = () => {
+    setMessages([]);
+    setThreadId(null);
+  };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input || !input.trim() || isLoading) return;
     
     const userMsg = { id: Date.now().toString(), role: 'user', content: input };
-    const currentMessages = [...safeMessages, userMsg];
+    const currentMessages = [...messages, userMsg];
     
-    setSafeMessages(currentMessages);
+    setMessages(currentMessages);
     setInput('');
     setIsLoading(true);
 
@@ -22,39 +35,28 @@ export default function CommandCenterClient() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: currentMessages })
+        body: JSON.stringify({ messages: currentMessages, threadId })
       });
 
       if (!response.body) throw new Error('No stream available');
+      
+      const responseThreadId = response.headers.get('X-Thread-ID');
+      if (responseThreadId) setThreadId(responseThreadId);
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let aiText = '';
 
-      setSafeMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: '' }]);
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: '' }]);
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         
         const chunk = decoder.decode(value, { stream: true });
-        
-        // toTextStreamResponse returns raw text chunks. We append directly.
-        // We strip Vercel stream prefixes if they exist by accident (e.g. 0:"text")
-        let parsedChunk = chunk;
-        if (chunk.startsWith('0:')) {
-           try {
-               const lines = chunk.split('\n').filter(Boolean);
-               parsedChunk = lines.map(line => {
-                   if (line.startsWith('0:')) return JSON.parse(line.slice(2));
-                   return line;
-               }).join('');
-           } catch(e) {}
-        }
-        
-        aiText += parsedChunk;
+        aiText += chunk;
 
-        setSafeMessages(prev => {
+        setMessages(prev => {
           const newArr = [...prev];
           newArr[newArr.length - 1] = { ...newArr[newArr.length - 1], content: aiText };
           return newArr;
@@ -71,7 +73,7 @@ export default function CommandCenterClient() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [safeMessages]);
+  }, [messages]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 150px)', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
@@ -80,17 +82,51 @@ export default function CommandCenterClient() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
         {/* Welcome Message */}
-        {safeMessages.length === 0 && (
+        {messages.length === 0 && (
           <div style={{ textAlign: 'center', marginTop: '10vh', color: 'var(--text-secondary)' }}>
             <div style={{ fontSize: '3rem', marginBottom: '20px' }}>🧠</div>
-            <h2 style={{ color: 'var(--text-primary)', marginBottom: '10px' }}>Welcome to the AI Command Center</h2>
-            <p style={{ maxWidth: '500px', margin: '0 auto', lineHeight: '1.6' }}>
-              I am your ERP assistant. I have real-time access to the system's global statistics and all active company policies. How can I help you manage operations today?
+            <h2 style={{ color: 'var(--text-primary)', marginBottom: '10px' }}>AI Knowledge Center</h2>
+            <p style={{ maxWidth: '500px', margin: '0 auto', lineHeight: '1.6', marginBottom: '30px' }}>
+              I am your official ERP Assistant. I can answer questions about the system, retrieve module guides, and check active project status.
             </p>
+            
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center', maxWidth: '600px', margin: '0 auto' }}>
+              {suggestedQuestions.map((q, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setInput(q)}
+                  style={{
+                    padding: '10px 15px',
+                    borderRadius: '20px',
+                    border: '1px solid var(--glass-border)',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        {safeMessages.map((m: any) => (
+        {messages.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '-10px' }}>
+            <button 
+              onClick={handleClearChat}
+              style={{ padding: '5px 15px', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', borderRadius: '15px', cursor: 'pointer', fontSize: '0.8rem' }}
+            >
+              Clear Chat
+            </button>
+          </div>
+        )}
+
+        {messages.map((m: any) => (
           <div 
             key={m.id} 
             style={{ 
@@ -151,15 +187,15 @@ export default function CommandCenterClient() {
           />
           <button 
             type="submit" 
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || !(input || '').trim()}
             style={{ 
               padding: '0 30px', 
               borderRadius: '30px', 
               border: 'none', 
-              background: (isLoading || !input.trim()) ? 'rgba(255,212,59,0.3)' : 'var(--accent-color)', 
+              background: (isLoading || !(input || '').trim()) ? 'rgba(255,212,59,0.3)' : 'var(--accent-color)', 
               color: '#000', 
               fontWeight: 'bold',
-              cursor: (isLoading || !input.trim()) ? 'not-allowed' : 'pointer',
+              cursor: (isLoading || !(input || '').trim()) ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s'
             }}
           >

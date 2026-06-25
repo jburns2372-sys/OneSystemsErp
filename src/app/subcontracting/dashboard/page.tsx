@@ -29,13 +29,15 @@ const joModules = [
 ];
 
 import { cookies } from 'next/headers';
+import { getUserPermissions } from '@/lib/permissions';
 
 export default async function SubcontractingDashboard() {
   const cookieStore = await cookies();
   const activeProjectId = cookieStore.get('activeProjectId')?.value || undefined;
   const sessionId = cookieStore.get('session')?.value || '';
+  const permissions = await getUserPermissions(sessionId);
 
-  if (!activeProjectId) {
+  if (!activeProjectId && !permissions.IS_ADMIN) {
     return (
       <div className={styles.dashboardContainer} style={{ maxWidth: '1400px', textAlign: 'center', padding: '100px 20px' }}>
         <h2>No Active Project Selected</h2>

@@ -12,6 +12,7 @@ export default function KnowledgeCenterLayout({ children }: { children: React.Re
     { name: 'Business Rules', href: '/knowledge-center/business-rules' },
     { name: 'SOPs', href: '/knowledge-center/sops' },
     { name: 'Training', href: '/knowledge-center/training' },
+    { name: 'Access Control', href: '/knowledge-center/rbac' },
     { name: 'AI Validation Rules', href: '/knowledge-center/ai-validation-rules' }
   ];
 

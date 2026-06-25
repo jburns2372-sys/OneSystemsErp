@@ -6,6 +6,7 @@ import DatePickerEnforcer from "@/components/layout/DatePickerEnforcer";
 import { cookies } from 'next/headers';
 import { getUserPermissions } from '@/lib/permissions';
 import MainContentWrapper from '@/components/layout/MainContentWrapper';
+import Topbar from '@/components/layout/Topbar';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -50,6 +51,7 @@ export default async function RootLayout({
         <OfflineSyncProvider>
           <DatePickerEnforcer />
           <MainContentWrapper permissions={permissions} user={user}>
+            {userId && <Topbar />}
             {children}
           </MainContentWrapper>
         </OfflineSyncProvider>

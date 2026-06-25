@@ -83,6 +83,11 @@ model User {
   reportedScheduleProgress     ScheduleProgressUpdate[]      @relation("ActivityReportedBy")
   reportedScheduleDelays       ScheduleDelayRecord[]         @relation("DelayReportedBy")
   projectAssignments           ProjectUserAssignment[]
+  uploadedAiSources            AiKnowledgeSource[]           @relation("AiKnowledgeSourceUploader")
+  chatbotLogs                  AiAccessAuditLog[]            @relation("UserAiAuditLogs")
+  chatbotFeedbacks             ChatbotFeedback[]             @relation("UserChatbotFeedbacks")
+  chatSessions                 AiChatSession[]               @relation("UserAiChatSessions")
+  chatMessages                 AiChatMessage[]               @relation("UserAiChatMessages")
 }
 
 model SystemRole {
@@ -3789,4 +3794,250 @@ model ScheduleRevisionRequest {
   createdAt     DateTime @default(now())
 
   schedule ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+}
+
+model AiKnowledgeSource {
+  id                   String   @id @default(cuid())
+  sourceType           String   // e.g., 'uploaded_file', 'database_schema', 'module_policy'
+  title                String
+  description          String?
+  moduleName           String?
+  projectId            String?
+  filePath             String?
+  storageUrl           String?
+  originalFilename     String?
+  mimeType             String?
+  uploadedById         String
+  visibilityScope      String   @default("GLOBAL") // GLOBAL, PROJECT, ROLE, PRIVATE
+  allowedRoles         String?  // JSON string array
+  allowedProjects      String?  // JSON string array
+  confidentialityLevel String   @default("PUBLIC_INTERNAL") // PUBLIC_INTERNAL, RESTRICTED, CONFIDENTIAL
+  status               String   @default("ACTIVE") // ACTIVE, ARCHIVED, DRAFT
+  indexedAt            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  uploadedBy           User     @relation("AiKnowledgeSourceUploader", fields: [uploadedById], references: [id])
+  chunks               AiKnowledgeChunk[]
+}
+
+model AiKnowledgeChunk {
+  id                   String   @id @default(cuid())
+  sourceId             String
+  chunkIndex           Int
+  chunkText            String
+  chunkSummary         String?
+  moduleName           String?
+  projectId            String?
+  allowedRoles         String?  // Inherited from source
+  visibilityScope      String   @default("GLOBAL")
+  confidentialityLevel String   @default("PUBLIC_INTERNAL")
+  vectorEmbedding      String   // JSON array of floats for manual cosine similarity
+  tokenCount           Int      @default(0)
+  createdAt            DateTime @default(now())
+
+  source               AiKnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+}
+
+model AiChatSession {
+  id          String   @id @default(cuid())
+  userId      String
+  projectId   String?
+  moduleName  String?
+  sessionTitle String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation("UserAiChatSessions", fields: [userId], references: [id])
+  messages    AiChatMessage[]
+}
+
+model AiChatMessage {
+  id                    String   @id @default(cuid())
+  sessionId             String
+  userId                String
+  role                  String   // user, assistant, system
+  message               String
+  authorizedContextUsed String?  // JSON of chunk IDs used
+  citedSources          String?  // JSON of source IDs
+  projectId             String?
+  createdAt             DateTime @default(now())
+
+  session               AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user                  User          @relation("UserAiChatMessages", fields: [userId], references: [id])
+}
+
+model AiAccessAuditLog {
+  id                     String   @id @default(cuid())
+  userId                 String
+  userRole               String?
+  projectId              String?
+  question               String
+  answerStatus           String   @default("SUCCESS") // SUCCESS, DENIED, ERROR
+  denialReason           String?
+  sourcesRetrieved       Int      @default(0)
+  sourcesDenied          Int      @default(0)
+  tokensUsed             Int      @default(0)
+  ipAddress              String?
+  userAgent              String?
+  createdAt              DateTime @default(now())
+
+  user                   User     @relation("UserAiAuditLogs", fields: [userId], references: [id])
+  feedbacks              ChatbotFeedback[]
+}
+
+model AiIndexingJob {
+  id          String   @id @default(cuid())
+  jobType     String   // FILE_UPLOAD, SCHEMA_SYNC, BULK_REINDEX
+  status      String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  sourceCount Int      @default(0)
+  chunkCount  Int      @default(0)
+  errorMessage String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model ChatbotFeedback {
+  id              String   @id @default(cuid())
+  auditLogId      String
+  userId          String
+  feedbackType    String // HELPFUL, NOT_HELPFUL, INCORRECT, NEEDS_REVIEW
+  correctionNote  String?
+  adminAction     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  auditLog        AiAccessAuditLog @relation(fields: [auditLogId], references: [id], onDelete: Cascade)
+  user            User             @relation("UserChatbotFeedbacks", fields: [userId], references: [id])
+}
+
+model AiRagKeywordRegistry {
+  id                        String   @id @default(cuid())
+  keyword                   String
+  normalizedKeyword         String
+  keywordType               String
+  moduleName                String?
+  relatedModule             String?
+  databaseTable             String?
+  databaseField             String?
+  businessMeaning           String?
+  synonyms                  String?  // JSON or comma separated
+  aliases                   String?  // JSON or comma separated
+  abbreviations             String?  // JSON or comma separated
+  relatedTerms              String?  // JSON or comma separated
+  exampleUserQuestions      String?  // JSON
+  requiredRoleAccess        String?  // JSON array of roles
+  requiredModulePermission  String?  // JSON array
+  confidentialityLevel      String   @default("PUBLIC") // PUBLIC, INTERNAL, RESTRICTED, CONFIDENTIAL
+  projectScoped             Boolean  @default(false)
+  documentScoped            Boolean  @default(false)
+  sourceType                String   @default("MANUAL") // MANUAL, AUTO_GENERATED
+  sourcePriority            Int      @default(1)
+  isActive                  Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([normalizedKeyword])
+  @@index([keywordType])
+}
+
+model AiRagSchemaMap {
+  id                        String   @id @default(cuid())
+  moduleName                String
+  tableName                 String
+  fieldName                 String
+  fieldAlias                String?
+  fieldDescription          String?
+  dataType                  String
+  relationshipTable         String?
+  relationshipField         String?
+  searchable                Boolean  @default(false)
+  filterable                Boolean  @default(false)
+  comparable                Boolean  @default(false)
+  aggregatable              Boolean  @default(false)
+  confidential              Boolean  @default(false)
+  requiredAccessRole        String?  // JSON
+  requiredPermission        String?  // JSON
+  projectScoped             Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@unique([tableName, fieldName])
+}
+
+model AiRagEmbedding {
+  id                        String   @id @default(cuid())
+  sourceType                String   // SOP, PDF, BOQ, TRANSACTION, REPORT
+  sourceModule              String?
+  sourceRecordId            String?
+  sourceTitle               String
+  sourceTextChunk           String
+  embeddingVector           String   // JSON array of floats representing the embedding
+  metadataJson              String?  // JSON
+  accessLevel               String   @default("PUBLIC") // PUBLIC, RESTRICTED
+  projectId                 String?
+  modulePermissionRequired  String?  // JSON
+  confidentialityLevel      String   @default("PUBLIC")
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([sourceType])
+  @@index([projectId])
+}
+
+model AiKnowledgeMap {
+  id                    String   @id @default(cuid())
+  sourceType            String   // database_schema, module_file, report, workflow
+  sourceName            String
+  moduleName            String?
+  tableName             String?
+  fieldName             String?
+  fieldLabel            String?
+  normalizedName        String
+  businessMeaning       String?
+  detectedKeywords      String?  // JSON
+  generatedAliases      String?  // JSON
+  generatedSynonyms     String?  // JSON
+  abbreviations         String?  // JSON
+  relatedTerms          String?  // JSON
+  relatedModules        String?  // JSON
+  relatedTables         String?  // JSON
+  relatedFields         String?  // JSON
+  relationshipType      String?
+  sampleQuestions       String?  // JSON
+  accessLevel           String   @default("PUBLIC")
+  requiredRole          String?  // JSON
+  requiredPermission    String?  // JSON
+  projectScoped         Boolean  @default(false)
+  confidential          Boolean  @default(false)
+  searchable            Boolean  @default(false)
+  filterable            Boolean  @default(false)
+  comparable            Boolean  @default(false)
+  aggregatable          Boolean  @default(false)
+  sourcePriority        Int      @default(1)
+  lastScannedAt         DateTime?
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model AiComparisonMap {
+  id                    String   @id @default(cuid())
+  comparisonName        String
+  userQuestionPattern   String?  // JSON array of strings
+  primaryModule         String
+  primaryTable          String
+  primaryField          String
+  relatedModules        String?  // JSON
+  relatedTables         String?  // JSON
+  relatedFields         String?  // JSON
+  comparisonLogic       String   // e.g., "SUBTRACT", "VARIANCE_PERCENTAGE", "CROSS_MODULE_SUM"
+  calculationFormula    String?
+  requiredPermission    String?  // JSON
+  projectScoped         Boolean  @default(true)
+  confidential          Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }

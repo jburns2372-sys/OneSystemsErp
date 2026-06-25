@@ -15,6 +15,17 @@ import ProfitabilityTab from './ProfitabilityTab';
 import ProcurementBenchmarkTab from './ProcurementBenchmarkTab';
 import ProjectCostLedgerTab from './ProjectCostLedgerTab';
 import ProjectTeamClient from './ProjectTeamClient';
+import ProjectSummaryTab from './ProjectSummaryTab';
+import ProjectExpenseLedgerTab from './ProjectExpenseLedgerTab';
+import ProjectPayrollCostTab from './ProjectPayrollCostTab';
+import ProjectMaterialsControlTab from './ProjectMaterialsControlTab';
+import ProjectSubcontractingTab from './ProjectSubcontractingTab';
+import ProjectJobOrdersTab from './ProjectJobOrdersTab';
+import ProjectAccomplishmentTab from './ProjectAccomplishmentTab';
+import ProjectBillingTab from './ProjectBillingTab';
+import ProjectReportsTab from './ProjectReportsTab';
+import ProjectAuditTrailTab from './ProjectAuditTrailTab';
+import ProjectAIAssistantTab from './ProjectAIAssistantTab';
 
 const PROJECT_TABS = [
   { id: 'summary', label: 'Project Summary', group: 'Overview' },
@@ -200,6 +211,10 @@ export default async function ProjectDetailsPage({
         </div>
       </div>
 
+      {tab === 'summary' && (
+        <ProjectSummaryTab projectId={project.id} />
+      )}
+
       {tab === 'team-access' && (
         <ProjectTeamClient 
           projectId={project.id}
@@ -289,12 +304,44 @@ export default async function ProjectDetailsPage({
         <ProjectCostLedgerTab projectId={project.id} />
       )}
 
-      {/* Placeholders for unimplemented tabs */}
-      {['summary', 'expense-ledger', 'payroll-cost', 'materials-control', 'subcontracting', 'job-orders', 'accomplishment', 'billing', 'reports', 'audit-trail', 'ai-assistant'].includes(tab) && (
-        <div style={{ padding: '40px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', border: '1px dashed var(--glass-border)' }}>
-          <h3 style={{ color: 'var(--text-secondary)', marginBottom: '10px' }}>Module Under Construction</h3>
-          <p style={{ color: 'var(--text-secondary)' }}>This module is scheduled for the next deployment phase of the Command Center.</p>
-        </div>
+      {tab === 'expense-ledger' && (
+        <ProjectExpenseLedgerTab projectId={project.id} />
+      )}
+
+      {tab === 'payroll-cost' && (
+        <ProjectPayrollCostTab projectId={project.id} />
+      )}
+
+      {tab === 'materials-control' && (
+        <ProjectMaterialsControlTab projectId={project.id} />
+      )}
+
+      {tab === 'subcontracting' && (
+        <ProjectSubcontractingTab projectId={project.id} />
+      )}
+
+      {tab === 'job-orders' && (
+        <ProjectJobOrdersTab projectId={project.id} />
+      )}
+
+      {tab === 'accomplishment' && (
+        <ProjectAccomplishmentTab projectId={project.id} />
+      )}
+
+      {tab === 'billing' && (
+        <ProjectBillingTab projectId={project.id} />
+      )}
+
+      {tab === 'reports' && (
+        <ProjectReportsTab projectId={project.id} />
+      )}
+
+      {tab === 'audit-trail' && (
+        <ProjectAuditTrailTab projectId={project.id} />
+      )}
+
+      {tab === 'ai-assistant' && (
+        <ProjectAIAssistantTab projectId={project.id} />
       )}
 
     </div>

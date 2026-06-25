@@ -42,15 +42,15 @@ async function checkExecutiveAccess() {
     throw new Error('Unauthorized: Executive access required');
   }
 
-  return user;
+  return { user, effectiveRole };
 }
 
 /**
  * Retrieves the high-level company overview KPIs for the Executive Home Dashboard
  */
 export async function getCompanyOverview(projectId?: string) {
-  const user = await checkExecutiveAccess();
-  const isSuperAdmin = user.role === 'SUPER_ADMIN' || user.role === 'SYSTEM_ADMIN';
+  const { user, effectiveRole } = await checkExecutiveAccess();
+  const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
 
   // Fetch all active/ongoing projects or the specific selected project
   const projectFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
@@ -193,8 +193,8 @@ export async function getCompanyOverview(projectId?: string) {
  * Retrieves the project portfolio list for the executive dashboard
  */
 export async function getProjectPortfolio() {
-  const user = await checkExecutiveAccess();
-  const isSuperAdmin = user.role === 'SUPER_ADMIN' || user.role === 'SYSTEM_ADMIN';
+  const { user, effectiveRole } = await checkExecutiveAccess();
+  const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
 
   const projects = await prisma.project.findMany({
     where: isSuperAdmin ? undefined : {

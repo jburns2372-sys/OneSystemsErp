@@ -16,7 +16,11 @@ export default async function ProjectsPage() {
   const permissions = await getUserPermissions(userId);
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+  const effectiveRole = (simulatedRole && user && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS'))
+    ? simulatedRole
+    : (user?.role || 'GUEST_USER');
+  const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
 
   const projects = await prisma.project.findMany({
     where: isSuperAdmin ? {} : {
