@@ -87,14 +87,14 @@ export class AiRagCleanupService {
       
       let mergedAliases = new Set<string>();
       if (hasVal(canonical.aliases)) {
-        try { JSON.parse(canonical.aliases).forEach((a: string) => mergedAliases.add(a)); } catch(e){ mergedAliases.add(canonical.aliases!); }
+        try { JSON.parse(canonical.aliases!).forEach((a: string) => mergedAliases.add(a)); } catch(e){ mergedAliases.add(canonical.aliases!); }
       }
 
       // Collect aliases from duplicates
       for (const dup of duplicatesToMerge) {
         if (hasVal(dup.aliases)) {
           try {
-            const arr = JSON.parse(dup.aliases);
+            const arr = JSON.parse(dup.aliases!);
             if (Array.isArray(arr)) {
               arr.forEach((a: string) => {
                 mergedAliases.add(a);
