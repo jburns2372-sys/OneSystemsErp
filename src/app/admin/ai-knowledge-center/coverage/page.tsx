@@ -1,7 +1,8 @@
 import { getUserPermissions } from '@/lib/permissions';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { prisma, Prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import CoverageClient from './CoverageClient';
 
 export default async function RagCoveragePage() {
