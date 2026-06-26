@@ -36,13 +36,29 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   const userId = cookieStore.get('session')?.value || '';
   let user: any = null;
-  let permissions = await getUserPermissions(userId);
+  let permissions: any = null;
 
   if (userId) {
     user = await import('@/lib/prisma').then(m => m.prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, email: true, role: true }
+      select: { id: true, name: true, email: true, role: true }
     }));
+  }
+
+  if (!user) {
+    // Fallback for demo
+    user = await import('@/lib/prisma').then(m => m.prisma.user.findFirst({
+      where: { email: 'jburns@demo.com' },
+      select: { id: true, name: true, email: true, role: true }
+    }));
+  }
+
+  // Now fetch permissions for the actual user (or the fallback user)
+  if (user && user.id) {
+    permissions = await getUserPermissions(user.id);
+  } else {
+    // Failsafe empty permissions
+    permissions = {};
   }
 
   return (

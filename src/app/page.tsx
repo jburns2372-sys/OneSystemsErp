@@ -19,7 +19,9 @@ export default async function Home() {
       where: { id: sessionId },
       include: { userRoles: { include: { role: true } } }
     });
-  } else {
+  } 
+  
+  if (!currentUser) {
     // Fallback for demo
     currentUser = await prisma.user.findFirst({
       where: { email: 'jburns@demo.com' },
