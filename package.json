@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --accept-data-loss && tsx create_admin.ts && next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "seed:workers": "tsx prisma/seeders/seed-workers.ts",
@@ -21,6 +21,7 @@
     "@fortune-sheet/react": "^1.0.4",
     "@google/genai": "^2.7.0",
     "@google/generative-ai": "^0.24.1",
+    "@heroicons/react": "^2.2.0",
     "@prisma/client": "^6.19.3",
     "@radix-ui/react-scroll-area": "^1.2.11",
     "@radix-ui/react-slot": "^1.2.5",

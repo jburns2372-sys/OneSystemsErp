@@ -17,17 +17,20 @@ export default function MainContentWrapper({
 }) {
   const pathname = usePathname();
   const isExecutive = pathname?.startsWith('/executive');
+  const isSecurity = pathname?.startsWith('/admin/security');
   
-  // Show main sidebar everywhere except inside the executive command center
+  // Show main sidebar everywhere except inside the executive command center (and we keep sidebar for security, but hide topbar)
   const showMainSidebar = !isExecutive;
+  const showTopbar = showMainSidebar && !isSecurity;
   const sidebarWidthVar = showMainSidebar ? 'var(--sidebar-width)' : '0px';
+  const removePadding = isExecutive || isSecurity;
 
   return (
     <>
       {showMainSidebar && <Sidebar permissions={permissions} user={user} />}
       <div style={{ marginLeft: sidebarWidthVar, display: 'flex', flexDirection: 'column', minHeight: '100vh', transition: 'margin-left 0.3s ease' }}>
-        {showMainSidebar && topbar}
-        <main style={{ padding: isExecutive ? '0px' : '30px', flex: 1, backgroundColor: 'var(--bg-primary)' }}>
+        {showTopbar && topbar}
+        <main style={{ padding: removePadding ? '0px' : '30px', flex: 1, backgroundColor: 'var(--bg-primary)' }}>
           {children}
         </main>
       </div>

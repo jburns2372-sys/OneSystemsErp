@@ -183,9 +183,9 @@ model ProjectUserAssignment {
   id               String    @id @default(cuid())
   userId           String
   projectId        String
-  projectRole      String    
-  accessLevel      String    
-  assignmentStatus String    @default("active") 
+  projectRole      String
+  accessLevel      String
+  assignmentStatus String    @default("active")
   assignedBy       String?
   dateAssigned     DateTime  @default(now())
   dateRemoved      DateTime?
@@ -193,8 +193,8 @@ model ProjectUserAssignment {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
   @@index([userId])
@@ -1690,16 +1690,16 @@ model Subcontractor {
 }
 
 model ProgramOfWorks {
-  id          String             @id @default(cuid())
-  packageId   String
-  title       String
-  description String?
-  startDate   DateTime?
-  endDate     DateTime?
-  activities  Json?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  package     SubcontractPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  id               String               @id @default(cuid())
+  packageId        String
+  title            String
+  description      String?
+  startDate        DateTime?
+  endDate          DateTime?
+  activities       Json?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  package          SubcontractPackage   @relation(fields: [packageId], references: [id], onDelete: Cascade)
   scheduleMappings SchedulePOWMapping[]
 }
 
@@ -1861,7 +1861,7 @@ model SubcontractAccomplishment {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   jobOrder          JobOrder?            @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
-  package           SubcontractPackage?   @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  package           SubcontractPackage?  @relation(fields: [packageId], references: [id], onDelete: Cascade)
 }
 
 model SubcontractBilling {
@@ -3718,8 +3718,8 @@ model ScheduleBOQMapping {
   mappedQuantity   Float  @default(0)
   mappedWeight     Float  @default(0)
 
-  activity         ScheduleActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  awardedBoqItem   AwardedBOQItem   @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  activity       ScheduleActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  awardedBoqItem AwardedBOQItem   @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
 }
 
 model SchedulePOWMapping {
@@ -3727,8 +3727,8 @@ model SchedulePOWMapping {
   activityId       String
   programOfWorksId String
 
-  activity         ScheduleActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  programOfWorks   ProgramOfWorks   @relation(fields: [programOfWorksId], references: [id], onDelete: Cascade)
+  activity       ScheduleActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  programOfWorks ProgramOfWorks   @relation(fields: [programOfWorksId], references: [id], onDelete: Cascade)
 }
 
 model ScheduleProgressUpdate {
@@ -3797,8 +3797,8 @@ model ScheduleRevisionRequest {
 }
 
 model AiKnowledgeSource {
-  id                   String   @id @default(cuid())
-  sourceType           String   // e.g., 'uploaded_file', 'database_schema', 'module_policy'
+  id                   String    @id @default(cuid())
+  sourceType           String // e.g., 'uploaded_file', 'database_schema', 'module_policy'
   title                String
   description          String?
   moduleName           String?
@@ -3808,17 +3808,17 @@ model AiKnowledgeSource {
   originalFilename     String?
   mimeType             String?
   uploadedById         String
-  visibilityScope      String   @default("GLOBAL") // GLOBAL, PROJECT, ROLE, PRIVATE
-  allowedRoles         String?  // JSON string array
-  allowedProjects      String?  // JSON string array
-  confidentialityLevel String   @default("PUBLIC_INTERNAL") // PUBLIC_INTERNAL, RESTRICTED, CONFIDENTIAL
-  status               String   @default("ACTIVE") // ACTIVE, ARCHIVED, DRAFT
+  visibilityScope      String    @default("GLOBAL") // GLOBAL, PROJECT, ROLE, PRIVATE
+  allowedRoles         String? // JSON string array
+  allowedProjects      String? // JSON string array
+  confidentialityLevel String    @default("PUBLIC_INTERNAL") // PUBLIC_INTERNAL, RESTRICTED, CONFIDENTIAL
+  status               String    @default("ACTIVE") // ACTIVE, ARCHIVED, DRAFT
   indexedAt            DateTime?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  uploadedBy           User     @relation("AiKnowledgeSourceUploader", fields: [uploadedById], references: [id])
-  chunks               AiKnowledgeChunk[]
+  uploadedBy User               @relation("AiKnowledgeSourceUploader", fields: [uploadedById], references: [id])
+  chunks     AiKnowledgeChunk[]
 }
 
 model AiKnowledgeChunk {
@@ -3829,126 +3829,126 @@ model AiKnowledgeChunk {
   chunkSummary         String?
   moduleName           String?
   projectId            String?
-  allowedRoles         String?  // Inherited from source
+  allowedRoles         String? // Inherited from source
   visibilityScope      String   @default("GLOBAL")
   confidentialityLevel String   @default("PUBLIC_INTERNAL")
-  vectorEmbedding      String   // JSON array of floats for manual cosine similarity
+  vectorEmbedding      String // JSON array of floats for manual cosine similarity
   tokenCount           Int      @default(0)
   createdAt            DateTime @default(now())
 
-  source               AiKnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  source AiKnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 }
 
 model AiChatSession {
-  id          String   @id @default(cuid())
-  userId      String
-  projectId   String?
-  moduleName  String?
+  id           String   @id @default(cuid())
+  userId       String
+  projectId    String?
+  moduleName   String?
   sessionTitle String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  user        User     @relation("UserAiChatSessions", fields: [userId], references: [id])
-  messages    AiChatMessage[]
+  user     User            @relation("UserAiChatSessions", fields: [userId], references: [id])
+  messages AiChatMessage[]
 }
 
 model AiChatMessage {
   id                    String   @id @default(cuid())
   sessionId             String
   userId                String
-  role                  String   // user, assistant, system
+  role                  String // user, assistant, system
   message               String
-  authorizedContextUsed String?  // JSON of chunk IDs used
-  citedSources          String?  // JSON of source IDs
+  authorizedContextUsed String? // JSON of chunk IDs used
+  citedSources          String? // JSON of source IDs
   projectId             String?
   createdAt             DateTime @default(now())
 
-  session               AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user                  User          @relation("UserAiChatMessages", fields: [userId], references: [id])
+  session AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User          @relation("UserAiChatMessages", fields: [userId], references: [id])
 }
 
 model AiAccessAuditLog {
-  id                     String   @id @default(cuid())
-  userId                 String
-  userRole               String?
-  projectId              String?
-  question               String
-  answerStatus           String   @default("SUCCESS") // SUCCESS, DENIED, ERROR
-  denialReason           String?
-  sourcesRetrieved       Int      @default(0)
-  sourcesDenied          Int      @default(0)
-  tokensUsed             Int      @default(0)
-  ipAddress              String?
-  userAgent              String?
-  createdAt              DateTime @default(now())
+  id               String   @id @default(cuid())
+  userId           String
+  userRole         String?
+  projectId        String?
+  question         String
+  answerStatus     String   @default("SUCCESS") // SUCCESS, DENIED, ERROR
+  denialReason     String?
+  sourcesRetrieved Int      @default(0)
+  sourcesDenied    Int      @default(0)
+  tokensUsed       Int      @default(0)
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime @default(now())
 
-  user                   User     @relation("UserAiAuditLogs", fields: [userId], references: [id])
-  feedbacks              ChatbotFeedback[]
+  user      User              @relation("UserAiAuditLogs", fields: [userId], references: [id])
+  feedbacks ChatbotFeedback[]
 }
 
 model AiIndexingJob {
-  id          String   @id @default(cuid())
-  jobType     String   // FILE_UPLOAD, SCHEMA_SYNC, BULK_REINDEX
-  status      String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
-  sourceCount Int      @default(0)
-  chunkCount  Int      @default(0)
+  id           String    @id @default(cuid())
+  jobType      String // FILE_UPLOAD, SCHEMA_SYNC, BULK_REINDEX
+  status       String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  sourceCount  Int       @default(0)
+  chunkCount   Int       @default(0)
   errorMessage String?
-  startedAt   DateTime?
-  completedAt DateTime?
-  createdAt   DateTime @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
 }
 
 model ChatbotFeedback {
-  id              String   @id @default(cuid())
-  auditLogId      String
-  userId          String
-  feedbackType    String // HELPFUL, NOT_HELPFUL, INCORRECT, NEEDS_REVIEW
-  correctionNote  String?
-  adminAction     String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  auditLogId     String
+  userId         String
+  feedbackType   String // HELPFUL, NOT_HELPFUL, INCORRECT, NEEDS_REVIEW
+  correctionNote String?
+  adminAction    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  auditLog        AiAccessAuditLog @relation(fields: [auditLogId], references: [id], onDelete: Cascade)
-  user            User             @relation("UserChatbotFeedbacks", fields: [userId], references: [id])
+  auditLog AiAccessAuditLog @relation(fields: [auditLogId], references: [id], onDelete: Cascade)
+  user     User             @relation("UserChatbotFeedbacks", fields: [userId], references: [id])
 }
 
 model AiRagKeywordRegistry {
-  id                        String   @id @default(cuid())
-  keyword                   String
-  normalizedKeyword         String
-  keywordType               String
-  moduleName                String?
-  relatedModule             String?
-  databaseTable             String?
-  databaseField             String?
-  businessMeaning           String?
-  synonyms                  String?  // JSON or comma separated
-  aliases                   String?  // JSON or comma separated
-  abbreviations             String?  // JSON or comma separated
-  relatedTerms              String?  // JSON or comma separated
-  exampleUserQuestions      String?  // JSON
-  requiredRoleAccess        String?  // JSON array of roles
-  requiredModulePermission  String?  // JSON array
-  confidentialityLevel      String   @default("PUBLIC") // PUBLIC, INTERNAL, RESTRICTED, CONFIDENTIAL
-  projectScoped             Boolean  @default(false)
-  documentScoped            Boolean  @default(false)
-  sourceType                String   @default("MANUAL") // MANUAL, AUTO_GENERATED
-  sourcePriority            Int      @default(1)
-  isActive                  Boolean  @default(true)
-  
-  // Deduplication Tracking
-  mergedIntoId              String?
-  mergedAt                  DateTime?
-  cleanupNotes              String?
-  sourceOrigin              String?
-  generatedBy               String?
-  adminApproved             Boolean  @default(false)
-  
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  id                       String  @id @default(cuid())
+  keyword                  String
+  normalizedKeyword        String
+  keywordType              String
+  moduleName               String?
+  relatedModule            String?
+  databaseTable            String?
+  databaseField            String?
+  businessMeaning          String?
+  synonyms                 String? // JSON or comma separated
+  aliases                  String? // JSON or comma separated
+  abbreviations            String? // JSON or comma separated
+  relatedTerms             String? // JSON or comma separated
+  exampleUserQuestions     String? // JSON
+  requiredRoleAccess       String? // JSON array of roles
+  requiredModulePermission String? // JSON array
+  confidentialityLevel     String  @default("PUBLIC") // PUBLIC, INTERNAL, RESTRICTED, CONFIDENTIAL
+  projectScoped            Boolean @default(false)
+  documentScoped           Boolean @default(false)
+  sourceType               String  @default("MANUAL") // MANUAL, AUTO_GENERATED
+  sourcePriority           Int     @default(1)
+  isActive                 Boolean @default(true)
 
-  mergedInto                AiRagKeywordRegistry?   @relation("KeywordMerges", fields: [mergedIntoId], references: [id], onDelete: SetNull)
-  mergedDuplicates          AiRagKeywordRegistry[]  @relation("KeywordMerges")
+  // Deduplication Tracking
+  mergedIntoId  String?
+  mergedAt      DateTime?
+  cleanupNotes  String?
+  sourceOrigin  String?
+  generatedBy   String?
+  adminApproved Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mergedInto       AiRagKeywordRegistry?  @relation("KeywordMerges", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedDuplicates AiRagKeywordRegistry[] @relation("KeywordMerges")
 
   @@unique([normalizedKeyword, keywordType])
   @@index([normalizedKeyword])
@@ -3956,158 +3956,347 @@ model AiRagKeywordRegistry {
 }
 
 model AiRagSchemaMap {
-  id                        String   @id @default(cuid())
-  moduleName                String
-  tableName                 String
-  fieldName                 String
-  fieldAlias                String?
-  fieldDescription          String?
-  dataType                  String
-  relationshipTable         String?
-  relationshipField         String?
-  searchable                Boolean  @default(false)
-  filterable                Boolean  @default(false)
-  comparable                Boolean  @default(false)
-  aggregatable              Boolean  @default(false)
-  confidential              Boolean  @default(false)
-  requiredAccessRole        String?  // JSON
-  requiredPermission        String?  // JSON
-  projectScoped             Boolean  @default(true)
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  moduleName         String
+  tableName          String
+  fieldName          String
+  fieldAlias         String?
+  fieldDescription   String?
+  dataType           String
+  relationshipTable  String?
+  relationshipField  String?
+  searchable         Boolean  @default(false)
+  filterable         Boolean  @default(false)
+  comparable         Boolean  @default(false)
+  aggregatable       Boolean  @default(false)
+  confidential       Boolean  @default(false)
+  requiredAccessRole String? // JSON
+  requiredPermission String? // JSON
+  projectScoped      Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@unique([tableName, fieldName])
 }
 
 model AiRagEmbedding {
-  id                        String   @id @default(cuid())
-  sourceType                String   // SOP, PDF, BOQ, TRANSACTION, REPORT
-  sourceModule              String?
-  sourceRecordId            String?
-  sourceTitle               String
-  sourceTextChunk           String
-  embeddingVector           String   // JSON array of floats representing the embedding
-  metadataJson              String?  // JSON
-  accessLevel               String   @default("PUBLIC") // PUBLIC, RESTRICTED
-  projectId                 String?
-  modulePermissionRequired  String?  // JSON
-  confidentialityLevel      String   @default("PUBLIC")
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  id                       String   @id @default(cuid())
+  sourceType               String // SOP, PDF, BOQ, TRANSACTION, REPORT
+  sourceModule             String?
+  sourceRecordId           String?
+  sourceTitle              String
+  sourceTextChunk          String
+  embeddingVector          String // JSON array of floats representing the embedding
+  metadataJson             String? // JSON
+  accessLevel              String   @default("PUBLIC") // PUBLIC, RESTRICTED
+  projectId                String?
+  modulePermissionRequired String? // JSON
+  confidentialityLevel     String   @default("PUBLIC")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   @@index([sourceType])
   @@index([projectId])
 }
 
 model AiKnowledgeMap {
-  id                    String   @id @default(cuid())
-  sourceType            String   // database_schema, module_file, report, workflow
-  sourceName            String
-  moduleName            String?
-  tableName             String?
-  fieldName             String?
-  fieldLabel            String?
-  normalizedName        String
-  businessMeaning       String?
-  detectedKeywords      String?  // JSON
-  generatedAliases      String?  // JSON
-  generatedSynonyms     String?  // JSON
-  abbreviations         String?  // JSON
-  relatedTerms          String?  // JSON
-  relatedModules        String?  // JSON
-  relatedTables         String?  // JSON
-  relatedFields         String?  // JSON
-  relationshipType      String?
-  sampleQuestions       String?  // JSON
-  accessLevel           String   @default("PUBLIC")
-  requiredRole          String?  // JSON
-  requiredPermission    String?  // JSON
-  projectScoped         Boolean  @default(false)
-  confidential          Boolean  @default(false)
-  searchable            Boolean  @default(false)
-  filterable            Boolean  @default(false)
-  comparable            Boolean  @default(false)
-  aggregatable          Boolean  @default(false)
-  sourcePriority        Int      @default(1)
-  lastScannedAt         DateTime?
-  isActive              Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  sourceType         String // database_schema, module_file, report, workflow
+  sourceName         String
+  moduleName         String?
+  tableName          String?
+  fieldName          String?
+  fieldLabel         String?
+  normalizedName     String
+  businessMeaning    String?
+  detectedKeywords   String? // JSON
+  generatedAliases   String? // JSON
+  generatedSynonyms  String? // JSON
+  abbreviations      String? // JSON
+  relatedTerms       String? // JSON
+  relatedModules     String? // JSON
+  relatedTables      String? // JSON
+  relatedFields      String? // JSON
+  relationshipType   String?
+  sampleQuestions    String? // JSON
+  accessLevel        String    @default("PUBLIC")
+  requiredRole       String? // JSON
+  requiredPermission String? // JSON
+  projectScoped      Boolean   @default(false)
+  confidential       Boolean   @default(false)
+  searchable         Boolean   @default(false)
+  filterable         Boolean   @default(false)
+  comparable         Boolean   @default(false)
+  aggregatable       Boolean   @default(false)
+  sourcePriority     Int       @default(1)
+  lastScannedAt      DateTime?
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
 
 model AiComparisonMap {
-  id                    String   @id @default(cuid())
-  comparisonName        String
-  userQuestionPattern   String?  // JSON array of strings
-  primaryModule         String
-  primaryTable          String
-  primaryField          String
-  relatedModules        String?  // JSON
-  relatedTables         String?  // JSON
-  relatedFields         String?  // JSON
-  comparisonLogic       String   // e.g., "SUBTRACT", "VARIANCE_PERCENTAGE", "CROSS_MODULE_SUM"
-  calculationFormula    String?
-  requiredPermission    String?  // JSON
-  projectScoped         Boolean  @default(true)
-  confidential          Boolean  @default(false)
-  isActive              Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  comparisonName      String
+  userQuestionPattern String? // JSON array of strings
+  primaryModule       String
+  primaryTable        String
+  primaryField        String
+  relatedModules      String? // JSON
+  relatedTables       String? // JSON
+  relatedFields       String? // JSON
+  comparisonLogic     String // e.g., "SUBTRACT", "VARIANCE_PERCENTAGE", "CROSS_MODULE_SUM"
+  calculationFormula  String?
+  requiredPermission  String? // JSON
+  projectScoped       Boolean  @default(true)
+  confidential        Boolean  @default(false)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
-
 model AiUiActionRegistry {
-  id                    String   @id @default(cuid())
-  uiLabel               String
-  normalizedLabel       String
-  componentOrPage       String?
-  actionType            String?  // button, link, title, form_field
-  aliases               String?  // JSON
-  isActive              Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id              String   @id @default(cuid())
+  uiLabel         String
+  normalizedLabel String
+  componentOrPage String?
+  actionType      String? // button, link, title, form_field
+  aliases         String? // JSON
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([normalizedLabel, actionType])
 }
 
 model AiSystemEnumRegistry {
-  id                    String   @id @default(cuid())
-  enumValue             String
-  normalizedValue       String
-  enumCategory          String?  // e.g., STATUS, RISK_LEVEL, APPROVAL_STATE
-  businessMeaning       String?
-  aliases               String?  // JSON
-  isActive              Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id              String   @id @default(cuid())
+  enumValue       String
+  normalizedValue String
+  enumCategory    String? // e.g., STATUS, RISK_LEVEL, APPROVAL_STATE
+  businessMeaning String?
+  aliases         String? // JSON
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([normalizedValue, enumCategory])
 }
 
 model AiRagNoiseExclusion {
-  id                    String   @id @default(cuid())
-  noiseTerm             String
-  normalizedTerm        String   @unique
-  reason                String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id             String   @id @default(cuid())
+  noiseTerm      String
+  normalizedTerm String   @unique
+  reason         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model AiRegistryCleanupReport {
-  id                    String   @id @default(cuid())
-  runBy                 String
-  runAt                 DateTime @default(now())
-  totalRowsScanned      Int
-  duplicateGroupsFound  Int
-  rowsMerged            Int
-  aliasesMerged         Int
-  schemaFieldsMoved     Int
-  uiLabelsMoved         Int
-  noiseTermsExcluded    Int
-  acronymsFixed         Int
-  activeRowsRemaining   Int
-  rollbackSupported     Boolean  @default(true)
-  rolledBackAt          DateTime?
-  rolledBackBy          String?
+  id                   String    @id @default(cuid())
+  runBy                String
+  runAt                DateTime  @default(now())
+  totalRowsScanned     Int
+  duplicateGroupsFound Int
+  rowsMerged           Int
+  aliasesMerged        Int
+  schemaFieldsMoved    Int
+  uiLabelsMoved        Int
+  noiseTermsExcluded   Int
+  acronymsFixed        Int
+  activeRowsRemaining  Int
+  rollbackSupported    Boolean   @default(true)
+  rolledBackAt         DateTime?
+  rolledBackBy         String?
 }
 
+model SecurityEvent {
+  id                  String    @id @default(cuid())
+  timestamp           DateTime  @default(now())
+  severity            String
+  riskScore           Float?
+  category            String
+  threatType          String
+  sourceIp            String?
+  country             String?
+  city                String?
+  region              String?
+  latitude            Float?
+  longitude           Float?
+  isp                 String?
+  asn                 String?
+  organization        String?
+  userId              String?
+  userEmail           String?
+  userRole            String?
+  projectId           String?
+  targetProjectId     String?
+  module              String?
+  endpoint            String?
+  method              String?
+  actionAttempted     String?
+  resourceType        String?
+  resourceId          String?
+  payloadSummary      String?
+  fieldsAttempted     String?
+  rbacResult          String?
+  pbacResult          String?
+  dataClassification  String?
+  threatDetected      String?
+  systemResponse      String?
+  result              String?
+  status              String
+  dataExposure        String?
+  adminActionRequired String?
+  reviewed            Boolean   @default(false)
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  incidentId          String?
+  simulated           Boolean   @default(false)
+  environment         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  incident SecurityIncident? @relation(fields: [incidentId], references: [id])
+}
+
+model SecurityIncident {
+  id                String    @id @default(cuid())
+  title             String
+  description       String
+  severity          String
+  status            String
+  assignedTo        String?
+  affectedUserId    String?
+  affectedProjectId String?
+  affectedModule    String?
+  sourceIp          String?
+  countermeasure    String?
+  result            String?
+  dataExposure      String?
+  relatedEventIds   String?   // JSON Array
+  rootCause         String?
+  resolutionNotes   String?
+  adminNotes        String?
+  openedAt          DateTime  @default(now())
+  closedAt          DateTime?
+  createdBy         String?
+  updatedAt         DateTime  @updatedAt
+
+  events SecurityEvent[]
+}
+
+model SecurityRule {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  category       String
+  enabled        Boolean  @default(true)
+  severity       String
+  condition      String
+  countermeasure String
+  notifyAdmins   Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model UserSessionSecurityLog {
+  id             String    @id @default(cuid())
+  userId         String
+  sourceIp       String?
+  userAgent      String?
+  device         String?
+  approximateLocation String?
+  loginAt        DateTime  @default(now())
+  lastActivityAt DateTime  @default(now())
+  revokedAt      DateTime?
+  revokedBy      String?
+  status         String    @default("ACTIVE")
+  riskScore      Float?
+  createdAt      DateTime  @default(now())
+}
+
+model AIQuerySecurityLog {
+  id                     String   @id @default(cuid())
+  userId                 String
+  role                   String?
+  projectScope           String?
+  query                  String
+  normalizedQuery        String?
+  detectedThreat         String?
+  blocked                Boolean  @default(false)
+  retrievedDocumentIds   String?
+  blockedDocumentIds     String?
+  dataClassificationUsed String?
+  responseStatus         String?
+  tokenUsage             Int?
+  costEstimate           Float?
+  createdAt              DateTime @default(now())
+}
+
+model FileSecurityLog {
+  id             String   @id @default(cuid())
+  fileId         String?
+  userId         String
+  projectId      String?
+  module         String?
+  action         String
+  filename       String
+  mimeType       String?
+  size           Int?
+  scanStatus     String   @default("PENDING")
+  threatDetected String?
+  countermeasure String?
+  createdAt      DateTime @default(now())
+}
+
+
+model ThreatIp {
+  id             String    @id @default(cuid())
+  ipAddress      String    @unique
+  country        String?
+  city           String?
+  region         String?
+  latitude       Float?
+  longitude      Float?
+  isp            String?
+  asn            String?
+  organization   String?
+  firstSeen      DateTime  @default(now())
+  lastSeen       DateTime  @default(now())
+  attemptCount   Int       @default(0)
+  severity       String?
+  status         String    @default("NEW")
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model CountermeasureLog {
+  id                 String    @id @default(cuid())
+  securityEventId    String?
+  countermeasureType String
+  description        String
+  result             String?
+  performedBySystem  Boolean   @default(true)
+  performedByUserId  String?
+  timestamp          DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+}
+
+model SensitiveExportLog {
+  id                 String    @id @default(cuid())
+  userId             String
+  userEmail          String?
+  role               String?
+  projectId          String?
+  module             String
+  exportType         String
+  recordCount        Int?
+  dataClassification String?
+  sourceIp           String?
+  approved           Boolean   @default(true)
+  blocked            Boolean   @default(false)
+  reason             String?
+  createdAt          DateTime  @default(now())
+}

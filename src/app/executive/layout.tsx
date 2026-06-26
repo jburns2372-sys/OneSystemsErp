@@ -33,9 +33,9 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f3f4f6' }}>
-      
+
       {/* Sidebar - Desktop */}
-      <aside 
+      <aside
         style={{
           width: '260px',
           backgroundColor: '#111827',
@@ -61,8 +61,8 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
           {navItems.map((item) => {
             const isActive = pathname?.startsWith(item.path);
             return (
-              <Link 
-                key={item.path} 
+              <Link
+                key={item.path}
                 href={item.path}
                 style={{
                   display: 'flex',
@@ -95,18 +95,18 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content Area */}
-      <main 
-        style={{ 
-          flex: 1, 
+      <main
+        style={{
+          flex: 1,
           marginLeft: '260px', // Offset for sidebar
-          display: 'flex', 
+          display: 'flex',
           flexDirection: 'column',
           minHeight: '100vh',
           backgroundColor: '#f9fafb'
         }}
       >
         {/* Top Navbar */}
-        <header 
+        <header
           style={{
             height: '64px',
             backgroundColor: '#ffffff',
@@ -133,15 +133,15 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
               EX
             </div>
             <form action={logout} style={{ marginLeft: '8px' }}>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="allow-guest"
-                style={{ 
-                  background: 'none', 
-                  border: '1px solid #ef4444', 
-                  color: '#ef4444', 
-                  padding: '6px 12px', 
-                  borderRadius: '6px', 
+                style={{
+                  background: 'none',
+                  border: '1px solid #ef4444',
+                  color: '#ef4444',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
                   cursor: 'pointer',
                   fontWeight: 500,
                   transition: 'all 0.2s'

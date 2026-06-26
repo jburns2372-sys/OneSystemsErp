@@ -56,6 +56,7 @@ export default function Sidebar({ permissions = {}, user }: { permissions?: Reco
     { name: 'Admin AI Center', href: '/admin/ai-knowledge-center', icon: '⚡', moduleKey: 'SYSTEM_SETTINGS' },
     { name: 'AI ERP Assistant', href: '/ai/erp-assistant', icon: '💬', moduleKey: 'KNOWLEDGE_CENTER' },
     { name: 'Users', href: '/users', icon: '👤', moduleKey: 'SYSTEM_ROLES' },
+    { name: 'Security (SOC)', href: '/admin/security', icon: '🛡️', moduleKey: 'SYSTEM_SETTINGS' },
     { name: 'Settings', href: '/settings', icon: '⚙️', moduleKey: 'SYSTEM_SETTINGS' },
   ];
 

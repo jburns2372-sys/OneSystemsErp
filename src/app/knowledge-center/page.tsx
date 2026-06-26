@@ -62,6 +62,16 @@ export default async function KnowledgeCenterPage() {
             Open Chat
           </Link>
         </div>
+
+        <div style={{ background: 'rgba(0,0,0,0.3)', padding: '25px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+          <h2 style={{ margin: '0 0 15px 0' }}>User Manual</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+            View standard operating procedures, daily tasks, and best practices for all ERP roles.
+          </p>
+          <Link href="/knowledge-center/manual" style={{ padding: '10px 20px', background: 'var(--accent-color)', color: '#000', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold' }}>
+            Read Manual
+          </Link>
+        </div>
       </div>
     </div>
   );
