@@ -6,4 +6,5 @@
   "installCommand": "npm install",
   "github": {
     "enabled": true
+  }
 }
