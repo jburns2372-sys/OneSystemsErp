@@ -15,7 +15,7 @@ export async function getUserPermissions(userId: string) {
   const cookieStore = await cookies();
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
 
-  const [user, userRoles] = await Promise.all([
+  let [user, userRoles] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
     prisma.userRole.findMany({
       where: { userId },
@@ -28,6 +28,27 @@ export async function getUserPermissions(userId: string) {
       }
     })
   ]);
+
+  // Fallback to demo user if session is invalid or missing
+  if (!user) {
+    const demoUser = await prisma.user.findFirst({
+      where: { email: 'jburns@demo.com' },
+      select: { id: true, role: true }
+    });
+    if (demoUser) {
+      user = demoUser;
+      userRoles = await prisma.userRole.findMany({
+        where: { userId: demoUser.id },
+        include: {
+          role: {
+            include: {
+              rolePermissions: true
+            }
+          }
+        }
+      });
+    }
+  }
 
   const isActualAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR' || user?.role === 'DIRECTORS';
 
