@@ -50,6 +50,10 @@ const newSecurityEvent = `model SecurityEvent {
   incidentId          String?
   simulated           Boolean   @default(false)
   environment         String?
+  userAgent           String?
+  sessionId           String?
+  message             String?
+  blocked             Boolean   @default(false)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
