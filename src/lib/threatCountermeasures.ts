@@ -15,10 +15,11 @@ export async function executeCountermeasure(threatType: string, userId: string |
 
       case 'CROSS_PROJECT_ACCESS_ATTEMPT':
         // Action: Revoke active session (requires session model enforcement)
-        await prisma.userSession.updateMany({
-          where: { userId, status: 'ACTIVE' },
-          data: { status: 'REVOKED', revokedAt: new Date(), revokedBy: 'SYSTEM_COUNTERMEASURE' }
-        });
+        // await prisma.userSession.updateMany({
+        //   where: { userId, status: 'ACTIVE' },
+        //   data: { status: 'REVOKED', revokedAt: new Date(), revokedBy: 'SYSTEM_COUNTERMEASURE' }
+        // });
+        console.warn('UserSession model not implemented, cannot revoke session automatically');
         break;
 
       case 'GUEST_WRITE_ATTEMPT':
