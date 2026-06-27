@@ -15,16 +15,22 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://onesystemserp.com'),
   title: "OneSystemsErp | Project Management System",
   description: "Comprehensive construction Project Management and Monitoring System",
+  applicationName: "OneSystemsErp",
   appleWebApp: {
     capable: true,
     title: "OneSystemsErp",
     statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
   },
 };
 
