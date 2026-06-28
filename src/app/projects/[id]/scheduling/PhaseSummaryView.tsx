@@ -56,7 +56,7 @@ export default function PhaseSummaryView({ schedule }: { schedule: any }) {
               let phaseProgressSum = 0;
               let phaseTotalCost = 0;
 
-              acts.forEach((a: any) => {
+              for (const a of acts) {
                 if (a.plannedStartDate) {
                   const d = new Date(a.plannedStartDate);
                   if (!phaseStart || d < phaseStart) phaseStart = d;
@@ -75,7 +75,7 @@ export default function PhaseSummaryView({ schedule }: { schedule: any }) {
                   return sum + proportionalCost;
                 }, 0);
                 phaseTotalCost += activityCost;
-              });
+              }
 
               let phaseDuration = 0;
               if (phaseStart && phaseFinish) {
