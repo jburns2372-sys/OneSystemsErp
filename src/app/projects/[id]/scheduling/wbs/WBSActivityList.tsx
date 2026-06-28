@@ -16,7 +16,7 @@ interface Activity {
   freeFloat: number;
   unit: string | null;
   plannedQuantity: number;
-  wbs?: { id: string; code: string; name: string } | null;
+  wbs?: { id: string; code: string; name: string; orderIndex?: number } | null;
   boqMappings?: any[];
   predecessors?: any[];
   successors?: any[];
