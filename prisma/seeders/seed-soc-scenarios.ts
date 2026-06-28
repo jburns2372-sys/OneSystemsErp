@@ -1,0 +1,233 @@
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+const scenarios = [
+  {
+    name: 'Failed Login Burst',
+    description: 'Simulates multiple failed login attempts within a short timeframe from a single IP address.',
+    category: 'Authentication',
+    severity: 'High',
+    targetModule: 'Auth',
+    simulatedSourceIp: '192.168.1.100',
+    simulatedCountry: 'Russia',
+    simulatedCity: 'Moscow',
+    latitude: 55.7558,
+    longitude: 37.6173,
+    expectedDetection: 'Rate limit, failed login alert',
+    expectedCountermeasure: 'Block source IP temporarily',
+    mitreTechnique: 'T1110 (Brute Force)',
+    owaspCategory: 'A07:2021-Identification and Authentication Failures',
+  },
+  {
+    name: 'Password Spraying Pattern',
+    description: 'Simulates login attempts using the same password across multiple different user accounts.',
+    category: 'Authentication',
+    severity: 'Critical',
+    targetModule: 'Auth',
+    simulatedSourceIp: '203.0.113.50',
+    simulatedCountry: 'China',
+    simulatedCity: 'Beijing',
+    latitude: 39.9042,
+    longitude: 116.4074,
+    expectedDetection: 'Detect repeated login attempts across accounts',
+    expectedCountermeasure: 'Block source IP, notify SOC',
+    mitreTechnique: 'T1110.003 (Password Spraying)',
+  },
+  {
+    name: 'Unauthorized Module Access',
+    description: 'Simulates a user attempting to access a module they do not have permissions for.',
+    category: 'RBAC',
+    severity: 'High',
+    targetModule: 'Settings',
+    simulatedRole: 'PROJECT_ENGINEER',
+    simulatedCountry: 'United States',
+    simulatedCity: 'New York',
+    latitude: 40.7128,
+    longitude: -74.0060,
+    expectedDetection: 'Log RBAC violation, create SOC event',
+    expectedCountermeasure: 'Block access',
+    owaspCategory: 'A01:2021-Broken Access Control',
+  },
+  {
+    name: 'Unauthorized Finance Ledger Export',
+    description: 'Simulates an attempt to export sensitive financial data by an unauthorized role.',
+    category: 'Finance Protection',
+    severity: 'Critical',
+    targetModule: 'Finance',
+    simulatedRole: 'SITE_ADMIN',
+    simulatedCountry: 'Brazil',
+    simulatedCity: 'São Paulo',
+    latitude: -23.5505,
+    longitude: -46.6333,
+    expectedDetection: 'Detect unauthorized export attempt',
+    expectedCountermeasure: 'Block export, notify Finance Admin, create incident',
+    mitreTechnique: 'T1048 (Exfiltration Over Alternative Protocol)',
+  },
+  {
+    name: 'Unauthorized Payroll Access',
+    description: 'Simulates an unauthorized user attempting to view or modify payroll data.',
+    category: 'Payroll Protection',
+    severity: 'Critical',
+    targetModule: 'Payroll',
+    simulatedRole: 'GUEST',
+    simulatedCountry: 'United Kingdom',
+    simulatedCity: 'London',
+    latitude: 51.5074,
+    longitude: -0.1278,
+    expectedDetection: 'Detect privacy violation attempt',
+    expectedCountermeasure: 'Block access, create privacy incident',
+    owaspCategory: 'A01:2021-Broken Access Control',
+  },
+  {
+    name: 'Cross-Project Data Access',
+    description: 'Simulates a user attempting to access records from a project they are not assigned to.',
+    category: 'Project Isolation',
+    severity: 'Critical',
+    targetModule: 'Projects',
+    simulatedRole: 'PROJECT_MANAGER',
+    expectedDetection: 'Detect PBAC violation',
+    expectedCountermeasure: 'Deny access, log project isolation violation',
+  },
+  {
+    name: 'Executive Dashboard Unauthorized Access',
+    description: 'Simulates a non-executive attempting to load the Executive Dashboard.',
+    category: 'Executive Module',
+    severity: 'High',
+    targetModule: 'Executive',
+    simulatedRole: 'SITE_ENGINEER',
+    expectedDetection: 'Detect unauthorized executive view attempt',
+    expectedCountermeasure: 'Block access, create SOC event',
+  },
+  {
+    name: 'Purchase Order Approval Bypass',
+    description: 'Simulates an attempt to force-approve a PO via API without proper permissions.',
+    category: 'Procurement Workflow',
+    severity: 'Critical',
+    targetModule: 'Procurement',
+    targetRoute: '/api/procurement/approve-po',
+    expectedDetection: 'Detect workflow violation',
+    expectedCountermeasure: 'Stop approval, notify Project Director, log workflow violation',
+  },
+  {
+    name: 'Material Request Approval Bypass',
+    description: 'Simulates an attempt to approve an MRF out of sequence or without permission.',
+    category: 'Procurement Workflow',
+    severity: 'High',
+    targetModule: 'Material Request',
+    expectedDetection: 'Detect approval bypass attempt',
+    expectedCountermeasure: 'Block transaction and create audit event',
+  },
+  {
+    name: 'Subcontractor Billing Manipulation',
+    description: 'Simulates tampering with subcontractor billing accomplishment percentages.',
+    category: 'Subcontracting',
+    severity: 'Critical',
+    targetModule: 'Subcontracting',
+    expectedDetection: 'Detect billing discrepancy',
+    expectedCountermeasure: 'Freeze transaction, create incident, notify approver',
+  },
+  {
+    name: 'Variation Order Approval Bypass',
+    description: 'Simulates an unauthorized approval of a client variation order.',
+    category: 'Variation Orders',
+    severity: 'Critical',
+    targetModule: 'Variation Orders',
+    expectedDetection: 'Detect unauthorized VO approval',
+    expectedCountermeasure: 'Block approval, create incident, notify management',
+  },
+  {
+    name: 'Petty Cash Release Without Approval',
+    description: 'Simulates releasing petty cash funds before the reviewer or approver signs off.',
+    category: 'Finance Protection',
+    severity: 'High',
+    targetModule: 'Petty Cash',
+    expectedDetection: 'Detect premature cash release',
+    expectedCountermeasure: 'Block release, notify Finance',
+  },
+  {
+    name: 'BOQ Unauthorized Editing',
+    description: 'Simulates an attempt to edit a locked Consolidated BOQ item.',
+    category: 'BOQ Protection',
+    severity: 'Critical',
+    targetModule: 'BOQ',
+    expectedDetection: 'Detect modification of locked record',
+    expectedCountermeasure: 'Block edit, create audit trail',
+  },
+  {
+    name: 'Suspicious API Request Volume',
+    description: 'Simulates a volumetric DoS or scraping attack against a specific API route.',
+    category: 'API Protection',
+    severity: 'High',
+    targetModule: 'API',
+    targetRoute: '/api/projects/list',
+    simulatedCountry: 'Germany',
+    simulatedCity: 'Frankfurt',
+    latitude: 50.1109,
+    longitude: 8.6821,
+    expectedDetection: 'Detect rate limit threshold breach',
+    expectedCountermeasure: 'Rate limit, block source, log event',
+    mitreTechnique: 'T1498 (Network Denial of Service)',
+  },
+  {
+    name: 'Invalid Token or Session Reuse',
+    description: 'Simulates usage of an expired JWT token or hijacked session cookie.',
+    category: 'Session Management',
+    severity: 'High',
+    targetModule: 'Auth',
+    expectedDetection: 'Detect invalid session signature',
+    expectedCountermeasure: 'Revoke token, force logout, create event',
+    owaspCategory: 'A07:2021-Identification and Authentication Failures',
+  },
+  {
+    name: 'Admin Role Tampering Attempt',
+    description: 'Simulates an API call attempting to escalate a user role to SUPER_ADMIN.',
+    category: 'User Management',
+    severity: 'Critical',
+    targetModule: 'User Management',
+    expectedDetection: 'Detect privilege escalation attempt',
+    expectedCountermeasure: 'Block change, notify Super Admin, create critical incident',
+    mitreTechnique: 'T1068 (Exploitation for Privilege Escalation)',
+  },
+  {
+    name: 'Suspicious File Upload',
+    description: 'Simulates an attempt to upload an executable script disguised as an image.',
+    category: 'File Upload Security',
+    severity: 'High',
+    targetModule: 'File Upload',
+    expectedDetection: 'Detect mismatched MIME type / file signature',
+    expectedCountermeasure: 'Reject or quarantine file, log evidence',
+    owaspCategory: 'A04:2021-Insecure Design (Missing validation)',
+  },
+  {
+    name: 'Audit Log Tampering Attempt',
+    description: 'Simulates an attempt to delete or alter historical audit logs.',
+    category: 'Audit Log Protection',
+    severity: 'Critical',
+    targetModule: 'Audit Logs',
+    expectedDetection: 'Detect unauthorized database manipulation',
+    expectedCountermeasure: 'Block action, create critical incident',
+    mitreTechnique: 'T1070 (Indicator Removal on Host)',
+  }
+];
+
+async function main() {
+  console.log('Seeding SOC Scenarios...');
+  await prisma.securitySimulationScenario.deleteMany();
+  for (const s of scenarios) {
+    await prisma.securitySimulationScenario.create({
+      data: s,
+    });
+    console.log(`Created scenario: ${s.name}`);
+  }
+  console.log('Finished seeding SOC Scenarios.');
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

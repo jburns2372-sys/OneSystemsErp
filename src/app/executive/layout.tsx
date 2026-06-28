@@ -13,6 +13,14 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [projects, setProjects] = useState([]);
   const [currentProjectId, setCurrentProjectId] = useState('ALL');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     async function fetchData() {
@@ -34,7 +42,14 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f3f4f6' }}>
 
-      {/* Sidebar - Desktop */}
+      {isMobile && isMobileMenuOpen && (
+        <div
+          onClick={() => setIsMobileMenuOpen(false)}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 45, backdropFilter: 'blur(2px)' }}
+        />
+      )}
+
+      {/* Sidebar */}
       <aside
         style={{
           width: '260px',
@@ -45,7 +60,9 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
           position: 'fixed',
           height: '100vh',
           zIndex: 50,
-          boxShadow: '4px 0 10px rgba(0,0,0,0.1)'
+          boxShadow: '4px 0 10px rgba(0,0,0,0.1)',
+          transform: isMobile && !isMobileMenuOpen ? 'translateX(-100%)' : 'translateX(0)',
+          transition: 'transform 0.3s ease'
         }}
       >
         <div style={{ padding: '24px 20px', borderBottom: '1px solid #374151' }}>
@@ -98,7 +115,7 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
       <main
         style={{
           flex: 1,
-          marginLeft: '260px', // Offset for sidebar
+          marginLeft: isMobile ? '0px' : '260px', // Offset for sidebar
           display: 'flex',
           flexDirection: 'column',
           minHeight: '100vh',
@@ -122,7 +139,27 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
           }}
         >
           {/* Left side: Context Selector */}
-          <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            {isMobile && (
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                style={{
+                  background: '#2563eb',
+                  border: 'none',
+                  color: 'white',
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.9rem'
+                }}
+              >
+                ☰ Menu
+              </button>
+            )}
             <GlobalProjectSelector projects={projects} currentProjectId={currentProjectId} />
           </div>
 

@@ -50,7 +50,14 @@ export default function ThreatDetailPanel({ eventId }: PanelProps) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(17, 24, 39, 0.5)', padding: '12px', borderRadius: '8px', border: '1px solid #1f2937' }}>
               <div>
                 <p style={{ color: '#9ca3af', fontSize: '0.625rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', marginTop: 0 }}>Threat Type</p>
-                <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.875rem', margin: 0 }}>{event.threatType}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.875rem', margin: 0 }}>{event.threatType}</p>
+                  {event.simulated && (
+                    <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.5px' }}>
+                      SIMULATED THREAT
+                    </span>
+                  )}
+                </div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.05em', backgroundColor: event.status === 'BLOCKED' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: event.status === 'BLOCKED' ? '#34d399' : '#f87171', border: event.status === 'BLOCKED' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)' }}>
@@ -98,7 +105,15 @@ export default function ThreatDetailPanel({ eventId }: PanelProps) {
               <div className="space-y-2 text-gray-300 text-xs">
                 <div><span className="block text-gray-500 mb-0.5">Countermeasure Applied</span>{event.systemResponse}</div>
                 <div><span className="block text-gray-500 mb-0.5">Final Result</span>{event.result}</div>
-                <div><span className="block text-gray-500 mb-0.5">Data Exposure</span><span className={event.dataExposure === 'None' ? 'text-emerald-400 font-medium' : 'text-amber-400 font-medium'}>{event.dataExposure || 'Unknown'}</span></div>
+                
+                {event.simulated && (
+                  <>
+                    <div className="border-t border-gray-800 pt-2 mt-2"><span className="block text-purple-400 mb-0.5 text-[10px] uppercase font-bold tracking-widest">Expected Response (Simulation)</span><span className="text-gray-300">{event.expectedResponse || 'N/A'}</span></div>
+                    <div><span className="block text-purple-400 mb-0.5 text-[10px] uppercase font-bold tracking-widest">Actual Response (Simulation)</span><span className="text-gray-300">{event.actualResponse || 'N/A'}</span></div>
+                  </>
+                )}
+
+                <div><span className="block text-gray-500 mb-0.5 mt-2">Data Exposure</span><span className={event.dataExposure === 'None' ? 'text-emerald-400 font-medium' : 'text-amber-400 font-medium'}>{event.dataExposure || 'Unknown'}</span></div>
                 {event.message && (
                   <div className="bg-gray-900 p-2 rounded border border-gray-800 text-[10px] font-mono text-red-300">
                     {event.message}

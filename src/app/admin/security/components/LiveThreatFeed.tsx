@@ -65,7 +65,16 @@ export default function LiveThreatFeed({ feed, onRowClick }: LiveThreatFeedProps
                   {format(new Date(event.timestamp), 'yyyy-MM-dd HH:mm:ss')}
                 </td>
                 <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{getSeverityBadge(event.severity)}</td>
-                <td style={{ padding: '12px', fontWeight: 500, color: '#e5e7eb' }}>{event.threatType}</td>
+                <td style={{ padding: '12px', fontWeight: 500, color: '#e5e7eb' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {event.threatType}
+                    {event.simulated && (
+                      <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.5px' }}>
+                        SIMULATED THREAT
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td style={{ padding: '12px', fontFamily: 'monospace', fontSize: '0.75rem', color: '#9ca3af' }}>{event.sourceIp || 'N/A'}</td>
                 <td style={{ padding: '12px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {event.city ? `${event.city}, ${event.country}` : (event.country || 'Unknown')}

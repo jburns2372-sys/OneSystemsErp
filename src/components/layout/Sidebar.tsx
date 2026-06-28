@@ -74,23 +74,26 @@ export default function Sidebar({ permissions = {}, user }: { permissions?: Reco
           onClick={() => setMobileOpen(!mobileOpen)}
           style={{
             position: 'fixed',
-            top: '15px',
+            top: '12px',
             left: '15px',
             zIndex: 101,
-            backgroundColor: 'var(--glass-bg)',
-            border: '1px solid var(--glass-border)',
-            color: 'var(--text-primary)',
-            padding: '8px 12px',
+            backgroundColor: 'var(--accent-color)',
+            border: 'none',
+            color: '#000',
+            padding: '8px 14px',
             borderRadius: '6px',
             cursor: 'pointer',
-            backdropFilter: 'blur(10px)',
+            boxShadow: '0 0 12px var(--accent-glow)',
             display: 'flex',
             alignItems: 'center',
+            gap: '8px',
             justifyContent: 'center',
-            fontSize: '1.2rem'
+            fontSize: '1.2rem',
+            fontWeight: 'bold',
+            transition: 'all 0.2s ease'
           }}
         >
-          ☰
+          ☰ <span style={{ fontSize: '0.9rem', textTransform: 'uppercase' }}>Menu</span>
         </button>
       )}
 

@@ -273,20 +273,34 @@ export default function GanttChartView({
       return acc;
     }, {} as Record<string, GanttActivity[]>);
 
-    const wbsOrder = ['Mobilization', 'Roughing-ins', 'Equipment', 'Electrical', 'Testing', 'Turnover', 'Unassigned'];
+    const wbsOrderMap: Record<string, number> = {};
+    const wbsCodeMap: Record<string, string> = {};
+    activities.forEach(act => {
+      const name = act.wbs?.name || 'Unassigned';
+      if (!(name in wbsOrderMap)) {
+        wbsOrderMap[name] = act.wbs?.orderIndex ?? 999;
+        wbsCodeMap[name] = act.wbs?.code || 'N/A';
+      }
+    });
+
     const sortedGroups = Object.keys(grouped).sort((a, b) => {
-      const idxA = wbsOrder.indexOf(a);
-      const idxB = wbsOrder.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
+      const orderDiff = (wbsOrderMap[a] || 999) - (wbsOrderMap[b] || 999);
+      if (orderDiff !== 0) return orderDiff;
       return a.localeCompare(b);
     });
 
     const rows: any[] = [];
     for (const g of sortedGroups) {
-      rows.push({ isHeader: true, name: g, id: `header-${g}` });
-      for (const a of grouped[g]) {
+      rows.push({ isHeader: true, name: `[${wbsCodeMap[g]}] ${g}`, id: `header-${g}` });
+      
+      const groupActivities = [...grouped[g]].sort((a, b) => {
+        const startA = a.plannedStartDate ? new Date(a.plannedStartDate).getTime() : 0;
+        const startB = b.plannedStartDate ? new Date(b.plannedStartDate).getTime() : 0;
+        if (startA !== startB) return startA - startB;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+
+      for (const a of groupActivities) {
         rows.push({ isHeader: false, act: a, id: a.id });
       }
     }

@@ -261,6 +261,7 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
               <th style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--text-secondary)', width: '90px' }}>Finish</th>
               <th style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--text-secondary)', width: '60px' }}>Float</th>
               <th style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--text-secondary)', width: '70px' }}>Progress</th>
+              <th style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text-secondary)', width: '100px' }}>Total Cost</th>
               <th style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--text-secondary)', width: '50px' }}>CP</th>
               <th style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--text-secondary)', width: '90px' }}>Actions</th>
             </tr>
@@ -274,6 +275,7 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                 <td style={{ padding: '6px 8px', textAlign: 'center' }}>—</td>
                 <td style={{ padding: '6px 8px' }}><input style={{...inputStyle, textAlign: 'center'}} type="number" value={newDuration} onChange={e => setNewDuration(Number(e.target.value))} /></td>
                 <td colSpan={2} style={{ padding: '6px 8px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>Run CPM after adding</td>
+                <td style={{ padding: '6px 8px', textAlign: 'center' }}>—</td>
                 <td style={{ padding: '6px 8px', textAlign: 'center' }}>—</td>
                 <td style={{ padding: '6px 8px', textAlign: 'center' }}>—</td>
                 <td style={{ padding: '6px 8px', textAlign: 'center' }}>—</td>
@@ -294,13 +296,19 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                 return acc;
               }, {} as Record<string, Activity[]>);
 
-              const wbsOrder = ['Mobilization', 'Roughing-ins', 'Equipment', 'Electrical', 'Testing', 'Turnover', 'Unassigned'];
+              const wbsOrderMap: Record<string, number> = {};
+              const wbsCodeMap: Record<string, string> = {};
+              activities.forEach(act => {
+                const name = act.wbs?.name || 'Unassigned';
+                if (!(name in wbsOrderMap)) {
+                  wbsOrderMap[name] = act.wbs?.orderIndex ?? 999;
+                  wbsCodeMap[name] = act.wbs?.code || 'N/A';
+                }
+              });
+
               const sortedGroups = Object.keys(grouped).sort((a, b) => {
-                const idxA = wbsOrder.indexOf(a);
-                const idxB = wbsOrder.indexOf(b);
-                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-                if (idxA !== -1) return -1;
-                if (idxB !== -1) return 1;
+                const orderDiff = (wbsOrderMap[a] || 999) - (wbsOrderMap[b] || 999);
+                if (orderDiff !== 0) return orderDiff;
                 return a.localeCompare(b);
               });
 
@@ -337,15 +345,36 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                     phaseBoqs.get(key)!.cost += proportionalCost;
                   });
                 });
-                const boqList = Array.from(phaseBoqs.values());
+                const boqList = Array.from(phaseBoqs.values()).filter(b => b.cost > 0);
                 const phaseGrandTotalCost = boqList.reduce((sum, b) => sum + b.cost, 0);
+
+                  let phaseStart: Date | null = null;
+                  let phaseFinish: Date | null = null;
+                  let totalProgressSum = 0;
+
+                  grouped[groupName].forEach(act => {
+                    const s = act.plannedStartDate ? new Date(act.plannedStartDate) : null;
+                    const f = act.plannedFinishDate ? new Date(act.plannedFinishDate) : null;
+                    
+                    if (s && (!phaseStart || s < phaseStart)) phaseStart = s;
+                    if (f && (!phaseFinish || f > phaseFinish)) phaseFinish = f;
+                    
+                    totalProgressSum += act.actualProgressPercent || 0;
+                  });
+
+                  let phaseDuration = 0;
+                  if (phaseStart && phaseFinish) {
+                    phaseDuration = Math.ceil((phaseFinish.getTime() - phaseStart.getTime()) / (1000 * 60 * 60 * 24));
+                  }
+                  const avgProgress = grouped[groupName].length > 0 ? Math.round(totalProgressSum / grouped[groupName].length) : 0;
 
                 return (
                 <React.Fragment key={groupName}>
-                  <tr style={{ backgroundColor: 'rgba(0, 240, 255, 0.1)', borderBottom: '1px solid var(--glass-border)' }}>
-                    <td colSpan={10} style={{ padding: '8px 12px', fontWeight: 'bold', color: 'var(--accent-color)', fontSize: '0.9rem' }}>
+                  <tr style={{ backgroundColor: 'rgba(0, 240, 255, 0.1)', borderBottom: '1px solid var(--glass-border)', fontWeight: 'bold', color: 'var(--accent-color)' }}>
+                    <td style={{ padding: '8px 12px' }}>—</td>
+                    <td style={{ padding: '8px 12px', fontSize: '0.9rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>📁 Phase: {groupName}</span>
+                        <span>📁 Phase Summary: [{wbsCodeMap[groupName]}] {groupName}</span>
                         {boqList.length > 0 && (
                           <button
                             onClick={() => toggleBoqPhase(groupName)}
@@ -365,11 +394,33 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                         )}
                       </div>
                     </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>—</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: 'var(--text-primary)' }}>{phaseDuration}d</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: 'var(--text-primary)', fontSize: '0.75rem' }}>
+                      {phaseStart ? phaseStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: 'var(--text-primary)', fontSize: '0.75rem' }}>
+                      {phaseFinish ? phaseFinish.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>—</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                        <div style={{ width: '40px', height: '6px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div style={{ width: `${avgProgress}%`, height: '100%', backgroundColor: 'var(--accent-color)', borderRadius: '3px' }} />
+                        </div>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--accent-color)' }}>{avgProgress}%</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#10b981', fontWeight: 'bold' }}>
+                      ₱ {phaseGrandTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>—</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>—</td>
                   </tr>
                   {/* BOQ Breakdown Table */}
                   {expandedBoqPhases[groupName] && boqList.length > 0 && (
                     <tr style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderBottom: '1px solid var(--glass-border)' }}>
-                      <td colSpan={10} style={{ padding: '15px' }}>
+                      <td colSpan={11} style={{ padding: '15px' }}>
                         <div style={{ padding: '10px', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '8px', backgroundColor: 'rgba(0, 240, 255, 0.05)' }}>
                           <h4 style={{ margin: '0 0 10px 0', color: 'var(--text-primary)', fontSize: '0.85rem' }}>Bill of Quantities Requirement</h4>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
@@ -411,8 +462,26 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                       </td>
                     </tr>
                   )}
-                  {grouped[groupName].map((act) => {
+                  {(() => {
+                    const groupActivities = [...grouped[groupName]].sort((a, b) => {
+                      const startA = a.plannedStartDate ? new Date(a.plannedStartDate).getTime() : 0;
+                      const startB = b.plannedStartDate ? new Date(b.plannedStartDate).getTime() : 0;
+                      if (startA !== startB) return startA - startB;
+                      // Fallback to alphabetical if dates are exactly the same
+                      return (a.name || '').localeCompare(b.name || '');
+                    });
+                    
+                    return groupActivities.map((act) => {
                     const i = globalIndex++;
+
+                    const activityTotalCost = (act.boqMappings || []).reduce((sum: number, mapping: any) => {
+                      const item = mapping.awardedBoqItem;
+                      if (!item) return sum;
+                      const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (mapping.mappedQuantity / item.quantity) : 0;
+                      return sum + proportionalCost;
+                    }, 0);
+                    const formattedActivityCost = `₱ ${activityTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
                     return editingId === act.id ? (
                 /* Edit Row */
                 <tr key={act.id} style={{ borderBottom: '1px solid var(--glass-border)', backgroundColor: 'rgba(245, 158, 11, 0.05)' }}>
@@ -431,6 +500,7 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                   <td style={{ padding: '6px 8px' }}><input style={inputStyle} type="date" value={editFinish} onChange={e => setEditFinish(e.target.value)} /></td>
                   <td style={{ padding: '6px 8px', textAlign: 'center', color: 'var(--text-secondary)' }}>{act.totalFloat}d</td>
                   <td style={{ padding: '6px 8px' }}><input style={{...inputStyle, textAlign: 'center'}} type="number" min={0} max={100} value={editProgress} onChange={e => setEditProgress(Number(e.target.value))} /></td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--text-secondary)' }}>{formattedActivityCost}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'center' }}>{act.criticalPath ? '🔴' : '—'}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'center' }}>
                     <button onClick={handleUpdate} style={{ padding: '4px 8px', backgroundColor: '#10b981', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', marginRight: '4px' }}>💾</button>
@@ -463,14 +533,16 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                       <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{act.actualProgressPercent}%</span>
                     </div>
                   </td>
+                  <td style={{ padding: '8px', textAlign: 'right', color: 'var(--text-primary)', fontWeight: 'bold' }}>{formattedActivityCost}</td>
                   <td style={{ padding: '8px', textAlign: 'center' }}>{act.criticalPath ? '🔴' : '—'}</td>
                   <td style={{ padding: '8px', textAlign: 'center' }}>
                     <button onClick={() => startEdit(act)} style={{ padding: '3px 6px', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', borderRadius: '4px', cursor: 'pointer', marginRight: '4px', fontSize: '0.75rem' }}>✏️</button>
                     <button onClick={() => handleDelete(act.id)} style={{ padding: '3px 6px', background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}>🗑</button>
                   </td>
-                </tr>
+              </tr>
               );
-            })}
+            });
+            })()}
                 </React.Fragment>
                 );
               });

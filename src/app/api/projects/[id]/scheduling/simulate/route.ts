@@ -66,9 +66,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 I have a list of project activities and an existing total project duration of ${totalDays} days.
 I need to group these activities into logical construction phases and sequence them correctly.
 Please do the following:
-1. Define 3 to 6 logical construction sub-phases (e.g. Mobilization, Rough-ins, Equipment Installation, Testing). Provide a unique 'code' for each sub-phase (e.g. PH-1).
+1. Define 3 to 6 logical construction sub-phases (e.g. Mobilization & Site Setup, Rough-ins, Equipment Installation, Testing). Provide a unique 'code' for each sub-phase (e.g. PH-1).
 2. For each sub-phase, estimate its percentage of the total project duration (pct, must sum to 1.0).
 3. For each sub-phase, provide an ordered array of 'orderedActivityIds' representing the recommended chronological sequence of works within that phase. Every activity provided in the input MUST be assigned to exactly one phase.
+
+CRITICAL RULES:
+- The FIRST phase (e.g. PH-1 Mobilization & Site Setup) MUST ONLY contain General Requirements and Preliminaries. This includes activities related to: Mobilization, Demobilization, Quality Standard and Control, Security, Safety and Protection, Site Management Work, Temporary Works, Transportation, and Permits.
+- DO NOT put physical construction works, demolition, chipping, restoration, or general "Consumables" into the first phase. They belong in subsequent construction phases.
+- Within each phase, the \`orderedActivityIds\` array MUST be strictly ordered chronologically from what starts first to what finishes last.
+- For the FIRST phase, true mobilization tasks (like 'Mobilization', 'Site Management', 'Permits', 'Temporary Works') MUST be at the very beginning of the \`orderedActivityIds\` array.
 
 Activities:
 ${JSON.stringify(activityPayload, null, 2)}`;

@@ -5,10 +5,11 @@ import LiveThreatFeed from './LiveThreatFeed';
 import SystemCountermeasures from './SystemCountermeasures';
 import LiveThreatMap from './LiveThreatMap';
 import ThreatDetailPanel from './ThreatDetailPanel';
+import SimulationControlPanel from './SimulationControlPanel';
 import { getLiveThreatFeed, getSocDashboardStats, getThreatMapData, getCountermeasuresData } from '@/app/actions/socActions';
 import { 
   ShieldCheck, ShieldAlert, Lock, 
-  Map, Server, AlertTriangle, Hand 
+  Map, Server, AlertTriangle, Hand, Activity
 } from 'lucide-react';
 
 interface SocDashboardClientProps {
@@ -26,16 +27,30 @@ export default function SocDashboardClient({ initialStats, initialFeed, initialM
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [isLiveMode, setIsLiveMode] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [includeSimulated, setIncludeSimulated] = useState(true);
+  const [toastAlert, setToastAlert] = useState<any>(null);
+  const latestThreatIdRef = React.useRef<string | null>(initialFeed.length > 0 ? initialFeed[0].id : null);
 
   const refreshData = async () => {
     setRefreshing(true);
     try {
       const [newStats, newFeed, newMap, newCm] = await Promise.all([
-        getSocDashboardStats(),
-        getLiveThreatFeed(),
-        getThreatMapData(),
+        getSocDashboardStats(includeSimulated),
+        getLiveThreatFeed(50, includeSimulated),
+        getThreatMapData(includeSimulated),
         getCountermeasuresData()
       ]);
+      
+      if (newFeed.length > 0) {
+        const newest = newFeed[0];
+        // If there's a new threat that wasn't our last seen threat
+        if (latestThreatIdRef.current && newest.id !== latestThreatIdRef.current) {
+          setToastAlert(newest);
+          setTimeout(() => setToastAlert(null), 8000); // Hide after 8s
+        }
+        latestThreatIdRef.current = newest.id;
+      }
+
       setStats(newStats);
       setFeed(newFeed);
       setMapData(newMap);
@@ -48,13 +63,67 @@ export default function SocDashboardClient({ initialStats, initialFeed, initialM
   };
 
   useEffect(() => {
+    refreshData();
+  }, [includeSimulated]);
+
+  useEffect(() => {
     if (!isLiveMode) return;
     const interval = setInterval(refreshData, 10000); // 10 seconds refresh
     return () => clearInterval(interval);
-  }, [isLiveMode]);
+  }, [isLiveMode, includeSimulated]);
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', width: '100%', padding: '20px', boxSizing: 'border-box' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', width: '100%', padding: '20px', boxSizing: 'border-box', position: 'relative' }}>
+      
+      {/* Toast Alert */}
+      {toastAlert && (
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          background: 'rgba(15, 23, 42, 0.95)',
+          border: `1px solid ${toastAlert.severity === 'Critical' ? '#ef4444' : '#f59e0b'}`,
+          borderRadius: '8px',
+          padding: '15px 20px',
+          zIndex: 9999,
+          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          minWidth: '320px',
+          backdropFilter: 'blur(10px)',
+          animation: 'fadeInSlide 0.3s ease-out forwards'
+        }}>
+          <style>{`
+            @keyframes fadeInSlide {
+              from { opacity: 0; transform: translateX(50px); }
+              to { opacity: 1; transform: translateX(0); }
+            }
+          `}</style>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertTriangle size={24} color={toastAlert.severity === 'Critical' ? '#ef4444' : '#f59e0b'} />
+            <div style={{ flex: 1 }}>
+              <h4 style={{ margin: 0, color: '#fff', fontSize: '1rem' }}>New Threat Detected</h4>
+              <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.8rem' }}>{toastAlert.module} Module</p>
+            </div>
+            {toastAlert.simulated && (
+              <span style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.5)', padding: '2px 6px', fontSize: '0.6rem', borderRadius: '4px', fontWeight: 'bold' }}>SIMULATED</span>
+            )}
+          </div>
+          
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748b', fontSize: '0.8rem' }}>Threat:</span>
+              <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 'bold', textAlign: 'right' }}>{toastAlert.threatType}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748b', fontSize: '0.8rem' }}>Response:</span>
+              <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 'bold', textAlign: 'right' }}>{toastAlert.systemResponse}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Section */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px solid var(--glass-border)' }}>
         <div>
@@ -68,6 +137,17 @@ export default function SocDashboardClient({ initialStats, initialFeed, initialM
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', background: 'var(--glass-panel)', padding: '10px 15px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingRight: '15px', borderRight: '1px solid var(--glass-border)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', color: '#fff', cursor: 'pointer' }}>
+              <input 
+                type="checkbox" 
+                checked={includeSimulated} 
+                onChange={(e) => setIncludeSimulated(e.target.checked)} 
+                style={{ accentColor: 'var(--accent-color)' }} 
+              />
+              Include Simulations
+            </label>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingRight: '15px', borderRight: '1px solid var(--glass-border)' }}>
             <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: isLiveMode ? '#ef4444' : '#64748b' }}></div>
             <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-secondary)', letterSpacing: '1px' }}>{isLiveMode ? 'LIVE MODE' : 'PAUSED'}</span>
@@ -97,9 +177,9 @@ export default function SocDashboardClient({ initialStats, initialFeed, initialM
         <KpiCard title="Active Incidents" count={stats.activeIncidents} icon={<AlertTriangle size={24} color="#f43f5e" />} color="rgba(244, 63, 94, 0.1)" />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '20px', minHeight: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '20px', minHeight: 0, overflowY: 'auto' }}>
         {/* Map and Details Row */}
-        <div style={{ display: 'flex', gap: '20px', flex: 3, minHeight: 0 }}>
+        <div style={{ display: 'flex', gap: '20px', minHeight: '400px' }}>
           <div style={{ flex: 2.5, position: 'relative', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: '15px', left: '15px', zIndex: 400, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--glass-border)' }}>
               <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '1px' }}>
@@ -117,7 +197,7 @@ export default function SocDashboardClient({ initialStats, initialFeed, initialM
         </div>
 
         {/* Feed and Countermeasures Row */}
-        <div style={{ display: 'flex', gap: '20px', flex: 2, minHeight: 0 }}>
+        <div style={{ display: 'flex', gap: '20px', minHeight: '300px' }}>
           <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--glass-border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <LiveThreatFeed feed={feed} onRowClick={(id: string) => setSelectedEventId(id)} />
           </div>
@@ -125,6 +205,13 @@ export default function SocDashboardClient({ initialStats, initialFeed, initialM
             <SystemCountermeasures countermeasures={countermeasures} />
           </div>
         </div>
+
+        {/* Simulation Control Panel Row */}
+        {includeSimulated && (
+          <div style={{ minHeight: '300px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <SimulationControlPanel onRefresh={refreshData} />
+          </div>
+        )}
       </div>
     </div>
   );

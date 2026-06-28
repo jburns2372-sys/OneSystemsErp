@@ -11,9 +11,11 @@ export async function checkSocAccess(userId: string) {
   return true;
 }
 
-export async function getSocDashboardStats() {
+export async function getSocDashboardStats(includeSimulated: boolean = true) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  const whereClause = includeSimulated ? {} : { simulated: false };
 
   const [
     totalEvents,
@@ -24,12 +26,12 @@ export async function getSocDashboardStats() {
     fileThreats,
     activeIncidents,
   ] = await Promise.all([
-    prisma.securityEvent.count({ where: { timestamp: { gte: today } } }),
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, status: 'BLOCKED' } }),
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, severity: 'CRITICAL' } }),
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, threatType: 'UNAUTHENTICATED_ACCESS' } }),
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, category: 'AI' } }),
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, category: 'FILE' } }),
+    prisma.securityEvent.count({ where: { timestamp: { gte: today }, ...whereClause } }),
+    prisma.securityEvent.count({ where: { timestamp: { gte: today }, OR: [{ status: 'BLOCKED' }, { result: 'BLOCKED' }, { blocked: true }], ...whereClause } }),
+    prisma.securityEvent.count({ where: { timestamp: { gte: today }, severity: { in: ['CRITICAL', 'Critical'] }, ...whereClause } }),
+    prisma.securityEvent.count({ where: { timestamp: { gte: today }, OR: [{ threatType: 'UNAUTHENTICATED_ACCESS' }, { category: 'Authentication' }], ...whereClause } }),
+    prisma.securityEvent.count({ where: { timestamp: { gte: today }, category: 'AI', ...whereClause } }),
+    prisma.securityEvent.count({ where: { timestamp: { gte: today }, category: 'FILE', ...whereClause } }),
     prisma.securityIncident.count({ where: { status: { notIn: ['Resolved', 'Closed'] } } }),
   ]);
 
@@ -44,9 +46,11 @@ export async function getSocDashboardStats() {
   };
 }
 
-export async function getLiveThreatFeed(limit: number = 50) {
+export async function getLiveThreatFeed(limit: number = 50, includeSimulated: boolean = true) {
+  const whereClause = includeSimulated ? {} : { simulated: false };
   return await prisma.securityEvent.findMany({
     take: limit,
+    where: whereClause,
     orderBy: { timestamp: 'desc' },
     select: {
       id: true,
@@ -62,6 +66,10 @@ export async function getLiveThreatFeed(limit: number = 50) {
       systemResponse: true,
       result: true,
       status: true,
+      simulated: true,
+      simulationRunId: true,
+      expectedResponse: true,
+      actualResponse: true,
     }
   });
 }
@@ -75,11 +83,15 @@ export async function getEventDetails(eventId: string) {
   });
 }
 
-export async function getThreatMapData() {
+export async function getThreatMapData(includeSimulated: boolean = true) {
+  const whereClause = includeSimulated 
+    ? { latitude: { not: null }, longitude: { not: null } }
+    : { latitude: { not: null }, longitude: { not: null }, simulated: false };
+
   const recentEvents = await prisma.securityEvent.findMany({
     take: 100,
     orderBy: { timestamp: 'desc' },
-    where: { latitude: { not: null }, longitude: { not: null } },
+    where: whereClause,
     select: {
       id: true,
       sourceIp: true,
@@ -90,6 +102,7 @@ export async function getThreatMapData() {
       threatType: true,
       country: true,
       city: true,
+      simulated: true,
     }
   });
   return recentEvents;

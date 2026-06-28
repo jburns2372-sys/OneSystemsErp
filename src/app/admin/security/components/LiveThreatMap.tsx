@@ -133,7 +133,10 @@ export default function LiveThreatMap({ data, onMarkerClick }: ThreatMapProps) {
           >
             <Popup className="soc-popup">
               <div style={{ fontSize: '0.875rem', backgroundColor: '#111', padding: '12px', color: '#e5e7eb', borderRadius: '8px', minWidth: '180px' }}>
-                <p style={{ fontWeight: 'bold', color: 'white', borderBottom: '1px solid #374151', paddingBottom: '4px', marginBottom: '8px', marginTop: 0 }}>{event.sourceIp}</p>
+                <p style={{ fontWeight: 'bold', color: 'white', borderBottom: '1px solid #374151', paddingBottom: '4px', marginBottom: '8px', marginTop: 0 }}>
+                  {event.sourceIp}
+                  {event.simulated && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '2px 4px', borderRadius: '4px' }}>SIMULATED</span>}
+                </p>
                 <p style={{ fontSize: '0.75rem', margin: '4px 0' }}><span style={{ color: '#9ca3af' }}>Loc:</span> {event.city}, {event.country}</p>
                 <p style={{ fontSize: '0.75rem', margin: '4px 0' }}><span style={{ color: '#9ca3af' }}>Threat:</span> <span style={{ color: getSeverityColor(event.severity), fontWeight: 'bold' }}>{event.threatType}</span></p>
                 <button 

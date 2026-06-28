@@ -10,6 +10,7 @@ import SchedulingDashboard from './dashboard/SchedulingDashboard';
 import DelayAndRecoveryTab from './delays/DelayAndRecoveryTab';
 import PERTNetworkDiagram from './pert/PERTNetworkDiagram';
 import AIScheduleIntelligence from './ai/AIScheduleIntelligence';
+import PhaseSummaryView from './PhaseSummaryView';
 
 export default function SchedulingHubClient({ 
   project, 
@@ -22,7 +23,7 @@ export default function SchedulingHubClient({
 }) {
   const router = useRouter();
   const [schedule, setSchedule] = useState(initialSchedule);
-  const [activeTab, setActiveTab] = useState('GANTT');
+  const [activeTab, setActiveTab] = useState('PHASE_SUMMARY');
   const [isDeleting, startTransition] = useTransition();
 
   const handleDeleteSchedule = () => {
@@ -43,6 +44,10 @@ export default function SchedulingHubClient({
     router.refresh();
   }, [router]);
 
+  React.useEffect(() => {
+    setSchedule(initialSchedule);
+  }, [initialSchedule]);
+
   if (!schedule) {
     return (
       <ScheduleSetupWizard 
@@ -57,6 +62,7 @@ export default function SchedulingHubClient({
   }
 
   const tabs = [
+    { key: 'PHASE_SUMMARY', label: '📑 Phase Summary', icon: '' },
     { key: 'GANTT', label: '📊 Gantt Chart', icon: '' },
     { key: 'WBS', label: '📋 WBS & Activities', icon: '' },
     { key: 'DASHBOARD', label: '📈 Dashboard', icon: '' },
@@ -67,6 +73,8 @@ export default function SchedulingHubClient({
 
   const renderTabContent = () => {
     switch (activeTab) {
+      case 'PHASE_SUMMARY':
+        return <PhaseSummaryView schedule={schedule} />;
       case 'GANTT':
         return (
           <GanttChartView
