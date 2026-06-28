@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateCPM } from '@/lib/cpm-engine';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
+import * as crypto from 'crypto';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -34,28 +35,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
        return NextResponse.json({ error: 'No BOQ items found to simulate phasing.' }, { status: 400 });
     }
 
-    // 1. Delete all existing dependencies, WBS nodes, and previous AI-generated activities
-    await prisma.scheduleDependency.deleteMany({
-      where: { scheduleId: schedule.id }
-    });
-    // Unlink wbs from activities first so we can delete old WBS nodes safely
-    await prisma.scheduleActivity.updateMany({
-      where: { scheduleId: schedule.id },
-      data: { wbsId: null }
-    });
-    await prisma.scheduleActivity.deleteMany({
-      where: { scheduleId: schedule.id, activityCode: 'AI-GEN' }
-    });
-    await prisma.scheduleWBS.deleteMany({
-      where: { scheduleId: schedule.id }
-    });
-
-    // Refresh activities list after deleting AI ones
-    const scheduleFresh = await prisma.projectSchedule.findUnique({
-      where: { projectId },
-      include: { activities: true }
-    });
-    const activities = scheduleFresh?.activities || [];
+    // Filter out previous AI-generated activities
+    const activities = schedule.activities.filter(a => a.activityCode !== 'AI-GEN');
     
     // Fallbacks
     let startDate = new Date('2026-06-12T00:00:00.000Z');
@@ -75,24 +56,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const diffTime = Math.abs(targetDate.getTime() - startDate.getTime());
     const totalDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
-    // 2. Intelligent AI Phasing based on BOQ Consolidation
-    const payload = consolidatedItems.map(item => ({
-      itemCode: item.itemCode,
-      description: item.description,
-      quantity: item.quantity,
-      unit: item.unit
+    // 2. Intelligent AI Phasing based on actual Activities
+    const activityPayload = activities.map(a => ({
+      id: a.id,
+      name: a.name
     }));
 
     const prompt = `You are an expert construction project manager. 
-I have a list of BOQ (Bill of Quantities) items and an existing total project duration of ${totalDays} days.
-I need to group the project's activities into logical construction phases based on the BOQ items provided.
+I have a list of project activities and an existing total project duration of ${totalDays} days.
+I need to group these activities into logical construction phases and sequence them correctly.
 Please do the following:
 1. Define 3 to 6 logical construction sub-phases (e.g. Mobilization, Rough-ins, Equipment Installation, Testing). Provide a unique 'code' for each sub-phase (e.g. PH-1).
 2. For each sub-phase, estimate its percentage of the total project duration (pct, must sum to 1.0).
-3. Provide an array of distinct 'keywords' for each sub-phase that I can use to automatically match and assign the existing schedule activities to this sub-phase.
+3. For each sub-phase, provide an ordered array of 'orderedActivityIds' representing the recommended chronological sequence of works within that phase. Every activity provided in the input MUST be assigned to exactly one phase.
 
-BOQ Items:
-${JSON.stringify(payload, null, 2)}`;
+Activities:
+${JSON.stringify(activityPayload, null, 2)}`;
 
     const schema: Schema = {
       type: Type.OBJECT,
@@ -106,10 +85,10 @@ ${JSON.stringify(payload, null, 2)}`;
               code: { type: Type.STRING, description: "Unique phase code e.g. PH-1" },
               name: { type: Type.STRING, description: "Phase name" },
               pct: { type: Type.NUMBER, description: "Percentage of total project duration (0.0 to 1.0)" },
-              keywords: { 
+              orderedActivityIds: { 
                 type: Type.ARRAY, 
                 items: { type: Type.STRING },
-                description: "List of keywords to match existing activities to this phase"
+                description: "Chronological sequence of activity IDs to be executed in this phase"
               }
             }
           }
@@ -140,8 +119,11 @@ ${JSON.stringify(payload, null, 2)}`;
       });
     }
 
-    const result = JSON.parse(response.text || '{}');
+    let jsonText = response.text || '{}';
+    jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const result = JSON.parse(jsonText);
     const phases = result.phases || [];
+    console.log("SIMULATION PHASES:", JSON.stringify(phases));
 
     if (phases.length === 0) {
       throw new Error("AI failed to generate phases.");
@@ -154,27 +136,46 @@ ${JSON.stringify(payload, null, 2)}`;
       totalPct = 1;
     }
 
-    // 3. Create Root WBS Node
-    const constructionWbs = await prisma.scheduleWBS.create({
-      data: {
-        scheduleId: schedule.id,
-        code: 'CONST',
-        name: 'Construction Phase',
-        level: 1,
-        orderIndex: 1
-      }
+    // 1. Delete all existing dependencies, WBS nodes, and previous AI-generated activities
+    await prisma.scheduleDependency.deleteMany({
+      where: { scheduleId: schedule.id }
+    });
+    // Unlink wbs from activities first so we can delete old WBS nodes safely
+    await prisma.scheduleActivity.updateMany({
+      where: { scheduleId: schedule.id },
+      data: { wbsId: null }
+    });
+    await prisma.scheduleActivity.deleteMany({
+      where: { scheduleId: schedule.id, activityCode: 'AI-GEN' }
+    });
+    await prisma.scheduleWBS.deleteMany({
+      where: { scheduleId: schedule.id }
     });
 
-    const transactionOps = [];
-    let daysAllocated = 0;
+    const wbsData: any[] = [];
+    const activityData: any[] = [];
+    const dependencyData: any[] = [];
+    const activityUpdates: any[] = [];
 
+    // Create root Construction Phase
+    const constructionWbsId = crypto.randomUUID();
+    wbsData.push({
+      id: constructionWbsId,
+      scheduleId: schedule.id,
+      code: 'CONST',
+      name: 'Construction Phase',
+      level: 1,
+      orderIndex: 1
+    });
+
+    let daysAllocated = 0;
     const activePhases: any[] = [];
 
     // Bucket activities into the new AI-generated phases
     for (let i = 0; i < phases.length; i++) {
       const p = phases[i];
       p.acts = [];
-      p.wbsId = `wbs_phase_${i}`;
+      p.wbsId = crypto.randomUUID();
       
       if (i === phases.length - 1) {
         p.days = totalDays - daysAllocated;
@@ -184,38 +185,42 @@ ${JSON.stringify(payload, null, 2)}`;
         daysAllocated += p.days;
       }
 
-      transactionOps.push(
-        prisma.scheduleWBS.create({
-          data: {
-            id: p.wbsId,
-            scheduleId: schedule.id,
-            parentId: constructionWbs.id,
-            code: p.code,
-            name: p.name,
-            level: 2,
-            orderIndex: i + 1
-          }
-        })
-      );
+      const wbsPayload = {
+        id: p.wbsId,
+        scheduleId: schedule.id,
+        parentId: constructionWbsId,
+        code: p.code || 'UNKNOWN',
+        name: p.name || 'Unnamed Phase',
+        level: 2,
+        orderIndex: i + 1
+      };
+      console.log("CREATING WBS:", wbsPayload);
+      wbsData.push(wbsPayload);
       activePhases.push(p);
     }
 
-    // Assign existing activities to the AI phases based on keywords
-    for (const act of activities) {
-      let matched = false;
-      const lowerName = (act.name || '').toLowerCase();
-      
-      for (const phase of activePhases) {
-        if ((phase.keywords || []).some((kw: string) => lowerName.includes(kw.toLowerCase()))) {
-          phase.acts.push(act);
-          matched = true;
-          break;
+    // Assign existing activities to the AI phases based on the explicit ordered sequence
+    const activityMap = new Map(activities.map(a => [a.id, a]));
+    const assignedIds = new Set<string>();
+
+    for (const phase of activePhases) {
+      if (phase.orderedActivityIds && Array.isArray(phase.orderedActivityIds)) {
+        for (const actId of phase.orderedActivityIds) {
+          const act = activityMap.get(actId);
+          if (act && !assignedIds.has(actId)) {
+            phase.acts.push(act);
+            assignedIds.add(actId);
+          }
         }
       }
-      
-      if (!matched && activePhases.length > 0) {
-        // Fallback to the largest or first phase
-        activePhases[0].acts.push(act);
+    }
+
+    // Catch any orphaned activities and append them to the final phase
+    if (activePhases.length > 0) {
+      for (const act of activities) {
+        if (!assignedIds.has(act.id)) {
+          activePhases[activePhases.length - 1].acts.push(act);
+        }
       }
     }
 
@@ -230,109 +235,109 @@ ${JSON.stringify(payload, null, 2)}`;
       const mainFinish = new Date(currentDate);
       mainFinish.setDate(mainFinish.getDate() + phase.days - 1);
 
+      let aiAnchorStatus = 'NOT_STARTED';
+      let aiAnchorProgress = 0;
+      const today = new Date();
+      if (mainStart <= today) {
+        const lapsedDays = Math.ceil((today.getTime() - mainStart.getTime()) / (1000 * 60 * 60 * 24));
+        if (lapsedDays >= phase.days) {
+          aiAnchorStatus = 'COMPLETED';
+          aiAnchorProgress = 100;
+        } else {
+          aiAnchorStatus = 'IN_PROGRESS';
+          aiAnchorProgress = Math.round((lapsedDays / phase.days) * 100);
+        }
+      }
+
       // Create an AI-injected anchor activity for this phase
       const aiAnchorId = `ai_anchor_${phase.wbsId}`;
-      transactionOps.push(
-        prisma.scheduleActivity.create({
-          data: {
-            id: aiAnchorId,
-            scheduleId: schedule.id,
-            wbsId: phase.wbsId,
-            name: `${phase.name} (AI Anchor)`,
-            activityCode: 'AI-GEN',
-            plannedDuration: phase.days,
-            plannedStartDate: mainStart,
-            plannedFinishDate: mainFinish,
-            status: 'NOT_STARTED',
-            actualProgressPercent: 0
-          }
-        })
-      );
+      activityData.push({
+        id: aiAnchorId,
+        scheduleId: schedule.id,
+        wbsId: phase.wbsId,
+        name: `${phase.name} (AI Anchor)`,
+        activityCode: 'AI-GEN',
+        plannedDuration: phase.days,
+        plannedStartDate: mainStart,
+        plannedFinishDate: mainFinish,
+        status: aiAnchorStatus,
+        actualProgressPercent: aiAnchorProgress
+      });
 
       // Link AI Anchor to Previous Phase's AI Anchor (FS)
       if (prevMainActId) {
-        transactionOps.push(
-          prisma.scheduleDependency.create({
-            data: {
-              scheduleId: schedule.id,
-              predecessorId: prevMainActId,
-              successorId: aiAnchorId,
-              type: 'FS',
-              lagDays: 0
-            }
-          })
-        );
+        dependencyData.push({
+          scheduleId: schedule.id,
+          predecessorId: prevMainActId,
+          successorId: aiAnchorId,
+          type: 'FS',
+          lagDays: 0
+        });
       }
 
       if (phase.acts.length > 0) {
-        // Divide activities into 3 parallel "Crew Tracks" to simulate concurrent teams
-        const numTracks = Math.min(phase.acts.length, 3);
-        const tracks: any[][] = Array.from({ length: numTracks }, () => []);
-        
-        phase.acts.forEach((act: any, index: number) => {
-          tracks[index % numTracks].push(act);
-        });
+        const numActs = phase.acts.length;
+        const staggerDays = phase.days / numActs;
+        // Assign a reasonable duration so they overlap and fill the phase
+        const duration = Math.max(1, Math.floor(phase.days / 2)); 
 
-        for (let t = 0; t < numTracks; t++) {
-          const trackActs = tracks[t];
-          if (trackActs.length === 0) continue;
+        for (let i = 0; i < numActs; i++) {
+          const act = phase.acts[i];
+          const lagFromStart = Math.floor(i * staggerDays);
+          
+          const actStart = new Date(mainStart);
+          actStart.setDate(actStart.getDate() + lagFromStart);
+          
+          const actFinish = new Date(actStart);
+          actFinish.setDate(actFinish.getDate() + duration - 1);
 
-          const baseDuration = Math.max(1, Math.floor(phase.days / trackActs.length));
-          const remainder = phase.days - (baseDuration * trackActs.length);
-
-          let currentTrackDate = new Date(mainStart);
-          let prevTrackActId: string | null = null;
-
-          for (let i = 0; i < trackActs.length; i++) {
-            const act = trackActs[i];
-            
-            const duration = (i === trackActs.length - 1) ? baseDuration + Math.max(0, remainder) : baseDuration;
-
-            const actStart = new Date(currentTrackDate);
-            const actFinish = new Date(actStart);
-            actFinish.setDate(actFinish.getDate() + duration - 1);
-
-            transactionOps.push(
-              prisma.scheduleActivity.update({
-                where: { id: act.id },
-                data: {
-                  wbsId: phase.wbsId,
-                  plannedDuration: duration,
-                  plannedStartDate: actStart,
-                  plannedFinishDate: actFinish
-                }
-              })
-            );
-
-            if (i === 0) {
-              transactionOps.push(
-                prisma.scheduleDependency.create({
-                  data: {
-                    scheduleId: schedule.id,
-                    predecessorId: aiAnchorId,
-                    successorId: act.id,
-                    type: 'SS',
-                    lagDays: Math.floor(Math.random() * 3)
-                  }
-                })
-              );
-            } else if (prevTrackActId) {
-              transactionOps.push(
-                prisma.scheduleDependency.create({
-                  data: {
-                    scheduleId: schedule.id,
-                    predecessorId: prevTrackActId,
-                    successorId: act.id,
-                    type: 'FS',
-                    lagDays: 0
-                  }
-                })
-              );
+          let actStatus = 'NOT_STARTED';
+          let actProgress = 0;
+          const today = new Date();
+          if (actStart <= today) {
+            const lapsedDays = Math.ceil((today.getTime() - actStart.getTime()) / (1000 * 60 * 60 * 24));
+            if (lapsedDays >= duration) {
+              actStatus = 'COMPLETED';
+              actProgress = 100;
+            } else {
+              actStatus = 'IN_PROGRESS';
+              actProgress = Math.round((lapsedDays / duration) * 100);
             }
+          }
 
-            prevTrackActId = act.id;
-            currentTrackDate = new Date(actFinish);
-            currentTrackDate.setDate(currentTrackDate.getDate() + 1);
+          activityUpdates.push({
+            id: act.id,
+            data: {
+              wbsId: phase.wbsId,
+              plannedDuration: duration,
+              plannedStartDate: actStart,
+              plannedFinishDate: actFinish,
+              status: actStatus,
+              actualProgressPercent: actProgress
+            }
+          });
+
+          if (i === 0) {
+            // First activity depends on the Anchor
+            dependencyData.push({
+              scheduleId: schedule.id,
+              predecessorId: aiAnchorId,
+              successorId: act.id,
+              type: 'SS',
+              lagDays: 0
+            });
+          } else {
+            // Subsequent activities depend on the previous one sequentially
+            const prevAct = phase.acts[i - 1];
+            const incrementalLag = Math.floor(i * staggerDays) - Math.floor((i - 1) * staggerDays);
+            
+            dependencyData.push({
+              scheduleId: schedule.id,
+              predecessorId: prevAct.id,
+              successorId: act.id,
+              type: 'SS',
+              lagDays: incrementalLag
+            });
           }
         }
       }
@@ -342,7 +347,16 @@ ${JSON.stringify(payload, null, 2)}`;
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    await prisma.$transaction(transactionOps);
+    console.log(`Writing ${wbsData.length} WBS, ${activityData.length} Anchor Acts, ${dependencyData.length} Deps, ${activityUpdates.length} Updates`);
+
+    if (wbsData.length > 0) await prisma.scheduleWBS.createMany({ data: wbsData });
+    if (activityData.length > 0) await prisma.scheduleActivity.createMany({ data: activityData });
+    if (dependencyData.length > 0) await prisma.scheduleDependency.createMany({ data: dependencyData });
+    
+    // Sequential updates to avoid Prisma connection pool exhaustion and Neon connection dropping
+    for (const u of activityUpdates) {
+      await prisma.scheduleActivity.update({ where: { id: u.id }, data: u.data });
+    }
 
     // 4. Run CPM to update Float and Critical Path dynamically
     const updatedSchedule = await prisma.projectSchedule.findUnique({
@@ -356,6 +370,12 @@ ${JSON.stringify(payload, null, 2)}`;
         duration: a.plannedDuration
       }));
       await calculateCPM(cpmActivities as any, updatedSchedule.dependencies as any);
+
+      // Update schedule status to BASELINE
+      await prisma.projectSchedule.update({
+        where: { id: schedule.id },
+        data: { status: 'BASELINE' }
+      });
     }
 
     return NextResponse.json({ success: true, message: `Schedule successfully simulated with AI phasing across ${totalDays} days.` });
