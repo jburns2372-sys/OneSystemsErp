@@ -352,7 +352,7 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                   let phaseFinish: Date | null = null;
                   let totalProgressSum = 0;
 
-                  grouped[groupName].forEach(act => {
+                  for (const act of grouped[groupName]) {
                     const s = act.plannedStartDate ? new Date(act.plannedStartDate) : null;
                     const f = act.plannedFinishDate ? new Date(act.plannedFinishDate) : null;
                     
@@ -360,7 +360,7 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                     if (f && (!phaseFinish || f > phaseFinish)) phaseFinish = f;
                     
                     totalProgressSum += act.actualProgressPercent || 0;
-                  });
+                  }
 
                   let phaseDuration = 0;
                   if (phaseStart && phaseFinish) {
