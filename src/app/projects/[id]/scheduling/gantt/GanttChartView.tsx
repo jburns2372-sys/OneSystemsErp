@@ -15,7 +15,7 @@ interface GanttActivity {
   status: string;
   criticalPath: boolean;
   totalFloat: number;
-  wbs?: { code: string; name: string } | null;
+  wbs?: { code: string; name: string; orderIndex?: number } | null;
   predecessors?: any[];
   successors?: any[];
 }
