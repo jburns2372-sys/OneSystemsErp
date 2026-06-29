@@ -147,7 +147,7 @@ export async function createProject(formData: FormData) {
     // Parse using Master Template Format (via ExcelJS)
     // ----------------------------------------------------
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
     const sheet = workbook.worksheets[0];
     
     // Helper to safely get string from cell (handles rich text)
@@ -528,7 +528,7 @@ export async function uploadProcurementBenchmark(formData: FormData) {
   if (isMasterTemplate) {
     // Parse using Master Template Format (via ExcelJS)
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
     const sheet = workbook.worksheets[0];
     
     // Helper to safely get string from cell (handles rich text)
