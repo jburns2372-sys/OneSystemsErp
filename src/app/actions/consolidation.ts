@@ -171,11 +171,29 @@ export async function uploadMasterMaterialsList(formData: FormData) {
 
   const buffer = Buffer.from(await materialsFile.arrayBuffer());
 
-  // Upload to Vercel Blob
-  const blob = await put(`templates/${projectId}/master-materials-template.xlsx`, buffer, {
-    access: 'public',
-    addRandomSuffix: true,
-  });
+  // Upload to Vercel Blob with fallback
+  let blobUrl = '';
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blob = await put(`templates/${projectId}/master-materials-template.xlsx`, buffer, {
+      access: 'public',
+      addRandomSuffix: true,
+    });
+    blobUrl = blob.url;
+  } else {
+    console.warn("BLOB_READ_WRITE_TOKEN is missing. Falling back to local filesystem for upload.");
+    const fs = require('fs');
+    const path = require('path');
+    try {
+      const dir = path.join(process.cwd(), 'public', 'uploads', 'templates', projectId);
+      fs.mkdirSync(dir, { recursive: true });
+      const safeName = `${Date.now()}-master-materials-template.xlsx`;
+      const filePath = path.join(dir, safeName);
+      fs.writeFileSync(filePath, buffer);
+      blobUrl = `/uploads/templates/${projectId}/${safeName}`;
+    } catch (err) {
+      console.warn("Could not save file to local filesystem (likely Vercel read-only environment). Continuing without saving file.", err);
+    }
+  }
 
   // Remove existing templates for this project to keep it clean
   await prisma.document.deleteMany({
@@ -188,7 +206,7 @@ export async function uploadMasterMaterialsList(formData: FormData) {
       projectId,
       title: 'Master Materials Template',
       category: 'BOQ_TEMPLATE',
-      fileUrl: blob.url,
+      fileUrl: blobUrl,
       fileType: materialsFile.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       fileSize: buffer.length
     }
