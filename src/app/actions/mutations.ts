@@ -123,6 +123,8 @@ export async function createProject(formData: FormData) {
 
   const mappedBoqJson = formData.get('mappedBoqJson') as string | null;
 
+  let isMasterTemplate = formData.get('isMasterTemplate') === 'true';
+
   if (mappedBoqJson) {
     try {
       const parsedClientItems = JSON.parse(mappedBoqJson);
@@ -139,6 +141,129 @@ export async function createProject(formData: FormData) {
         throw new Error('AI Processing Error: Your Gemini API credits have been depleted. Please upload an Excel file instead, which does not require AI to process.');
       }
       throw e;
+    }
+  } else if (isMasterTemplate) {
+    // ----------------------------------------------------
+    // Parse using Master Template Format (via ExcelJS)
+    // ----------------------------------------------------
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const sheet = workbook.worksheets[0];
+    
+    // Helper to safely get string from cell (handles rich text)
+    const getCellString = (cell: ExcelJS.Cell) => {
+      if (cell.value && typeof cell.value === 'object' && 'richText' in cell.value) {
+        // @ts-ignore
+        return cell.value.richText.map(rt => rt.text).join("");
+      }
+      return cell.value?.toString() || "";
+    };
+
+    // Extract Logo
+    let logoData = null;
+    const imgObj = sheet.getImages()[0];
+    if (imgObj) {
+      try {
+        const img = workbook.getImage(imgObj.imageId as unknown as number);
+        if (img && img.buffer) {
+          const bufferAny = img.buffer as any;
+          const base64Str = Buffer.isBuffer(bufferAny) 
+            ? bufferAny.toString('base64') 
+            : Buffer.from(bufferAny).toString('base64');
+          logoData = `data:image/${img.extension};base64,${base64Str}`;
+        }
+      } catch (e) {
+        console.warn("Failed to extract image", e);
+      }
+    }
+
+    const line1 = getCellString(sheet.getRow(1).getCell(3)) || getCellString(sheet.getRow(2).getCell(1)) || "REPUBLIC OF THE PHILIPPINES";
+    const line2 = getCellString(sheet.getRow(2).getCell(3)) || getCellString(sheet.getRow(3).getCell(1)) || "";
+    const line3 = getCellString(sheet.getRow(3).getCell(3)) || getCellString(sheet.getRow(4).getCell(1)) || "";
+
+    formData.append('extractedLogo', logoData || '');
+    formData.append('extractedLine1', line1);
+    formData.append('extractedLine2', line2);
+    formData.append('extractedLine3', line3);
+
+    let anchorRowNumber = -1;
+    sheet.eachRow((row, rowNumber) => {
+      row.eachCell((cell) => {
+        if (cell.type === ExcelJS.ValueType.String && cell.value?.toString().replace(/\s/g, '').toUpperCase().includes("BIDDETAILEDCOSTBREAKDOWN")) {
+          anchorRowNumber = rowNumber;
+        }
+      });
+    });
+
+    if (anchorRowNumber !== -1) {
+      const headerRow = sheet.getRow(anchorRowNumber + 1);
+      const headers = (headerRow.values as any[]).map(v => String(v || '').replace(/\s/g, '').toUpperCase());
+
+      const cItem = headers.findIndex(h => h.includes("ITEM"));
+      const cDesc = headers.findIndex(h => h.includes("DESCRIPTION"));
+      const cUnit = headers.findIndex(h => h.includes("UNIT") && !h.includes("COST"));
+      const cQty = headers.findIndex(h => h.includes("QUANTITY"));
+      const cUc = headers.findIndex(h => h.includes("UNITCOST"));
+      const cAmt = headers.findIndex(h => h.includes("AMOUNT"));
+      const cMat = headers.findIndex(h => h.includes("MATERIAL"));
+      const cLab = headers.findIndex(h => h.includes("LABOR"));
+      const cEqu = headers.findIndex(h => h.includes("EQUIPMENT"));
+      const cTdc = headers.findIndex(h => h.includes("TOTALDIRECTCOST") || h.includes("TDC"));
+      const cOcm = headers.findIndex(h => h.includes("OCM"));
+      const cCp = headers.findIndex(h => h.includes("PROFIT") || h === "CP");
+      const cVat = headers.findIndex(h => h.includes("VAT") || h.includes("TAX"));
+      const cTic = headers.findIndex(h => h.includes("TOTALINDIRECTCOST") || h.includes("TIC"));
+      const cPct = headers.findIndex(h => h.includes("%OFTOTAL"));
+
+      const getNum = (cell: ExcelJS.Cell) => {
+        if (cell.type === ExcelJS.ValueType.Number) return cell.value as number;
+        if (cell.type === ExcelJS.ValueType.Formula) return cell.result as number || 0;
+        return Number(String(cell.value || '').replace(/[^0-9.-]/g, '')) || 0;
+      };
+
+      let currentRowNum = anchorRowNumber + 2;
+      while (currentRowNum <= sheet.rowCount) {
+        const row = sheet.getRow(currentRowNum);
+        const descCell = getCellString(row.getCell(cDesc)).trim();
+        const amount = getNum(row.getCell(cAmt));
+        const qty = getNum(row.getCell(cQty));
+
+        if (!descCell) {
+          currentRowNum++;
+          continue;
+        }
+
+        const descUpper = descCell.toUpperCase();
+        if (descUpper.includes("GRAND TOTAL") || descUpper.includes("TOTAL ESTIMATED COST") || descUpper === "TOTAL") {
+          break;
+        }
+
+        let itemNumber = getCellString(row.getCell(cItem)).trim();
+        let unit = getCellString(row.getCell(cUnit)).trim();
+
+        parsedItems.push({
+          itemCode: itemNumber,
+          description: descCell,
+          unit: unit || "LOT",
+          quantity: qty,
+          materialUnitCost: getNum(row.getCell(cMat)),
+          laborUnitCost: getNum(row.getCell(cLab)),
+          equipmentUnitCost: getNum(row.getCell(cEqu)),
+          directCost: getNum(row.getCell(cTdc)),
+          ocmAmount: getNum(row.getCell(cOcm)),
+          cpAmount: getNum(row.getCell(cCp)),
+          vatAmount: getNum(row.getCell(cVat)),
+          indirectCost: getNum(row.getCell(cTic)),
+          combinedUnitCost: getNum(row.getCell(cUc)),
+          totalCost: amount,
+          percentageOfTotal: getNum(row.getCell(cPct)) * 100,
+          status: 'PENDING',
+          processingType: 'MATERIAL_EQUIPMENT'
+        });
+
+        contractAmount += amount;
+        currentRowNum++;
+      }
     }
   } else {
     // Parse Excel file using LOCAL parser (0 API credits)
@@ -232,10 +357,6 @@ export async function createProject(formData: FormData) {
            // It's a header section. We should reset the item numbering.
            isHeader = true;
            currentSectionIndex = 0;
-           
-           // If the itemCode is completely missing, and the description looks like "I. GENERAL REQUIREMENTS",
-           // let's try to extract the roman numeral or number from the description to itemCode if we want,
-           // but the user just wants the items *under* it to have 1.0, 2.0. So resetting is enough.
         }
 
         // Apply auto-numbering for line items that have no itemCode but have quantity/cost
@@ -244,8 +365,6 @@ export async function createProject(formData: FormData) {
            itemCode = `${currentSectionIndex}.0`;
            console.log('AUTO-NUMBERED:', itemDesc, '->', itemCode);
         }
-
-        console.log('Evaluating row:', { itemCode, itemDesc, quantity, totalCost, isHeader });
 
         if (itemDesc && !itemDesc.toUpperCase().includes('MATERIAL LABOR EQUIPMENT') && (quantity > 0 || totalCost > 0 || isHeader)) {
           parsedItems.push({
@@ -302,6 +421,11 @@ export async function createProject(formData: FormData) {
     }
   }
 
+  const extractedLogo = formData.get('extractedLogo') as string | null;
+  const extractedLine1 = formData.get('extractedLine1') as string | null;
+  const extractedLine2 = formData.get('extractedLine2') as string | null;
+  const extractedLine3 = formData.get('extractedLine3') as string | null;
+
   const project = await prisma.project.create({
     data: {
       name,
@@ -314,6 +438,10 @@ export async function createProject(formData: FormData) {
       endDate,
       originalContractDuration,
       originalCompletionDate: endDate,
+      letterheadLine1: extractedLine1 || null,
+      letterheadLine2: extractedLine2 || null,
+      letterheadLine3: extractedLine3 || null,
+      letterheadLogo: extractedLogo || null,
       awardedBoqItems: {
         create: parsedItems
       }

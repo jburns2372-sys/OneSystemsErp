@@ -106,6 +106,21 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
             }
           }
 
+          let isMasterTemplate = false;
+          for (let i = 0; i < Math.min(40, rows.length); i++) {
+             const row = rows[i] || [];
+             if (row.some((cell: any) => String(cell || '').replace(/\s/g, '').toUpperCase().includes('BIDDETAILEDCOSTBREAKDOWN'))) {
+                isMasterTemplate = true;
+                break;
+             }
+          }
+
+          if (isMasterTemplate) {
+            formData.append('isMasterTemplate', 'true');
+            submitToServer(formData);
+            return;
+          }
+
           // Use the best header row for the dropdown labels, or fallback to Column N
           const headers = (rows[bestHeaderRowIndex] || []).map((h: any, idx: number) => h ? String(h).trim() : `Column ${idx + 1}`);
 
