@@ -817,7 +817,24 @@ export async function runMRFAIValidation(mrId: string) {
   const findings: string[] = [];
   let riskLevel = 'LOW';
 
+  // Optimization: Fetch all duplicate items across other MRs in one query to prevent Vercel timeouts (N+1 query fix)
+  const consolidatedBoqItemIds = mr.items
+    .map(i => i.consolidatedBoqItemId)
+    .filter((id): id is string => id !== null);
+
+  const allExistingMRItems = await prisma.materialRequestItem.findMany({
+    where: {
+      consolidatedBoqItemId: { in: consolidatedBoqItemIds },
+      mr: {
+        projectId: mr.projectId,
+        status: { in: ['DRAFT', 'SUBMITTED', 'FOR_REVIEW', 'APPROVED'] },
+        id: { not: mrId },
+      },
+    },
+  });
+
   for (const item of mr.items) {
+    if (!item.consolidatedBoqItem) continue;
     const boqItem = item.consolidatedBoqItem;
     const boqBalance = boqItem.quantity - boqItem.deliveredQty;
 
@@ -846,16 +863,9 @@ export async function runMRFAIValidation(mrId: string) {
     }
 
     // Check for duplicate requests of same item in other pending MRs
-    const existingMRItems = await prisma.materialRequestItem.findMany({
-      where: {
-        consolidatedBoqItemId: item.consolidatedBoqItemId,
-        mr: {
-          projectId: mr.projectId,
-          status: { in: ['DRAFT', 'SUBMITTED', 'FOR_REVIEW', 'APPROVED'] },
-          id: { not: mrId },
-        },
-      },
-    });
+    const existingMRItems = allExistingMRItems.filter(
+      (i) => i.consolidatedBoqItemId === item.consolidatedBoqItemId
+    );
 
     if (existingMRItems.length > 0) {
       const totalAlreadyRequested = existingMRItems.reduce((sum, i) => sum + i.quantity, 0);
