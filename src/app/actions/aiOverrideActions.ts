@@ -1,5 +1,6 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { PrismaClient } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/workflow';
@@ -10,18 +11,27 @@ export async function submitAIOverrideRequest(data: {
   validationLogId: string;
   transactionId: string;
   moduleName: string;
-  overriddenBy: string;
-  overriddenByRole: string;
+  overriddenBy?: string;
+  overriddenByRole?: string;
   overrideReason: string;
 }) {
   try {
+    const cookieStore = await cookies();
+    const sessionId = cookieStore.get('session')?.value;
+    if (!sessionId) throw new Error('Unauthorized');
+    const user = await prisma.user.findUnique({ where: { id: sessionId } });
+    if (!user) throw new Error('User not found');
+
+    const overriddenBy = user.id;
+    const overriddenByRole = user.role || 'USER';
+
     const override = await prisma.aIValidationOverride.create({
       data: {
         validationResultId: data.validationLogId,
         transactionId: data.transactionId,
         moduleName: data.moduleName,
-        overriddenBy: data.overriddenBy,
-        overriddenByRole: data.overriddenByRole,
+        overriddenBy: overriddenBy,
+        overriddenByRole: overriddenByRole,
         overrideReason: data.overrideReason,
       }
     });
@@ -30,8 +40,8 @@ export async function submitAIOverrideRequest(data: {
     // but the schema doesn't have an override status field, so we just link it.
     
     await logAudit(
-      data.overriddenBy,
-      data.overriddenByRole,
+      overriddenBy,
+      overriddenByRole,
       data.moduleName,
       data.transactionId,
       'SUBMIT_AI_OVERRIDE',

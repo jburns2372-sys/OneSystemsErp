@@ -22,7 +22,10 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
     unit: '',
     quantity: '',
     unitCost: '',
-    totalCost: ''
+    totalCost: '',
+    materialCost: '',
+    laborCost: '',
+    equipmentCost: ''
   });
 
   const computedCompletionDate = useMemo(() => {
@@ -73,7 +76,7 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
           const rows = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
 
           // Smart Auto-guess mappings by scanning the first 30 rows
-          const guessMapping = { itemCode: '', description: '', unit: '', quantity: '', unitCost: '', totalCost: '' };
+          const guessMapping = { itemCode: '', description: '', unit: '', quantity: '', unitCost: '', totalCost: '', materialCost: '', laborCost: '', equipmentCost: '' };
           let dataStartIndex = 1;
           let bestHeaderRowIndex = 0;
 
@@ -89,8 +92,11 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
                 else if (cLower.includes('desc') && !guessMapping.description) { guessMapping.description = colIdx.toString(); foundHeaderInThisRow = true; }
                 else if (cLower === 'unit' && !guessMapping.unit) { guessMapping.unit = colIdx.toString(); foundHeaderInThisRow = true; }
                 else if ((cLower === 'qty' || cLower === 'quantity') && !guessMapping.quantity) { guessMapping.quantity = colIdx.toString(); foundHeaderInThisRow = true; }
-                else if (cLower.includes('unit cost') && !guessMapping.unitCost) { guessMapping.unitCost = colIdx.toString(); foundHeaderInThisRow = true; }
-                else if ((cLower.includes('total cost') || cLower.includes('amount')) && !guessMapping.totalCost) { guessMapping.totalCost = colIdx.toString(); foundHeaderInThisRow = true; }
+                else if ((cLower === 'unit cost' || cLower.includes('unit cost')) && !cLower.includes('direct') && !guessMapping.unitCost) { guessMapping.unitCost = colIdx.toString(); foundHeaderInThisRow = true; }
+                else if ((cLower.includes('total cost') || cLower === 'amount') && !guessMapping.totalCost) { guessMapping.totalCost = colIdx.toString(); foundHeaderInThisRow = true; }
+                else if (cLower === 'material' && !guessMapping.materialCost) { guessMapping.materialCost = colIdx.toString(); foundHeaderInThisRow = true; }
+                else if (cLower === 'labor' && !guessMapping.laborCost) { guessMapping.laborCost = colIdx.toString(); foundHeaderInThisRow = true; }
+                else if (cLower === 'equipment' && !guessMapping.equipmentCost) { guessMapping.equipmentCost = colIdx.toString(); foundHeaderInThisRow = true; }
               }
             });
 
@@ -150,6 +156,9 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
       const quantity = mappings.quantity !== '' ? parseNumber(row[parseInt(mappings.quantity)]) : 0;
       const unitCost = mappings.unitCost !== '' ? parseNumber(row[parseInt(mappings.unitCost)]) : 0;
       let totalCost = mappings.totalCost !== '' ? parseNumber(row[parseInt(mappings.totalCost)]) : 0;
+      const materialCost = mappings.materialCost !== '' ? parseNumber(row[parseInt(mappings.materialCost)]) : 0;
+      const laborCost = mappings.laborCost !== '' ? parseNumber(row[parseInt(mappings.laborCost)]) : 0;
+      const equipmentCost = mappings.equipmentCost !== '' ? parseNumber(row[parseInt(mappings.equipmentCost)]) : 0;
 
       if (totalCost === 0 && quantity > 0 && unitCost > 0) totalCost = quantity * unitCost;
 
@@ -180,15 +189,21 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
         }
       }
 
+      // Compute direct cost as sum of material + labor + equipment
+      const directCostTotal = materialCost + laborCost + equipmentCost;
+
       return {
         itemCode,
         description,
         unit: mappings.unit !== '' ? String(row[parseInt(mappings.unit)] || '') : '',
         quantity,
-        directCost: 0,
+        directCost: directCostTotal,
         indirectCost: 0,
         combinedUnitCost: unitCost,
         totalCost,
+        materialUnitCost: materialCost,
+        laborUnitCost: laborCost,
+        equipmentUnitCost: equipmentCost,
         status: 'PENDING',
         processingType: 'MATERIAL_EQUIPMENT'
       };
@@ -246,6 +261,34 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
                   </select>
                 </div>
               ))}
+            </div>
+
+            {/* Direct Unit Cost Breakdown */}
+            <div style={{ marginBottom: '20px', padding: '12px', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px', background: 'rgba(16,185,129,0.05)' }}>
+              <p style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '10px' }}>
+                📊 Direct Unit Cost Breakdown (Optional — for Program of Works template)
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                {[
+                  { label: 'Material Cost', key: 'materialCost' },
+                  { label: 'Labor Cost', key: 'laborCost' },
+                  { label: 'Equipment Cost', key: 'equipmentCost' }
+                ].map(field => (
+                  <div key={field.key}>
+                    <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-primary)', fontSize: '0.85rem' }}>{field.label}</label>
+                    <select 
+                      value={(mappings as any)[field.key]} 
+                      onChange={e => setMappings({ ...mappings, [field.key]: e.target.value })}
+                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
+                    >
+                      <option value="">-- Ignore / Not Present --</option>
+                      {mappingData.headers.map((h, i) => (
+                        <option key={i} value={String(i)}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
             </div>
             
             <div className="modal-actions" style={{ justifyContent: 'space-between' }}>

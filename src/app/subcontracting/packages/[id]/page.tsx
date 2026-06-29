@@ -17,7 +17,7 @@ export default async function ViewSubcontractPackagePage({ params }: { params: P
   // Check auth and role for unlocking packages
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
-  let canUnlock = false;
+  let canDelete = false;
   if (sessionId) {
     const user = await prisma.user.findUnique({
       where: { id: sessionId },
@@ -26,14 +26,14 @@ export default async function ViewSubcontractPackagePage({ params }: { params: P
     const hasCompletedPayments = pkg.billings?.some((b: any) => ['APPROVED_FOR_PAYMENT', 'PAID'].includes(b.status)) || false;
     
     if (hasCompletedPayments) {
-      // Only Project Director or System Admin can unlock
-      canUnlock = user?.email === 'pd@gmail.com' ||
+      // Only Project Director or System Admin can delete
+      canDelete = user?.email === 'pd@gmail.com' ||
         user?.role === 'PROJECT_DIRECTOR' ||
         user?.role === 'SUPER_ADMIN' ||
         user?.userRoles?.some(ur => ['SUPER_ADMIN', 'PROJECT_DIRECTOR'].includes(ur.role.roleCode)) || false;
     } else {
-      // Project Manager can also unlock
-      canUnlock = user?.email === 'pd@gmail.com' ||
+      // Project Manager can also delete
+      canDelete = user?.email === 'pd@gmail.com' ||
         user?.role === 'PROJECT_DIRECTOR' ||
         user?.role === 'PROJECT_MANAGER' ||
         user?.role === 'SUPER_ADMIN' ||
@@ -92,7 +92,7 @@ export default async function ViewSubcontractPackagePage({ params }: { params: P
         </div>
       </div>
 
-      <PackageWorkflowControls packageId={id} currentStatus={pkg.status} isLocked={(pkg as any).isLocked} canUnlock={canUnlock} />
+      <PackageWorkflowControls packageId={id} currentStatus={pkg.status} isLocked={(pkg as any).isLocked} canDelete={canDelete} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
         <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>

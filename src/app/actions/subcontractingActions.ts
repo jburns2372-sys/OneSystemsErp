@@ -62,19 +62,28 @@ export async function deleteSubcontractor(id: string) {
 // --- SUBCONTRACT PACKAGE CRUD ---
 
 export async function getSubcontractPackages(projectId?: string) {
-  const pkgFilter: any = {};
-  if (projectId) pkgFilter.projectId = projectId;
-
-  return await prisma.subcontractPackage.findMany({
-    where: pkgFilter,
-    include: {
-      subcontractor: true,
-      project: true,
-      accomplishments: true,
-      billings: true
-    },
-    orderBy: { createdAt: 'desc' }
-  });
+  try {
+    const pkgFilter: any = {};
+    if (projectId) pkgFilter.projectId = projectId;
+  
+    const packages = await prisma.subcontractPackage.findMany({
+      where: pkgFilter,
+      include: {
+        subcontractor: {
+          include: { subcontractorBOQItems: true }
+        },
+        project: true,
+        accomplishments: true,
+        billings: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    return JSON.parse(JSON.stringify(packages));
+  } catch (error: any) {
+    console.error("Prisma Error in getSubcontractPackages:", error);
+    throw new Error('Failed to fetch subcontract packages: ' + error.message);
+  }
 }
 
 export async function createSubcontractPackage(data: any) {

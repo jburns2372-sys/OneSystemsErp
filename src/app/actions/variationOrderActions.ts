@@ -54,10 +54,13 @@ export async function getAllClientVariationOrders() {
 
 export async function getAllSubcontractorVariationOrders(projectId?: string) {
   try {
+    const cookieStore = await cookies();
+    const activeProjectId = cookieStore.get('activeProjectId')?.value;
+
     const vos = await prisma.variationOrder.findMany({
       where: {
         variationCategory: 'SUBCONTRACTOR',
-        ...(projectId ? { projectId } : {})
+        ...((projectId || activeProjectId) ? { projectId: projectId || activeProjectId } : {})
       },
       include: {
         items: true,
@@ -120,6 +123,18 @@ export async function getProjectAwardedBOQItems(projectId: string) {
 
 export async function createVariationOrder(data: any) {
   try {
+    if (data.variationCategory === 'SUBCONTRACTOR' && data.subcontractPackageId) {
+       const existingActiveVO = await prisma.variationOrder.findFirst({
+         where: {
+           subcontractPackageId: data.subcontractPackageId,
+           currentStatus: { notIn: ['APPROVED', 'REJECTED'] }
+         }
+       });
+       if (existingActiveVO) {
+         throw new Error(`Package already has an active variation order (${existingActiveVO.voNumber}) that is currently ${existingActiveVO.currentStatus}. Please finalize it before creating a new one.`);
+       }
+    }
+
     // Generate Sequence Number
     const count = await prisma.variationOrder.count({
       where: { projectId: data.projectId, createdAt: { gte: new Date(new Date().getFullYear(), 0, 1) } }
@@ -310,8 +325,11 @@ export async function approveVariationOrderStage(voId: string, stage: string, ac
        const vo = await prisma.variationOrder.findUnique({ where: { id: voId } });
        if (vo?.variationCategory === 'SUBCONTRACTOR') {
          await applyVariationOrderToSubcontractPackage(voId);
+         await applyVariationOrderToConsolidatedBOQ(voId);
        } else {
          await applyVariationOrderToConsolidatedBOQ(voId);
+         await applyVariationOrderToAwardedBOQ(voId);
+         await applyVariationOrderToSchedule(voId);
        }
     }
     
@@ -630,3 +648,173 @@ export async function updateVariationOrderDetails(id: string, data: any) {
     throw new Error('Failed to update Variation Order: ' + error.message);
   }
 }
+
+/**
+ * When a non-subcontractor VO is fully approved, apply its impacts to the Project Schedule:
+ * - Creates a "Client Variation Orders" WBS node if missing.
+ * - ADDITIONAL_WORK items: create a new ScheduleActivity under this WBS.
+ * - BOQ_ADJUSTMENT items: find matching ScheduleActivity and update plannedQuantity.
+ */
+async function applyVariationOrderToSchedule(voId: string) {
+  const vo = await prisma.variationOrder.findUnique({
+    where: { id: voId },
+    include: { items: true }
+  });
+  if (!vo) return;
+
+  const schedule = await prisma.projectSchedule.findUnique({
+    where: { projectId: vo.projectId }
+  });
+  if (!schedule) return;
+
+  // Find or create "Variation Orders" WBS Phase
+  let voWbs = await prisma.scheduleWBS.findFirst({
+    where: { scheduleId: schedule.id, name: 'Client Variation Orders' }
+  });
+
+  if (!voWbs) {
+    // Try to find Construction Phase to nest under
+    const constPhase = await prisma.scheduleWBS.findFirst({
+      where: { scheduleId: schedule.id, code: 'CONST' }
+    });
+
+    const wbsCount = await prisma.scheduleWBS.count({ where: { scheduleId: schedule.id, parentId: constPhase?.id || null } });
+    voWbs = await prisma.scheduleWBS.create({
+      data: {
+        scheduleId: schedule.id,
+        parentId: constPhase?.id || null,
+        code: `VO-PHASE`,
+        name: 'Client Variation Orders',
+        level: constPhase ? constPhase.level + 1 : 1,
+        orderIndex: wbsCount + 1
+      }
+    });
+  }
+
+  for (const item of vo.items) {
+    if (item.itemClassification === 'ADDITIONAL_WORK' || item.itemClassification === 'NEW_ITEM') {
+        const newActivity = await prisma.scheduleActivity.create({
+          data: {
+            scheduleId: schedule.id,
+            wbsId: voWbs.id,
+            activityCode: `VO-${item.voItemNumber}`,
+            name: item.description.substring(0, 100),
+            description: item.description,
+            plannedQuantity: item.revisedQuantity,
+            unit: item.unit,
+            status: 'NOT_STARTED'
+          }
+        });
+
+        // Try to link it to the newly created AwardedBOQItem
+        const newAwardedBoqItem = await prisma.awardedBOQItem.findFirst({
+          where: {
+            itemCode: `VO-${item.voItemNumber}`,
+            // We don't have projectId directly on schedule, but vo.projectId is available
+          }
+        });
+        
+        if (newAwardedBoqItem) {
+          await prisma.scheduleBOQMapping.create({
+            data: {
+              activityId: newActivity.id,
+              awardedBoqItemId: newAwardedBoqItem.id,
+              mappedQuantity: item.revisedQuantity,
+              mappedWeight: 0
+            }
+          });
+        }
+      } else {
+        // For Additive / Deductive, find an existing matching activity by name/description
+        const matchingActivity = await prisma.scheduleActivity.findFirst({
+          where: {
+            scheduleId: schedule.id,
+            name: { contains: item.description.trim().substring(0, 30) }
+          }
+        });
+
+        if (matchingActivity) {
+          const addQty = item.additionalAmount > 0 ? (item.revisedQuantity - item.originalQuantity) : 0;
+          const dedQty = item.deductiveAmount > 0 ? (item.originalQuantity - item.revisedQuantity) : 0;
+          const newPlannedQty = Math.max(0, matchingActivity.plannedQuantity + addQty - dedQty);
+
+          await prisma.scheduleActivity.update({
+            where: { id: matchingActivity.id },
+            data: {
+              plannedQuantity: newPlannedQty
+            }
+          });
+        }
+      }
+    }
+  }
+
+/**
+ * When a non-subcontractor VO is fully approved, apply its impacts to the Awarded BOQ (Client Contract):
+ * - ADDITIONAL_WORK items: create a new AwardedBOQItem appended to the contract.
+ * - BOQ_ADJUSTMENT items: find matching AwardedBOQItem and update revisedContractQuantity / revisedContractAmount.
+ */
+async function applyVariationOrderToAwardedBOQ(voId: string) {
+  const vo = await prisma.variationOrder.findUnique({
+    where: { id: voId },
+    include: { items: true, project: true }
+  });
+  if (!vo) return;
+
+  for (const item of vo.items) {
+    if (item.itemClassification === 'ADDITIONAL_WORK' || item.itemClassification === 'NEW_ITEM') {
+      // Create new Awarded BOQ Item
+      await prisma.awardedBOQItem.create({
+        data: {
+          itemCode: `VO-${item.voItemNumber}`,
+          category: item.workCategory || 'Variation Order',
+          description: `${item.description} (VO)`,
+          unit: item.unit || 'lot',
+          quantity: 0, // Original contract quantity is 0
+          directCost: 0,
+          indirectCost: 0,
+          combinedUnitCost: item.approvedUnitCost,
+          totalCost: 0, // Original total cost is 0
+          revisedContractQuantity: item.revisedQuantity,
+          revisedContractUnitPrice: item.approvedUnitCost,
+          revisedContractAmount: item.additionalAmount,
+          approvedClientVoQuantity: item.revisedQuantity,
+          projectId: vo.projectId
+        }
+      });
+    } else {
+      // BOQ_ADJUSTMENT (Additive/Deductive)
+      const matchingItem = await prisma.awardedBOQItem.findFirst({
+        where: {
+          projectId: vo.projectId,
+          description: { contains: item.description.trim().substring(0, 30) }
+        }
+      });
+
+      if (matchingItem) {
+        const addQty = item.additionalAmount > 0 ? (item.revisedQuantity - item.originalQuantity) : 0;
+        const dedQty = item.deductiveAmount > 0 ? (item.originalQuantity - item.revisedQuantity) : 0;
+        
+        // Calculate the net VO quantity change
+        const netVoQty = addQty - dedQty;
+        const newApprovedVoQty = matchingItem.approvedClientVoQuantity + netVoQty;
+        
+        // Revised quantity is original + all approved VO quantities
+        const revisedQty = matchingItem.quantity + newApprovedVoQty;
+        const revisedAmount = revisedQty * (matchingItem.combinedUnitCost > 0 ? matchingItem.combinedUnitCost : item.approvedUnitCost);
+
+        await prisma.awardedBOQItem.update({
+          where: { id: matchingItem.id },
+          data: {
+            approvedClientVoQuantity: newApprovedVoQty,
+            revisedContractQuantity: revisedQty,
+            revisedContractAmount: revisedAmount,
+            // Only update unit price if it was originally 0
+            revisedContractUnitPrice: matchingItem.combinedUnitCost > 0 ? matchingItem.combinedUnitCost : item.approvedUnitCost
+          }
+        });
+      }
+    }
+  }
+}
+

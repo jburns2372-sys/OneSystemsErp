@@ -1,21 +1,23 @@
 'use client';
 
 import React, { useState } from 'react';
-import { updateSubcontractPackageStatus, unlockSubcontractPackage } from '@/app/actions/subcontractingActions';
+import { useRouter } from 'next/navigation';
+import { updateSubcontractPackageStatus, deleteSubcontractPackage } from '@/app/actions/subcontractingActions';
 
 interface PackageWorkflowControlsProps {
   packageId: string;
   currentStatus: string;
   isLocked: boolean;
-  canUnlock: boolean;
+  canDelete: boolean;
   currentUser?: { role: string };
 }
 
-export default function PackageWorkflowControls({ packageId, currentStatus, isLocked, canUnlock, currentUser }: PackageWorkflowControlsProps) {
+export default function PackageWorkflowControls({ packageId, currentStatus, isLocked, canDelete, currentUser }: PackageWorkflowControlsProps) {
   const [status, setStatus] = useState(currentStatus);
   const [locked, setLocked] = useState(isLocked);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const router = useRouter();
 
   const role = currentUser?.role || '';
   const isSimAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'PROJECT_DIRECTOR';
@@ -35,16 +37,17 @@ export default function PackageWorkflowControls({ packageId, currentStatus, isLo
     setLoading(false);
   };
 
-  const handleUnlock = async () => {
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this locked package? This cannot be undone.')) return;
     setLoading(true);
     setError('');
-    const res = await unlockSubcontractPackage(packageId);
+    const res = await deleteSubcontractPackage(packageId);
     if (res.success) {
-      setLocked(false);
+      router.push('/subcontracting/dashboard');
     } else {
-      setError(res.error || 'Failed to unlock package');
+      setError(res.error || 'Failed to delete package');
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const steps = [
@@ -174,13 +177,13 @@ export default function PackageWorkflowControls({ packageId, currentStatus, isLo
 
         <div style={{ display: 'flex', gap: '12px' }}>
           {locked ? (
-            canUnlock ? (
+            canDelete ? (
               <button
-                onClick={handleUnlock}
+                onClick={handleDelete}
                 disabled={loading}
                 style={{
                   padding: '10px 24px',
-                  backgroundColor: '#ea580c',
+                  backgroundColor: '#ef4444',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
@@ -191,7 +194,7 @@ export default function PackageWorkflowControls({ packageId, currentStatus, isLo
                   transition: 'all 0.2s'
                 }}
               >
-                {loading ? 'Unlocking...' : '🔓 Unlock Subcontract (Authorized)'}
+                {loading ? 'Deleting...' : '🗑️ Delete Package'}
               </button>
             ) : (
               <span style={{
@@ -202,7 +205,7 @@ export default function PackageWorkflowControls({ packageId, currentStatus, isLo
                 borderRadius: '8px',
                 border: '1px solid #334155'
               }}>
-                🔒 Locked: PM / PD authorization required to edit
+                🔒 Locked: PM / PD authorization required to delete
               </span>
             )
           ) : (

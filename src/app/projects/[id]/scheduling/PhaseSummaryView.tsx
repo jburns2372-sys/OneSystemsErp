@@ -71,7 +71,9 @@ export default function PhaseSummaryView({ schedule }: { schedule: any }) {
                 const activityCost = (a.boqMappings || []).reduce((sum: number, mapping: any) => {
                   const item = mapping.awardedBoqItem;
                   if (!item) return sum;
-                  const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (mapping.mappedQuantity / item.quantity) : 0;
+                  const revisedQty = item.revisedContractQuantity || item.quantity || 0;
+                  const totalAmount = item.revisedContractAmount || item.totalCost || 0;
+                  const proportionalCost = revisedQty > 0 ? totalAmount * (mapping.mappedQuantity / revisedQty) : totalAmount;
                   return sum + proportionalCost;
                 }, 0);
                 phaseTotalCost += activityCost;
@@ -123,7 +125,9 @@ export default function PhaseSummaryView({ schedule }: { schedule: any }) {
                     const actCost = (a.boqMappings || []).reduce((sum: number, mapping: any) => {
                       const item = mapping.awardedBoqItem;
                       if (!item) return sum;
-                      return sum + (item.quantity > 0 ? (item.totalCost || 0) * (mapping.mappedQuantity / item.quantity) : 0);
+                      const revisedQty = item.revisedContractQuantity || item.quantity || 0;
+                      const totalAmount = item.revisedContractAmount || item.totalCost || 0;
+                      return sum + (revisedQty > 0 ? totalAmount * (mapping.mappedQuantity / revisedQty) : totalAmount);
                     }, 0);
                     phaseCost += actCost;
                   });

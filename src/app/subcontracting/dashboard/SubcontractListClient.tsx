@@ -60,7 +60,7 @@ export default function SubcontractListClient({ packages }: { packages: any[] })
                     <td style={{ padding: '16px 20px', color: '#374151' }}>{pkg.project?.contractNumber || pkg.project?.name}</td>
                     <td style={{ padding: '16px 20px', color: '#374151' }}>{pkg.subcontractor?.name}</td>
                     <td style={{ padding: '16px 20px', fontWeight: '600', color: '#059669' }}>
-                      ₱{totalBilled.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ₱{(pkg.contractAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ padding: '16px 20px' }}>
                       <span style={{ 

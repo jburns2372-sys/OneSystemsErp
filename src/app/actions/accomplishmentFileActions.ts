@@ -4,6 +4,26 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { put } from '@vercel/blob';
 import ExcelJS from "exceljs";
+import fs from 'fs';
+import path from 'path';
+
+async function saveFileLocallyOrBlob(directory: string, fileName: string, buffer: Buffer, contentType?: string): Promise<string> {
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blob = await put(`${directory}/${fileName}`, buffer, {
+      access: 'public',
+      contentType: contentType || "application/octet-stream",
+    });
+    return blob.url;
+  } else {
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', directory);
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(uploadDir, fileName), buffer);
+    return `/uploads/${directory}/${fileName}`;
+  }
+}
+
 
 export async function uploadAccomplishmentFileAction(projectId: string, formData: FormData) {
   try {
@@ -20,11 +40,7 @@ export async function uploadAccomplishmentFileAction(projectId: string, formData
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
     const newFileName = `${uniqueId}-${sanitizedFileName}`;
 
-    const blob = await put(`accomplishments/${newFileName}`, buffer, {
-      access: 'public',
-      contentType: file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const publicPath = blob.url;
+    const publicPath = await saveFileLocallyOrBlob("accomplishments", newFileName, buffer, file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
     // Optional: get currently logged in user ID if you have an auth system
     // For now, leaving it null or you can pass it from the client

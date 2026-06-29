@@ -16,7 +16,13 @@ export default async function PrintableDeliveryRecord({ params }: { params: Prom
     }
   });
 
-  if (!delivery || delivery.status !== 'APPROVED') notFound();
+  if (!delivery) {
+    return <div>Delivery not found. ID requested: {resolvedParams.id}</div>;
+  }
+  
+  if (delivery.status !== 'APPROVED') {
+    return <div>Delivery is not approved. Current status: {delivery.status}</div>;
+  }
 
   return (
     <div style={{

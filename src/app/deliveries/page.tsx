@@ -74,8 +74,13 @@ export default async function DeliveriesPage() {
                 <td>{delivery.po?.poNumber || 'N/A'}</td>
                 <td>{new Date(delivery.date).toLocaleDateString()}</td>
                 <td>
-                  <span className={`${styles.badge} ${delivery.status === 'APPROVED' ? styles.badgeActive : styles.badgeInactive}`}>
-                    {delivery.status.replace(/_/g, ' ')}
+                  <span className={`${styles.badge} ${delivery.status === 'APPROVED' && delivery.hasProof !== false && !delivery.isMismatch ? styles.badgeActive : styles.badgeInactive}`}
+                        style={delivery.status === 'APPROVED' && (delivery.hasProof === false || delivery.isMismatch) ? { background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: '1px solid #eab308' } : {}}>
+                    {delivery.status === 'APPROVED' ? (
+                      delivery.hasProof === false && delivery.isMismatch ? 'APPROVED (LACKING DOCS & MATERIALS)' :
+                      delivery.hasProof === false ? 'APPROVED (LACKING DOCUMENTS)' :
+                      delivery.isMismatch ? 'APPROVED (LACKING MATERIALS)' : 'APPROVED'
+                    ) : delivery.status.replace(/_/g, ' ')}
                   </span>
                 </td>
                 <td>

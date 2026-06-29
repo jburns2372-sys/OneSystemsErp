@@ -380,11 +380,7 @@ export default function VariationOrderDetailPage() {
         </div>
       )}
 
-      {/* AI VALIDATION */}
-      <div style={{ marginBottom: '24px', padding: '20px', background: 'var(--glass-bg)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: 'var(--text-primary)' }}>AI Validation Results</h3>
-        <AIValidationPanel validations={vo.aiValidations} />
-      </div>
+
 
       {/* VO BOQ TABLE */}
       <div style={{ marginBottom: '24px', padding: '20px', background: 'var(--glass-bg)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
@@ -465,6 +461,12 @@ export default function VariationOrderDetailPage() {
             )}
           </table>
         </div>
+      </div>
+
+      {/* AI VALIDATION */}
+      <div style={{ marginBottom: '24px', padding: '20px', background: 'var(--glass-bg)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: 'var(--text-primary)' }}>AI Validation Results</h3>
+        <AIValidationPanel validations={vo.aiValidations} />
       </div>
 
       <AIVariationAssistant voId={voId} />

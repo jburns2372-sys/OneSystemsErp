@@ -118,6 +118,10 @@ model Project {
   consolidatedBOQLocked           Boolean                          @default(false)
   procurementBenchmarkLocked      Boolean                          @default(false)
   contractNumber                  String?
+  letterheadLine1                 String?
+  letterheadLine2                 String?
+  letterheadLine3                 String?
+  letterheadLogo                  String?                          @db.Text
   client                          String?
   contractor                      String?
   gpsLatitude                     Float?
@@ -178,6 +182,7 @@ model Project {
   valueEngineeringRecords         ValueEngineeringRecord[]         @relation("ProjectVERecords")
   projectSchedule                 ProjectSchedule?
   userAssignments                 ProjectUserAssignment[]
+  boqTemplateUploads              BOQTemplateUpload[]
 }
 
 model ProjectUserAssignment {
@@ -201,6 +206,31 @@ model ProjectUserAssignment {
   @@index([userId])
   @@index([projectId])
   @@index([assignmentStatus])
+}
+
+model BOQTemplateUpload {
+  id                   String           @id @default(cuid())
+  projectId            String
+  project              Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedByUserId     String?
+  uploadedByName       String?
+  fileName             String
+  templateVersion      String?
+  status               String           @default("DRAFT_UPLOADED")
+  grandTotal           Float            @default(0)
+  totalPercentage      Float            @default(0)
+  ocmRate              Float            @default(8)
+  cpRate               Float            @default(8)
+  vatRate              Float            @default(5)
+  validRows            Int              @default(0)
+  errorRows            Int              @default(0)
+  warningRows          Int              @default(0)
+  fileUrl              String?
+  validationReport     String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  awardedBoqItems      AwardedBOQItem[]
 }
 
 model AwardedBOQItem {
@@ -247,6 +277,27 @@ model AwardedBOQItem {
   updatedAt                      DateTime                      @updatedAt
   aiValidationRuns               AIValidationRun[]
   accomplishmentItems            AccomplishmentItem[]
+  
+  // New granular BOQ fields
+  templateVersion                String?
+  sourceFileName                 String?
+  sourceSheetName                String?
+  sourceRowNumber                Int?
+  materialUnitCost               Float                         @default(0)
+  laborUnitCost                  Float                         @default(0)
+  equipmentUnitCost              Float                         @default(0)
+  ocmAmount                      Float                         @default(0)
+  cpAmount                       Float                         @default(0)
+  vatAmount                      Float                         @default(0)
+  percentageOfTotal              Float                         @default(0)
+  ocmRate                        Float                         @default(8)
+  cpRate                         Float                         @default(8)
+  vatRate                        Float                         @default(5)
+  approvalStatus                 String                        @default("APPROVED")
+  
+  boqTemplateUploadId            String?
+  boqTemplateUpload              BOQTemplateUpload?            @relation(fields: [boqTemplateUploadId], references: [id])
+
   project                        Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   lotBreakdowns                  BOQLotBreakdown[]
   mappings                       BOQMapping[]

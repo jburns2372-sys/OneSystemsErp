@@ -13,6 +13,7 @@ export async function encodeDelivery(data: {
   items: { consolidatedBoqItemId: string; quantity: number; drQuantity: number; remarks: string }[];
   drDocumentText?: string;
   proofFileUrl?: string;
+  hasProof?: boolean;
 }) {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
@@ -43,27 +44,30 @@ export async function encodeDelivery(data: {
   }
 
   // === AI VALIDATION INTERCEPTOR ===
-  const validation = await validateTransactionWithAI(
-    'Delivery Receiving',
-    {
-      action: 'Encode Delivery Receipt',
-      poId: data.poId,
-      receiptNumber: data.receiptNumber,
-      isMismatch,
-      mismatchNotes,
-      items: data.items,
-      attachedDocumentOCR: data.drDocumentText || 'No document attached.'
-    },
-    user.id,
-    user.role || 'STOCKMAN'
-  );
+  console.log("encodeDelivery called with hasProof:", data.hasProof);
+  if (data.hasProof !== false) {
+    const validation = await validateTransactionWithAI(
+      'Delivery Receiving',
+      {
+        action: 'Encode Delivery Receipt',
+        poId: data.poId,
+        receiptNumber: data.receiptNumber,
+        isMismatch,
+        mismatchNotes,
+        items: data.items,
+        attachedDocumentOCR: data.drDocumentText || 'No document attached.'
+      },
+      user.id,
+      user.role || 'STOCKMAN'
+    );
 
-  if (validation.validationStatus === 'BLOCKING ISSUE') {
-    return { 
-      success: false, 
-      error: `AI Blocked Transaction: ${validation.findings}`,
-      validationLogId: validation.validationLogId 
-    };
+    if (validation.validationStatus === 'BLOCKING ISSUE') {
+      return { 
+        success: false, 
+        error: `AI Blocked Transaction: ${validation.findings}`,
+        validationLogId: validation.validationLogId 
+      };
+    }
   }
   // =================================
 
@@ -74,6 +78,7 @@ export async function encodeDelivery(data: {
       status: 'FOR_ACCOUNTANT_APPROVAL',
       receivedById: user.id,
       proofFileUrl: data.proofFileUrl,
+      hasProof: data.hasProof !== false,
       isMismatch,
       mismatchNotes,
       items: {
@@ -240,6 +245,7 @@ export async function encodeDeliveryWithFile(formData: FormData) {
 
     let drDocumentText = noFileReason ? `No document uploaded. Reason provided by user: ${noFileReason}` : 'No document uploaded.';
     let proofFileUrl: string | undefined;
+    let hasProof = true;
 
     if (file && file.size > 0) {
       // 1. Save file locally
@@ -295,6 +301,8 @@ export async function encodeDeliveryWithFile(formData: FormData) {
       }
 
       drDocumentText = `[AI EXTRACTED OCR & VISION MATCH PASSED]: ${visionResult.findings}`;
+    } else if (noFileReason) {
+      hasProof = false;
     }
 
     return await encodeDelivery({
@@ -302,7 +310,8 @@ export async function encodeDeliveryWithFile(formData: FormData) {
       receiptNumber,
       items,
       drDocumentText,
-      proofFileUrl
+      proofFileUrl,
+      hasProof
     });
   } catch (error: any) {
     console.error('Error encoding delivery with file:', error);

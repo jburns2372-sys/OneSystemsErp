@@ -73,7 +73,7 @@ export default function CreateVariationOrderPage() {
   }, [formData.projectId, formData.variationCategory]);
 
   useEffect(() => {
-    if (formData.projectId && formData.variationCategory !== 'SUBCONTRACTOR') {
+    if (formData.projectId) {
       setFetchingBoq(true);
       getProjectAwardedBOQItems(formData.projectId)
         .then(res => setBoqItems(res))
@@ -83,7 +83,7 @@ export default function CreateVariationOrderPage() {
   }, [formData.projectId, formData.variationCategory]);
 
   const handleAdjustmentChange = (itemId: string, value: string) => {
-    const numValue = parseFloat(value);
+    const numValue = parseInt(value, 10);
     setAdjustments(prev => ({
       ...prev,
       [itemId]: isNaN(numValue) ? 0 : numValue
@@ -198,7 +198,11 @@ export default function CreateVariationOrderPage() {
       toast.success('Success: Variation Request has been created and saved!');
       setTimeout(() => {
         router.refresh();
-        router.push(`/variation-orders`);
+        if (formData.variationCategory === 'SUBCONTRACTOR') {
+          router.push('/subcontracting/variations');
+        } else {
+          router.push(`/variation-orders`);
+        }
       }, 800);
     } catch (error: any) {
       toast.error('Submission failed: ' + error.message);
@@ -207,10 +211,30 @@ export default function CreateVariationOrderPage() {
     }
   };
 
-  const filteredBoq = boqItems.filter(i => 
+  let filteredBoq = boqItems.filter(i => 
     i.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (i.itemCode && i.itemCode.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  if (formData.variationCategory === 'SUBCONTRACTOR' && formData.subcontractPackageId) {
+    const selectedPkg = packages.find(p => p.id === formData.subcontractPackageId);
+    if (selectedPkg) {
+      const allowedBoqIds = new Set<string>();
+      if (selectedPkg.awardedBoqItemId) allowedBoqIds.add(selectedPkg.awardedBoqItemId);
+      if (selectedPkg.consolidatedBoqItemId) allowedBoqIds.add(selectedPkg.consolidatedBoqItemId);
+      if (selectedPkg.masterBoqItemId) allowedBoqIds.add(selectedPkg.masterBoqItemId);
+      
+      if (selectedPkg.subcontractor?.subcontractorBOQItems) {
+        selectedPkg.subcontractor.subcontractorBOQItems.forEach((boqItem: any) => {
+           if (boqItem.awardedBoqItemId) allowedBoqIds.add(boqItem.awardedBoqItemId);
+        });
+      }
+
+      filteredBoq = filteredBoq.filter(i => allowedBoqIds.has(i.id));
+    } else {
+      filteredBoq = []; // Hide if no package is fully matched
+    }
+  }
 
   return (
     <form onSubmit={handleSubmit} style={{ height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', padding: '16px 32px', maxWidth: '100%', margin: '0 auto', background: 'var(--bg-primary)' }}>
@@ -402,7 +426,7 @@ export default function CreateVariationOrderPage() {
                           <td style={{ padding: '8px 16px' }}>
                             <input 
                               type="number" 
-                              step="0.01"
+                              step="1"
                               placeholder="0"
                               value={adjustments[item.id] === 0 ? '' : adjustments[item.id] || ''}
                               onChange={e => handleAdjustmentChange(item.id, e.target.value)}

@@ -7,6 +7,7 @@ import { cookies } from 'next/headers';
 import { getUserPermissions } from '@/lib/permissions';
 import MainContentWrapper from '@/components/layout/MainContentWrapper';
 import Topbar from '@/components/layout/Topbar';
+import { Toaster } from 'sonner';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -74,6 +75,7 @@ export default async function RootLayout({
           <DatePickerEnforcer />
           <MainContentWrapper permissions={permissions} user={user} topbar={userId ? <Topbar /> : null}>
             {children}
+            <Toaster position="top-right" richColors />
           </MainContentWrapper>
         </OfflineSyncProvider>
       </body>

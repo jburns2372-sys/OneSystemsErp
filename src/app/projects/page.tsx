@@ -51,9 +51,28 @@ export default async function ProjectsPage() {
           <h1>Projects</h1>
           <p>Manage and monitor all active construction projects.</p>
         </div>
-        <PermissionGuard permissions={permissions} moduleName="PROJECT_MANAGEMENT" action="canCreate">
-          <NewProjectButton users={users} />
-        </PermissionGuard>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <Link
+            href="/boq-template"
+            style={{ 
+              padding: '10px 18px', 
+              borderRadius: '8px', 
+              background: 'rgba(0, 240, 255, 0.1)', 
+              color: 'var(--accent-color)', 
+              textDecoration: 'none', 
+              fontWeight: 'bold',
+              fontSize: '0.9rem', 
+              border: '1px solid rgba(0, 240, 255, 0.3)',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            📄 BOQ Template Center
+          </Link>
+          <PermissionGuard permissions={permissions} moduleName="PROJECT_MANAGEMENT" action="canCreate">
+            <NewProjectButton users={users} />
+          </PermissionGuard>
+        </div>
       </header>
 
       <div className={styles.tableContainer}>

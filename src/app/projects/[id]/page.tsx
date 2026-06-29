@@ -26,11 +26,13 @@ import ProjectBillingTab from './ProjectBillingTab';
 import ProjectReportsTab from './ProjectReportsTab';
 import ProjectAuditTrailTab from './ProjectAuditTrailTab';
 import ProjectAIAssistantTab from './ProjectAIAssistantTab';
+import ProjectProgramOfWorksTab from './ProjectProgramOfWorksTab';
 
 const PROJECT_TABS = [
   { id: 'summary', label: 'Project Summary', group: 'Overview' },
   { id: 'team-access', label: 'Team Access', group: 'Overview' },
   { id: 'awarded-boq', label: 'Contract Value & BOQ', group: 'Planning' },
+  { id: 'program-of-works', label: 'Program of Works', group: 'Planning' },
   { id: 'benchmark', label: 'Procurement Benchmark', group: 'Planning' },
   { id: 'consolidation', label: 'Master Materials List', group: 'Planning' },
   { id: 'profitability', label: 'Profitability Center (Cash Flow & Variance)', group: 'Financials' },
@@ -109,14 +111,20 @@ export default async function ProjectDetailsPage({
   if (hasBOQ) {
     let customHtml = '<table><thead><tr style="background: #e0e0e0; font-weight: bold;"><th>Item No.</th><th>Description</th><th>Unit</th><th>Quantity</th><th>Unit Cost</th><th>Total Cost</th></tr></thead><tbody>';
     for (const item of project.awardedBoqItems) {
-      const displayUnitCost = item.quantity > 0 ? item.totalCost / item.quantity : 0;
-      customHtml += `<tr>
-        <td style="${!item.quantity && !item.totalCost ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${item.itemCode || ''}</td>
-        <td style="${!item.quantity && !item.totalCost ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${item.description || ''}</td>
-        <td style="${!item.quantity && !item.totalCost ? 'background-color: rgba(0,0,0,0.05);' : ''}">${item.unit || ''}</td>
-        <td style="${!item.quantity && !item.totalCost ? 'background-color: rgba(0,0,0,0.05);' : ''}">${item.quantity > 0 ? item.quantity.toLocaleString() : ''}</td>
-        <td style="${!item.quantity && !item.totalCost ? 'background-color: rgba(0,0,0,0.05);' : ''}">${displayUnitCost > 0 ? displayUnitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
-        <td style="${!item.quantity && !item.totalCost ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${item.totalCost > 0 ? item.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}</td>
+      const displayQty = item.revisedContractQuantity || item.quantity || 0;
+      const displayTotalCost = item.revisedContractAmount || item.totalCost || 0;
+      const displayUnitCost = displayQty > 0 ? displayTotalCost / displayQty : 0;
+      
+      const isHeader = !item.quantity && !item.totalCost && !item.revisedContractAmount;
+      const isVariation = item.description.includes('(VO)');
+      
+      customHtml += `<tr style="${isVariation ? 'background-color: rgba(16, 185, 129, 0.05); border-left: 3px solid #10b981;' : ''}">
+        <td style="${isHeader ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${item.itemCode || ''}</td>
+        <td style="${isHeader ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : (isVariation ? 'color: #10b981; font-weight: 500;' : '')}">${item.description || ''}</td>
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : ''}">${item.unit || ''}</td>
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : ''}">${displayQty > 0 ? displayQty.toLocaleString() : ''}</td>
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : ''}">${displayUnitCost > 0 ? displayUnitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+        <td style="${isHeader ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${displayTotalCost > 0 ? displayTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}</td>
       </tr>`;
     }
     customHtml += '</tbody></table>';
@@ -140,12 +148,12 @@ export default async function ProjectDetailsPage({
           unit: item.unit || 'lot',
           quantity: 0,
           totalCost: 0,
-          unitCost: item.combinedUnitCost || 0
+          unitCost: item.combinedUnitCost || item.revisedContractUnitPrice || 0
         });
       }
       const group = groups.get(key);
-      group.quantity += (item.quantity || 1);
-      group.totalCost += (item.totalCost || 0);
+      group.quantity += (item.revisedContractQuantity || item.quantity || 0);
+      group.totalCost += (item.revisedContractAmount || item.totalCost || 0);
     }
 
     let consHtml = '<table><thead><tr style="background: #0f172a; color: #38bdf8; font-weight: bold;"><th>Item No.</th><th>Description</th><th>Unit</th><th>Consolidated Quantity</th><th>Unit Cost</th><th>Total Cost</th></tr></thead><tbody>';
@@ -342,6 +350,19 @@ export default async function ProjectDetailsPage({
 
       {tab === 'ai-assistant' && (
         <ProjectAIAssistantTab projectId={project.id} />
+      )}
+
+      {tab === 'program-of-works' && (
+        <ProjectProgramOfWorksTab
+          projectId={project.id}
+          projectName={project.name}
+          projectLocation={project.location || ''}
+          letterheadLine1={(project as any).letterheadLine1 || undefined}
+          letterheadLine2={(project as any).letterheadLine2 || undefined}
+          letterheadLine3={(project as any).letterheadLine3 || undefined}
+          letterheadLogo={(project as any).letterheadLogo || undefined}
+          awardedBoqItems={JSON.parse(JSON.stringify(project.awardedBoqItems || []))}
+        />
       )}
 
     </div>

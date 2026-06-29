@@ -322,17 +322,31 @@ export async function createProject(formData: FormData) {
 
   // Upload Awarded BOQ Template to Blob Storage
   if (boqFile.name.endsWith('.xlsx')) {
-    const blob = await put(`templates/${project.id}/awarded-boq-template.xlsx`, buffer, {
-      access: 'public',
-      addRandomSuffix: true,
-    });
+    let blobUrl = '';
+    
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      const blob = await put(`templates/${project.id}/awarded-boq-template.xlsx`, buffer, {
+        access: 'public',
+        addRandomSuffix: true,
+      });
+      blobUrl = blob.url;
+    } else {
+      console.warn("BLOB_READ_WRITE_TOKEN is missing. Falling back to local filesystem for upload.");
+      const fs = require('fs');
+      const path = require('path');
+      const dir = path.join(process.cwd(), 'public', 'uploads', 'templates', project.id);
+      fs.mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, 'awarded-boq-template.xlsx');
+      fs.writeFileSync(filePath, buffer);
+      blobUrl = `/uploads/templates/${project.id}/awarded-boq-template.xlsx`;
+    }
 
     await prisma.document.create({
       data: {
         projectId: project.id,
         title: 'Awarded BOQ Template',
         category: 'AWARDED_BOQ_TEMPLATE',
-        fileUrl: blob.url,
+        fileUrl: blobUrl,
         fileType: boqFile.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         fileSize: buffer.length
       }
@@ -359,68 +373,139 @@ export async function uploadProcurementBenchmark(formData: FormData) {
   const sheet = workbook.Sheets[sheetName];
   const rows = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
 
-  // Extract BOQ Items
-  let headerRowIndex = -1;
+  // Check if it's the BOQ Master Template
+  let isMasterTemplate = false;
+  let anchorRowIndex = -1;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    if (row && Array.isArray(row) && row.some(cell => typeof cell === 'string' && (cell.toLowerCase().includes('item no') || cell.toLowerCase().includes('description')))) {
-      headerRowIndex = i;
-      break;
+    if (row && Array.isArray(row)) {
+      if (row.some(cell => String(cell || '').replace(/\s/g, '').toUpperCase().includes('BIDDETAILEDCOSTBREAKDOWN'))) {
+        isMasterTemplate = true;
+        anchorRowIndex = i;
+        break;
+      }
     }
   }
 
-  if (headerRowIndex !== -1) {
-    const headers = rows[headerRowIndex].map(h => (h || '').toString().toLowerCase().trim());
+  if (isMasterTemplate) {
+    // Parse Master Template format
+    const headerRow = rows[anchorRowIndex + 1] || [];
+    const headers = headerRow.map(h => String(h || '').replace(/\s/g, '').toUpperCase());
     
-    for (let i = headerRowIndex + 1; i < rows.length; i++) {
+    const cItem = headers.findIndex(h => h?.includes("ITEM"));
+    const cDesc = headers.findIndex(h => h?.includes("DESCRIPTION"));
+    const cUnit = headers.findIndex(h => h?.includes("UNIT") && !h?.includes("COST"));
+    const cQty = headers.findIndex(h => h?.includes("QUANTITY"));
+    const cUc = headers.findIndex(h => h?.includes("UNITCOST"));
+    const cAmt = headers.findIndex(h => h?.includes("AMOUNT"));
+
+    let startRow = anchorRowIndex + 2; // Data usually starts a few rows down
+    for (let i = startRow; i < rows.length; i++) {
       const row = rows[i];
-      if (!row || !Array.isArray(row) || row.length === 0) continue;
+      if (!row || !Array.isArray(row)) continue;
       
-      let itemCode = '';
-      let itemDesc = '';
-      let unit = '';
-      let quantity = 0;
-      let unitCost = 0;
-      let totalCost = 0;
-      let category = '';
-      
-      for (let j = 0; j < headers.length; j++) {
-        const h = headers[j];
-        const val = row[j];
-        if (!h || val == null) continue;
-        
-        if (h.includes('item')) itemCode = val;
-        else if (h.includes('desc')) itemDesc = val;
-        else if (h === 'unit cost' || h.includes('price')) unitCost = parseFloat((val || '').toString()) || 0;
-        else if (h === 'total cost' || h === 'amount') totalCost = parseFloat((val || '').toString()) || 0;
-        else if (h.includes('unit') || h.includes('uom')) unit = val;
-        else if (h === 'qty' || h.includes('quantity')) quantity = parseFloat((val || '').toString()) || 0;
-        else if (h.includes('cat')) category = val;
+      const itemNumberRaw = String(row[cItem] || '').trim();
+      let descCell = String(row[cDesc] || '').trim();
+      const unit = String(row[cUnit] || '').trim();
+      const quantity = Number(row[cQty]) || 0;
+      const unitCost = Number(row[cUc]) || 0;
+      const amount = Number(row[cAmt]) || 0;
+
+      if (itemNumberRaw.replace(/\s/g, '').toUpperCase().includes('GRANDTOTAL') || 
+          descCell.replace(/\s/g, '').toUpperCase().includes('GRANDTOTAL')) {
+        break;
       }
       
-      quantity = isNaN(quantity) ? 0 : quantity;
-      unitCost = isNaN(unitCost) ? 0 : unitCost;
-      totalCost = isNaN(totalCost) ? 0 : totalCost;
+      if (!descCell && !itemNumberRaw) continue;
 
-      if (totalCost === 0) totalCost = quantity * unitCost;
-
-      const descUpper = String(itemDesc || '').toUpperCase();
-      if (descUpper.includes('TOTAL PROJECT COST') || descUpper === 'GRAND TOTAL' || descUpper === 'TOTAL') {
-        continue;
+      let itemNumber = itemNumberRaw;
+      if (!descCell && itemNumberRaw) {
+        descCell = itemNumberRaw;
+        const match = itemNumberRaw.match(/^([IVXLCDM]+\.?|\d+\.)\s*(.*)/i);
+        itemNumber = match ? match[1].trim() : "";
       }
 
-      if (itemDesc && (quantity > 0 || totalCost > 0)) {
+      const descUpper = descCell.toUpperCase();
+      if (descUpper.includes('DESCRIPTION') || descUpper.includes('PARTICULARS') || descUpper === 'MATERIAL') continue;
+
+      if (descCell && (quantity > 0 || amount > 0)) {
         parsedItems.push({
           projectId,
-          itemCode: String(itemCode || ''),
-          description: String(itemDesc || ''),
-          category: String(category || ''),
-          unit: String(unit || ''),
+          itemCode: itemNumber,
+          description: descCell,
+          unit: unit || "LOT",
           quantity: quantity,
           unitCost: unitCost,
-          totalCost: totalCost,
+          totalCost: amount,
           status: 'PENDING'
         });
+      }
+    }
+
+  } else {
+    // Original generic flat-file parser
+    let headerRowIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (row && Array.isArray(row) && row.some(cell => typeof cell === 'string' && (cell.toLowerCase().includes('item no') || cell.toLowerCase().includes('description')))) {
+        headerRowIndex = i;
+        break;
+      }
+    }
+
+    if (headerRowIndex !== -1) {
+      const headers = Array.from(rows[headerRowIndex]).map(h => (h || '').toString().toLowerCase().trim());
+      
+      for (let i = headerRowIndex + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || !Array.isArray(row) || row.length === 0) continue;
+        
+        let itemCode = '';
+        let itemDesc = '';
+        let unit = '';
+        let quantity = 0;
+        let unitCost = 0;
+        let totalCost = 0;
+        let category = '';
+        
+        for (let j = 0; j < headers.length; j++) {
+          const h = headers[j];
+          const val = row[j];
+          if (!h || val == null) continue;
+          
+          if (h.includes('item')) itemCode = val;
+          else if (h.includes('desc')) itemDesc = val;
+          else if (h === 'unit cost' || h.includes('price')) unitCost = parseFloat((val || '').toString()) || 0;
+          else if (h === 'total cost' || h === 'amount') totalCost = parseFloat((val || '').toString()) || 0;
+          else if (h.includes('unit') || h.includes('uom')) unit = val;
+          else if (h === 'qty' || h.includes('quantity')) quantity = parseFloat((val || '').toString()) || 0;
+          else if (h.includes('cat')) category = val;
+        }
+        
+        quantity = isNaN(quantity) ? 0 : quantity;
+        unitCost = isNaN(unitCost) ? 0 : unitCost;
+        totalCost = isNaN(totalCost) ? 0 : totalCost;
+
+        if (totalCost === 0) totalCost = quantity * unitCost;
+
+        const descUpper = String(itemDesc || '').toUpperCase();
+        if (descUpper.includes('TOTAL PROJECT COST') || descUpper === 'GRAND TOTAL' || descUpper === 'TOTAL') {
+          continue;
+        }
+
+        if (itemDesc && (quantity > 0 || totalCost > 0)) {
+          parsedItems.push({
+            projectId,
+            itemCode: String(itemCode || ''),
+            description: String(itemDesc || ''),
+            category: String(category || ''),
+            unit: String(unit || ''),
+            quantity: quantity,
+            unitCost: unitCost,
+            totalCost: totalCost,
+            status: 'PENDING'
+          });
+        }
       }
     }
   }
@@ -631,6 +716,25 @@ export async function updateMRStatus(mrId: string, newStatus: string, userId?: s
   revalidatePath('/material-requests');
 }
 
+
+export async function deleteProcurementBenchmark(projectId: string) {
+  // Only allow if not locked
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { procurementBenchmarkLocked: true }
+  });
+
+  if (project?.procurementBenchmarkLocked) {
+    throw new Error('Cannot delete a locked Procurement Benchmark.');
+  }
+
+  await prisma.procurementBenchmarkItem.deleteMany({
+    where: { projectId }
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath('/projects');
+}
 
 export async function lockProjectBOQ(projectId: string) {
   await prisma.project.update({

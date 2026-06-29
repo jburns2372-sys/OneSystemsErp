@@ -113,7 +113,7 @@ export default function LogDeliveryForm({ purchaseOrders }: { purchaseOrders: an
       validationLogId,
       transactionId: 'PENDING_DELIVERY',
       moduleName: 'Delivery Receiving',
-      overriddenBy: 'user-stub', // Use actual session later
+      overriddenBy: '', // The server will automatically use your active session cookie
       overriddenByRole: 'STOCKMAN',
       overrideReason
     });

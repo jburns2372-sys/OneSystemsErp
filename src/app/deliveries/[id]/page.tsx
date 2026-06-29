@@ -44,8 +44,13 @@ export default async function DeliveryDetailsPage({ params }: { params: Promise<
           </Link>
           <h1 style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             Delivery Receipt: {delivery.receiptNumber || 'N/A'}
-            <span className={`${styles.badge} ${delivery.status === 'APPROVED' ? styles.badgeActive : styles.badgeInactive}`} style={{ fontSize: '1rem' }}>
-              {delivery.status.replace(/_/g, ' ')}
+            <span className={`${styles.badge} ${delivery.status === 'APPROVED' && delivery.hasProof !== false && !delivery.isMismatch ? styles.badgeActive : styles.badgeInactive}`} 
+                  style={{ fontSize: '1rem', ...(delivery.status === 'APPROVED' && (delivery.hasProof === false || delivery.isMismatch) ? { background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: '1px solid #eab308' } : {}) }}>
+              {delivery.status === 'APPROVED' ? (
+                delivery.hasProof === false && delivery.isMismatch ? 'APPROVED (LACKING DOCS & MATERIALS)' :
+                delivery.hasProof === false ? 'APPROVED (LACKING DOCUMENTS)' :
+                delivery.isMismatch ? 'APPROVED (LACKING MATERIALS)' : 'APPROVED'
+              ) : delivery.status.replace(/_/g, ' ')}
             </span>
           </h1>
           <p style={{ marginTop: '10px', color: 'var(--text-secondary)' }}>
@@ -88,6 +93,17 @@ export default async function DeliveryDetailsPage({ params }: { params: Promise<
           </h2>
           <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
             <strong>Footnote for Project Accountant:</strong> {delivery.mismatchNotes}
+          </p>
+        </div>
+      )}
+
+      {delivery.hasProof === false && (
+        <div style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid #eab308', borderRadius: '12px', padding: '20px', marginBottom: '30px' }}>
+          <h2 style={{ color: '#eab308', margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            ⚠️ PENDING DOCUMENT UPLOAD
+          </h2>
+          <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+            <strong>Notice to Approver:</strong> This delivery was logged without an uploaded DR document, bypassing AI OCR validation. Please review and optionally require a document upload.
           </p>
         </div>
       )}

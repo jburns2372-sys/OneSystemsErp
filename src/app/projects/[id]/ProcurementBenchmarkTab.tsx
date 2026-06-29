@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { uploadProcurementBenchmark, lockProcurementBenchmark } from '@/app/actions/mutations';
+import { uploadProcurementBenchmark, lockProcurementBenchmark, deleteProcurementBenchmark } from '@/app/actions/mutations';
 
 export default function ProcurementBenchmarkTab({ 
   projectId, 
@@ -46,6 +46,16 @@ export default function ProcurementBenchmarkTab({
         alert(err.message || 'Failed to lock benchmark');
       } finally {
         setIsLocking(false);
+      }
+    }
+  };
+
+  const handleDelete = async () => {
+    if (confirm('Are you sure you want to delete this Procurement Benchmark? This action cannot be undone.')) {
+      try {
+        await deleteProcurementBenchmark(projectId);
+      } catch (err: any) {
+        alert(err.message || 'Failed to delete benchmark');
       }
     }
   };
@@ -98,6 +108,13 @@ export default function ProcurementBenchmarkTab({
         {!isLocked && (
           <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
             <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Please review the uploaded items below.</span>
+            <button 
+              onClick={handleDelete}
+              className="btn-primary"
+              style={{ backgroundColor: '#ef4444', borderColor: '#ef4444', color: '#fff' }}
+            >
+              Delete Benchmark
+            </button>
             <button 
               onClick={handleLock}
               disabled={isLocking}
