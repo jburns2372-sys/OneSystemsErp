@@ -355,14 +355,16 @@ ${JSON.stringify(activityPayload, null, 2)}`;
 
     console.log(`Writing ${wbsData.length} WBS, ${activityData.length} Anchor Acts, ${dependencyData.length} Deps, ${activityUpdates.length} Updates`);
 
-    if (wbsData.length > 0) await prisma.scheduleWBS.createMany({ data: wbsData });
-    if (activityData.length > 0) await prisma.scheduleActivity.createMany({ data: activityData });
-    if (dependencyData.length > 0) await prisma.scheduleDependency.createMany({ data: dependencyData });
-    
-    // Sequential updates to avoid Prisma connection pool exhaustion and Neon connection dropping
-    for (const u of activityUpdates) {
-      await prisma.scheduleActivity.update({ where: { id: u.id }, data: u.data });
-    }
+    await prisma.$transaction(async (tx) => {
+      if (wbsData.length > 0) await tx.scheduleWBS.createMany({ data: wbsData });
+      if (activityData.length > 0) await tx.scheduleActivity.createMany({ data: activityData });
+      if (dependencyData.length > 0) await tx.scheduleDependency.createMany({ data: dependencyData });
+      
+      // Sequential updates to avoid Prisma connection pool exhaustion and Neon connection dropping
+      for (const u of activityUpdates) {
+        await tx.scheduleActivity.update({ where: { id: u.id }, data: u.data });
+      }
+    });
 
     // 4. Run CPM to update Float and Critical Path dynamically
     const updatedSchedule = await prisma.projectSchedule.findUnique({
