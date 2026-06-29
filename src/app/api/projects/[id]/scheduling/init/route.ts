@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
+import crypto from 'crypto';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -197,34 +198,42 @@ ${JSON.stringify(payload, null, 2)}`;
 
           // 1. Create WBS Nodes
           const wbsMap = new Map();
+          const wbsNodesToInsert = [];
           for (let i = 0; i < phases.length; i++) {
             const p = phases[i];
-            const wbs = await prisma.scheduleWBS.create({
-              data: {
-                scheduleId: newSchedule.id,
-                parentId: constructionWbs.id,
-                code: p.code,
-                name: p.name,
-                level: 2,
-                orderIndex: p.orderIndex || i
-              }
+            const wbsId = crypto.randomUUID();
+            wbsNodesToInsert.push({
+              id: wbsId,
+              scheduleId: newSchedule.id,
+              parentId: constructionWbs.id,
+              code: p.code,
+              name: p.name,
+              level: 2,
+              orderIndex: p.orderIndex || i
             });
-            wbsMap.set(p.code, wbs.id);
+            wbsMap.set(p.code, wbsId);
+          }
+
+          if (wbsNodesToInsert.length > 0) {
+            await prisma.scheduleWBS.createMany({ data: wbsNodesToInsert });
           }
 
           // Fallback WBS if mapping fails
           let fallbackWbsId = null;
           if (activities.length > 0 && !wbsMap.size) {
-             const fwbs = await prisma.scheduleWBS.create({
-                data: { scheduleId: newSchedule.id, parentId: constructionWbs.id, code: 'GEN', name: 'General', level: 2, orderIndex: 0 }
+             fallbackWbsId = crypto.randomUUID();
+             await prisma.scheduleWBS.create({
+                data: { id: fallbackWbsId, scheduleId: newSchedule.id, parentId: constructionWbs.id, code: 'GEN', name: 'General', level: 2, orderIndex: 0 }
              });
-             fallbackWbsId = fwbs.id;
           }
 
-          // 2. Create Activities mapped exactly to BOQ Items
+          // 2. Prepare Activities and Mappings
           const activityMap = new Map();
           let startDate = new Date();
           
+          const activitiesToInsert = [];
+          const mappingsToInsert = [];
+
           for (let i = 0; i < activities.length; i++) {
             const act = activities[i];
             
@@ -256,74 +265,89 @@ ${JSON.stringify(payload, null, 2)}`;
             const group = consolidatedItems[groupIndex];
             if (!group) continue;
 
-            const newAct = await prisma.scheduleActivity.create({
-              data: {
-                scheduleId: newSchedule.id,
-                wbsId: wbsId,
-                activityCode: group.itemCode,
-                name: group.description,
-                plannedStartDate: startDate,
-                plannedFinishDate: endDate,
-                plannedDuration: duration,
-                plannedQuantity: group.quantity,
-                unit: group.unit,
-                status: 'NOT_STARTED'
-              }
+            const newActId = crypto.randomUUID();
+            activitiesToInsert.push({
+              id: newActId,
+              scheduleId: newSchedule.id,
+              wbsId: wbsId,
+              activityCode: group.itemCode,
+              name: group.description,
+              plannedStartDate: startDate,
+              plannedFinishDate: endDate,
+              plannedDuration: duration,
+              plannedQuantity: group.quantity,
+              unit: group.unit,
+              status: 'NOT_STARTED'
             });
-            activityMap.set(act.id, newAct.id);
+            activityMap.set(act.id, newActId);
 
             // Directly map the exact raw BOQ items from this group
             for (const item of group.items) {
-              await prisma.scheduleBOQMapping.create({
-                data: {
-                  activityId: newAct.id,
-                  awardedBoqItemId: item.id,
-                  mappedQuantity: item.quantity
-                }
+              mappingsToInsert.push({
+                activityId: newActId,
+                awardedBoqItemId: item.id,
+                mappedQuantity: item.quantity
               });
             }
             
             startDate = new Date(endDate);
           }
 
+          if (activitiesToInsert.length > 0) {
+            await prisma.scheduleActivity.createMany({ data: activitiesToInsert });
+          }
+          if (mappingsToInsert.length > 0) {
+            await prisma.scheduleBOQMapping.createMany({ data: mappingsToInsert });
+          }
+
           // 3. Create Dependencies
+          const depsToInsert = [];
           for (const dep of dependencies) {
             const predId = activityMap.get(dep.predecessorCode);
             const succId = activityMap.get(dep.successorCode);
             if (predId && succId && predId !== succId) {
-              await prisma.scheduleDependency.create({
-                data: {
-                  scheduleId: newSchedule.id,
-                  predecessorId: predId,
-                  successorId: succId,
-                  type: dep.type || 'FS'
-                }
+              depsToInsert.push({
+                scheduleId: newSchedule.id,
+                predecessorId: predId,
+                successorId: succId,
+                type: dep.type || 'FS'
               });
             }
+          }
+          if (depsToInsert.length > 0) {
+            await prisma.scheduleDependency.createMany({ data: depsToInsert });
           }
 
         } else {
           // No AI consolidation, map 1-to-1 under Construction Phase WBS
+          const actsToInsert = [];
+          const mapsToInsert = [];
+
           for (const item of awardedBoqItems) {
-            const activity = await prisma.scheduleActivity.create({
-              data: {
-                scheduleId: newSchedule.id,
-                wbsId: constructionWbs.id,
-                activityCode: item.itemCode,
-                name: item.description || `BOQ Item ${item.itemCode}`,
-                plannedQuantity: item.quantity,
-                unit: item.unit,
-                status: 'NOT_STARTED'
-              }
+            const actId = crypto.randomUUID();
+            actsToInsert.push({
+              id: actId,
+              scheduleId: newSchedule.id,
+              wbsId: constructionWbs.id,
+              activityCode: item.itemCode,
+              name: item.description || `BOQ Item ${item.itemCode}`,
+              plannedQuantity: item.quantity,
+              unit: item.unit,
+              status: 'NOT_STARTED'
             });
 
-            await prisma.scheduleBOQMapping.create({
-              data: {
-                activityId: activity.id,
-                awardedBoqItemId: item.id,
-                mappedQuantity: item.quantity
-              }
+            mapsToInsert.push({
+              activityId: actId,
+              awardedBoqItemId: item.id,
+              mappedQuantity: item.quantity
             });
+          }
+
+          if (actsToInsert.length > 0) {
+            await prisma.scheduleActivity.createMany({ data: actsToInsert });
+          }
+          if (mapsToInsert.length > 0) {
+            await prisma.scheduleBOQMapping.createMany({ data: mapsToInsert });
           }
         }
       }
