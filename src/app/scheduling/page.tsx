@@ -13,7 +13,7 @@ export default async function SchedulingDashboard() {
 
   const projects = await prisma.project.findMany({
     where: { 
-      status: { notIn: ["PLANNING", "COMPLETED", "CLOSED"] },
+      status: { notIn: ["COMPLETED", "CLOSED"] },
       ...(isSuperAdmin ? {} : {
         userAssignments: {
           some: {
