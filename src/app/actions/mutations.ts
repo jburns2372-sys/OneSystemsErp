@@ -874,12 +874,24 @@ export async function runMRFAIValidation(mrId: string) {
   // If it passes (not CRITICAL) and still has a DRAFT number, assign an official MRF Number
   let officialMrNumber = mr.mrNumber;
   if (riskLevel !== 'CRITICAL' && mr.mrNumber.startsWith('DRAFT-')) {
-    const count = await prisma.materialRequest.count({
-      where: {
-        mrNumber: { startsWith: 'MR-' }
-      }
+    const currentYear = new Date().getFullYear();
+    const prefix = `MR-${currentYear}-`;
+    
+    const lastMr = await prisma.materialRequest.findFirst({
+      where: { mrNumber: { startsWith: prefix } },
+      orderBy: { mrNumber: 'desc' },
+      select: { mrNumber: true }
     });
-    officialMrNumber = `MR-${new Date().getFullYear()}-${(count + 1).toString().padStart(4, '0')}`;
+
+    let nextNumber = 1;
+    if (lastMr && lastMr.mrNumber) {
+      const lastInt = parseInt(lastMr.mrNumber.substring(prefix.length), 10);
+      if (!isNaN(lastInt)) {
+        nextNumber = lastInt + 1;
+      }
+    }
+    
+    officialMrNumber = `${prefix}${nextNumber.toString().padStart(4, '0')}`;
   }
 
   // Update the MR with AI validation results
