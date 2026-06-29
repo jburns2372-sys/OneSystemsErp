@@ -52,8 +52,20 @@ export async function createPOFromMRF(mrId: string, items: { consolidatedBoqItem
 
   const createdPOIds = [];
   
-  // Get current PO count for numbering
-  let count = await prisma.purchaseOrder.count();
+  // Get highest PO number for safe incrementing
+  const currentYear = new Date().getFullYear();
+  const prefix = `PO-${currentYear}-`;
+  const lastPO = await prisma.purchaseOrder.findFirst({
+    where: { poNumber: { startsWith: prefix } },
+    orderBy: { poNumber: 'desc' },
+    select: { poNumber: true }
+  });
+
+  let count = 0;
+  if (lastPO && lastPO.poNumber) {
+    const lastInt = parseInt(lastPO.poNumber.substring(prefix.length), 10);
+    if (!isNaN(lastInt)) count = lastInt;
+  }
 
   // Create a PO for each supplier
   for (const supplierId of Object.keys(supplierGroups)) {
