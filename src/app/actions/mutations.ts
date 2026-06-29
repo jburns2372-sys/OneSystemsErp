@@ -707,7 +707,7 @@ export async function uploadProcurementBenchmark(formData: FormData) {
       await prisma.project.update({
         where: { id: projectId },
         data: {
-          contractAmountVATInclusive: contractAmount,
+          contractAmountVATInclusive: true,
           contractAmount: contractAmount,
           letterheadLine1: line1,
           letterheadLine2: line2,
@@ -719,7 +719,7 @@ export async function uploadProcurementBenchmark(formData: FormData) {
       await prisma.project.update({
         where: { id: projectId },
         data: {
-          contractAmountVATInclusive: contractAmount,
+          contractAmountVATInclusive: true,
           contractAmount: contractAmount,
         }
       });
