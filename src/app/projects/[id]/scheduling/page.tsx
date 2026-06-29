@@ -45,6 +45,14 @@ export default async function ProjectSchedulingHub({ params }: { params: Promise
       where: { projectId },
       orderBy: { itemCode: 'asc' }
     });
+    
+    // Fallback to Procurement Benchmark if Awarded BOQ is empty
+    if (awardedBoq.length === 0) {
+      awardedBoq = await prisma.procurementBenchmarkItem.findMany({
+        where: { projectId },
+        orderBy: { itemCode: 'asc' }
+      });
+    }
   }
 
   return (

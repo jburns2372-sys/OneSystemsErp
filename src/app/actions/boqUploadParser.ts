@@ -352,12 +352,16 @@ export async function uploadAndParseBOQ(projectId: string | null | undefined, fi
       blobUrl = blob.url;
     } else {
       console.warn("BLOB_READ_WRITE_TOKEN is missing. Falling back to local filesystem for upload.");
-      const dir = path.join(process.cwd(), 'public', 'uploads', 'boq-uploads', targetProjectId);
-      fs.mkdirSync(dir, { recursive: true });
-      const safeName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const filePath = path.join(dir, safeName);
-      fs.writeFileSync(filePath, buffer);
-      blobUrl = `/uploads/boq-uploads/${targetProjectId}/${safeName}`;
+      try {
+        const dir = path.join(process.cwd(), 'public', 'uploads', 'boq-uploads', targetProjectId);
+        fs.mkdirSync(dir, { recursive: true });
+        const safeName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const filePath = path.join(dir, safeName);
+        fs.writeFileSync(filePath, buffer);
+        blobUrl = `/uploads/boq-uploads/${targetProjectId}/${safeName}`;
+      } catch (err) {
+        console.warn("Could not save file to local filesystem (likely Vercel read-only environment). Continuing without saving file.", err);
+      }
     }
 
     // Step 6: Save BOQTemplateUpload record

@@ -127,16 +127,29 @@ export default function ProcurementBenchmarkTab({
         )}
         
         {isLocked && (
-          <span style={{ 
-            backgroundColor: 'rgba(0, 255, 128, 0.1)', 
-            color: '#00ff80', 
-            padding: '6px 12px', 
-            borderRadius: '4px',
-            fontWeight: 'bold',
-            border: '1px solid rgba(0, 255, 128, 0.3)'
-          }}>
-            🔒 Benchmark Locked
-          </span>
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+            <span style={{ 
+              backgroundColor: 'rgba(0, 255, 128, 0.1)', 
+              color: '#00ff80', 
+              padding: '6px 12px', 
+              borderRadius: '4px',
+              fontWeight: 'bold',
+              border: '1px solid rgba(0, 255, 128, 0.3)'
+            }}>
+              🔒 Benchmark Locked
+            </span>
+            <button 
+              onClick={() => {
+                if(confirm("This benchmark is locked. Are you absolutely sure you want to delete it? This might affect existing records.")){ 
+                  handleDelete(); 
+                }
+              }}
+              className="btn-primary"
+              style={{ backgroundColor: '#ef4444', borderColor: '#ef4444', color: '#fff', padding: '6px 12px', fontSize: '0.85rem' }}
+            >
+              Delete
+            </button>
+          </div>
         )}
       </div>
 

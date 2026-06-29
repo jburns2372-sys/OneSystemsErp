@@ -40,10 +40,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // If importBoq is true, generate WBS and Activities from BOQ
     if (importBoq) {
-      const awardedBoqItems = await prisma.awardedBOQItem.findMany({
+      let awardedBoqItems = await prisma.awardedBOQItem.findMany({
         where: { projectId },
         orderBy: { itemCode: 'asc' }
       });
+
+      // Fallback to Procurement Benchmark if Awarded BOQ is empty
+      if (awardedBoqItems.length === 0) {
+        const benchmarkItems = await prisma.procurementBenchmarkItem.findMany({
+          where: { projectId },
+          orderBy: { itemCode: 'asc' }
+        });
+        
+        // Map to the shape expected below
+        awardedBoqItems = benchmarkItems.map(b => ({
+          ...b,
+          directCost: 0,
+          indirectCost: 0,
+          combinedUnitCost: b.unitCost
+        })) as any;
+      }
 
       if (awardedBoqItems.length > 0) {
         // Create Construction Phase root WBS

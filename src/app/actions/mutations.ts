@@ -462,11 +462,15 @@ export async function createProject(formData: FormData) {
       console.warn("BLOB_READ_WRITE_TOKEN is missing. Falling back to local filesystem for upload.");
       const fs = require('fs');
       const path = require('path');
-      const dir = path.join(process.cwd(), 'public', 'uploads', 'templates', project.id);
-      fs.mkdirSync(dir, { recursive: true });
-      const filePath = path.join(dir, 'awarded-boq-template.xlsx');
-      fs.writeFileSync(filePath, buffer);
-      blobUrl = `/uploads/templates/${project.id}/awarded-boq-template.xlsx`;
+      try {
+        const dir = path.join(process.cwd(), 'public', 'uploads', 'templates', project.id);
+        fs.mkdirSync(dir, { recursive: true });
+        const filePath = path.join(dir, 'awarded-boq-template.xlsx');
+        fs.writeFileSync(filePath, buffer);
+        blobUrl = `/uploads/templates/${project.id}/awarded-boq-template.xlsx`;
+      } catch (err) {
+        console.warn("Could not save file to local filesystem (likely Vercel read-only environment). Continuing without saving file.", err);
+      }
     }
 
     await prisma.document.create({
@@ -494,12 +498,13 @@ export async function uploadProcurementBenchmark(formData: FormData) {
 
   let parsedItems: any[] = [];
   const buffer = Buffer.from(await boqFile.arrayBuffer());
+  let contractAmount = 0;
 
   // Parse Excel file
-  const workbook = xlsx.read(buffer, { type: 'buffer' });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-  const rows = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+  const workbookXlsx = xlsx.read(buffer, { type: 'buffer' });
+  const sheetName = workbookXlsx.SheetNames[0];
+  const sheetXlsx = workbookXlsx.Sheets[sheetName];
+  const rows = xlsx.utils.sheet_to_json<any[]>(sheetXlsx, { header: 1 });
 
   // Check if it's the BOQ Master Template
   let isMasterTemplate = false;
@@ -515,61 +520,110 @@ export async function uploadProcurementBenchmark(formData: FormData) {
     }
   }
 
+  let line1 = "REPUBLIC OF THE PHILIPPINES";
+  let line2 = "";
+  let line3 = "";
+  let logoData: string | null = null;
+
   if (isMasterTemplate) {
-    // Parse Master Template format
-    const headerRow = rows[anchorRowIndex + 1] || [];
-    const headers = headerRow.map(h => String(h || '').replace(/\s/g, '').toUpperCase());
+    // Parse using Master Template Format (via ExcelJS)
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const sheet = workbook.worksheets[0];
     
-    const cItem = headers.findIndex(h => h?.includes("ITEM"));
-    const cDesc = headers.findIndex(h => h?.includes("DESCRIPTION"));
-    const cUnit = headers.findIndex(h => h?.includes("UNIT") && !h?.includes("COST"));
-    const cQty = headers.findIndex(h => h?.includes("QUANTITY"));
-    const cUc = headers.findIndex(h => h?.includes("UNITCOST"));
-    const cAmt = headers.findIndex(h => h?.includes("AMOUNT"));
-
-    let startRow = anchorRowIndex + 2; // Data usually starts a few rows down
-    for (let i = startRow; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row || !Array.isArray(row)) continue;
-      
-      const itemNumberRaw = String(row[cItem] || '').trim();
-      let descCell = String(row[cDesc] || '').trim();
-      const unit = String(row[cUnit] || '').trim();
-      const quantity = Number(row[cQty]) || 0;
-      const unitCost = Number(row[cUc]) || 0;
-      const amount = Number(row[cAmt]) || 0;
-
-      if (itemNumberRaw.replace(/\s/g, '').toUpperCase().includes('GRANDTOTAL') || 
-          descCell.replace(/\s/g, '').toUpperCase().includes('GRANDTOTAL')) {
-        break;
+    // Helper to safely get string from cell (handles rich text)
+    const getCellString = (cell: ExcelJS.Cell) => {
+      if (cell.value && typeof cell.value === 'object' && 'richText' in cell.value) {
+        // @ts-ignore
+        return cell.value.richText.map(rt => rt.text).join("");
       }
-      
-      if (!descCell && !itemNumberRaw) continue;
+      return cell.value?.toString() || "";
+    };
 
-      let itemNumber = itemNumberRaw;
-      if (!descCell && itemNumberRaw) {
-        descCell = itemNumberRaw;
-        const match = itemNumberRaw.match(/^([IVXLCDM]+\.?|\d+\.)\s*(.*)/i);
-        itemNumber = match ? match[1].trim() : "";
-      }
-
-      const descUpper = descCell.toUpperCase();
-      if (descUpper.includes('DESCRIPTION') || descUpper.includes('PARTICULARS') || descUpper === 'MATERIAL') continue;
-
-      if (descCell && (quantity > 0 || amount > 0)) {
-        parsedItems.push({
-          projectId,
-          itemCode: itemNumber,
-          description: descCell,
-          unit: unit || "LOT",
-          quantity: quantity,
-          unitCost: unitCost,
-          totalCost: amount,
-          status: 'PENDING'
-        });
+    // Extract Logo
+    const imgObj = sheet.getImages()[0];
+    if (imgObj) {
+      try {
+        const img = workbook.getImage(imgObj.imageId as unknown as number);
+        if (img && img.buffer) {
+          const bufferAny = img.buffer as any;
+          const base64Str = Buffer.isBuffer(bufferAny) 
+            ? bufferAny.toString('base64') 
+            : Buffer.from(bufferAny).toString('base64');
+          logoData = `data:image/${img.extension};base64,${base64Str}`;
+        }
+      } catch (e) {
+        console.warn("Failed to extract image", e);
       }
     }
 
+    line1 = getCellString(sheet.getRow(1).getCell(3)) || getCellString(sheet.getRow(2).getCell(1)) || "REPUBLIC OF THE PHILIPPINES";
+    line2 = getCellString(sheet.getRow(2).getCell(3)) || getCellString(sheet.getRow(3).getCell(1)) || "";
+    line3 = getCellString(sheet.getRow(3).getCell(3)) || getCellString(sheet.getRow(4).getCell(1)) || "";
+
+    let anchorRowNumber = -1;
+    sheet.eachRow((row, rowNumber) => {
+      row.eachCell((cell) => {
+        if (cell.type === ExcelJS.ValueType.String && cell.value?.toString().replace(/\s/g, '').toUpperCase().includes("BIDDETAILEDCOSTBREAKDOWN")) {
+          anchorRowNumber = rowNumber;
+        }
+      });
+    });
+
+    if (anchorRowNumber !== -1) {
+      const headerRow = sheet.getRow(anchorRowNumber + 1);
+      const headers = (headerRow.values as any[]).map(v => String(v || '').replace(/\s/g, '').toUpperCase());
+
+      const cItem = headers.findIndex(h => h.includes("ITEM"));
+      const cDesc = headers.findIndex(h => h.includes("DESCRIPTION"));
+      const cUnit = headers.findIndex(h => h.includes("UNIT") && !h.includes("COST"));
+      const cQty = headers.findIndex(h => h.includes("QUANTITY"));
+      const cUc = headers.findIndex(h => h.includes("UNITCOST"));
+      const cAmt = headers.findIndex(h => h.includes("AMOUNT") || h.includes("TOTALCOST"));
+
+      const getNum = (cell: ExcelJS.Cell) => {
+        if (cell.type === ExcelJS.ValueType.Number) return cell.value as number;
+        if (cell.type === ExcelJS.ValueType.Formula) return cell.result as number || 0;
+        return Number(String(cell.value || '').replace(/[^0-9.-]/g, '')) || 0;
+      };
+
+      let currentRowNum = anchorRowNumber + 2;
+      while (currentRowNum <= sheet.rowCount) {
+        const row = sheet.getRow(currentRowNum);
+        const descCell = getCellString(row.getCell(cDesc)).trim();
+        const amount = getNum(row.getCell(cAmt));
+        const qty = getNum(row.getCell(cQty));
+
+        if (!descCell) {
+          currentRowNum++;
+          continue;
+        }
+
+        const descUpper = descCell.toUpperCase();
+        if (descUpper.includes("GRAND TOTAL") || descUpper.includes("TOTAL ESTIMATED COST") || descUpper === "TOTAL") {
+          break;
+        }
+
+        let itemNumber = getCellString(row.getCell(cItem)).trim();
+        let unit = getCellString(row.getCell(cUnit)).trim();
+
+        if (descCell && (qty > 0 || amount > 0)) {
+          parsedItems.push({
+            projectId,
+            itemCode: itemNumber,
+            description: descCell,
+            unit: unit || "LOT",
+            quantity: qty,
+            unitCost: getNum(row.getCell(cUc)),
+            totalCost: amount,
+            status: 'PENDING'
+          });
+          contractAmount += amount;
+        }
+        
+        currentRowNum++;
+      }
+    }
   } else {
     // Original generic flat-file parser
     let headerRowIndex = -1;
@@ -633,6 +687,7 @@ export async function uploadProcurementBenchmark(formData: FormData) {
             totalCost: totalCost,
             status: 'PENDING'
           });
+          contractAmount += totalCost;
         }
       }
     }
@@ -647,6 +702,28 @@ export async function uploadProcurementBenchmark(formData: FormData) {
     await prisma.procurementBenchmarkItem.createMany({
       data: parsedItems
     });
+    
+    if (isMasterTemplate) {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          contractAmountVATInclusive: contractAmount,
+          contractAmount: contractAmount,
+          letterheadLine1: line1,
+          letterheadLine2: line2,
+          letterheadLine3: line3,
+          letterheadLogo: logoData || undefined,
+        }
+      });
+    } else {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          contractAmountVATInclusive: contractAmount,
+          contractAmount: contractAmount,
+        }
+      });
+    }
   }
 
   revalidatePath(`/projects/${projectId}`);
@@ -852,9 +929,10 @@ export async function deleteProcurementBenchmark(projectId: string) {
     select: { procurementBenchmarkLocked: true }
   });
 
-  if (project?.procurementBenchmarkLocked) {
-    throw new Error('Cannot delete a locked Procurement Benchmark.');
-  }
+  // Allow deletion even if locked, but maybe warn in the UI
+  // if (project.procurementBenchmarkLocked) {
+  //   throw new Error('Cannot delete a locked Procurement Benchmark.');
+  // }
 
   await prisma.procurementBenchmarkItem.deleteMany({
     where: { projectId }
