@@ -31,9 +31,20 @@ export async function createCanvassForm(mrId: string) {
       return { success: true, canvassId: existingCanvass.id };
     }
 
-    // Create a new canvass form
-    const canvassCount = await prisma.canvassForm.count();
-    const canvassNumber = `CANV-${new Date().getFullYear()}-${String(canvassCount + 1).padStart(4, '0')}`;
+    const currentYear = new Date().getFullYear();
+    const prefix = `CANV-${currentYear}-`;
+    const lastCanvass = await prisma.canvassForm.findFirst({
+      where: { canvassNumber: { startsWith: prefix } },
+      orderBy: { canvassNumber: 'desc' },
+      select: { canvassNumber: true }
+    });
+
+    let nextNumber = 1;
+    if (lastCanvass && lastCanvass.canvassNumber) {
+      const lastInt = parseInt(lastCanvass.canvassNumber.substring(prefix.length), 10);
+      if (!isNaN(lastInt)) nextNumber = lastInt + 1;
+    }
+    const canvassNumber = `${prefix}${String(nextNumber).padStart(4, '0')}`;
 
     const canvass = await prisma.canvassForm.create({
       data: {
@@ -109,8 +120,20 @@ export async function autoGeneratePOFromCanvass(canvassId: string, supplierId: s
 
     if (!quotation) return { success: false, error: 'Quotation not found' };
 
-    const poCount = await prisma.purchaseOrder.count();
-    const poNumber = `PO-${new Date().getFullYear()}-${String(poCount + 1).padStart(4, '0')}`;
+    const currentYear = new Date().getFullYear();
+    const prefix = `PO-${currentYear}-`;
+    const lastPO = await prisma.purchaseOrder.findFirst({
+      where: { poNumber: { startsWith: prefix } },
+      orderBy: { poNumber: 'desc' },
+      select: { poNumber: true }
+    });
+
+    let nextNumber = 1;
+    if (lastPO && lastPO.poNumber) {
+      const lastInt = parseInt(lastPO.poNumber.substring(prefix.length), 10);
+      if (!isNaN(lastInt)) nextNumber = lastInt + 1;
+    }
+    const poNumber = `${prefix}${String(nextNumber).padStart(4, '0')}`;
 
     const po = await prisma.purchaseOrder.create({
       data: {
