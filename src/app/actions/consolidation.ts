@@ -123,36 +123,32 @@ export async function autoConsolidateBOQ(projectId: string, force: boolean = fal
 
   let index = 1;
 
-  // Use a transaction for safety with an increased timeout for large BOQs
-  await prisma.$transaction(async (tx) => {
-    for (const group of groups.values()) {
-      const unitCost = group.unitCost || 0;
-      
-      const itemCodePrefix = group.itemCodePrefix || 'N/A';
-      const consolidatedCode = `C${index.toString().padStart(3, '0')}`;
-      index++;
+  const itemsToInsert: any[] = [];
+  for (const group of groups.values()) {
+    const unitCost = group.unitCost || 0;
+    
+    const itemCodePrefix = group.itemCodePrefix || 'N/A';
+    const consolidatedCode = `C${index.toString().padStart(3, '0')}`;
+    index++;
 
-      // Create the parent consolidated item
-      const consolidated = await tx.consolidatedBOQItem.create({
-        data: {
-          projectId,
-          itemCode: consolidatedCode,
-          category: itemCodePrefix,
-          description: group.description,
-          unit: group.unit,
-          quantity: group.quantity,
-          unitCost: unitCost,
-          totalCost: group.totalCost,
-          status: 'PENDING' // Awaiting final approval from procurement
-        }
-      });
+    itemsToInsert.push({
+      projectId,
+      itemCode: consolidatedCode,
+      category: itemCodePrefix,
+      description: group.description,
+      unit: group.unit,
+      quantity: group.quantity,
+      unitCost: unitCost,
+      totalCost: group.totalCost,
+      status: 'PENDING'
+    });
+  }
 
-      // We no longer create BOQMapping here, as we are generating from ProcurementBenchmark
-    }
-  }, {
-    maxWait: 20000, // 20 seconds to wait for a connection
-    timeout: 120000  // 120 seconds timeout for the transaction itself
-  });
+  if (itemsToInsert.length > 0) {
+    await prisma.consolidatedBOQItem.createMany({
+      data: itemsToInsert
+    });
+  }
 
   revalidatePath(`/projects/${projectId}`);
 }
@@ -349,10 +345,12 @@ export async function uploadMasterMaterialsList(formData: FormData) {
     index++;
   }
 
-  // Insert items
-  await prisma.$transaction(
-    parsedItems.map(item => prisma.consolidatedBOQItem.create({ data: item }))
-  );
+  // Insert items in bulk (much faster than individual creates in a transaction)
+  if (parsedItems.length > 0) {
+    await prisma.consolidatedBOQItem.createMany({ 
+      data: parsedItems 
+    });
+  }
 
   revalidatePath(`/projects/${projectId}`);
 }
