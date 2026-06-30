@@ -16,7 +16,13 @@ export default async function CanvassingDashboard() {
       isSuperAdmin = role === 'SUPER_ADMIN';
     }
   }
-  const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+  let activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+  if (activeProjectId) {
+    const projExists = await prisma.project.findUnique({ where: { id: activeProjectId } });
+    if (!projExists) {
+      activeProjectId = null;
+    }
+  }
 
   const baseProjectFilter: any = {};
   if (!isSuperAdmin) {
