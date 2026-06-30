@@ -125,6 +125,11 @@ export async function autoConsolidateBOQ(projectId: string, force: boolean = fal
 
   const itemsToInsert: any[] = [];
   for (const group of groups.values()) {
+    // Exclude header rows or items with zero value from the consolidated list
+    if (group.totalCost === 0 && group.quantity === 0) {
+      continue;
+    }
+
     const unitCost = group.unitCost || 0;
     
     const itemCodePrefix = group.itemCodePrefix || 'N/A';

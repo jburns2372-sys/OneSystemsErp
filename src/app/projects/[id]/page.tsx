@@ -67,7 +67,7 @@ export default async function ProjectDetailsPage({
     where: { id },
     include: {
       materialRequests: true,
-      awardedBoqItems: true,
+      awardedBoqItems: { orderBy: { createdAt: 'asc' } },
       procurementBenchmarkItems: true,
       variationOrders: {
         where: { currentStatus: 'APPROVED' }
@@ -109,23 +109,60 @@ export default async function ProjectDetailsPage({
   }
 
   if (hasBOQ) {
-    let customHtml = '<table><thead><tr style="background: #e0e0e0; font-weight: bold;"><th>Item No.</th><th>Description</th><th>Unit</th><th>Quantity</th><th>Unit Cost</th><th>Total Cost</th></tr></thead><tbody>';
+    const hasVariations = project.variationOrders && project.variationOrders.length > 0;
+    
+    let customHtml = '<table><thead><tr style="background: #e0e0e0; font-weight: bold;"><th>Item No.</th><th>Description</th><th>Unit</th>';
+    if (hasVariations) {
+      customHtml += '<th>Original Qty</th><th>Deductive Qty</th><th>Additive Qty</th><th>Revised Qty</th><th>Unit Cost</th><th>Original Total Cost</th><th>Deductive Amount</th><th>Additive Amount</th><th>Revised Total Cost</th>';
+    } else {
+      customHtml += '<th>Qty</th><th>Unit Cost</th><th>Total Cost</th>';
+    }
+    customHtml += '</tr></thead><tbody>';
+
     for (const item of project.awardedBoqItems) {
-      const displayQty = item.revisedContractQuantity || item.quantity || 0;
-      const displayTotalCost = item.revisedContractAmount || item.totalCost || 0;
+      const originalQty = item.quantity || 0;
+      const voQty = item.approvedClientVoQuantity || 0;
+      const additiveQty = voQty > 0 ? voQty : 0;
+      const deductiveQty = voQty < 0 ? Math.abs(voQty) : 0;
+      const displayQty = item.revisedContractQuantity || originalQty;
+      
+      const originalTotalCost = item.totalCost || 0;
+      const displayTotalCost = item.revisedContractAmount || originalTotalCost;
+      const voAmount = displayTotalCost - originalTotalCost;
+      const additiveAmount = voAmount > 0 ? voAmount : 0;
+      const deductiveAmount = voAmount < 0 ? Math.abs(voAmount) : 0;
+      
       const displayUnitCost = displayQty > 0 ? displayTotalCost / displayQty : 0;
       
       const isHeader = !item.quantity && !item.totalCost && !item.revisedContractAmount;
-      const isVariation = item.description.includes('(VO)');
+      const isVariation = item.description.includes('(VO)') || voQty !== 0 || voAmount !== 0;
       
-      customHtml += `<tr style="${isVariation ? 'background-color: rgba(16, 185, 129, 0.05); border-left: 3px solid #10b981;' : ''}">
+      const rowStyle = isVariation ? 'color: #3b82f6; font-weight: 500; background-color: rgba(59, 130, 246, 0.05);' : '';
+      
+      customHtml += `<tr style="${rowStyle}">
         <td style="${isHeader ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${item.itemCode || ''}</td>
-        <td style="${isHeader ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : (isVariation ? 'color: #10b981; font-weight: 500;' : '')}">${item.description || ''}</td>
-        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : ''}">${item.unit || ''}</td>
-        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : ''}">${displayQty > 0 ? displayQty.toLocaleString() : ''}</td>
+        <td style="${isHeader ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${item.description || ''}</td>
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : ''}">${item.unit || ''}</td>`;
+      
+      if (hasVariations) {
+        customHtml += `
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : ''}">${originalQty > 0 || isVariation ? originalQty.toLocaleString() : ''}</td>
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : 'color: #ef4444;'}">${deductiveQty > 0 ? '-' + deductiveQty.toLocaleString() : ''}</td>
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : 'color: #10b981;'}">${additiveQty > 0 ? '+' + additiveQty.toLocaleString() : ''}</td>
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05); font-weight: bold;' : 'font-weight: bold;'}">${displayQty > 0 ? displayQty.toLocaleString() : ''}</td>
         <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : ''}">${displayUnitCost > 0 ? displayUnitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
-        <td style="${isHeader ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${displayTotalCost > 0 ? displayTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}</td>
-      </tr>`;
+        <td style="${isHeader ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${originalTotalCost > 0 || isVariation ? originalTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}</td>
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : 'color: #ef4444;'}">${deductiveAmount > 0 ? '-₱ ' + deductiveAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}</td>
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : 'color: #10b981;'}">${additiveAmount > 0 ? '+₱ ' + additiveAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}</td>
+        <td style="${isHeader ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : 'font-weight: bold;'}">${displayTotalCost > 0 ? '₱ ' + displayTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}</td>`;
+      } else {
+        customHtml += `
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : ''}">${originalQty > 0 ? originalQty.toLocaleString() : ''}</td>
+        <td style="${isHeader ? 'background-color: rgba(0,0,0,0.05);' : ''}">${displayUnitCost > 0 ? displayUnitCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+        <td style="${isHeader ? 'font-weight: bold; background-color: rgba(0,0,0,0.05);' : ''}">${originalTotalCost > 0 ? '₱ ' + originalTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}</td>`;
+      }
+      
+      customHtml += `</tr>`;
     }
     customHtml += '</tbody></table>';
     htmlTable = customHtml;

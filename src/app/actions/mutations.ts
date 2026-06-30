@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
 import ExcelJS from 'exceljs';
+import { cookies } from 'next/headers';
 
 async function parseBoqWithGemini(buffer: Buffer | null, mimeType: string, rawTextContent?: string) {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -197,36 +198,53 @@ export async function createProject(formData: FormData) {
 
     if (anchorRowNumber !== -1) {
       const headerRow = sheet.getRow(anchorRowNumber + 1);
+      const subHeaderRow = sheet.getRow(anchorRowNumber + 2);
+      
       const headers = (headerRow.values as any[]).map(v => String(v || '').replace(/\s/g, '').toUpperCase());
+      const subHeaders = (subHeaderRow.values as any[]).map(v => String(v || '').replace(/\s/g, '').toUpperCase());
 
-      const cItem = headers.findIndex(h => h.includes("ITEM"));
-      const cDesc = headers.findIndex(h => h.includes("DESCRIPTION"));
-      const cUnit = headers.findIndex(h => h.includes("UNIT") && !h.includes("COST"));
-      const cQty = headers.findIndex(h => h.includes("QUANTITY"));
-      const cUc = headers.findIndex(h => h.includes("UNITCOST"));
-      const cAmt = headers.findIndex(h => h.includes("AMOUNT"));
-      const cMat = headers.findIndex(h => h.includes("MATERIAL"));
-      const cLab = headers.findIndex(h => h.includes("LABOR"));
-      const cEqu = headers.findIndex(h => h.includes("EQUIPMENT"));
-      const cTdc = headers.findIndex(h => h.includes("TOTALDIRECTCOST") || h.includes("TDC"));
-      const cOcm = headers.findIndex(h => h.includes("OCM"));
-      const cCp = headers.findIndex(h => h.includes("PROFIT") || h === "CP");
-      const cVat = headers.findIndex(h => h.includes("VAT") || h.includes("TAX"));
-      const cTic = headers.findIndex(h => h.includes("TOTALINDIRECTCOST") || h.includes("TIC"));
-      const cPct = headers.findIndex(h => h.includes("%OFTOTAL"));
+      // Search both rows for the column headers
+      const findCol = (keywords: string[]) => {
+        let idx = headers.findIndex(h => keywords.some(k => h.includes(k)));
+        if (idx === -1) {
+          idx = subHeaders.findIndex(h => keywords.some(k => h.includes(k)));
+        }
+        return idx;
+      };
 
-      const getNum = (cell: ExcelJS.Cell) => {
+      const cItem = findCol(["ITEM"]);
+      const cDesc = findCol(["DESCRIPTION"]);
+      const cUnit = findCol(["UNIT"]);
+      const cQty = findCol(["QUANTITY", "QTY"]);
+      const cUc = findCol(["UNITCOST", "UNIT PRICE"]);
+      const cAmt = findCol(["AMOUNT", "TOTAL COST"]);
+      const cMat = findCol(["MATERIAL"]);
+      const cLab = findCol(["LABOR"]);
+      const cEqu = findCol(["EQUIPMENT"]);
+      const cTdc = findCol(["TOTALDIRECTCOST", "TDC"]);
+      const cOcm = findCol(["OCM"]);
+      const cCp = findCol(["PROFIT", "CP"]);
+      const cVat = findCol(["VAT", "TAX"]);
+      const cTic = findCol(["TOTALINDIRECTCOST", "TIC"]);
+      const cPct = findCol(["%OFTOTAL", "% OF TOTAL", "%"]);
+
+      const getNum = (cell: ExcelJS.Cell | undefined) => {
+        if (!cell) return 0;
         if (cell.type === ExcelJS.ValueType.Number) return cell.value as number;
         if (cell.type === ExcelJS.ValueType.Formula) return cell.result as number || 0;
         return Number(String(cell.value || '').replace(/[^0-9.-]/g, '')) || 0;
       };
 
-      let currentRowNum = anchorRowNumber + 2;
+      const getSafeCell = (row: ExcelJS.Row, colIndex: number) => {
+        return colIndex >= 1 ? row.getCell(colIndex) : undefined;
+      };
+
+      let currentRowNum = anchorRowNumber + 3; // start data from anchor + 3
       while (currentRowNum <= sheet.rowCount) {
         const row = sheet.getRow(currentRowNum);
-        const descCell = getCellString(row.getCell(cDesc)).trim();
-        const amount = getNum(row.getCell(cAmt));
-        const qty = getNum(row.getCell(cQty));
+        const descCell = getCellString(getSafeCell(row, cDesc) as any).trim();
+        const amount = getNum(getSafeCell(row, cAmt));
+        const qty = getNum(getSafeCell(row, cQty));
 
         if (!descCell) {
           currentRowNum++;
@@ -238,25 +256,39 @@ export async function createProject(formData: FormData) {
           break;
         }
 
-        let itemNumber = getCellString(row.getCell(cItem)).trim();
-        let unit = getCellString(row.getCell(cUnit)).trim();
+        // Purge known spreadsheet sub-header junk
+        const descNoSpaces = descUpper.replace(/\s/g, '');
+        if (
+          descNoSpaces.includes("DIRECTCOSTOCM") ||
+          descNoSpaces.includes("PROFIT(8%)") ||
+          descNoSpaces.includes("INDIRECTCOST") ||
+          descNoSpaces === "(1)" ||
+          descNoSpaces === "(2)" ||
+          descNoSpaces === "(3)"
+        ) {
+          currentRowNum++;
+          continue;
+        }
+
+        let itemNumber = getCellString(getSafeCell(row, cItem) as any).trim();
+        let unit = getCellString(getSafeCell(row, cUnit) as any).trim();
 
         parsedItems.push({
           itemCode: itemNumber,
           description: descCell,
           unit: unit || "LOT",
           quantity: qty,
-          materialUnitCost: getNum(row.getCell(cMat)),
-          laborUnitCost: getNum(row.getCell(cLab)),
-          equipmentUnitCost: getNum(row.getCell(cEqu)),
-          directCost: getNum(row.getCell(cTdc)),
-          ocmAmount: getNum(row.getCell(cOcm)),
-          cpAmount: getNum(row.getCell(cCp)),
-          vatAmount: getNum(row.getCell(cVat)),
-          indirectCost: getNum(row.getCell(cTic)),
-          combinedUnitCost: getNum(row.getCell(cUc)),
+          materialUnitCost: getNum(getSafeCell(row, cMat)),
+          laborUnitCost: getNum(getSafeCell(row, cLab)),
+          equipmentUnitCost: getNum(getSafeCell(row, cEqu)),
+          directCost: getNum(getSafeCell(row, cTdc)),
+          ocmAmount: getNum(getSafeCell(row, cOcm)),
+          cpAmount: getNum(getSafeCell(row, cCp)),
+          vatAmount: getNum(getSafeCell(row, cVat)),
+          indirectCost: getNum(getSafeCell(row, cTic)),
+          combinedUnitCost: getNum(getSafeCell(row, cUc)),
           totalCost: amount,
-          percentageOfTotal: getNum(row.getCell(cPct)) * 100,
+          percentageOfTotal: getNum(getSafeCell(row, cPct)) * 100,
           status: 'PENDING',
           processingType: 'MATERIAL_EQUIPMENT'
         });
@@ -447,6 +479,28 @@ export async function createProject(formData: FormData) {
       }
     }
   });
+
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value || cookieStore.get('userId')?.value;
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+
+  if (sessionId) {
+    const user = await prisma.user.findUnique({ where: { id: sessionId } });
+    if (user) {
+      const activeRole = simulatedRole || user.role;
+      // Auto-assign the creator to the project
+      await prisma.projectUserAssignment.create({
+        data: {
+          userId: sessionId,
+          projectId: project.id,
+          projectRole: activeRole,
+          accessLevel: 'READ_WRITE',
+          assignmentStatus: 'active',
+          assignedBy: 'SYSTEM',
+        }
+      });
+    }
+  }
 
   // Upload Awarded BOQ Template to Blob Storage
   if (boqFile.name.endsWith('.xlsx')) {
@@ -836,7 +890,7 @@ export async function runMRFAIValidation(mrId: string) {
   for (const item of mr.items) {
     if (!item.consolidatedBoqItem) continue;
     const boqItem = item.consolidatedBoqItem;
-    const boqBalance = boqItem.quantity - boqItem.deliveredQty;
+    const boqBalance = boqItem.revisedQuantity - boqItem.deliveredQty;
 
     // Check if requested quantity exceeds BOQ balance
     if (item.quantity > boqBalance) {
@@ -847,9 +901,9 @@ export async function runMRFAIValidation(mrId: string) {
     }
 
     // Check if requested quantity exceeds total BOQ quantity
-    if (item.quantity > boqItem.quantity) {
+    if (item.quantity > boqItem.revisedQuantity) {
       findings.push(
-        `🚨 EXCEEDS BOQ: "${boqItem.description}" — Requested ${item.quantity} ${boqItem.unit} exceeds total BOQ quantity of ${boqItem.quantity} ${boqItem.unit}.`
+        `🚨 EXCEEDS BOQ: "${boqItem.description}" — Requested ${item.quantity} ${boqItem.unit} exceeds total revised BOQ quantity of ${boqItem.revisedQuantity} ${boqItem.unit}.`
       );
       riskLevel = 'CRITICAL';
     }

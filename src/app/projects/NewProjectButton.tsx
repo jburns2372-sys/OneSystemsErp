@@ -229,6 +229,19 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
       if (descUpper === 'TOTAL' || descUpper === 'GRAND TOTAL' || descUpper.includes('TOTAL PROJECT COST') || descUpper.includes('SUB-TOTAL') || descUpper.includes('SUB TOTAL') || descUpper.startsWith('TOTAL:')) return false;
       if (descUpper.includes('MATERIAL LABOR EQUIPMENT')) return false;
 
+      // Purge known spreadsheet sub-header junk
+      const descNoSpaces = descUpper.replace(/\s/g, '');
+      if (
+        descNoSpaces.includes("DIRECTCOSTOCM") ||
+        descNoSpaces.includes("PROFIT(8%)") ||
+        descNoSpaces.includes("INDIRECTCOST") ||
+        descNoSpaces === "(1)" ||
+        descNoSpaces === "(2)" ||
+        descNoSpaces === "(3)"
+      ) {
+        return false;
+      }
+
       // Keep ALL other rows with a description! 
       // If they have 0 cost and 0 quantity, they will naturally display as Header Rows (like "I. GENERAL REQUIREMENTS")
       return true;

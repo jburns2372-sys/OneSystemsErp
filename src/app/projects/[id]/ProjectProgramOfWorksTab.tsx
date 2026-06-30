@@ -8,17 +8,17 @@ interface AwardedBOQItem {
   description: string;
   unit: string;
   quantity: number;
-  directCost: number;
-  indirectCost: number;
-  combinedUnitCost: number;
   totalCost: number;
-  revisedContractQuantity: number;
-  revisedContractUnitPrice: number;
-  revisedContractAmount: number;
-  approvedClientVoQuantity: number;
-  materialUnitCost: number;
-  laborUnitCost: number;
-  equipmentUnitCost: number;
+  materialUnitCost?: number;
+  laborUnitCost?: number;
+  equipmentUnitCost?: number;
+  directCost?: number;
+  ocmAmount?: number;
+  cpAmount?: number;
+  vatAmount?: number;
+  indirectCost?: number;
+  combinedUnitCost?: number;
+  percentageOfTotal?: number;
 }
 
 interface ProjectProgramOfWorksTabProps {
@@ -57,9 +57,6 @@ export default function ProjectProgramOfWorksTab({
     subject: 'Program of Works',
   });
 
-  // OCM / CP / VAT rates
-  const [rates, setRates] = useState({ ocm: 0.08, cp: 0.08, vat: 0.05 });
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,57 +68,25 @@ export default function ProjectProgramOfWorksTab({
     }
   };
 
-  // Build rows from AwardedBOQItems
-  const rows = useMemo(() => {
-    if (awardedBoqItems.length === 0) return [];
+  const handlePrint = () => {
+    window.print();
+  };
 
-    return awardedBoqItems.map((item) => {
-      const qty = item.revisedContractQuantity || item.quantity || 0;
-      const totalCost = item.revisedContractAmount || item.totalCost || 0;
-      const unitCost = item.revisedContractUnitPrice || item.combinedUnitCost || 0;
+  const thStyle = {
+    padding: '8px 6px',
+    border: '1px solid #334155',
+    textAlign: 'center' as const,
+    whiteSpace: 'pre-line' as const,
+  };
 
-      // Determine if this is a category header (no qty, no cost)
-      const isHeader = !item.quantity && !item.totalCost && !item.revisedContractAmount;
-      const isVO = item.description.includes('(VO)');
+  const tdStyle = {
+    padding: '6px 8px',
+    border: '1px solid #cbd5e1',
+  };
 
-      // Use actual stored values from the import
-      const materialCost = (item as any).materialUnitCost || 0;
-      const laborCost = (item as any).laborUnitCost || 0;
-      const equipmentCost = (item as any).equipmentUnitCost || 0;
+  const grandTotal = awardedBoqItems.reduce((acc, row) => acc + (row.totalCost || 0), 0);
 
-      const totalDirectCost = materialCost + laborCost + equipmentCost;
-      const ocm = totalDirectCost * rates.ocm;
-      const cp = totalDirectCost * rates.cp;
-      const vatVal = totalDirectCost * rates.vat;
-      const totalIndirectCost = ocm + cp + vatVal;
-      const computedUnitCost = totalDirectCost + totalIndirectCost;
-      const amount = totalCost > 0 ? totalCost : (computedUnitCost * qty);
-
-      return {
-        itemCode: item.itemCode || '',
-        description: item.description || '',
-        unit: item.unit || '',
-        quantity: qty,
-        materialCost,
-        laborCost,
-        equipmentCost,
-        totalDirectCost,
-        ocm,
-        cp,
-        vatVal,
-        totalIndirectCost,
-        unitCost: unitCost > 0 ? unitCost : computedUnitCost,
-        amount,
-        isHeader,
-        isVO,
-      };
-    });
-  }, [awardedBoqItems, rates]);
-
-  // Grand total
-  const grandTotal = rows.reduce((acc, row) => acc + (row.isHeader ? 0 : row.amount), 0);
-
-  const fmt = (n: number) => n > 0 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+  const fmt = (n?: number) => (n && n > 0) ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
 
   return (
     <div style={{ padding: '0' }}>
@@ -137,16 +102,17 @@ export default function ProjectProgramOfWorksTab({
           <div>
             <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.1rem' }}>Program of Works</h2>
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-              Bid Detailed Cost Breakdown — Auto-populated from Awarded BOQ ({awardedBoqItems.length} items)
+              Original Uploaded Format ({awardedBoqItems.length} items)
             </p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {awardedBoqItems.length === 0 && (
-            <span style={{ color: '#f59e0b', fontSize: '0.8rem', fontStyle: 'italic' }}>
-              ⚠️ No BOQ items found. Import an Awarded BOQ first.
-            </span>
-          )}
+          <button onClick={handlePrint} className="btn-secondary" style={{
+            background: 'transparent', border: '1px solid #cbd5e1', color: 'var(--text-primary)',
+            padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+          }}>
+            🖨️ Print / Save as PDF
+          </button>
         </div>
       </div>
 
@@ -157,10 +123,8 @@ export default function ProjectProgramOfWorksTab({
         fontFamily: "'Times New Roman', Times, serif", fontSize: '11px',
         maxWidth: '1400px', margin: '0 auto'
       }}>
-
         {/* Letterhead */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          {/* Logo */}
           <div style={{ marginBottom: '10px' }}>
             {logoUrl ? (
               <img src={logoUrl} alt="Company Logo" style={{ maxHeight: '80px', objectFit: 'contain' }} />
@@ -182,7 +146,6 @@ export default function ProjectProgramOfWorksTab({
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: 'none' }} />
           </div>
 
-          {/* Letterhead Lines */}
           <input
             value={letterhead.line1}
             onChange={(e) => setLetterhead({ ...letterhead, line1: e.target.value })}
@@ -191,7 +154,6 @@ export default function ProjectProgramOfWorksTab({
               fontSize: '14px', fontWeight: 'bold', fontFamily: 'inherit', color: '#111',
               letterSpacing: '2px', padding: '2px 0', background: 'transparent'
             }}
-            placeholder="REPUBLIC OF THE PHILIPPINES"
           />
           <input
             value={letterhead.line2}
@@ -201,7 +163,6 @@ export default function ProjectProgramOfWorksTab({
               fontSize: '12px', fontWeight: 'bold', fontFamily: 'inherit', color: '#333',
               padding: '2px 0', background: 'transparent'
             }}
-            placeholder="PROVINCE / REGION"
           />
           <input
             value={letterhead.line3}
@@ -211,7 +172,6 @@ export default function ProjectProgramOfWorksTab({
               fontSize: '12px', fontWeight: 'bold', fontFamily: 'inherit', color: '#333',
               padding: '2px 0', background: 'transparent'
             }}
-            placeholder="MUNICIPALITY / CITY"
           />
         </div>
 
@@ -229,7 +189,6 @@ export default function ProjectProgramOfWorksTab({
                 fontFamily: 'inherit', fontSize: '11px', fontWeight: 'bold', color: '#111',
                 padding: '2px 4px', background: 'transparent'
               }}
-              placeholder="Enter project name..."
             />
           </div>
           <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
@@ -242,7 +201,6 @@ export default function ProjectProgramOfWorksTab({
                 fontFamily: 'inherit', fontSize: '11px', color: '#333',
                 padding: '2px 4px', background: 'transparent'
               }}
-              placeholder="Enter project location..."
             />
           </div>
           <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
@@ -255,14 +213,8 @@ export default function ProjectProgramOfWorksTab({
                 fontFamily: 'inherit', fontSize: '11px', color: '#333',
                 padding: '2px 4px', background: 'transparent'
               }}
-              placeholder="e.g., Program of Works"
             />
           </div>
-        </div>
-
-        {/* Title */}
-        <div style={{ textAlign: 'center', marginBottom: '16px', fontWeight: 'bold', fontSize: '13px', letterSpacing: '1px' }}>
-          BID DETAILED COST BREAKDOWN
         </div>
 
         {/* Main Table */}
@@ -279,12 +231,12 @@ export default function ProjectProgramOfWorksTab({
                 <th rowSpan={2} style={thStyle}>UNIT</th>
                 <th rowSpan={2} style={thStyle}>QUANTITY</th>
                 <th colSpan={3} style={{ ...thStyle, borderBottom: '1px solid #334155' }}>DIRECT UNIT COST</th>
-                <th rowSpan={2} style={thStyle}>TOTAL DIRECT{'\n'}COST</th>
+                <th rowSpan={2} style={thStyle}>TOTAL{'\n'}DIRECT{'\n'}COST</th>
                 <th rowSpan={2} style={thStyle}>OCM</th>
                 <th rowSpan={2} style={thStyle}>CP</th>
                 <th rowSpan={2} style={thStyle}>VAT (5%)</th>
-                <th rowSpan={2} style={thStyle}>TOTAL INDIRECT{'\n'}COST</th>
-                <th rowSpan={2} style={thStyle}>UNIT COST</th>
+                <th rowSpan={2} style={thStyle}>TOTAL{'\n'}INDIRECT{'\n'}COST</th>
+                <th rowSpan={2} style={thStyle}>UNIT{'\n'}COST</th>
                 <th rowSpan={2} style={thStyle}>AMOUNT</th>
                 <th rowSpan={2} style={thStyle}>%</th>
               </tr>
@@ -295,144 +247,115 @@ export default function ProjectProgramOfWorksTab({
                 <th style={thStyle}>EQUIPMENT</th>
               </tr>
               {/* Row 3: Rate display */}
-              <tr style={{ background: '#f1f5f9', color: '#475569', fontSize: '9px' }}>
-                <td colSpan={4} style={{ ...tdStyle, textAlign: 'right', fontStyle: 'italic', fontWeight: 'bold', color: '#64748b' }}>
+              <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '9px', fontStyle: 'italic' }}>
+                <td colSpan={4} style={{ ...tdStyle, textAlign: 'right', fontWeight: 'bold' }}>
                   Rates →
                 </td>
                 <td style={tdStyle}></td>
                 <td style={tdStyle}></td>
                 <td style={tdStyle}></td>
                 <td style={tdStyle}></td>
-                <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 'bold' }}>
-                  {(rates.ocm * 100).toFixed(0)}%
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 'bold' }}>
-                  {(rates.cp * 100).toFixed(0)}%
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 'bold' }}>
-                  {(rates.vat * 100).toFixed(0)}%
-                </td>
+                <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 'bold' }}>8%</td>
+                <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 'bold' }}>8%</td>
+                <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 'bold' }}>5%</td>
                 <td colSpan={4} style={tdStyle}></td>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {awardedBoqItems.length === 0 ? (
                 <tr>
                   <td colSpan={15} style={{ ...tdStyle, textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: '12px' }}>
-                    No Awarded BOQ items found. Please import BOQ data from the "Contract Value &amp; BOQ" tab first.
+                    No BOQ items found.
                   </td>
                 </tr>
               ) : (
-                rows.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    style={{
-                      background: row.isHeader
-                        ? '#f0f4f8'
-                        : row.isVO
-                          ? 'rgba(16, 185, 129, 0.06)'
-                          : (idx % 2 === 0 ? '#fff' : '#fafbfc'),
-                    }}
-                  >
-                    <td style={{
-                      ...tdStyle, textAlign: 'center',
-                      fontWeight: row.isHeader ? 'bold' : 'normal',
-                      fontSize: row.isHeader ? '10px' : '9px'
-                    }}>
-                      {row.itemCode}
-                    </td>
-                    <td style={{
-                      ...tdStyle,
-                      fontWeight: row.isHeader ? 'bold' : 'normal',
-                      color: row.isVO ? '#059669' : '#111',
-                      paddingLeft: row.isHeader ? '6px' : '14px',
-                      fontSize: row.isHeader ? '10px' : '9.5px',
-                      borderLeft: row.isVO ? '3px solid #10b981' : undefined,
-                    }}>
-                      {row.description}
-                    </td>
-                    <td style={{ ...tdStyle, textAlign: 'center' }}>{row.isHeader ? '' : row.unit}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right' }}>{row.isHeader ? '' : (row.quantity > 0 ? row.quantity.toLocaleString() : '')}</td>
-                    {/* Direct Unit Cost breakdown */}
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#475569' }}>{row.isHeader ? '' : fmt(row.materialCost)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#475569' }}>{row.isHeader ? '' : fmt(row.laborCost)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#475569' }}>{row.isHeader ? '' : fmt(row.equipmentCost)}</td>
-                    {/* Total Direct Cost */}
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#334155', fontWeight: '500' }}>{row.isHeader ? '' : fmt(row.totalDirectCost)}</td>
-                    {/* Indirect costs */}
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#64748b', fontSize: '9px' }}>{row.isHeader ? '' : fmt(row.ocm)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#64748b', fontSize: '9px' }}>{row.isHeader ? '' : fmt(row.cp)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#64748b', fontSize: '9px' }}>{row.isHeader ? '' : fmt(row.vatVal)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#475569' }}>{row.isHeader ? '' : fmt(row.totalIndirectCost)}</td>
-                    {/* Unit Cost & Amount */}
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#0f172a', fontWeight: 'bold' }}>{row.isHeader ? '' : fmt(row.unitCost)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#059669', fontWeight: 'bold' }}>
-                      {row.isHeader
-                        ? ''
-                        : fmt(row.amount)}
-                    </td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#64748b', fontSize: '9px' }}>
-                      {!row.isHeader && grandTotal > 0 ? (row.amount / grandTotal * 100).toFixed(2) + '%' : ''}
-                    </td>
-                  </tr>
-                ))
+                awardedBoqItems.map((item, idx) => {
+                  const isHeader = !item.quantity && !item.totalCost;
+                  const qty = item.quantity || 0;
+
+                  return (
+                    <tr key={item.id} style={{ background: isHeader ? '#f0f4f8' : (idx % 2 === 0 ? '#fff' : '#fafbfc') }}>
+                      <td style={{ ...tdStyle, textAlign: 'center', fontWeight: isHeader ? 'bold' : 'normal' }}>
+                        {item.itemCode || ''}
+                      </td>
+                      <td style={{ ...tdStyle, fontWeight: isHeader ? 'bold' : 'normal' }}>
+                        {item.description}
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: 'center' }}>
+                        {isHeader ? '' : (item.unit || '')}
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: 'center' }}>
+                        {isHeader ? '' : (qty > 0 ? qty.toLocaleString() : '')}
+                      </td>
+
+                      {/* Direct Unit Cost breakdown */}
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>{isHeader ? '' : fmt(item.materialUnitCost)}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>{isHeader ? '' : fmt(item.laborUnitCost)}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>{isHeader ? '' : fmt(item.equipmentUnitCost)}</td>
+
+                      {/* Total Direct Cost */}
+                      <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 'bold' }}>{isHeader ? '' : fmt(item.directCost)}</td>
+
+                      {/* Indirect costs */}
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>{isHeader ? '' : fmt(item.ocmAmount)}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>{isHeader ? '' : fmt(item.cpAmount)}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>{isHeader ? '' : fmt(item.vatAmount)}</td>
+
+                      <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 'bold' }}>{isHeader ? '' : fmt(item.indirectCost)}</td>
+
+                      {/* Final Unit Cost & Amount */}
+                      <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 'bold' }}>{isHeader ? '' : fmt(item.combinedUnitCost)}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 'bold', color: '#0f172a' }}>
+                        {isHeader ? '' : fmt(item.totalCost)}
+                      </td>
+
+                      <td style={{ ...tdStyle, textAlign: 'right', color: '#64748b' }}>
+                        {(!isHeader && item.percentageOfTotal && item.percentageOfTotal > 0) ? item.percentageOfTotal.toFixed(2) + '%' : ''}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
-            <tfoot>
-              <tr style={{ background: '#0f172a', color: '#fff', fontWeight: 'bold' }}>
-                <td colSpan={13} style={{ ...tdStyle, textAlign: 'right', fontSize: '12px', padding: '10px 8px', borderColor: '#334155' }}>
-                  GRAND TOTAL:
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'right', fontSize: '12px', padding: '10px 8px', color: '#34d399', borderColor: '#334155' }}>
-                  {fmt(grandTotal)}
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'center', fontSize: '11px', padding: '10px 8px', borderColor: '#334155' }}>
-                  {grandTotal > 0 ? '100.00%' : ''}
-                </td>
-              </tr>
-            </tfoot>
+            {awardedBoqItems.length > 0 && (
+              <tfoot>
+                <tr style={{ background: '#0f172a', color: '#fff', fontWeight: 'bold' }}>
+                  <td colSpan={13} style={{ ...tdStyle, textAlign: 'right', padding: '10px' }}>GRAND TOTAL</td>
+                  <td style={{ ...tdStyle, textAlign: 'right', color: '#34d399', padding: '10px' }}>
+                    {grandTotal > 0 ? grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
+                  </td>
+                  <td style={tdStyle}></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
-        {/* Signature Block */}
-        <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'space-between', gap: '40px' }}>
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ borderTop: '1px solid #334155', paddingTop: '4px', marginTop: '50px', fontSize: '10px' }}>
-              Prepared By
-            </div>
+        <div style={{ marginTop: '50px', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ borderBottom: '1px solid #111', width: '200px', marginBottom: '8px' }}></div>
+            <div>Prepared By</div>
           </div>
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ borderTop: '1px solid #334155', paddingTop: '4px', marginTop: '50px', fontSize: '10px' }}>
-              Checked By
-            </div>
-          </div>
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ borderTop: '1px solid #334155', paddingTop: '4px', marginTop: '50px', fontSize: '10px' }}>
-              Approved By
-            </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ borderBottom: '1px solid #111', width: '200px', marginBottom: '8px' }}></div>
+            <div>Approved By</div>
           </div>
         </div>
+
       </div>
 
-      {/* Print Styles */}
-      <style>{`
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @media print {
           body * { visibility: hidden; }
           #pow-document, #pow-document * { visibility: visible; }
-          #pow-document {
-            position: absolute; left: 0; top: 0;
-            width: 100%; padding: 20px !important;
-            box-shadow: none !important; border-radius: 0 !important;
-          }
+          #pow-document { position: absolute; left: 0; top: 0; width: 100%; max-width: 100%; box-shadow: none; padding: 20px; }
           .pow-no-print { display: none !important; }
           .pow-no-print-hide { display: none !important; }
-          input {
-            border: none !important;
-            border-bottom: none !important;
-            outline: none !important;
-          }
+          input { border: none !important; background: transparent !important; }
+          input::placeholder { color: transparent !important; }
         }
-      `}</style>
+      `}} />
     </div>
   );
 }

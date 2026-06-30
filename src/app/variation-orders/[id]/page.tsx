@@ -129,8 +129,21 @@ export default function VariationOrderDetailPage() {
       else if (vo.currentStatus === 'FOR_FINANCE_REVIEW') stage = 'FINANCE_REVIEW';
       else if (vo.currentStatus === 'FOR_PD_APPROVAL') stage = 'PD_APPROVAL';
 
-      await approveVariationOrderStage(voId, stage, 'APPROVED', 'USER_ID_PLACEHOLDER', 'Approved via Dashboard');
-      toast.success('VO Approved!');
+      if (vo.currentStatus === 'FOR_PD_APPROVAL') {
+        // Final approval -> propagate to BOQ
+        const res = await fetch(`/api/projects/${vo.projectId}/variation-orders/${voId}/approve`, {
+          method: 'POST'
+        });
+        if (!res.ok) {
+           const err = await res.json();
+           throw new Error(err.error || 'Failed to propagate VO to BOQ');
+        }
+        toast.success('VO Final Approved and Integrated into BOQ & Schedule!');
+      } else {
+        await approveVariationOrderStage(voId, stage, 'APPROVED', 'USER_ID_PLACEHOLDER', 'Approved via Dashboard');
+        toast.success('VO Stage Approved!');
+      }
+      
       await fetchVO();
     } catch (error: any) {
       toast.error(error.message);
