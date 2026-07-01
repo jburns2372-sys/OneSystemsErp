@@ -6,8 +6,15 @@ import { cookies } from 'next/headers';
 export async function getDashboardStats() {
   const cookieStore = await cookies();
   const userId = cookieStore.get('session')?.value;
-  const activeProjectId = cookieStore.get('activeProjectId')?.value;
+  let activeProjectId = cookieStore.get('activeProjectId')?.value;
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
+
+  if (activeProjectId && activeProjectId !== 'ALL') {
+    const projectExists = await prisma.project.findUnique({ where: { id: activeProjectId } });
+    if (!projectExists) {
+      activeProjectId = undefined;
+    }
+  }
 
   let projectIds: string[] | undefined = undefined;
   
@@ -30,11 +37,11 @@ export async function getDashboardStats() {
     }
   }
 
-  let finalProjectFilter: any = {};
+  let finalProjectFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
   if (activeProjectId && activeProjectId !== 'ALL') {
-    finalProjectFilter = { id: activeProjectId };
+    finalProjectFilter.id = activeProjectId;
   } else if (projectIds !== undefined) {
-    finalProjectFilter = { id: { in: projectIds } };
+    finalProjectFilter.id = { in: projectIds };
   }
 
   let relationProjectFilter: any = {};
@@ -44,18 +51,24 @@ export async function getDashboardStats() {
     relationProjectFilter = { projectId: { in: projectIds } };
   }
 
-  const totalProjects = await prisma.project.count({ where: finalProjectFilter });
+  // Portfolio-wide filters (ignore activeProjectId for high-level counts)
+  let portfolioFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
+  if (projectIds !== undefined) {
+    portfolioFilter.id = { in: projectIds };
+  }
+
+  const totalProjects = await prisma.project.count({ where: portfolioFilter });
   const totalUsers = await prisma.user.count();
 
   const pendingMRs = await prisma.materialRequest.count({
     where: { status: 'PENDING', ...relationProjectFilter },
   });
 
-  const projects = await prisma.project.findMany({
-    where: finalProjectFilter,
+  const allPortfolioProjects = await prisma.project.findMany({
+    where: portfolioFilter,
     select: { contractAmount: true },
   });
-  const totalBudget = projects.reduce((sum, p) => sum + (p.contractAmount || 0), 0);
+  const totalBudget = allPortfolioProjects.reduce((sum, p) => sum + (p.contractAmount || 0), 0);
 
   const expenses = await prisma.expense.aggregate({
     where: relationProjectFilter,
@@ -196,16 +209,65 @@ export async function deleteProject(projectId: string) {
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user || user.role !== 'SUPER_ADMIN') {
+    if (!user) {
+      return { success: false, error: 'Unauthorized: User not found' };
+    }
+
+    const simulatedRole = cookieStore.get('simulatedRole')?.value;
+    const effectiveRole = simulatedRole ? simulatedRole : user.role;
+
+    if (effectiveRole !== 'SUPER_ADMIN' && effectiveRole !== 'SYSTEM_ADMIN') {
       return { success: false, error: 'Unauthorized: Only SUPER_ADMIN can delete projects' };
     }
 
-    await prisma.project.delete({
-      where: { id: projectId }
-    });
+    // Manual cascade delete to avoid foreign key constraint errors
+    await prisma.$transaction([
+      prisma.projectUserAssignment.deleteMany({ where: { projectId } }),
+      prisma.bOQExtractedItem.deleteMany({ where: { projectId } }),
+      prisma.bOQExtractedSection.deleteMany({ where: { projectId } }),
+      prisma.workbookFormulaValidation.deleteMany({ where: { workbookFile: { projectId } } }),
+      prisma.workbookExtractionAudit.deleteMany({ where: { projectId } }),
+      prisma.uploadedWorkbookFile.deleteMany({ where: { projectId } }),
+      prisma.awardedBOQItem.deleteMany({ where: { projectId } }),
+      prisma.scheduleProgressUpdate.deleteMany({ where: { activity: { schedule: { projectId } } } }),
+      prisma.scheduleDelayRecord.deleteMany({ where: { activity: { schedule: { projectId } } } }),
+      prisma.scheduleActivity.deleteMany({ where: { schedule: { projectId } } }),
+      prisma.projectSchedule.deleteMany({ where: { projectId } }),
+      prisma.project.delete({ where: { id: projectId } })
+    ]);
+    
     return { success: true };
   } catch (error: any) {
     console.error('Error deleting project:', error);
     return { success: false, error: error.message || 'Failed to delete project' };
+  }
+}
+
+export async function updateProjectDates(projectId: string, startDateStr: string, durationDays: number) {
+  try {
+    const startDate = new Date(startDateStr);
+    const originalCompletionDate = new Date(startDate);
+    originalCompletionDate.setDate(originalCompletionDate.getDate() + durationDays);
+
+    const project = await prisma.project.update({
+      where: { id: projectId },
+      data: {
+        startDate,
+        originalContractDuration: durationDays,
+        originalCompletionDate,
+        revisedCompletionDate: originalCompletionDate, // Align revised with original for safety initially
+      },
+      include: {
+        projectSchedule: true
+      }
+    });
+
+    return {
+      success: true,
+      hasSchedule: !!project.projectSchedule
+    };
+  } catch (error: any) {
+    console.error('Error updating project dates:', error);
+    return { success: false, error: error.message || 'Failed to update project dates' };
   }
 }

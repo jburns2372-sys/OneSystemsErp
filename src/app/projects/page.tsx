@@ -22,6 +22,14 @@ export default async function ProjectsPage() {
     : (user?.role || 'GUEST_USER');
   const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
 
+  console.log('--- PROJECTS PAGE DEBUG ---');
+  console.log('userId:', userId);
+  console.log('user.role:', user?.role);
+  console.log('simulatedRole:', simulatedRole);
+  console.log('effectiveRole:', effectiveRole);
+  console.log('isSuperAdmin:', isSuperAdmin);
+
+
   const projects = await prisma.project.findMany({
     where: isSuperAdmin ? {} : {
       userAssignments: {
@@ -32,7 +40,10 @@ export default async function ProjectsPage() {
       }
     },
     orderBy: { createdAt: 'desc' },
-    include: { manager: true }
+    include: { 
+      manager: true,
+      consolidatedBoqItems: { select: { totalCost: true } }
+    }
   });
 
   const canAssignManager = permissions?.PROJECT_MANAGEMENT?.canUpdate || false;
@@ -81,7 +92,7 @@ export default async function ProjectsPage() {
             <tr>
               <th>Project Name</th>
               <th>Status</th>
-              <th>Contract Amount</th>
+              <th>Contract Amounts</th>
               <th>Timeline</th>
               <th>Manager</th>
               <th>Actions</th>
@@ -94,6 +105,7 @@ export default async function ProjectsPage() {
               </tr>
             ) : projects.map(project => {
               const formatDate = (d: any) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBA';
+              const consolidatedCost = project.consolidatedBoqItems?.reduce((sum, i) => sum + (i.totalCost || 0), 0) || 0;
               return (
               <tr key={project.id}>
                 <td>
@@ -106,7 +118,8 @@ export default async function ProjectsPage() {
                   </span>
                 </td>
                 <td className={styles.amount}>
-                  ₱ {project.contractAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <div><strong>Awarded:</strong> ₱ {project.contractAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                  <div style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '4px' }}><strong>Materials:</strong> ₱ {consolidatedCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 </td>
                 <td style={{ fontSize: '0.85rem', color: '#4b5563', whiteSpace: 'nowrap' }}>
                   <div><strong>Start:</strong> {formatDate(project.startDate)}</div>

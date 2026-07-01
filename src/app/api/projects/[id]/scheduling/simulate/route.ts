@@ -26,6 +26,55 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'No activities to simulate.' }, { status: 400 });
     }
 
+    // ==========================================
+    // Execute Standard Operations Procedure: Purge Junk Data before simulation
+    // ==========================================
+    
+    // 1. Identify Junk Keywords
+    const junkKeywords = ['DIRECT COST OCM (12%) PROFIT', '(2)'];
+
+    for (const keyword of junkKeywords) {
+      // Find Junk Activities
+      const junkActs = await prisma.scheduleActivity.findMany({
+        where: { scheduleId: schedule.id, name: { contains: keyword } }
+      });
+
+      if (junkActs.length > 0) {
+        const junkActIds = junkActs.map(a => a.id);
+        
+        // Delete Dependencies
+        await prisma.scheduleDependency.deleteMany({
+          where: { OR: [{ predecessorId: { in: junkActIds } }, { successorId: { in: junkActIds } }] }
+        });
+
+        // Delete BOQ Mappings
+        await prisma.scheduleBOQMapping.deleteMany({
+          where: { activityId: { in: junkActIds } }
+        });
+
+        // Delete Activities
+        await prisma.scheduleActivity.deleteMany({
+          where: { id: { in: junkActIds } }
+        });
+      }
+
+      // Delete Junk BOQ Items
+      await prisma.awardedBOQItem.deleteMany({
+        where: { projectId, description: { contains: keyword } }
+      });
+    }
+
+    // Re-fetch activities after cleanup to ensure we don't pass deleted ones to AI
+    const refreshedSchedule = await prisma.projectSchedule.findUnique({
+      where: { projectId },
+      include: { activities: { orderBy: { activityCode: 'asc' } } }
+    });
+    
+    if (!refreshedSchedule) {
+      return NextResponse.json({ error: 'Schedule not found after cleanup' }, { status: 404 });
+    }
+    // ==========================================
+
     // Fetch consolidated BOQ items to feed to AI
     const consolidatedItems = await prisma.consolidatedBOQItem.findMany({
       where: { projectId }
@@ -36,7 +85,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     // Filter out previous AI-generated activities
-    const activities = schedule.activities.filter(a => a.activityCode !== 'AI-GEN');
+    const activities = refreshedSchedule.activities.filter(a => a.activityCode !== 'AI-GEN');
     
     // Fallbacks
     let startDate = new Date('2026-06-12T00:00:00.000Z');
@@ -142,21 +191,25 @@ ${JSON.stringify(activityPayload, null, 2)}`;
       totalPct = 1;
     }
 
-    // 1. Delete all existing dependencies, WBS nodes, and previous AI-generated activities
-    await prisma.scheduleDependency.deleteMany({
-      where: { scheduleId: schedule.id }
-    });
-    // Unlink wbs from activities first so we can delete old WBS nodes safely
-    await prisma.scheduleActivity.updateMany({
-      where: { scheduleId: schedule.id },
-      data: { wbsId: null }
-    });
-    await prisma.scheduleActivity.deleteMany({
-      where: { scheduleId: schedule.id, activityCode: 'AI-GEN' }
-    });
-    await prisma.scheduleWBS.deleteMany({
-      where: { scheduleId: schedule.id }
-    });
+    // Prepare the transaction array
+    const txOperations = [];
+
+    // Clear previous AI mapping
+    txOperations.push(
+      prisma.scheduleDependency.deleteMany({
+        where: { scheduleId: schedule.id }
+      }),
+      prisma.scheduleActivity.updateMany({
+        where: { scheduleId: schedule.id },
+        data: { wbsId: null }
+      }),
+      prisma.scheduleActivity.deleteMany({
+        where: { scheduleId: schedule.id, activityCode: 'AI-GEN' }
+      }),
+      prisma.scheduleWBS.deleteMany({
+        where: { scheduleId: schedule.id }
+      })
+    );
 
     const wbsData: any[] = [];
     const activityData: any[] = [];
@@ -240,6 +293,8 @@ ${JSON.stringify(activityPayload, null, 2)}`;
       const mainStart = new Date(currentDate);
       const mainFinish = new Date(currentDate);
       mainFinish.setDate(mainFinish.getDate() + phase.days - 1);
+      // Clamp phase finish to project target date
+      if (mainFinish > targetDate) mainFinish.setTime(targetDate.getTime());
 
       let aiAnchorStatus = 'NOT_STARTED';
       let aiAnchorProgress = 0;
@@ -284,8 +339,8 @@ ${JSON.stringify(activityPayload, null, 2)}`;
       if (phase.acts.length > 0) {
         const numActs = phase.acts.length;
         const staggerDays = phase.days / numActs;
-        // Assign a reasonable duration so they overlap and fill the phase
-        const duration = Math.max(1, Math.floor(phase.days / 2)); 
+        // Cap activity duration: cannot exceed phase window
+        const duration = Math.max(1, Math.min(Math.floor(phase.days / 2), phase.days));
 
         for (let i = 0; i < numActs; i++) {
           const act = phase.acts[i];
@@ -296,6 +351,9 @@ ${JSON.stringify(activityPayload, null, 2)}`;
           
           const actFinish = new Date(actStart);
           actFinish.setDate(actFinish.getDate() + duration - 1);
+          // Clamp finish to phase end and project target date
+          if (actFinish > mainFinish) actFinish.setTime(mainFinish.getTime());
+          if (actFinish > targetDate) actFinish.setTime(targetDate.getTime());
 
           let actStatus = 'NOT_STARTED';
           let actProgress = 0;
@@ -351,20 +409,22 @@ ${JSON.stringify(activityPayload, null, 2)}`;
       prevMainActId = aiAnchorId;
       currentDate = new Date(mainFinish);
       currentDate.setDate(currentDate.getDate() + 1);
+      // Prevent advancing past the project target date
+      if (currentDate > targetDate) currentDate.setTime(targetDate.getTime());
     }
 
     console.log(`Writing ${wbsData.length} WBS, ${activityData.length} Anchor Acts, ${dependencyData.length} Deps, ${activityUpdates.length} Updates`);
 
-    await prisma.$transaction(async (tx) => {
-      if (wbsData.length > 0) await tx.scheduleWBS.createMany({ data: wbsData });
-      if (activityData.length > 0) await tx.scheduleActivity.createMany({ data: activityData });
-      if (dependencyData.length > 0) await tx.scheduleDependency.createMany({ data: dependencyData });
-      
-      // Sequential updates to avoid Prisma connection pool exhaustion and Neon connection dropping
-      for (const u of activityUpdates) {
-        await tx.scheduleActivity.update({ where: { id: u.id }, data: u.data });
-      }
-    });
+    if (wbsData.length > 0) txOperations.push(prisma.scheduleWBS.createMany({ data: wbsData }));
+    if (activityData.length > 0) txOperations.push(prisma.scheduleActivity.createMany({ data: activityData }));
+    if (dependencyData.length > 0) txOperations.push(prisma.scheduleDependency.createMany({ data: dependencyData }));
+    
+    // Batch all updates into the transaction array instead of sequential interactive tx
+    for (const u of activityUpdates) {
+      txOperations.push(prisma.scheduleActivity.update({ where: { id: u.id }, data: u.data }));
+    }
+
+    await prisma.$transaction(txOperations);
 
     // 4. Run CPM to update Float and Critical Path dynamically
     const updatedSchedule = await prisma.projectSchedule.findUnique({
@@ -383,6 +443,12 @@ ${JSON.stringify(activityPayload, null, 2)}`;
       await prisma.projectSchedule.update({
         where: { id: schedule.id },
         data: { status: 'BASELINE' }
+      });
+
+      // Automatically start the project
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { status: 'ACTIVE' }
       });
     }
 

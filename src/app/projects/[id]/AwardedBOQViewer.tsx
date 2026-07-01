@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { downloadAwardedBOQTemplate } from '@/app/actions/mutations';
+import { downloadRawOriginalBOQTemplate, getAwardedBOQOnlyofficeConfig, getExactExcelHtml } from '@/app/actions/mutations';
+import { DocumentEditor } from '@onlyoffice/document-editor-react';
 
 interface AwardedBOQViewerProps {
   projectId: string;
@@ -15,11 +16,34 @@ export default function AwardedBOQViewer({ projectId, htmlTable, consolidatedHtm
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isConsolidatedView, setIsConsolidatedView] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  
+  const [showSpreadsheet, setShowSpreadsheet] = useState(false);
+  const [onlyofficeConfig, setOnlyofficeConfig] = useState<any>(null);
+  const [documentServerUrl, setDocumentServerUrl] = useState<string>('');
+  const [useHtmlFallback, setUseHtmlFallback] = useState(false);
+  const [exactHtml, setExactHtml] = useState<string | null>(null);
+
+  const fetchOnlyofficeConfig = async () => {
+    if (onlyofficeConfig) return true;
+    setIsDownloading(true);
+    try {
+      const baseUrl = window.location.origin;
+      const data = await getAwardedBOQOnlyofficeConfig(projectId, baseUrl);
+      setOnlyofficeConfig(data.config);
+      setDocumentServerUrl(data.documentServerUrl);
+      return true;
+    } catch (err: any) {
+      alert(err.message || 'Failed to load template layout. It may not exist.');
+      return false;
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const handleDownloadTemplate = async () => {
     try {
       setIsDownloading(true);
-      const base64Data = await downloadAwardedBOQTemplate(projectId);
+      const base64Data = await downloadRawOriginalBOQTemplate(projectId);
       const binaryString = window.atob(base64Data);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
@@ -33,15 +57,151 @@ export default function AwardedBOQViewer({ projectId, htmlTable, consolidatedHtm
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message || 'Failed to download template. It may not exist.');
+      alert(err.message || 'Failed to download template.');
     } finally {
       setIsDownloading(false);
     }
   };
 
+  const handleViewSpreadsheet = async () => {
+    const success = await fetchOnlyofficeConfig();
+    if (success) {
+      setShowSpreadsheet(true);
+    }
+  };
+
+  const onLoadComponentError = async (errorCode: any, errorDescription: any) => {
+    console.warn("ONLYOFFICE Load Warning (caught):", errorCode, errorDescription);
+    // Silently fallback to HTML viewer without an alert
+    
+    setUseHtmlFallback(true);
+    setOnlyofficeConfig(null);
+    
+    setIsDownloading(true);
+    try {
+      const rawHtml = await getExactExcelHtml(projectId);
+      
+      // Parse the HTML to format numbers (commas, 2 decimals, percentages)
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(rawHtml, 'text/html');
+      const tds = doc.querySelectorAll('td');
+      
+      tds.forEach(td => {
+        const text = td.textContent?.trim() || '';
+        if (!text || text === '') return;
+        
+        // Strict number check
+        if (/^-?\d*\.?\d+$/.test(text)) {
+          const num = Number(text);
+          
+          // Format specific small decimals (like 0.08, 0.05) as percentages
+          if (num > 0 && num < 1 && text.length <= 5) {
+            td.textContent = (num * 100).toFixed(2) + '%';
+          } else {
+            // Format everything else with commas and 2 decimal places
+            td.textContent = num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            
+            // Align numbers to the right for better readability
+            td.style.textAlign = 'right';
+          }
+        }
+      });
+      
+      setExactHtml(doc.body.innerHTML);
+    } catch (err: any) {
+      alert("Fallback also failed: " + err.message);
+      setShowSpreadsheet(false);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  if (showSpreadsheet) {
+    if (useHtmlFallback) {
+      return (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: '#f3f4f6', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '15px', background: '#fff', borderBottom: '1px solid #ccc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>📄 Original Excel Layout (HTML Fallback)</h2>
+            <button onClick={() => { setShowSpreadsheet(false); setUseHtmlFallback(false); }} className="btn-secondary" style={{ padding: '6px 12px', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}>
+              Close
+            </button>
+          </div>
+          <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+            {!exactHtml ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <h3>Loading HTML Fallback Layout... This may take a few seconds...</h3>
+              </div>
+            ) : (
+              <>
+                <style>{`
+                  .html-fallback-viewer td, .html-fallback-viewer th, .html-fallback-viewer span, .html-fallback-viewer div {
+                    color: #111827 !important;
+                  }
+                  .html-fallback-viewer table {
+                    border-collapse: collapse;
+                    width: 100% !important;
+                    table-layout: auto;
+                  }
+                  .html-fallback-viewer td, .html-fallback-viewer th {
+                    border: 1px solid #d1d5db !important;
+                    padding: 4px 4px !important;
+                    white-space: normal !important;
+                    font-size: 0.75rem !important;
+                    word-break: break-word;
+                  }
+                  .html-fallback-viewer span, .html-fallback-viewer div {
+                    font-size: 0.75rem !important;
+                    white-space: normal !important;
+                  }
+                `}</style>
+                <div className="html-fallback-viewer" style={{ background: '#fff', padding: '20px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', borderRadius: '8px', maxWidth: '1400px', margin: '0 auto', overflowX: 'auto' }}
+                     dangerouslySetInnerHTML={{ __html: exactHtml }} />
+              </>
+            )}
+          </div>
+        </div>
+      );
+    } else if (onlyofficeConfig) {
+      return (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: '#f3f4f6', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '15px', background: '#fff', borderBottom: '1px solid #ccc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>📄 Original Excel Layout</h2>
+            <button onClick={() => setShowSpreadsheet(false)} className="btn-secondary" style={{ padding: '6px 12px', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}>
+              Close
+            </button>
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <DocumentEditor
+              id="awarded-boq-viewer"
+              documentServerUrl={documentServerUrl}
+              config={onlyofficeConfig}
+              onLoadComponentError={onLoadComponentError}
+              height="100%"
+            />
+          </div>
+        </div>
+      );
+    }
+  }
+
   return (
     <div className={isFullscreen ? "fullscreen-wrapper" : "normal-wrapper"}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
+        <button 
+          onClick={handleViewSpreadsheet}
+          disabled={isDownloading}
+          className="btn-primary"
+          style={{ 
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
+            color: '#fff',
+            borderColor: '#059669',
+            fontWeight: 'bold',
+            zIndex: 10000,
+            cursor: isDownloading ? 'not-allowed' : 'pointer'
+          }}
+        >
+          {isDownloading && !onlyofficeConfig ? 'Loading...' : '📊 View Original Excel Layout'}
+        </button>
         <button 
           onClick={handleDownloadTemplate}
           disabled={isDownloading}

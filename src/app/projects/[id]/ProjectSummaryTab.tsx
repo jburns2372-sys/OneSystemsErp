@@ -3,6 +3,7 @@ import React from 'react';
 import { 
   Wallet, DollarSign, Activity, AlertCircle, FileText, Briefcase, Truck, HardHat, Calendar, Clock, BarChart3, Receipt
 } from 'lucide-react';
+import ProjectTimelineEditor from './ProjectTimelineEditor';
 
 export default async function ProjectSummaryTab({ projectId }: { projectId: string }) {
   const project = await prisma.project.findUnique({
@@ -161,6 +162,11 @@ export default async function ProjectSummaryTab({ projectId }: { projectId: stri
                 {daysElapsed} / {totalDays} Days
               </p>
             </div>
+            <ProjectTimelineEditor 
+              projectId={projectId} 
+              initialStartDate={project.startDate?.toISOString() || null} 
+              initialDuration={project.originalContractDuration || totalDays || null} 
+            />
           </div>
           
           <div style={{ marginTop: '20px' }}>

@@ -42,6 +42,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
     });
 
+    // Also mark the project as ACTIVE now that the schedule is locked
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { status: 'ACTIVE', startDate: new Date() }
+    });
+
     return NextResponse.json({ success: true, message: 'Baseline locked successfully' });
   } catch (error: any) {
     console.error('Error locking baseline:', error);

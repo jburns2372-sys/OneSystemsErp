@@ -26,13 +26,12 @@ import ProjectBillingTab from './ProjectBillingTab';
 import ProjectReportsTab from './ProjectReportsTab';
 import ProjectAuditTrailTab from './ProjectAuditTrailTab';
 import ProjectAIAssistantTab from './ProjectAIAssistantTab';
-import ProjectProgramOfWorksTab from './ProjectProgramOfWorksTab';
+import ProjectStatusOverride from './ProjectStatusOverride';
 
 const PROJECT_TABS = [
   { id: 'summary', label: 'Project Summary', group: 'Overview' },
   { id: 'team-access', label: 'Team Access', group: 'Overview' },
   { id: 'awarded-boq', label: 'Contract Value & BOQ', group: 'Planning' },
-  { id: 'program-of-works', label: 'Program of Works', group: 'Planning' },
   { id: 'benchmark', label: 'Procurement Benchmark', group: 'Planning' },
   { id: 'consolidation', label: 'Master Materials List', group: 'Planning' },
   { id: 'profitability', label: 'Profitability Center (Cash Flow & Variance)', group: 'Financials' },
@@ -224,7 +223,7 @@ export default async function ProjectDetailsPage({
           <div style={{ fontSize: '1.15rem', color: 'var(--accent-color)', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
             ₱ {project.contractAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
-          <div style={{ color: 'var(--text-secondary)' }}>Status: {project.status}</div>
+          <ProjectStatusOverride projectId={project.id} currentStatus={project.status} />
           <div style={{ color: 'var(--text-secondary)' }}>Location: {project.location || 'N/A'}</div>
           {project.startDate && <div style={{ color: 'var(--text-secondary)' }}>Date Started: {new Date(project.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} (15 Days post-NTP)</div>}
           {project.originalCompletionDate && <div style={{ color: 'var(--text-secondary)' }}>Target Completion: {new Date(project.originalCompletionDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} (180 Calendar Days)</div>}
@@ -387,19 +386,6 @@ export default async function ProjectDetailsPage({
 
       {tab === 'ai-assistant' && (
         <ProjectAIAssistantTab projectId={project.id} />
-      )}
-
-      {tab === 'program-of-works' && (
-        <ProjectProgramOfWorksTab
-          projectId={project.id}
-          projectName={project.name}
-          projectLocation={project.location || ''}
-          letterheadLine1={(project as any).letterheadLine1 || undefined}
-          letterheadLine2={(project as any).letterheadLine2 || undefined}
-          letterheadLine3={(project as any).letterheadLine3 || undefined}
-          letterheadLogo={(project as any).letterheadLogo || undefined}
-          awardedBoqItems={JSON.parse(JSON.stringify(project.awardedBoqItems || []))}
-        />
       )}
 
     </div>

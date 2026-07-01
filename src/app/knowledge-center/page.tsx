@@ -1,9 +1,14 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import { getUserPermissions } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function KnowledgeCenterPage() {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value || '';
+  const permissions = await getUserPermissions(sessionId);
   const totalRecords = await prisma.knowledgeRecord.count();
   const approvedRecords = await prisma.knowledgeRecord.count({ where: { status: 'Approved' } });
   const reviewRecords = await prisma.knowledgeRecord.count({ where: { status: 'For Review' } });
@@ -72,6 +77,18 @@ export default async function KnowledgeCenterPage() {
             Read Manual
           </Link>
         </div>
+
+        {permissions.IS_ADMIN && (
+          <div style={{ background: 'rgba(231, 76, 60, 0.1)', padding: '25px', borderRadius: '12px', border: '1px solid rgba(231, 76, 60, 0.3)' }}>
+            <h2 style={{ margin: '0 0 15px 0', color: '#e74c3c' }}>AI Control Panel</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+              Master settings for Bulk Autodiscovery, RAG Keyword Registry, and Embeddings.
+            </p>
+            <Link href="/knowledge-center/admin-center" style={{ padding: '10px 20px', background: '#e74c3c', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold' }}>
+              Open Admin AI Center
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

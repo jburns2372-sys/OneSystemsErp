@@ -224,6 +224,9 @@ export async function getProjectPortfolio() {
       billings: {
         where: { status: { in: ['APPROVED', 'SUBMITTED', 'PAID'] } },
         select: { currentBillingAmount: true, payments: { select: { amountPaid: true } } }
+      },
+      consolidatedBoqItems: {
+        select: { totalCost: true }
       }
     }
   });
@@ -233,6 +236,7 @@ export async function getProjectPortfolio() {
     const revisedAmount = p.contractAmount + totalVOs;
     const totalBilled = p.billings.reduce((sum, b) => sum + b.currentBillingAmount, 0);
     const progress = revisedAmount > 0 ? (totalBilled / revisedAmount) * 100 : 0;
+    const consolidatedCost = p.consolidatedBoqItems.reduce((sum, i) => sum + (i.totalCost || 0), 0);
     
     return {
       ...p,
@@ -240,6 +244,7 @@ export async function getProjectPortfolio() {
       revisedAmount,
       totalBilled,
       progressPercentage: progress,
+      consolidatedCost,
       // Default to GRAY risk if no score exists yet
       riskLevel: p.projectValidationScore?.riskLevel || 'GRAY',
       validationConfidenceScore: p.projectValidationScore?.validationConfidenceScore || 0

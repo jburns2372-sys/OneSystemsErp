@@ -8,6 +8,7 @@ import { getUserPermissions } from '@/lib/permissions';
 import MainContentWrapper from '@/components/layout/MainContentWrapper';
 import Topbar from '@/components/layout/Topbar';
 import { Toaster } from 'sonner';
+import FloatingAIAssistant from '@/components/FloatingAIAssistant';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -76,6 +77,7 @@ export default async function RootLayout({
           <MainContentWrapper permissions={permissions} user={user} topbar={userId ? <Topbar /> : null}>
             {children}
             <Toaster position="top-right" richColors />
+            {userId && <FloatingAIAssistant />}
           </MainContentWrapper>
         </OfflineSyncProvider>
       </body>

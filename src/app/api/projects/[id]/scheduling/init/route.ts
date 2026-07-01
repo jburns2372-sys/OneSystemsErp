@@ -77,6 +77,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (consolidateBoq) {
           // AI SCHEDULE SIMULATION LOGIC
           
+          // ── Extract project contractual boundaries ──
+          let projectStartDate = new Date();
+          let projectEndDate: Date;
+          if (project.startDate) {
+            projectStartDate = new Date(project.startDate);
+          }
+          if (project.originalCompletionDate) {
+            projectEndDate = new Date(project.originalCompletionDate);
+          } else if (project.endDate) {
+            projectEndDate = new Date(project.endDate);
+          } else {
+            projectEndDate = new Date(projectStartDate);
+            projectEndDate.setDate(projectEndDate.getDate() + (calendarDays || 180));
+          }
+          const totalProjectDays = Math.max(1, Math.ceil(Math.abs(projectEndDate.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24)));
+
           // First, perform in-memory consolidation to reduce payload size to AI
           const groups = new Map<string, any>();
           for (const item of awardedBoqItems) {
@@ -113,12 +129,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           }));
 
           const prompt = `You are an expert construction project manager. 
-We are building a project schedule for a construction project with a target of ${calendarDays} calendar days.
+We are building a project schedule for a construction project.
+CONTRACT START DATE: ${projectStartDate.toISOString().split('T')[0]}
+CONTRACT END DATE: ${projectEndDate.toISOString().split('T')[0]}
+TOTAL PROJECT DURATION: ${totalProjectDays} calendar days.
+
+CRITICAL CONSTRAINT: The total of ALL activity durations, when arranged within their phases, MUST fit within ${totalProjectDays} calendar days total. No individual activity duration should exceed 30% of the total project duration. Activities within each phase will run in PARALLEL (overlapping), not sequentially.
+
 I have a pre-consolidated list of BOQ (Bill of Quantities) items. 
 DO NOT CONSOLIDATE THEM FURTHER. Each item in this list MUST become exactly one distinct Schedule Activity.
 Please do the following:
-1. Define 3 to 6 logical construction sub-phases (e.g. Mobilization, Execution, Testing). Provide a unique 'code' for each sub-phase. These will be nested under a master 'Construction Phase'.
-2. For EACH item in the provided BOQ list, assign it to the most appropriate sub-phase (wbsCode) and estimate a realistic 'durationDays'. You MUST return an activity for every single item provided, using its exact 'id'.
+1. Define 3 to 6 logical construction sub-phases (e.g. Mobilization, Execution, Testing). Provide a unique 'code' for each sub-phase and a 'pct' (percentage of total project duration, must sum to 1.0). These will be nested under a master 'Construction Phase'.
+2. For EACH item in the provided BOQ list, assign it to the most appropriate sub-phase (wbsCode) and estimate a realistic 'durationDays' (must not exceed ${Math.round(totalProjectDays * 0.3)} days). You MUST return an activity for every single item provided, using its exact 'id'.
 3. Identify logical sequence dependencies between these items based on their descriptions. Use the item 'id' to link predecessor and successor.
 
 BOQ Items:
@@ -135,6 +157,7 @@ ${JSON.stringify(payload, null, 2)}`;
                   properties: {
                     code: { type: Type.STRING, description: "Unique phase code e.g. WBS-1" },
                     name: { type: Type.STRING, description: "Phase name" },
+                    pct: { type: Type.NUMBER, description: "Percentage of total project duration (0.0 to 1.0)" },
                     orderIndex: { type: Type.INTEGER }
                   }
                 }
@@ -227,70 +250,119 @@ ${JSON.stringify(payload, null, 2)}`;
              });
           }
 
-          // 2. Prepare Activities and Mappings
-          const activityMap = new Map();
-          let startDate = new Date();
-          
-          const activitiesToInsert = [];
-          const mappingsToInsert = [];
+          // ── Phase-aware date distribution ──
+          // Normalize AI phase percentages and compute phase date boundaries
+          let totalPct = phases.reduce((sum: number, p: any) => sum + (p.pct || 0), 0);
+          if (totalPct === 0) {
+            phases.forEach((p: any) => p.pct = 1 / phases.length);
+            totalPct = 1;
+          }
 
-          for (let i = 0; i < activities.length; i++) {
-            const act = activities[i];
-            
-            // Fuzzy match WBS
-            let wbsId = wbsMap.get(act.wbsCode);
+          // Compute phase date windows within the project boundary
+          const phaseWindows = new Map<string, { start: Date; end: Date; days: number }>();
+          let phaseCursor = new Date(projectStartDate);
+          let daysAllocated = 0;
+          for (let i = 0; i < phases.length; i++) {
+            const p = phases[i];
+            let phaseDays: number;
+            if (i === phases.length - 1) {
+              phaseDays = totalProjectDays - daysAllocated;
+            } else {
+              const normalizedPct = (p.pct || 0) / totalPct;
+              phaseDays = Math.max(1, Math.round(totalProjectDays * normalizedPct));
+              daysAllocated += phaseDays;
+            }
+            const phaseStart = new Date(phaseCursor);
+            const phaseEnd = new Date(phaseStart);
+            phaseEnd.setDate(phaseEnd.getDate() + phaseDays - 1);
+            // Clamp to project end
+            if (phaseEnd > projectEndDate) phaseEnd.setTime(projectEndDate.getTime());
+            phaseWindows.set(p.code, { start: phaseStart, end: phaseEnd, days: phaseDays });
+            phaseCursor = new Date(phaseEnd);
+            phaseCursor.setDate(phaseCursor.getDate() + 1);
+          }
+
+          // 2. Prepare Activities and Mappings — distribute within phase windows
+          const activityMap = new Map();
+          const activitiesToInsert: any[] = [];
+          const mappingsToInsert: any[] = [];
+
+          // Group AI activities by their phase code
+          const actsByPhase = new Map<string, any[]>();
+          for (const act of activities) {
+            const phaseCode = act.wbsCode || phases[0]?.code || 'GEN';
+            if (!actsByPhase.has(phaseCode)) actsByPhase.set(phaseCode, []);
+            actsByPhase.get(phaseCode)!.push(act);
+          }
+
+          for (const [phaseCode, phaseActs] of actsByPhase) {
+            // Fuzzy-match the phase code to a known WBS
+            let wbsId = wbsMap.get(phaseCode);
             if (!wbsId) {
-              const normalizedWbsCode = (act.wbsCode || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-              const matchedPhase = phases.find((p: any) => 
+              const normalizedWbsCode = phaseCode.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const matchedPhase = phases.find((p: any) =>
                 p.code.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedWbsCode ||
                 p.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(normalizedWbsCode) ||
                 normalizedWbsCode.includes(p.code.toLowerCase().replace(/[^a-z0-9]/g, ''))
               );
-              if (matchedPhase) {
-                wbsId = wbsMap.get(matchedPhase.code);
-              }
+              if (matchedPhase) wbsId = wbsMap.get(matchedPhase.code);
             }
             wbsId = wbsId || Array.from(wbsMap.values())[0] || fallbackWbsId;
-
             if (!wbsId) continue;
 
-            let duration = parseInt(act.durationDays);
-            if (isNaN(duration) || duration < 1) duration = 1;
+            const window = phaseWindows.get(phaseCode) || phaseWindows.values().next().value;
+            if (!window) continue;
+            const phaseDays = window.days;
+            const numActs = phaseActs.length;
+            const staggerDays = numActs > 1 ? phaseDays / numActs : 0;
 
-            const endDate = new Date(startDate);
-            endDate.setDate(endDate.getDate() + duration);
+            for (let i = 0; i < numActs; i++) {
+              const act = phaseActs[i];
+              let duration = parseInt(act.durationDays);
+              if (isNaN(duration) || duration < 1) duration = 1;
+              // Cap duration: cannot exceed the phase window
+              duration = Math.min(duration, phaseDays);
 
-            // Find the consolidated group to pull exact name and code
-            const groupIndex = parseInt(act.id.replace('ITEM_', ''));
-            const group = consolidatedItems[groupIndex];
-            if (!group) continue;
+              const lagFromStart = Math.floor(i * staggerDays);
+              const actStart = new Date(window.start);
+              actStart.setDate(actStart.getDate() + lagFromStart);
 
-            const newActId = crypto.randomUUID();
-            activitiesToInsert.push({
-              id: newActId,
-              scheduleId: newSchedule.id,
-              wbsId: wbsId,
-              activityCode: group.itemCode,
-              name: group.description,
-              plannedStartDate: startDate,
-              plannedFinishDate: endDate,
-              plannedDuration: duration,
-              plannedQuantity: group.quantity,
-              unit: group.unit,
-              status: 'NOT_STARTED'
-            });
-            activityMap.set(act.id, newActId);
+              let actFinish = new Date(actStart);
+              actFinish.setDate(actFinish.getDate() + duration - 1);
+              // Clamp finish to phase end and project end
+              if (actFinish > window.end) actFinish = new Date(window.end);
+              if (actFinish > projectEndDate) actFinish = new Date(projectEndDate);
 
-            // Directly map the exact raw BOQ items from this group
-            for (const item of group.items) {
-              mappingsToInsert.push({
-                activityId: newActId,
-                awardedBoqItemId: item.id,
-                mappedQuantity: item.quantity
+              // Find the consolidated group
+              const groupIndex = parseInt(act.id.replace('ITEM_', ''));
+              const group = consolidatedItems[groupIndex];
+              if (!group) continue;
+
+              const newActId = crypto.randomUUID();
+              activitiesToInsert.push({
+                id: newActId,
+                scheduleId: newSchedule.id,
+                wbsId: wbsId,
+                activityCode: group.itemCode,
+                name: group.description,
+                plannedStartDate: actStart,
+                plannedFinishDate: actFinish,
+                plannedDuration: duration,
+                plannedQuantity: group.quantity,
+                unit: group.unit,
+                status: 'NOT_STARTED'
               });
+              activityMap.set(act.id, newActId);
+
+              // Directly map the exact raw BOQ items from this group
+              for (const item of group.items) {
+                mappingsToInsert.push({
+                  activityId: newActId,
+                  awardedBoqItemId: item.id,
+                  mappedQuantity: item.quantity
+                });
+              }
             }
-            
-            startDate = new Date(endDate);
           }
 
           if (activitiesToInsert.length > 0) {
@@ -300,18 +372,23 @@ ${JSON.stringify(payload, null, 2)}`;
             await prisma.scheduleBOQMapping.createMany({ data: mappingsToInsert });
           }
 
-          // 3. Create Dependencies
-          const depsToInsert = [];
-          for (const dep of dependencies) {
-            const predId = activityMap.get(dep.predecessorCode);
-            const succId = activityMap.get(dep.successorCode);
-            if (predId && succId && predId !== succId) {
-              depsToInsert.push({
-                scheduleId: newSchedule.id,
-                predecessorId: predId,
-                successorId: succId,
-                type: dep.type || 'FS'
-              });
+          // 3. Create Dependencies — use SS (Start-to-Start) within each phase for overlap
+          const depsToInsert: any[] = [];
+          for (const [phaseCode, phaseActs] of actsByPhase) {
+            for (let i = 1; i < phaseActs.length; i++) {
+              const predId = activityMap.get(phaseActs[i - 1].id);
+              const succId = activityMap.get(phaseActs[i].id);
+              if (predId && succId && predId !== succId) {
+                const window = phaseWindows.get(phaseCode);
+                const staggerDays = window ? Math.max(1, Math.floor(window.days / phaseActs.length)) : 1;
+                depsToInsert.push({
+                  scheduleId: newSchedule.id,
+                  predecessorId: predId,
+                  successorId: succId,
+                  type: 'SS',
+                  lagDays: staggerDays
+                });
+              }
             }
           }
           if (depsToInsert.length > 0) {

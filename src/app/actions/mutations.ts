@@ -200,14 +200,14 @@ export async function createProject(formData: FormData) {
       const headerRow = sheet.getRow(anchorRowNumber + 1);
       const subHeaderRow = sheet.getRow(anchorRowNumber + 2);
       
-      const headers = (headerRow.values as any[]).map(v => String(v || '').replace(/\s/g, '').toUpperCase());
-      const subHeaders = (subHeaderRow.values as any[]).map(v => String(v || '').replace(/\s/g, '').toUpperCase());
+      const headers = Array.from(headerRow.values as any[] || []).map(v => String(v || '').replace(/\s/g, '').toUpperCase());
+      const subHeaders = Array.from(subHeaderRow.values as any[] || []).map(v => String(v || '').replace(/\s/g, '').toUpperCase());
 
       // Search both rows for the column headers
       const findCol = (keywords: string[]) => {
-        let idx = headers.findIndex(h => keywords.some(k => h.includes(k)));
+        let idx = headers.findIndex(h => h && keywords.some(k => h.includes(k)));
         if (idx === -1) {
-          idx = subHeaders.findIndex(h => keywords.some(k => h.includes(k)));
+          idx = subHeaders.findIndex(h => h && keywords.some(k => h.includes(k)));
         }
         return idx;
       };
@@ -458,6 +458,16 @@ export async function createProject(formData: FormData) {
   const extractedLine2 = formData.get('extractedLine2') as string | null;
   const extractedLine3 = formData.get('extractedLine3') as string | null;
 
+  const boqRawHeadersJson = formData.get('boqRawHeaders') as string | null;
+  let boqRawHeaders = null;
+  if (boqRawHeadersJson) {
+    try {
+      boqRawHeaders = JSON.parse(boqRawHeadersJson);
+    } catch (e) {
+      console.warn('Failed to parse boqRawHeaders');
+    }
+  }
+
   const project = await prisma.project.create({
     data: {
       name,
@@ -465,7 +475,7 @@ export async function createProject(formData: FormData) {
       location,
       contractAmount,
       status: 'ACTIVE',
-      managerId: managerId || null,
+      manager: managerId ? { connect: { id: managerId } } : undefined,
       startDate,
       endDate,
       originalContractDuration,
@@ -626,14 +636,14 @@ export async function uploadProcurementBenchmark(formData: FormData) {
 
     if (anchorRowNumber !== -1) {
       const headerRow = sheet.getRow(anchorRowNumber + 1);
-      const headers = (headerRow.values as any[]).map(v => String(v || '').replace(/\s/g, '').toUpperCase());
+      const headers = Array.from(headerRow.values as any[] || []).map(v => String(v || '').replace(/\s/g, '').toUpperCase());
 
-      const cItem = headers.findIndex(h => h.includes("ITEM"));
-      const cDesc = headers.findIndex(h => h.includes("DESCRIPTION"));
-      const cUnit = headers.findIndex(h => h.includes("UNIT") && !h.includes("COST"));
-      const cQty = headers.findIndex(h => h.includes("QUANTITY"));
-      const cUc = headers.findIndex(h => h.includes("UNITCOST"));
-      const cAmt = headers.findIndex(h => h.includes("AMOUNT") || h.includes("TOTALCOST"));
+      const cItem = headers.findIndex(h => h && h.includes("ITEM"));
+      const cDesc = headers.findIndex(h => h && h.includes("DESCRIPTION"));
+      const cUnit = headers.findIndex(h => h && h.includes("UNIT") && !h.includes("COST"));
+      const cQty = headers.findIndex(h => h && h.includes("QUANTITY"));
+      const cUc = headers.findIndex(h => h && h.includes("UNITCOST"));
+      const cAmt = headers.findIndex(h => h && (h.includes("AMOUNT") || h.includes("TOTALCOST")));
 
       const getNum = (cell: ExcelJS.Cell) => {
         if (cell.type === ExcelJS.ValueType.Number) return cell.value as number;
@@ -762,7 +772,6 @@ export async function uploadProcurementBenchmark(formData: FormData) {
         where: { id: projectId },
         data: {
           contractAmountVATInclusive: true,
-          contractAmount: contractAmount,
           letterheadLine1: line1,
           letterheadLine2: line2,
           letterheadLine3: line3,
@@ -774,7 +783,6 @@ export async function uploadProcurementBenchmark(formData: FormData) {
         where: { id: projectId },
         data: {
           contractAmountVATInclusive: true,
-          contractAmount: contractAmount,
         }
       });
     }
@@ -1092,6 +1100,115 @@ export async function deleteLotBreakdown(breakdownId: string) {
   return { success: true };
 }
 
+import { convertExcelToHtml } from '@/lib/excel/excelToHtml';
+
+export async function getExactExcelHtml(projectId: string) {
+  const templateDoc = await prisma.document.findFirst({
+    where: { projectId, category: 'AWARDED_BOQ_TEMPLATE' },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  if (!templateDoc) {
+    throw new Error('No Awarded BOQ template found for this project.');
+  }
+
+  let arrayBuffer: ArrayBuffer;
+  if (templateDoc.fileUrl.startsWith('/uploads/')) {
+    const filePath = path.join(process.cwd(), 'public', templateDoc.fileUrl.replace(/^\//, ''));
+    const fileBuffer = await fs.promises.readFile(filePath);
+    arrayBuffer = fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength);
+  } else {
+    const response = await fetch(templateDoc.fileUrl);
+    if (!response.ok) {
+      throw new Error('Failed to fetch template file from storage.');
+    }
+    arrayBuffer = await response.arrayBuffer();
+  }
+  
+  return await convertExcelToHtml(arrayBuffer);
+}
+
+export async function downloadRawOriginalBOQTemplate(projectId: string) {
+  const templateDoc = await prisma.document.findFirst({
+    where: { projectId, category: 'AWARDED_BOQ_TEMPLATE' },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  if (!templateDoc) {
+    throw new Error('No Awarded BOQ template found for this project.');
+  }
+
+  let arrayBuffer: ArrayBuffer;
+  if (templateDoc.fileUrl.startsWith('/uploads/')) {
+    const filePath = path.join(process.cwd(), 'public', templateDoc.fileUrl.replace(/^\//, ''));
+    const fileBuffer = await fs.promises.readFile(filePath);
+    arrayBuffer = fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength);
+  } else {
+    const response = await fetch(templateDoc.fileUrl);
+    if (!response.ok) {
+      throw new Error('Failed to fetch template file from storage.');
+    }
+    arrayBuffer = await response.arrayBuffer();
+  }
+  
+  const base64String = Buffer.from(arrayBuffer).toString('base64');
+  return base64String;
+}
+
+import * as jwt from 'jsonwebtoken';
+const JWT_SECRET = process.env.ONLYOFFICE_JWT_SECRET || 'super-secret-key-for-dev';
+
+export async function getAwardedBOQOnlyofficeConfig(projectId: string, baseUrl: string) {
+  const templateDoc = await prisma.document.findFirst({
+    where: { projectId, category: 'AWARDED_BOQ_TEMPLATE' },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  if (!templateDoc) {
+    throw new Error('No Awarded BOQ template found for this project.');
+  }
+
+  const documentKey = `awarded-boq-${projectId}-${templateDoc.id}-${Date.now()}`;
+  
+  // Construct the full URL. If templateDoc.fileUrl is relative, prepend baseUrl.
+  let fileUrl = templateDoc.fileUrl;
+  if (fileUrl.startsWith('/')) {
+    fileUrl = `${baseUrl}${fileUrl}`;
+  }
+
+  const config = {
+    document: {
+      fileType: 'xlsx',
+      key: documentKey,
+      title: templateDoc.fileName || `Awarded_BOQ_${projectId}.xlsx`,
+      url: fileUrl,
+      permissions: {
+        edit: false,
+        download: true,
+      }
+    },
+    documentType: 'spreadsheet',
+    editorConfig: {
+      mode: 'view',
+      user: {
+        id: 'viewer',
+        name: 'Viewer'
+      },
+      customization: {
+        forcesave: false,
+        autosave: false,
+      }
+    }
+  };
+
+  const token = jwt.sign(config, JWT_SECRET, { expiresIn: '2h' });
+  
+  return {
+    config: { ...config, token },
+    documentServerUrl: process.env.ONLYOFFICE_DOCUMENT_SERVER_URL || 'http://localhost:8080'
+  };
+}
+
 export async function downloadAwardedBOQTemplate(projectId: string) {
   const templateDoc = await prisma.document.findFirst({
     where: { projectId, category: 'AWARDED_BOQ_TEMPLATE' },
@@ -1102,12 +1219,18 @@ export async function downloadAwardedBOQTemplate(projectId: string) {
     throw new Error('No Awarded BOQ template found for this project.');
   }
 
-  const response = await fetch(templateDoc.fileUrl);
-  if (!response.ok) {
-    throw new Error('Failed to fetch template file from storage.');
+  let arrayBuffer: ArrayBuffer;
+  if (templateDoc.fileUrl.startsWith('/uploads/')) {
+    const filePath = path.join(process.cwd(), 'public', templateDoc.fileUrl.replace(/^\//, ''));
+    const fileBuffer = await fs.promises.readFile(filePath);
+    arrayBuffer = fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength);
+  } else {
+    const response = await fetch(templateDoc.fileUrl);
+    if (!response.ok) {
+      throw new Error('Failed to fetch template file from storage.');
+    }
+    arrayBuffer = await response.arrayBuffer();
   }
-
-  const arrayBuffer = await response.arrayBuffer();
   
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(arrayBuffer);

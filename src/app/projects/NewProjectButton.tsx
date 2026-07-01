@@ -131,6 +131,13 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
 
           const dataRows = rows.slice(dataStartIndex).filter(r => r && r.length > 0);
 
+          const isConfident = guessMapping.description !== '' && (guessMapping.totalCost !== '' || (guessMapping.quantity !== '' && guessMapping.unitCost !== ''));
+
+          if (isConfident) {
+            processAndSubmit(guessMapping, dataRows, formData, headers);
+            return;
+          }
+
           setMappings(guessMapping);
           setMappingData({ headers, rows: dataRows });
           setPendingFormData(formData);
@@ -146,9 +153,7 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
     }
   }
 
-  function confirmMapping() {
-    if (!mappingData || !pendingFormData) return;
-    
+  function processAndSubmit(mappingsToUse: any, rowsToUse: any[][], form: FormData, rawHeaders?: string[]) {
     const parseNumber = (val: any) => {
       if (typeof val === 'number') return val;
       if (!val) return 0;
@@ -156,7 +161,6 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
       if (strVal.startsWith('(') && strVal.endsWith(')')) {
         strVal = '-' + strVal;
       }
-      // Strip everything except digits, decimal points, and minus signs
       const cleaned = strVal.replace(/[^0-9.-]/g, '');
       const parsed = parseFloat(cleaned);
       return isNaN(parsed) ? 0 : parsed;
@@ -164,22 +168,19 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
 
     let currentSectionIndex = 0;
 
-    const parsedItems = mappingData.rows.map(row => {
-      let description = mappings.description !== '' ? String(row[parseInt(mappings.description)] || '').trim() : '';
-      let itemCode = mappings.itemCode !== '' ? String(row[parseInt(mappings.itemCode)] || '').trim() : '';
+    const parsedItems = rowsToUse.map(row => {
+      let description = mappingsToUse.description !== '' ? String(row[parseInt(mappingsToUse.description)] || '').trim() : '';
+      let itemCode = mappingsToUse.itemCode !== '' ? String(row[parseInt(mappingsToUse.itemCode)] || '').trim() : '';
 
-      const quantity = mappings.quantity !== '' ? parseNumber(row[parseInt(mappings.quantity)]) : 0;
-      const unitCost = mappings.unitCost !== '' ? parseNumber(row[parseInt(mappings.unitCost)]) : 0;
-      let totalCost = mappings.totalCost !== '' ? parseNumber(row[parseInt(mappings.totalCost)]) : 0;
-      const materialCost = mappings.materialCost !== '' ? parseNumber(row[parseInt(mappings.materialCost)]) : 0;
-      const laborCost = mappings.laborCost !== '' ? parseNumber(row[parseInt(mappings.laborCost)]) : 0;
-      const equipmentCost = mappings.equipmentCost !== '' ? parseNumber(row[parseInt(mappings.equipmentCost)]) : 0;
+      const quantity = mappingsToUse.quantity !== '' ? parseNumber(row[parseInt(mappingsToUse.quantity)]) : 0;
+      const unitCost = mappingsToUse.unitCost !== '' ? parseNumber(row[parseInt(mappingsToUse.unitCost)]) : 0;
+      let totalCost = mappingsToUse.totalCost !== '' ? parseNumber(row[parseInt(mappingsToUse.totalCost)]) : 0;
+      const materialCost = mappingsToUse.materialCost !== '' ? parseNumber(row[parseInt(mappingsToUse.materialCost)]) : 0;
+      const laborCost = mappingsToUse.laborCost !== '' ? parseNumber(row[parseInt(mappingsToUse.laborCost)]) : 0;
+      const equipmentCost = mappingsToUse.equipmentCost !== '' ? parseNumber(row[parseInt(mappingsToUse.equipmentCost)]) : 0;
 
       if (totalCost === 0 && quantity > 0 && unitCost > 0) totalCost = quantity * unitCost;
 
-      // Ultimate Fallback for Merged Header Rows
-      // If the row has 0 cost and 0 quantity, it is a structural header.
-      // We concatenate all text in the row to guarantee no words are lost due to merged cells.
       if (totalCost === 0 && quantity === 0) {
         const allText = row
           .filter(c => typeof c === 'string' || typeof c === 'number')
@@ -189,28 +190,25 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
         
         if (allText) {
           description = allText;
-          itemCode = ''; // Keep item code blank for pure headers so they span beautifully
+          itemCode = '';
         }
         
-        // Reset section numbering when we hit a header
         if (description && !description.toUpperCase().includes('MATERIAL LABOR EQUIPMENT')) {
            currentSectionIndex = 0;
         }
       } else {
-        // Line item, auto-number if no item code
         if (!itemCode && description && !description.toUpperCase().includes('MATERIAL LABOR EQUIPMENT')) {
           currentSectionIndex += 1;
           itemCode = `${currentSectionIndex}.0`;
         }
       }
 
-      // Compute direct cost as sum of material + labor + equipment
       const directCostTotal = materialCost + laborCost + equipmentCost;
 
       return {
         itemCode,
         description,
-        unit: mappings.unit !== '' ? String(row[parseInt(mappings.unit)] || '') : '',
+        unit: mappingsToUse.unit !== '' ? String(row[parseInt(mappingsToUse.unit)] || '') : '',
         quantity,
         directCost: directCostTotal,
         indirectCost: 0,
@@ -229,7 +227,6 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
       if (descUpper === 'TOTAL' || descUpper === 'GRAND TOTAL' || descUpper.includes('TOTAL PROJECT COST') || descUpper.includes('SUB-TOTAL') || descUpper.includes('SUB TOTAL') || descUpper.startsWith('TOTAL:')) return false;
       if (descUpper.includes('MATERIAL LABOR EQUIPMENT')) return false;
 
-      // Purge known spreadsheet sub-header junk
       const descNoSpaces = descUpper.replace(/\s/g, '');
       if (
         descNoSpaces.includes("DIRECTCOSTOCM") ||
@@ -241,15 +238,22 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
       ) {
         return false;
       }
-
-      // Keep ALL other rows with a description! 
-      // If they have 0 cost and 0 quantity, they will naturally display as Header Rows (like "I. GENERAL REQUIREMENTS")
       return true;
     });
 
-    pendingFormData.append('mappedBoqJson', JSON.stringify(parsedItems));
-    submitToServer(pendingFormData);
+    if (rawHeaders && rawHeaders.length > 0) {
+      form.append('boqRawHeaders', JSON.stringify(rawHeaders));
+    }
+    form.append('mappedBoqJson', JSON.stringify(parsedItems));
+    submitToServer(form);
   }
+
+  function confirmMapping() {
+    if (!mappingData || !pendingFormData) return;
+    processAndSubmit(mappings, mappingData.rows, pendingFormData, mappingData.headers);
+  }
+
+
 
   return (
     <>
@@ -264,16 +268,16 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
         {mappingData ? (
           <div style={{ padding: '10px 20px' }}>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '15px' }}>
-              We've scanned your Excel file. Please map your columns to the system fields so we can extract the BOQ accurately.
+              We could not perfectly auto-detect your columns. Please map the required fields below.
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
               {[
-                { label: 'Item No / Code', key: 'itemCode' },
                 { label: 'Description (Required)', key: 'description' },
-                { label: 'Unit', key: 'unit' },
                 { label: 'Quantity', key: 'quantity' },
-                { label: 'Unit Cost', key: 'unitCost' },
-                { label: 'Total Cost', key: 'totalCost' }
+                { label: 'Total Cost', key: 'totalCost' },
+                { label: 'Item No / Code (Optional)', key: 'itemCode' },
+                { label: 'Unit (Optional)', key: 'unit' },
+                { label: 'Unit Cost (Optional)', key: 'unitCost' }
               ].map(field => (
                 <div key={field.key}>
                   <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-primary)', fontSize: '0.9rem' }}>{field.label}</label>
@@ -291,33 +295,34 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
               ))}
             </div>
 
-            {/* Direct Unit Cost Breakdown */}
-            <div style={{ marginBottom: '20px', padding: '12px', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px', background: 'rgba(16,185,129,0.05)' }}>
-              <p style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '10px' }}>
-                📊 Direct Unit Cost Breakdown (Optional — for Program of Works template)
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
-                {[
-                  { label: 'Material Cost', key: 'materialCost' },
-                  { label: 'Labor Cost', key: 'laborCost' },
-                  { label: 'Equipment Cost', key: 'equipmentCost' }
-                ].map(field => (
-                  <div key={field.key}>
-                    <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-primary)', fontSize: '0.85rem' }}>{field.label}</label>
-                    <select 
-                      value={(mappings as any)[field.key]} 
-                      onChange={e => setMappings({ ...mappings, [field.key]: e.target.value })}
-                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
-                    >
-                      <option value="">-- Ignore / Not Present --</option>
-                      {mappingData.headers.map((h, i) => (
-                        <option key={i} value={String(i)}>{h}</option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
+            <details style={{ marginBottom: '20px' }}>
+              <summary style={{ cursor: 'pointer', color: '#10b981', fontSize: '0.85rem', fontWeight: 'bold', padding: '12px', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px' }}>
+                Advanced: Direct Unit Cost Breakdown (Program of Works)
+              </summary>
+              <div style={{ padding: '15px', border: '1px solid rgba(16,185,129,0.3)', borderTop: 'none', borderRadius: '0 0 8px 8px', background: 'rgba(16,185,129,0.02)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                  {[
+                    { label: 'Material Cost', key: 'materialCost' },
+                    { label: 'Labor Cost', key: 'laborCost' },
+                    { label: 'Equipment Cost', key: 'equipmentCost' }
+                  ].map(field => (
+                    <div key={field.key}>
+                      <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-primary)', fontSize: '0.85rem' }}>{field.label}</label>
+                      <select 
+                        value={(mappings as any)[field.key]} 
+                        onChange={e => setMappings({ ...mappings, [field.key]: e.target.value })}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
+                      >
+                        <option value="">-- Ignore --</option>
+                        {mappingData.headers.map((h, i) => (
+                          <option key={i} value={String(i)}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            </details>
             
             <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
               <button type="button" className="btn-secondary" onClick={() => setMappingData(null)}>Back to Upload</button>

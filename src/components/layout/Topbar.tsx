@@ -9,6 +9,7 @@ export default async function Topbar() {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
+  const simulatedRole = cookieStore.get('simulatedRole')?.value || null;
   
   let user = null;
   let assignments: any[] = [];
@@ -51,7 +52,9 @@ export default async function Topbar() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '15px', borderLeft: '1px solid var(--glass-border)', paddingLeft: '20px' }}>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>{user.name}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)' }}>{user.role.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: '0.75rem', color: simulatedRole ? '#ff4d4d' : 'var(--accent-color)', fontWeight: simulatedRole ? 'bold' : 'normal' }}>
+                  {simulatedRole ? `SIMULATING: ${simulatedRole.replace(/_/g, ' ')}` : user.role.replace(/_/g, ' ')}
+                </div>
               </div>
               
               <form action={logout}>

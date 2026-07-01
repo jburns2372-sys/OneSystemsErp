@@ -206,12 +206,10 @@ export default function SocDashboardClient({ initialStats, initialFeed, initialM
           </div>
         </div>
 
-        {/* Simulation Control Panel Row */}
-        {includeSimulated && (
-          <div style={{ minHeight: '300px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <SimulationControlPanel onRefresh={refreshData} />
-          </div>
-        )}
+        {/* Simulation Control Panel Row — Always Visible */}
+        <div style={{ minHeight: '320px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <SimulationControlPanel onRefresh={refreshData} />
+        </div>
       </div>
     </div>
   );

@@ -1,14 +1,17 @@
-import { getAIAuditLogs, getAIAuditMetrics } from '../actions/aiAuditActions';
+import { getAIAuditLogs, getAIAuditMetrics, getChatbotAuditLogs } from '../actions/aiAuditActions';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AIAuditDashboard({
+export default async function AiAuditPage({
   searchParams,
 }: {
-  searchParams: { filter?: string };
+  searchParams: { filter?: string; tab?: string };
 }) {
   const filter = searchParams.filter || 'ALL';
+  const tab = searchParams.tab || 'transactions';
+  
   const logs = await getAIAuditLogs(filter);
+  const chatbotLogs = await getChatbotAuditLogs();
   const metrics = await getAIAuditMetrics();
 
   return (
@@ -36,15 +39,24 @@ export default async function AIAuditDashboard({
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-        <a href="/ai-audit" style={{ padding: '8px 16px', borderRadius: '20px', backgroundColor: filter === 'ALL' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', color: filter === 'ALL' ? '#000' : '#fff', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>All Logs</a>
-        <a href="/ai-audit?filter=BLOCKED" style={{ padding: '8px 16px', borderRadius: '20px', backgroundColor: filter === 'BLOCKED' ? '#ff6b6b' : 'rgba(255,255,255,0.05)', color: filter === 'BLOCKED' ? '#fff' : '#fff', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>Blocked Only</a>
-        <a href="/ai-audit?filter=WARNING" style={{ padding: '8px 16px', borderRadius: '20px', backgroundColor: filter === 'WARNING' ? '#ffd43b' : 'rgba(255,255,255,0.05)', color: filter === 'WARNING' ? '#000' : '#fff', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>Warnings Only</a>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '10px' }}>
+        <a href="/ai-audit?tab=transactions" style={{ color: tab === 'transactions' ? '#fff' : 'var(--text-secondary)', textDecoration: 'none', fontWeight: tab === 'transactions' ? 'bold' : 'normal', borderBottom: tab === 'transactions' ? '2px solid var(--accent-color)' : 'none', paddingBottom: '10px' }}>Transaction Validations</a>
+        <a href="/ai-audit?tab=chatbot" style={{ color: tab === 'chatbot' ? '#fff' : 'var(--text-secondary)', textDecoration: 'none', fontWeight: tab === 'chatbot' ? 'bold' : 'normal', borderBottom: tab === 'chatbot' ? '2px solid var(--accent-color)' : 'none', paddingBottom: '10px' }}>Chatbot Access Logs</a>
       </div>
 
-      {/* Logs Table */}
-      <div style={{ backgroundColor: 'var(--bg-card, #1a1b1e)', border: '1px solid var(--glass-border)', borderRadius: '12px', overflow: 'hidden' }}>
+      {tab === 'transactions' && (
+        <>
+          {/* Filters */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+            <a href="/ai-audit?tab=transactions&filter=ALL" style={{ padding: '8px 16px', borderRadius: '20px', backgroundColor: filter === 'ALL' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', color: filter === 'ALL' ? '#000' : '#fff', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>All Logs</a>
+            <a href="/ai-audit?tab=transactions&filter=BLOCKED" style={{ padding: '8px 16px', borderRadius: '20px', backgroundColor: filter === 'BLOCKED' ? '#ff6b6b' : 'rgba(255,255,255,0.05)', color: filter === 'BLOCKED' ? '#fff' : '#fff', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>Blocked Only</a>
+            <a href="/ai-audit?tab=transactions&filter=WARNING" style={{ padding: '8px 16px', borderRadius: '20px', backgroundColor: filter === 'WARNING' ? '#ffd43b' : 'rgba(255,255,255,0.05)', color: filter === 'WARNING' ? '#000' : '#fff', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>Warnings Only</a>
+          </div>
+
+          {/* Logs Table */}
+          <div style={{ backgroundColor: 'var(--bg-card, #1a1b1e)', border: '1px solid var(--glass-border)', borderRadius: '12px', overflow: 'hidden' }}>
+
         {logs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '50px', color: 'var(--text-secondary)' }}>
             <p>No AI audit logs found.</p>
@@ -102,6 +114,59 @@ export default async function AIAuditDashboard({
           </table>
         )}
       </div>
+      </>
+      )}
+
+      {tab === 'chatbot' && (
+        <div style={{ backgroundColor: 'var(--bg-card, #1a1b1e)', border: '1px solid var(--glass-border)', borderRadius: '12px', overflow: 'hidden' }}>
+          {chatbotLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '50px', color: 'var(--text-secondary)' }}>
+              <p>No chatbot interaction logs found.</p>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--glass-border)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                  <th style={{ padding: '15px' }}>Date</th>
+                  <th style={{ padding: '15px' }}>User</th>
+                  <th style={{ padding: '15px' }}>Question / Prompt</th>
+                  <th style={{ padding: '15px' }}>Sources Allowed</th>
+                  <th style={{ padding: '15px' }}>Sources Denied</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chatbotLogs.map((log: any) => (
+                  <tr key={log.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                    <td style={{ padding: '15px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                      {new Date(log.createdAt).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '15px', fontWeight: 500 }}>
+                      {log.user ? (log.user.name || log.user.email) : 'Unknown'}
+                    </td>
+                    <td style={{ padding: '15px', maxWidth: '400px' }}>
+                      <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontStyle: 'italic' }}>"{log.question}"</div>
+                    </td>
+                    <td style={{ padding: '15px' }}>
+                      <span style={{ padding: '4px 10px', backgroundColor: 'rgba(81,207,102,0.1)', color: '#51cf66', borderRadius: '4px', fontWeight: 'bold' }}>
+                        {log.sourcesRetrieved} chunks
+                      </span>
+                    </td>
+                    <td style={{ padding: '15px' }}>
+                      {log.sourcesDenied > 0 ? (
+                        <span style={{ padding: '4px 10px', backgroundColor: 'rgba(255,107,107,0.1)', color: '#ff6b6b', borderRadius: '4px', fontWeight: 'bold' }}>
+                          {log.sourcesDenied} blocked
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>0</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }

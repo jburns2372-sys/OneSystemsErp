@@ -42,7 +42,7 @@ export default async function ExecutivePortfolioPage() {
               <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Project Name</th>
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Status</th>
-                <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Revised Contract</th>
+                <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Contract Amounts</th>
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Billed Progress</th>
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>Timeline</th>
                 <th style={{ padding: '16px 24px', fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase' }}>AI Risk Level</th>
@@ -67,7 +67,10 @@ export default async function ExecutivePortfolioPage() {
                       </span>
                     </td>
                     <td style={{ padding: '16px 24px', fontWeight: 500, color: '#374151' }}>
-                      {formatCurrency(project.revisedAmount)}
+                      <div><strong style={{color: '#111827'}}>Revised:</strong> {formatCurrency(project.revisedAmount)}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '4px' }}>
+                        <strong>Materials:</strong> {formatCurrency(project.consolidatedCost)}
+                      </div>
                     </td>
                     <td style={{ padding: '16px 24px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

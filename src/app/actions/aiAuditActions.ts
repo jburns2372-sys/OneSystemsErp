@@ -44,3 +44,19 @@ export async function getAIAuditMetrics() {
     return { total: 0, blocked: 0, warnings: 0 };
   }
 }
+
+export async function getChatbotAuditLogs() {
+  try {
+    const logs = await prisma.aiAccessAuditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        user: { select: { name: true, email: true } }
+      }
+    });
+    return logs;
+  } catch (error) {
+    console.error('Error fetching chatbot audit logs:', error);
+    return [];
+  }
+}

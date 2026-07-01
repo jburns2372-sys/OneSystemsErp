@@ -47,6 +47,12 @@ export default function ChatPage() {
             <Bot size={48} style={{ opacity: 0.5, marginBottom: '15px' }} />
             <h3>How can I help you today?</h3>
             <p>Try asking about projects, workers, expenses, or uploaded documents.</p>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '20px' }}>
+              <button onClick={() => handleInputChange({ target: { value: 'Show me recent expenses' } } as any)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid var(--glass-border)', padding: '8px 16px', borderRadius: '20px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem' }}>Show me recent expenses</button>
+              <button onClick={() => handleInputChange({ target: { value: 'Draft a material request for cement' } } as any)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid var(--glass-border)', padding: '8px 16px', borderRadius: '20px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem' }}>Draft an MR</button>
+              <button onClick={() => handleInputChange({ target: { value: 'What projects are active?' } } as any)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid var(--glass-border)', padding: '8px 16px', borderRadius: '20px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem' }}>Active Projects</button>
+              <button onClick={() => handleInputChange({ target: { value: 'Compare project profitability' } } as any)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid var(--glass-border)', padding: '8px 16px', borderRadius: '20px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem' }}>Project Profitability</button>
+            </div>
           </div>
         ) : (
           messages.map((m) => (
@@ -76,10 +82,7 @@ export default function ChatPage() {
                 maxWidth: '80%',
                 lineHeight: '1.6'
               }}>
-                {/* Basic markdown rendering can be added later if needed */}
                 <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
-
-                {/* Show tool calls if any exist in the message */}
                 {m.toolInvocations?.map((toolInvocation) => {
                   const { toolCallId, toolName } = toolInvocation;
                   return (
