@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string, uploadId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string, uploadId: string }>}) {
   try {
     const upload = await prisma.uploadedWorkbookFile.findUnique({
-      where: { id: params.uploadId }
+      where: { id: (await params).uploadId }
     });
     if (!upload) return new NextResponse('Not found', { status: 404 });
 

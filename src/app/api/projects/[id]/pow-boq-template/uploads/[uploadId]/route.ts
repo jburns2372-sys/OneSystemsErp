@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string, uploadId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string, uploadId: string }>}) {
   try {
     const upload = await prisma.uploadedWorkbookFile.findUnique({
-      where: { id: params.uploadId },
+      where: { id: (await params).uploadId },
       include: {
         cellSnapshots: true,
         layoutSnapshots: true,
@@ -19,10 +19,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string, uploadId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{}>}) {
   try {
     await prisma.uploadedWorkbookFile.delete({
-      where: { id: params.uploadId }
+      where: { id: (await params).uploadId }
     });
     return NextResponse.json({ success: true });
   } catch (error: any) {

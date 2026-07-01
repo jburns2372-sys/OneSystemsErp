@@ -6,13 +6,13 @@ import { validateFormulas } from '@/lib/excel/excel-formula-validator';
 import fs from 'fs';
 import path from 'path';
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }>}) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
 
-    const projectId = params.id;
+    const projectId = (await params).id;
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 

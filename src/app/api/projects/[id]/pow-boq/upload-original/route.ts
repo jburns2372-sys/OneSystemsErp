@@ -5,7 +5,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }>}) {
   try {
     const cookieStore = await cookies();
     const userId = cookieStore.get('session')?.value;
