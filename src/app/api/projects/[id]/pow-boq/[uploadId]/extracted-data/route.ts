@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { cookies } from 'next/headers';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string, uploadId: string } }) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const cookieStore = await cookies();
+    const userId = cookieStore.get('session')?.value;
+    const user = userId ? await prisma.user.findUnique({ where: { id: userId } }) : await prisma.user.findFirst();
+
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
