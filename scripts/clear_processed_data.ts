@@ -10,6 +10,9 @@ async function main() {
     const tablesToKeep = [
       '_prisma_migrations',
       'User',
+      'Role',
+      'UserRole',
+      'RolePermission',
       'Worker',
       'Supplier',
       'Subcontractor',

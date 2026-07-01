@@ -126,7 +126,7 @@ async function main() {
         status: 'RECEIVED',
         totalAmount: totalAmount,
         paymentTerms: i === 0 ? 'Cash on Delivery' : '30 Days',
-        deliveryLeadTime: i === 0 ? '3 Days' : '7 Days',
+        deliveryPeriod: i === 0 ? '3 Days' : '7 Days',
         items: {
           create: quoteItems
         }
