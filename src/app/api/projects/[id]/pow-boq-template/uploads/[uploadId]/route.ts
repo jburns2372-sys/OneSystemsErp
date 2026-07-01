@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{}>}) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string, uploadId: string }>}) {
   try {
     await prisma.uploadedWorkbookFile.delete({
       where: { id: (await params).uploadId }

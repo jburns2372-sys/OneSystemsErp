@@ -1180,7 +1180,7 @@ export async function getAwardedBOQOnlyofficeConfig(projectId: string, baseUrl: 
     document: {
       fileType: 'xlsx',
       key: documentKey,
-      title: templateDoc.fileName || `Awarded_BOQ_${projectId}.xlsx`,
+      title: templateDoc.title || `Awarded_BOQ_${projectId}.xlsx`,
       url: fileUrl,
       permissions: {
         edit: false,
