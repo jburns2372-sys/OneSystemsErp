@@ -2,13 +2,13 @@ import ExcelJS from 'exceljs';
 
 export async function convertExcelToHtml(buffer: ArrayBuffer | Buffer): Promise<string> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
+  await workbook.xlsx.load(buffer as any);
 
   const sheet = workbook.worksheets[0];
   if (!sheet) return '<p>No sheet found</p>';
 
   // Map merges
-  const merges = Object.values(sheet._merges || {}).reduce((acc: any, merge: any) => {
+  const merges: any = Object.values((sheet as any)._merges || {}).reduce((acc: any, merge: any) => {
     acc[merge.top + ',' + merge.left] = {
       rowspan: merge.bottom - merge.top + 1,
       colspan: merge.right - merge.left + 1

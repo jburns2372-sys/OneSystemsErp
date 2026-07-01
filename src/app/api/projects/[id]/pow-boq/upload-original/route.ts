@@ -52,8 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         originalFilename: file.name,
         fileHash: hash,
         storagePath: publicUrl,
-        preservedOriginalUrl: publicUrl,
-        uploadedByUserId: user.id || 'system',
+        uploadedBy: user.id || 'system',
         validationStatus: 'PENDING',
         extractionStatus: 'PENDING',
         commitStatus: 'PENDING'
