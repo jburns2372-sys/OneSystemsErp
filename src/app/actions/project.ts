@@ -223,6 +223,11 @@ export async function deleteProject(projectId: string) {
     // Manual cascade delete to avoid foreign key constraint errors
     await prisma.$transaction([
       prisma.projectUserAssignment.deleteMany({ where: { projectId } }),
+      prisma.bOQExtractedItem.deleteMany({ where: { projectId } }),
+      prisma.bOQExtractedSection.deleteMany({ where: { projectId } }),
+      prisma.workbookFormulaValidation.deleteMany({ where: { workbookFile: { projectId } } }),
+      prisma.workbookExtractionAudit.deleteMany({ where: { projectId } }),
+      prisma.uploadedWorkbookFile.deleteMany({ where: { projectId } }),
       prisma.awardedBOQItem.deleteMany({ where: { projectId } }),
       prisma.scheduleProgressUpdate.deleteMany({ where: { activity: { schedule: { projectId } } } }),
       prisma.scheduleDelayRecord.deleteMany({ where: { activity: { schedule: { projectId } } } }),
