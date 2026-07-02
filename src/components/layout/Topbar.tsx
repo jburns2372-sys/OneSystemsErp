@@ -19,7 +19,7 @@ export default async function Topbar() {
     if (user) {
       assignments = await prisma.projectUserAssignment.findMany({
         where: { userId: user.id, assignmentStatus: 'active' },
-        include: { project: { select: { name: true } } },
+        include: { project: { select: { name: true, contractAmount: true, originalContractDuration: true } } },
         orderBy: { project: { name: 'asc' } }
       });
     }

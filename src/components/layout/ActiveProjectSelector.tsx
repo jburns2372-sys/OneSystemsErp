@@ -8,7 +8,7 @@ export default function ActiveProjectSelector({
   assignments, 
   activeProjectId 
 }: { 
-  assignments: { projectId: string; project: { name: string }; projectRole: string; accessLevel: string }[];
+  assignments: { projectId: string; project: { name: string; contractAmount?: number; originalContractDuration?: number | null }; projectRole: string; accessLevel: string }[];
   activeProjectId: string | null;
 }) {
   const router = useRouter();
@@ -67,9 +67,19 @@ export default function ActiveProjectSelector({
         </select>
         
         {currentAssignment && (
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Role: {currentAssignment.projectRole.replace(/_/g, ' ')}</span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Access: {currentAssignment.accessLevel.replace(/_/g, ' ').toUpperCase()}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Role: {currentAssignment.projectRole.replace(/_/g, ' ')}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Access: {currentAssignment.accessLevel.replace(/_/g, ' ').toUpperCase()}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, borderLeft: '1px solid var(--glass-border)', paddingLeft: '15px' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--accent-color)', fontWeight: 'bold' }}>
+                Cost: ₱{(currentAssignment.project.contractAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--accent-color)', fontWeight: 'bold' }}>
+                Duration: {currentAssignment.project.originalContractDuration || 0} Days
+              </span>
+            </div>
           </div>
         )}
       </div>
