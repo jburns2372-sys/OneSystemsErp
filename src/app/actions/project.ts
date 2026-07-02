@@ -52,7 +52,7 @@ export async function getDashboardStats() {
   }
 
   // Portfolio-wide filters (ignore activeProjectId for high-level counts)
-  let portfolioFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
+  let portfolioFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED', 'PLANNING'] } };
   if (projectIds !== undefined) {
     portfolioFilter.id = { in: projectIds };
   }
