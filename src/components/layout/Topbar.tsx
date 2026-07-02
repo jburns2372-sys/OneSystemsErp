@@ -11,17 +11,30 @@ export default async function Topbar() {
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
   const simulatedRole = cookieStore.get('simulatedRole')?.value || null;
   
-  let user = null;
+  let user: any = null;
   let assignments: any[] = [];
   
   if (sessionId) {
     user = await prisma.user.findUnique({ where: { id: sessionId } });
     if (user) {
-      assignments = await prisma.projectUserAssignment.findMany({
-        where: { userId: user.id, assignmentStatus: 'active' },
-        include: { project: { select: { name: true, contractAmount: true, originalContractDuration: true } } },
-        orderBy: { project: { name: 'asc' } }
-      });
+      if (['SUPER_ADMIN', 'SYSTEM_ADMIN', 'EXECUTIVE'].includes(user.role)) {
+        const allProjects = await prisma.project.findMany({
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, contractAmount: true, originalContractDuration: true }
+        });
+        assignments = allProjects.map(p => ({
+          projectId: p.id,
+          project: p,
+          projectRole: user.role,
+          accessLevel: 'FULL'
+        }));
+      } else {
+        assignments = await prisma.projectUserAssignment.findMany({
+          where: { userId: user.id, assignmentStatus: 'active' },
+          include: { project: { select: { name: true, contractAmount: true, originalContractDuration: true } } },
+          orderBy: { project: { name: 'asc' } }
+        });
+      }
     }
   }
 
