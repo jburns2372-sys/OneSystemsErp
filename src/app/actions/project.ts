@@ -37,7 +37,7 @@ export async function getDashboardStats() {
     }
   }
 
-  let finalProjectFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
+  let finalProjectFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED', 'PLANNING'] } };
   if (activeProjectId && activeProjectId !== 'ALL') {
     finalProjectFilter.id = activeProjectId;
   } else if (projectIds !== undefined) {
