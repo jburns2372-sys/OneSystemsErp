@@ -6,7 +6,7 @@ import { generateEmbedding, cosineSimilarity } from '@/lib/ai-indexer';
 import { detectIntents, expandKeywords } from '@/lib/rag-intelligence';
 import { evaluateComparison } from '@/lib/ai-comparison-engine';
 import { openai } from '@ai-sdk/openai';
-import { streamText, tool } from 'ai';
+import { streamText, tool, jsonSchema } from 'ai';
 import { z } from 'zod';
 import { logSecurityEvent } from '@/lib/securityEngine';
 
@@ -253,54 +253,6 @@ ${staticContext}
       model: openai('gpt-4o-mini'),
       system: systemPrompt,
       messages,
-      tools: {
-        getProjectDetails: tool({
-          description: 'Get project details, status, and budget. Useful when the user asks about a specific project.',
-          parameters: z.object({
-            projectId: z.string().describe('The ID of the project'),
-          }),
-          execute: async ({ projectId }: { projectId: string }) => {
-             if (!permissions.IS_ADMIN && !permissions.PROJECT_MANAGEMENT?.canView) {
-                return { error: 'Access Denied: Missing Project Management Module Access.' };
-             }
-             const proj = await prisma.project.findUnique({ where: { id: projectId } });
-             if (!proj) return { error: 'Project not found.' };
-             return { id: proj.id, name: proj.name, status: proj.status, contractAmount: proj.contractAmount };
-          }
-        }),
-        getRecentExpenses: tool({
-          description: 'Get a list of recent expenses. Use this to summarize recent financial costs.',
-          parameters: z.object({
-            limit: z.number().optional().describe('Number of expenses to fetch, max 20'),
-          }),
-          execute: async ({ limit = 5 }: { limit?: number }) => {
-             if (!permissions.IS_ADMIN && !permissions.FINANCE?.canView && !permissions.EXPENSES?.canView) {
-                return { error: 'Access Denied: Missing Finance Module Access.' };
-             }
-             const expenses = await prisma.expense.findMany({ take: Math.min(limit, 20), orderBy: { createdAt: 'desc' } });
-             return expenses.map((e: any) => ({ id: e.id, description: e.description, amount: e.amount, status: e.status }));
-          }
-        }),
-        createDraftMaterialRequest: tool({
-          description: 'Create a draft material request for a project. Returns the draft ID. This NEVER finalizes or approves the request. Use this when the user asks to create an MR.',
-          parameters: z.object({
-            projectId: z.string(),
-            description: z.string(),
-            items: z.array(z.object({
-              itemCode: z.string(),
-              quantity: z.number(),
-              unit: z.string()
-            }))
-          }),
-          execute: async ({ projectId, description, items }: { projectId: string, description: string, items: any[] }) => {
-             if (permissions.IS_GUEST_USER) {
-               return { error: 'Access Denied: Guest Users cannot create records.' };
-             }
-             // NOTE: Mocked Draft Creation for the ERP since MaterialRequest table might be named differently (e.g. PurchaseRequest)
-             return { success: true, draftId: 'DRAFT-' + Date.now(), status: 'DRAFT', message: `Draft MR created for ${items.length} items. Human review required in the Procurement module.` };
-          }
-        })
-      },
       onFinish: async ({ text }) => {
         if (userId) {
           try {
