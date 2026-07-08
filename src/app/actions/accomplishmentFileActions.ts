@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { put } from '@vercel/blob';
+import { uploadToS3 as put } from '@/lib/s3';
 import ExcelJS from "exceljs";
 import fs from 'fs';
 import path from 'path';

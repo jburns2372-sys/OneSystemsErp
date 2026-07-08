@@ -36,13 +36,9 @@ export async function uploadAndAnalyzeQuotationsBulk(canvassId: string, formData
         const fileName = `${Date.now()}-${file.name}`;
         let fileUrl = '';
         try {
-          const { put } = await import('@vercel/blob');
-          const blob = await put(`quotations/${fileName}`, buffer, {
-            access: 'public',
-            addRandomSuffix: false,
-            token: process.env.BLOB_READ_WRITE_TOKEN
-          });
-          fileUrl = blob.url;
+          const { uploadToS3 } = await import('@/lib/s3');
+          const s3Response = await uploadToS3(`quotations/${fileName}`, buffer);
+          fileUrl = s3Response.url;
         } catch (blobErr: any) {
           console.warn('Vercel Blob upload failed, falling back to local storage:', blobErr.message);
           try {

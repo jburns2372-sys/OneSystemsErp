@@ -1,0 +1,193 @@
+model UploadedWorkbookFile {
+  id                     String    @id @default(cuid())
+  projectId              String
+  templateCode           String?
+  templateName           String?
+  templateVersion        String?
+  documentType           String?
+  originalFilename       String
+  fileHash               String
+  mimeType               String
+  fileSize               Int
+  storagePath            String
+  preservedOriginalUrl   String?
+  latestPreservedVersionId String?
+  uploadedBy             String
+  uploadedAt             DateTime  @default(now())
+  recognizedTemplate     String?
+  validationStatus       String    @default("PENDING")
+  extractionStatus       String    @default("PENDING")
+  commitStatus           String    @default("PENDING")
+  onlyOfficeDocumentKey  String?
+  metadataJson           String?   @db.Text
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  project                Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions               WorkbookVersion[]
+  sessions               OnlyOfficeSession[]
+  extractedSections      BOQExtractedSection[]
+  extractedItems         BOQExtractedItem[]
+  formulaValidations     WorkbookFormulaValidation[]
+  templateValidations    WorkbookTemplateValidation[]
+  audits                 WorkbookExtractionAudit[]
+}
+
+model WorkbookVersion {
+  id                     String    @id @default(cuid())
+  uploadedWorkbookFileId String
+  projectId              String
+  versionNumber          Int
+  versionLabel           String?
+  sourceType             String
+  filePath               String
+  fileHash               String
+  createdBy              String
+  createdAt              DateTime  @default(now())
+  remarks                String?
+
+  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  sessions               OnlyOfficeSession[]
+}
+
+model OnlyOfficeSession {
+  id                     String    @id @default(cuid())
+  uploadedWorkbookFileId String
+  projectId              String
+  workbookVersionId      String?
+  documentKey            String    @unique
+  mode                   String    @default("view")
+  userId                 String
+  userName               String?
+  permissionsJson        String?   @db.Text
+  configJson             String?   @db.Text
+  status                 String    @default("ACTIVE")
+  createdAt              DateTime  @default(now())
+  expiresAt              DateTime?
+  lastCallbackAt         DateTime?
+
+  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  version                WorkbookVersion?     @relation(fields: [workbookVersionId], references: [id], onDelete: Cascade)
+}
+
+model BOQExtractedSection {
+  id                     String    @id @default(cuid())
+  uploadedWorkbookFileId String
+  projectId              String
+  sheetName              String?
+  sourceRowNumber        Int?
+  sectionCode            String?
+  sectionName            String
+  displayOrder           Int       @default(0)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items                  BOQExtractedItem[]
+}
+
+model BOQExtractedItem {
+  id                     String    @id @default(cuid())
+  uploadedWorkbookFileId String
+  projectId              String
+  sectionId              String?
+  sheetName              String?
+  sourceRowNumber        Int?
+  itemNumber             String?
+  description            String
+  unit                   String?
+  quantity               Float?
+  materialUnitCost       Float?
+  laborUnitCost          Float?
+  equipmentUnitCost      Float?
+  totalDirectCost        Float?
+  ocm                    Float?
+  cp                     Float?
+  vat                    Float?
+  totalIndirectCost      Float?
+  unitCost               Float?
+  amount                 Float?
+  percentage             Float?
+  formulaMapJson         String?   @db.Text
+  validationStatus       String    @default("PENDING")
+  validationErrorsJson   String?   @db.Text
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  section                BOQExtractedSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+}
+
+model WorkbookFormulaValidation {
+  id                     String    @id @default(cuid())
+  uploadedWorkbookFileId String
+  projectId              String
+  sheetName              String?
+  cellAddress            String
+  sourceRowNumber        Int?
+  expectedFormula        String?
+  actualFormula          String?
+  expectedValue          Float?
+  actualValue            Float?
+  severity               String    @default("INFO")
+  validationStatus       String    @default("PENDING")
+  message                String?
+  createdAt              DateTime  @default(now())
+
+  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+}
+
+model WorkbookTemplateValidation {
+  id                     String    @id @default(cuid())
+  uploadedWorkbookFileId String
+  projectId              String
+  validationType         String
+  validationKey          String
+  expectedValue          String?
+  actualValue            String?
+  severity               String    @default("INFO")
+  status                 String    @default("PENDING")
+  message                String?
+  createdAt              DateTime  @default(now())
+
+  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+}
+
+model ProjectBOQVersion {
+  id                           String    @id @default(cuid())
+  projectId                    String
+  sourceUploadedWorkbookFileId String?
+  versionNumber                Int
+  versionLabel                 String?
+  status                       String    @default("DRAFT")
+  committedBy                  String?
+  committedAt                  DateTime?
+  approvedBy                   String?
+  approvedAt                   DateTime?
+  totalDirectCost              Float?
+  totalIndirectCost            Float?
+  totalAmount                  Float?
+  remarks                      String?
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+}
+
+model WorkbookExtractionAudit {
+  id                     String    @id @default(cuid())
+  uploadedWorkbookFileId String
+  projectId              String
+  action                 String
+  status                 String    @default("SUCCESS")
+  message                String?
+  detailsJson            String?   @db.Text
+  performedBy            String?
+  performedByRole        String?
+  performedAt            DateTime  @default(now())
+  ipAddress              String?
+  userAgent              String?
+
+  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}

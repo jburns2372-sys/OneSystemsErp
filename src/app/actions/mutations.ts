@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import * as xlsx from 'xlsx';
-import { put } from '@vercel/blob';
+import { uploadToS3 as put } from '@/lib/s3';
 import * as fs from 'fs';
 import * as path from 'path';
 import { GoogleGenAI, Type, Schema } from '@google/genai';

@@ -17,7 +17,7 @@ export async function getDashboardStats() {
   }
 
   let projectIds: string[] | undefined = undefined;
-  
+
   if (userId) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -28,7 +28,7 @@ export async function getDashboardStats() {
       const effectiveRole = (simulatedRole && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS'))
         ? simulatedRole
         : (user.role || 'GUEST_USER');
-      
+
       const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
 
       if (!isSuperAdmin) {
@@ -84,7 +84,7 @@ export async function getDashboardStats() {
     where: apWhere,
     _sum: { amount: true },
   });
-  
+
   const sbWhere: any = { paymentStatus: { not: 'PAID' } };
   if (relationProjectFilter.projectId) {
     sbWhere.projectId = relationProjectFilter.projectId;
@@ -115,14 +115,14 @@ export async function getDashboardStats() {
   });
 
   const activePurchaseOrders = await prisma.purchaseOrder.count({
-    where: { 
+    where: {
       status: { in: ['PENDING', 'APPROVED', 'PARTIAL_DELIVERY'] },
       mr: relationProjectFilter.projectId ? { projectId: relationProjectFilter.projectId } : undefined
     }
   });
 
   const expectedDeliveries = await prisma.purchaseOrder.count({
-    where: { 
+    where: {
       status: { in: ['APPROVED', 'PARTIAL_DELIVERY'] },
       mr: relationProjectFilter.projectId ? { projectId: relationProjectFilter.projectId } : undefined
     }
@@ -133,7 +133,7 @@ export async function getDashboardStats() {
   });
 
   const openCanvassing = await prisma.canvassForm.count({
-    where: { 
+    where: {
       status: { in: ['DRAFT', 'PENDING', 'OPEN', 'FOR_REVIEW'] },
       projectId: relationProjectFilter.projectId
     }
@@ -203,7 +203,7 @@ export async function deleteProject(projectId: string) {
   try {
     const cookieStore = await cookies();
     const userId = cookieStore.get('session')?.value;
-    
+
     if (!userId) {
       return { success: false, error: 'Unauthorized: Please log in' };
     }
@@ -235,7 +235,7 @@ export async function deleteProject(projectId: string) {
       prisma.projectSchedule.deleteMany({ where: { projectId } }),
       prisma.project.delete({ where: { id: projectId } })
     ]);
-    
+
     return { success: true };
   } catch (error: any) {
     console.error('Error deleting project:', error);

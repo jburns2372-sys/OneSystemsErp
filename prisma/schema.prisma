@@ -1,11 +1,11 @@
 generator client {
   provider = "prisma-client-js"
+  
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -118,10 +118,6 @@ model Project {
   consolidatedBOQLocked           Boolean                          @default(false)
   procurementBenchmarkLocked      Boolean                          @default(false)
   contractNumber                  String?
-  letterheadLine1                 String?
-  letterheadLine2                 String?
-  letterheadLine3                 String?
-  letterheadLogo                  String?                          @db.Text
   client                          String?
   contractor                      String?
   gpsLatitude                     Float?
@@ -182,11 +178,6 @@ model Project {
   valueEngineeringRecords         ValueEngineeringRecord[]         @relation("ProjectVERecords")
   projectSchedule                 ProjectSchedule?
   userAssignments                 ProjectUserAssignment[]
-  boqTemplateUploads              BOQTemplateUpload[]
-  uploadedWorkbookFiles           UploadedWorkbookFile[]
-  boqextractedSections            BOQExtractedSection[]
-  boqextractedItems               BOQExtractedItem[]
-  workbookExtractionAudits        WorkbookExtractionAudit[]
 }
 
 model ProjectUserAssignment {
@@ -210,31 +201,6 @@ model ProjectUserAssignment {
   @@index([userId])
   @@index([projectId])
   @@index([assignmentStatus])
-}
-
-model BOQTemplateUpload {
-  id                   String           @id @default(cuid())
-  projectId            String
-  project              Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  uploadedByUserId     String?
-  uploadedByName       String?
-  fileName             String
-  templateVersion      String?
-  status               String           @default("DRAFT_UPLOADED")
-  grandTotal           Float            @default(0)
-  totalPercentage      Float            @default(0)
-  ocmRate              Float            @default(8)
-  cpRate               Float            @default(8)
-  vatRate              Float            @default(5)
-  validRows            Int              @default(0)
-  errorRows            Int              @default(0)
-  warningRows          Int              @default(0)
-  fileUrl              String?
-  validationReport     String?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-
-  awardedBoqItems      AwardedBOQItem[]
 }
 
 model AwardedBOQItem {
@@ -281,27 +247,6 @@ model AwardedBOQItem {
   updatedAt                      DateTime                      @updatedAt
   aiValidationRuns               AIValidationRun[]
   accomplishmentItems            AccomplishmentItem[]
-  
-  // New granular BOQ fields
-  templateVersion                String?
-  sourceFileName                 String?
-  sourceSheetName                String?
-  sourceRowNumber                Int?
-  materialUnitCost               Float                         @default(0)
-  laborUnitCost                  Float                         @default(0)
-  equipmentUnitCost              Float                         @default(0)
-  ocmAmount                      Float                         @default(0)
-  cpAmount                       Float                         @default(0)
-  vatAmount                      Float                         @default(0)
-  percentageOfTotal              Float                         @default(0)
-  ocmRate                        Float                         @default(8)
-  cpRate                         Float                         @default(8)
-  vatRate                        Float                         @default(5)
-  approvalStatus                 String                        @default("APPROVED")
-  
-  boqTemplateUploadId            String?
-  boqTemplateUpload              BOQTemplateUpload?            @relation(fields: [boqTemplateUploadId], references: [id])
-
   project                        Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   lotBreakdowns                  BOQLotBreakdown[]
   mappings                       BOQMapping[]
@@ -317,8 +262,6 @@ model AwardedBOQItem {
   clientVariationOrders          ClientVariationOrder[]        @relation("AwardedClientVOs")
   valueEngineeringRecords        ValueEngineeringRecord[]      @relation("AwardedVERecords")
   scheduleMappings               ScheduleBOQMapping[]
-  uploadedWorkbookFileId String?
-  uploadedWorkbookFile   UploadedWorkbookFile? @relation(fields: [uploadedWorkbookFileId], references: [id])
 }
 
 model ProcurementBenchmarkItem {
@@ -4216,48 +4159,36 @@ model SecurityEvent {
   sessionId           String?
   message             String?
   blocked             Boolean   @default(false)
-
-  // Simulation Tracking Fields
-  simulationRunId  String?
-  expectedResponse String?
-  actualResponse   String?
-  simulationPassed Boolean?
-  simulationRun    SecuritySimulationRun? @relation(fields: [simulationRunId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   incident SecurityIncident? @relation(fields: [incidentId], references: [id])
 }
 
 model SecurityIncident {
-  id                    String    @id @default(cuid())
-  title                 String
-  description           String
-  severity              String
-  status                String
-  assignedTo            String?
-  affectedUserId        String?
-  affectedProjectId     String?
-  affectedModule        String?
-  sourceIp              String?
-  countermeasure        String?
-  result                String?
-  dataExposure          String?
-  relatedEventIds       String? // JSON Array
-  timelineJson          String?
-  evidenceJson          String?
-  linkedSimulationRunId String?
-  rootCause             String?
-  resolutionNotes       String?
-  adminNotes            String?
-  openedAt              DateTime  @default(now())
-  closedAt              DateTime?
-  createdBy             String?
-  updatedAt             DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  title             String
+  description       String
+  severity          String
+  status            String
+  assignedTo        String?
+  affectedUserId    String?
+  affectedProjectId String?
+  affectedModule    String?
+  sourceIp          String?
+  countermeasure    String?
+  result            String?
+  dataExposure      String?
+  relatedEventIds   String?   // JSON Array
+  rootCause         String?
+  resolutionNotes   String?
+  adminNotes        String?
+  openedAt          DateTime  @default(now())
+  closedAt          DateTime?
+  createdBy         String?
+  updatedAt         DateTime  @updatedAt
 
-  events        SecurityEvent[]
-  simulationRun SecuritySimulationRun? @relation("IncidentSimulationRun", fields: [linkedSimulationRunId], references: [id])
+  events SecurityEvent[]
 }
 
 model SecurityRule {
@@ -4275,19 +4206,19 @@ model SecurityRule {
 }
 
 model UserSessionSecurityLog {
-  id                  String    @id @default(cuid())
-  userId              String
-  sourceIp            String?
-  userAgent           String?
-  device              String?
+  id             String    @id @default(cuid())
+  userId         String
+  sourceIp       String?
+  userAgent      String?
+  device         String?
   approximateLocation String?
-  loginAt             DateTime  @default(now())
-  lastActivityAt      DateTime  @default(now())
-  revokedAt           DateTime?
-  revokedBy           String?
-  status              String    @default("ACTIVE")
-  riskScore           Float?
-  createdAt           DateTime  @default(now())
+  loginAt        DateTime  @default(now())
+  lastActivityAt DateTime  @default(now())
+  revokedAt      DateTime?
+  revokedBy      String?
+  status         String    @default("ACTIVE")
+  riskScore      Float?
+  createdAt      DateTime  @default(now())
 }
 
 model AIQuerySecurityLog {
@@ -4324,45 +4255,42 @@ model FileSecurityLog {
   createdAt      DateTime @default(now())
 }
 
+
 model ThreatIp {
-  id           String   @id @default(cuid())
-  ipAddress    String   @unique
-  country      String?
-  city         String?
-  region       String?
-  latitude     Float?
-  longitude    Float?
-  isp          String?
-  asn          String?
-  organization String?
-  firstSeen    DateTime @default(now())
-  lastSeen     DateTime @default(now())
-  attemptCount Int      @default(0)
-  severity     String?
-  status       String   @default("NEW")
-  notes        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String    @id @default(cuid())
+  ipAddress      String    @unique
+  country        String?
+  city           String?
+  region         String?
+  latitude       Float?
+  longitude      Float?
+  isp            String?
+  asn            String?
+  organization   String?
+  firstSeen      DateTime  @default(now())
+  lastSeen       DateTime  @default(now())
+  attemptCount   Int       @default(0)
+  severity       String?
+  status         String    @default("NEW")
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model CountermeasureLog {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   securityEventId    String?
   countermeasureType String
   description        String
   result             String?
-  responseTimeMs     Int?
-  expectedResult     String?
-  actualResult       String?
-  passed             Boolean?
-  performedBySystem  Boolean  @default(true)
+  performedBySystem  Boolean   @default(true)
   performedByUserId  String?
-  timestamp          DateTime @default(now())
-  createdAt          DateTime @default(now())
+  timestamp          DateTime  @default(now())
+  createdAt          DateTime  @default(now())
 }
 
 model SensitiveExportLog {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   userId             String
   userEmail          String?
   role               String?
@@ -4372,358 +4300,8 @@ model SensitiveExportLog {
   recordCount        Int?
   dataClassification String?
   sourceIp           String?
-  approved           Boolean  @default(true)
-  blocked            Boolean  @default(false)
+  approved           Boolean   @default(true)
+  blocked            Boolean   @default(false)
   reason             String?
-  createdAt          DateTime @default(now())
-}
-
-model SecuritySimulationScenario {
-  id                     String   @id @default(cuid())
-  name                   String
-  description            String?
-  category               String
-  severity               String
-  targetModule           String
-  targetRoute            String?
-  simulatedRole          String?
-  simulatedSourceIp      String?
-  simulatedCountry       String?
-  simulatedCity          String?
-  latitude               Float?
-  longitude              Float?
-  mitreTechnique         String?
-  owaspCategory          String?
-  expectedDetection      String?
-  expectedCountermeasure String?
-  passFailCriteria       String?
-  enabled                Boolean  @default(true)
-  createdBy              String?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-
-  runs SecuritySimulationRun[]
-}
-
-model SecuritySimulationCampaign {
-  id                   String   @id @default(cuid())
-  name                 String
-  description          String?
-  severity             String
-  scenarioSequenceJson String
-  status               String
-  createdBy            String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
-  runs SecuritySimulationRun[]
-}
-
-model SecuritySimulationRun {
-  id             String    @id @default(cuid())
-  scenarioId     String?
-  campaignId     String?
-  runMode        String // Event-Only, Controlled Negative, Campaign
-  environment    String
-  status         String // Pending, Running, Completed, Failed
-  initiatedBy    String?
-  startedAt      DateTime  @default(now())
-  completedAt    DateTime?
-  detectionScore Float?
-  responseScore  Float?
-  evidenceScore  Float?
-  finalScore     Float?
-  overallResult  String?
-  notes          String?
-
-  scenario  SecuritySimulationScenario? @relation(fields: [scenarioId], references: [id])
-  campaign  SecuritySimulationCampaign? @relation(fields: [campaignId], references: [id])
-  events    SecurityEvent[]
-  incidents SecurityIncident[]          @relation("IncidentSimulationRun")
-}
-
-model SecuritySimulationArchive {
-  id                           String    @id @default(cuid())
-  archiveNumber                String
-  simulationRunId              String?
-  campaignId                   String?
-  scenarioName                 String?
-  runMode                      String?
-  environment                  String?
-  initiatedBy                  String?
-  clearedBy                    String?
-  startedAt                    DateTime?
-  completedAt                  DateTime?
-  clearedAt                    DateTime  @default(now())
-  totalEventsArchived          Int?
-  totalIncidentsArchived       Int?
-  totalCountermeasuresArchived Int?
-  detectionScore               Float?
-  responseScore                Float?
-  evidenceScore                Float?
-  finalScore                   Float?
-  overallResult                String?
-  archiveJson                  String?   @db.Text
-  exportedPdfUrl               String?
-  exportedExcelUrl             String?
-  createdAt                    DateTime  @default(now())
-}
-
-model UploadedWorkbookFile {
-  id                   String                    @id @default(cuid())
-  templateId           String?
-  template             UploadedDocumentTemplate? @relation(fields: [templateId], references: [id])
-  projectId            String
-  project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  templateCode         String?
-  templateName         String?
-  templateVersion      String?
-  documentType         String?
-  originalFilename     String
-  fileHash             String?
-  mimeType             String?
-  fileSize             Int?
-  storagePath          String
-  preservedOriginalUrl String?
-  latestPreservedVersionId String?
-  uploadedBy           String?
-  uploadedAt           DateTime                  @default(now())
-  recognizedTemplate   Boolean                   @default(false)
-  validationStatus     String                    @default("PENDING")
-  extractionStatus     String                    @default("PENDING")
-  commitStatus         String                    @default("PENDING")
-  onlyOfficeDocumentKey String?
-  validationErrorsJson String?
-  workbookMetadataJson String?
-  metadataJson         String?
-  status               String                    @default("DRAFT")
-  createdAt            DateTime                  @default(now())
-  updatedAt            DateTime                  @updatedAt
-
-  cellSnapshots      WorkbookCellSnapshot[]
-  layoutSnapshots    WorkbookLayoutSnapshot[]
-  extractedSections  BOQExtractedSection[]
-  extractedItems     BOQExtractedItem[]
-  formulaValidations WorkbookFormulaValidation[]
-  templateValidations WorkbookTemplateValidation[]
-  auditTrails        WorkbookExtractionAudit[]
-  awardedBoqItems    AwardedBOQItem[]
-  workbookVersions   WorkbookVersion[]
-  onlyOfficeSessions OnlyOfficeSession[]
-  projectBOQVersions ProjectBOQVersion[]
-}
-
-model WorkbookCellSnapshot {
-  id                     String               @id @default(cuid())
-  uploadedWorkbookFileId String
-  workbookFile           UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  sheetName              String
-  cellAddress            String
-  rowNumber              Int
-  columnLetter           String
-  rawValue               String?
-  displayValue           String?
-  formula                String?
-  dataType               String?
-  numberFormat           String?
-  styleJson              String?
-  alignmentJson          String?
-  borderJson             String?
-  fillJson               String?
-  fontJson               String?
-  isMerged               Boolean              @default(false)
-  mergedRange            String?
-  isFormulaCell          Boolean              @default(false)
-  isEditableCell         Boolean              @default(false)
-  createdAt              DateTime             @default(now())
-}
-
-model WorkbookLayoutSnapshot {
-  id                     String               @id @default(cuid())
-  uploadedWorkbookFileId String
-  workbookFile           UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  sheetName              String
-  columnWidthsJson       String?
-  rowHeightsJson         String?
-  mergedCellsJson        String?
-  imagesJson             String?
-  freezePaneJson         String?
-  printSettingsJson      String?
-  pageSetupJson          String?
-  createdAt              DateTime             @default(now())
-}
-
-model BOQExtractedSection {
-  id                     String               @id @default(cuid())
-  uploadedWorkbookFileId String
-  workbookFile           UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  projectId              String
-  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sheetName              String
-  sourceRowNumber        Int
-  sectionCode            String?
-  sectionName            String
-  displayOrder           Int                  @default(0)
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
-
-  extractedItems BOQExtractedItem[]
-}
-
-model BOQExtractedItem {
-  id                     String               @id @default(cuid())
-  uploadedWorkbookFileId String
-  workbookFile           UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  projectId              String
-  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sectionId              String?
-  section                BOQExtractedSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
-  sheetName              String
-  sourceRowNumber        Int
-  itemNumber             String?
-  description            String
-  unit                   String?
-  quantity               Float                @default(0)
-  materialUnitCost       Float                @default(0)
-  laborUnitCost          Float                @default(0)
-  equipmentUnitCost      Float                @default(0)
-  totalDirectCost        Float                @default(0)
-  ocm                    Float                @default(0)
-  cp                     Float                @default(0)
-  vat                    Float                @default(0)
-  totalIndirectCost      Float                @default(0)
-  unitCost               Float                @default(0)
-  amount                 Float                @default(0)
-  percentage             Float                @default(0)
-  formulaMapJson         String?
-  validationStatus       String               @default("PENDING")
-  validationErrorsJson   String?
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
-}
-
-model WorkbookFormulaValidation {
-  id                     String               @id @default(cuid())
-  uploadedWorkbookFileId String
-  workbookFile           UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  projectId              String?
-  sheetName              String
-  cellAddress            String
-  sourceRowNumber        Int?
-  expectedFormula        String?
-  actualFormula          String?
-  expectedValue          String?
-  actualValue            String?
-  severity               String?
-  validationStatus       String
-  message                String?
-  createdAt              DateTime             @default(now())
-}
-
-model WorkbookExtractionAudit {
-  id                     String               @id @default(cuid())
-  uploadedWorkbookFileId String
-  workbookFile           UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  projectId              String
-  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  action                 String
-  status                 String
-  message                String?
-  detailsJson            String?
-  performedBy            String?
-  performedByRole        String?
-  ipAddress              String?
-  userAgent              String?
-  performedAt            DateTime             @default(now())
-}
-
-model UploadedDocumentTemplate {
-  id                       String   @id @default(cuid())
-  templateCode             String   @unique
-  templateName             String
-  templateVersion          String
-  documentType             String
-  sheetName                String
-  usedRange                String?
-  headerRange              String?
-  dataRange                String?
-  totalRow                 String?
-  requiredMergedRangesJson String?
-  requiredColumnsJson      String?
-  formulaRulesJson         String?
-  status                   String   @default("ACTIVE")
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
-
-  workbookFiles UploadedWorkbookFile[]
-}
-
-model WorkbookVersion {
-  id                     String               @id @default(cuid())
-  uploadedWorkbookFileId String
-  workbookFile           UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  projectId              String
-  versionNumber          Int
-  versionLabel           String?
-  sourceType             String
-  filePath               String
-  fileHash               String?
-  createdBy              String?
-  createdAt              DateTime             @default(now())
-  remarks                String?
-  onlyOfficeSessions     OnlyOfficeSession[]
-}
-
-model OnlyOfficeSession {
-  id                     String               @id @default(cuid())
-  uploadedWorkbookFileId String
-  workbookFile           UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  projectId              String
-  workbookVersionId      String?
-  workbookVersion        WorkbookVersion?     @relation(fields: [workbookVersionId], references: [id], onDelete: Cascade)
-  documentKey            String
-  mode                   String
-  userId                 String?
-  userName               String?
-  permissionsJson        String?
-  configJson             String?
-  status                 String
-  createdAt              DateTime             @default(now())
-  expiresAt              DateTime?
-  lastCallbackAt         DateTime?
-}
-
-model WorkbookTemplateValidation {
-  id                     String               @id @default(cuid())
-  uploadedWorkbookFileId String
-  workbookFile           UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  projectId              String
-  validationType         String
-  validationKey          String
-  expectedValue          String?
-  actualValue            String?
-  severity               String
-  status                 String
-  message                String?
-  createdAt              DateTime             @default(now())
-}
-
-model ProjectBOQVersion {
-  id                           String               @id @default(cuid())
-  projectId                    String
-  sourceUploadedWorkbookFileId String?
-  sourceWorkbookFile           UploadedWorkbookFile? @relation(fields: [sourceUploadedWorkbookFileId], references: [id], onDelete: SetNull)
-  versionNumber                Int
-  versionLabel                 String?
-  status                       String
-  committedBy                  String?
-  committedAt                  DateTime?
-  approvedBy                   String?
-  approvedAt                   DateTime?
-  totalDirectCost              Float                @default(0)
-  totalIndirectCost            Float                @default(0)
-  totalAmount                  Float                @default(0)
-  remarks                      String?
-  createdAt                    DateTime             @default(now())
-  updatedAt                    DateTime             @updatedAt
+  createdAt          DateTime  @default(now())
 }

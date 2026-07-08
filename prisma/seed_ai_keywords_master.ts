@@ -355,71 +355,25 @@ const keywordsToSeed = [
 async function main() {
   console.log(`Starting massive AI keyword ontology seed with ${keywordsToSeed.length} keywords...`);
   
-  let inserted = 0;
-  for (const item of keywordsToSeed) {
-    try {
-      const normalizedKeyword = item.keyword.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      
-      await prisma.aiRagKeywordRegistry.upsert({
-        where: { id: normalizedKeyword }, // Use normalized string as ID or create by searching
-        update: {
-          aliases: item.aliases,
-          keywordType: item.type,
-          databaseTable: item.table !== '' ? item.table : null,
-          confidentialityLevel: item.level,
-          sourceType: 'SEEDED'
-        },
-        create: {
-          keyword: item.keyword,
-          normalizedKeyword: normalizedKeyword,
-          keywordType: item.type,
-          aliases: item.aliases,
-          databaseTable: item.table !== '' ? item.table : null,
-          confidentialityLevel: item.level,
-          sourceType: 'SEEDED'
-        }
-      });
-      inserted++;
-    } catch (error) {
-      // If it fails on id matching, fall back to searching by keyword
-      try {
-        const existing = await prisma.aiRagKeywordRegistry.findFirst({
-          where: { keyword: item.keyword }
-        });
-        
-        if (existing) {
-          await prisma.aiRagKeywordRegistry.update({
-            where: { id: existing.id },
-            data: {
-              aliases: item.aliases,
-              keywordType: item.type,
-              databaseTable: item.table !== '' ? item.table : null,
-              confidentialityLevel: item.level,
-              sourceType: 'SEEDED'
-            }
-          });
-        } else {
-          const normalizedKeyword = item.keyword.toLowerCase().replace(/[^a-z0-9]/g, '_');
-          await prisma.aiRagKeywordRegistry.create({
-            data: {
-              keyword: item.keyword,
-              normalizedKeyword: normalizedKeyword,
-              keywordType: item.type,
-              aliases: item.aliases,
-              databaseTable: item.table !== '' ? item.table : null,
-              confidentialityLevel: item.level,
-              sourceType: 'SEEDED'
-            }
-          });
-        }
-        inserted++;
-      } catch (e) {
-        console.error(`Failed to seed ${item.keyword}:`, e);
-      }
-    }
-  }
+  // Clear existing seeded keywords to prevent duplicates during testing
+  await prisma.aiRagKeywordRegistry.deleteMany({ where: { sourceType: 'SEEDED' } });
   
-  console.log(`Successfully seeded ${inserted} AI keywords into the live database!`);
+  const dataToInsert = keywordsToSeed.map(item => ({
+    keyword: item.keyword,
+    normalizedKeyword: item.keyword.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+    keywordType: item.type,
+    aliases: item.aliases,
+    databaseTable: item.table !== '' ? item.table : null,
+    confidentialityLevel: item.level,
+    sourceType: 'SEEDED'
+  }));
+
+  const result = await prisma.aiRagKeywordRegistry.createMany({
+    data: dataToInsert,
+    skipDuplicates: true
+  });
+  
+  console.log(`Successfully seeded ${result.count} AI keywords into the live database!`);
 }
 
 main()

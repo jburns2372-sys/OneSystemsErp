@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 const prisma = new PrismaClient();
 
-import { put } from '@vercel/blob';
+import { uploadToS3 as put } from '@/lib/s3';
 import * as fs from 'fs';
 import path from 'path';
 const pdfParse = require('pdf-parse');

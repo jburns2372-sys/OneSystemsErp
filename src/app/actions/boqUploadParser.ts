@@ -5,7 +5,7 @@ import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 // Force hot reload to refresh Prisma client
 import { cookies } from "next/headers";
-import { put } from "@vercel/blob";
+import { uploadToS3 as put } from "@/lib/s3";
 import fs from "fs";
 import path from "path";
 

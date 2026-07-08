@@ -6,7 +6,7 @@ import { computePayrollForPeriod } from './payrollEngine';
 import { promises as fs } from 'fs';
 import path from 'path';
 import Papa from 'papaparse';
-import { put } from '@vercel/blob';
+import { uploadToS3 as put } from '@/lib/s3';
 
 export async function saveManualDtr(data: any, payrollPeriodId: string, encodedById: string) {
   try {
