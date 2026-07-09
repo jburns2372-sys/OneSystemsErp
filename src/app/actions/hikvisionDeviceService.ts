@@ -1,118 +1,77 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { requirePermission } from '@/lib/permissions';
 import { cookies } from 'next/headers';
-import crypto from 'crypto';
+import { revalidatePath, revalidateTag } from 'next/cache'; // Included for reference, though not used in original
 
-// Use a fallback secret for local dev if not in env
-const SECRET_KEY = process.env.ENCRYPTION_SECRET || 'vOVH6sdmpNWjRRIqCc7rdxs01lwHzfr3'; 
+/**
+ * Helper to fetch data from the authenticated backend.
+ * In a real application, this would handle attaching authentication tokens
+ * (e.g., JWT from session cookies) to requests and managing the backend base URL.
+ */
+async function fetchWithAuth(url: string, options?: RequestInit) {
+  const authToken = cookies().get('session')?.value; // Example: get session token from cookie
 
+  const headers = new Headers(options?.headers);
+  headers.set('Content-Type', 'application/json');
+  if (authToken) {
+    headers.set('Authorization', `Bearer ${authToken}`);
+  }
+
+  // IMPORTANT: Configure this environment variable to point to your AWS Express backend URL.
+  // Example: 'https://your-aws-lambda-api-gateway-url.amazonaws.com'
+  const baseUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || 'http://localhost:3001'; 
+
+  const response = await fetch(`${baseUrl}${url}`, {
+    ...options,
+    headers,
+  });
+
+  const result = await response.json();
+
+  if (!response.ok || result.success === false) {
+    const errorMessage = result.error || response.statusText || 'Unknown backend error';
+    throw new Error(`API call failed: ${errorMessage}`);
+  }
+  
+  return result.data; // Assuming backend returns { success: true, data: ... }
+}
+
+// Helper function to get userId from Next.js cookies, used internally by the actions.
 async function getUserId() {
   const cookieStore = await cookies();
   return cookieStore.get('session')?.value || '';
 }
 
-function encrypt(text: string) {
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(SECRET_KEY), iv);
-  let encrypted = cipher.update(text);
-  encrypted = Buffer.concat([encrypted, cipher.final()]);
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
-}
-
-function decrypt(text: string) {
-  const textParts = text.split(':');
-  const iv = Buffer.from(textParts.shift()!, 'hex');
-  const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(SECRET_KEY), iv);
-  let decrypted = decipher.update(encryptedText);
-  decrypted = Buffer.concat([decrypted, decipher.final()]);
-  return decrypted.toString();
-}
+// Define the API route prefix for this service
+const API_ROUTE_PREFIX = '/hikvisionDeviceService'; 
 
 export async function getHikvisionDevices() {
-  const userId = await getUserId();
-  await requirePermission(userId, 'EQUIPMENT', 'canView');
-  
-  const devices = await prisma.hikvisionDevice.findMany({
-    include: {
-      equipment: { select: { code: true, name: true, status: true, plateNumber: true } }
-    },
-    orderBy: { createdAt: 'desc' }
+  // Obtain userId from Next.js context and pass to backend for permission check
+  const userId = await getUserId(); 
+  const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/getHikvisionDevices`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }), // Pass userId in body
   });
-
-  // Never return plain text passwords to client
-  return devices.map(d => ({
-    ...d,
-    passwordEncrypted: d.passwordEncrypted ? '******' : null,
-    rtspUrlEncrypted: d.rtspUrlEncrypted ? '******' : null
-  }));
+  return response;
 }
 
 export async function registerHikvisionDevice(data: any) {
-  const userId = await getUserId();
-  await requirePermission(userId, 'EQUIPMENT', 'canEdit');
-
-  const {
-    deviceName,
-    deviceModel,
-    deviceSerialNumber,
-    imeiOrUniqueId,
-    integrationType,
-    ipAddress,
-    domainName,
-    port,
-    username,
-    password,
-    equipmentId,
-    simNumber,
-    simProvider
-  } = data;
-
-  const passwordEncrypted = password ? encrypt(password) : null;
-
-  return prisma.hikvisionDevice.create({
-    data: {
-      deviceName,
-      deviceModel,
-      deviceSerialNumber,
-      imeiOrUniqueId,
-      integrationType,
-      ipAddress,
-      domainName,
-      port: port ? parseInt(port) : null,
-      usernameEncrypted: username,
-      passwordEncrypted,
-      equipmentId: equipmentId || null,
-      simNumber,
-      simProvider,
-      installedBy: userId,
-      installationDate: new Date()
-    }
+  // Obtain userId from Next.js context and pass to backend for permission check
+  const userId = await getUserId(); 
+  const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/registerHikvisionDevice`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, data }), // Pass userId and the original data object
   });
+  // The original file did not include revalidatePath/Tag, so it's omitted here.
+  return response;
 }
 
 export async function testDeviceConnection(deviceId: string) {
-  const userId = await getUserId();
-  await requirePermission(userId, 'EQUIPMENT', 'canView');
-  
-  const device = await prisma.hikvisionDevice.findUnique({ where: { id: deviceId } });
-  if (!device) throw new Error('Device not found');
-
-  // MOCK: In production, we'd ping the ISAPI endpoint: 
-  // e.g. http://${device.ipAddress}:${device.port}/ISAPI/System/deviceInfo
-  
-  // Simulate network delay
-  await new Promise(r => setTimeout(r, 1000));
-  
-  if (device.integrationType === 'DEVICE_GATEWAY') {
-    return { success: true, message: 'Gateway integration ready for incoming webhooks.' };
-  }
-
-  if (device.ipAddress) {
-    return { success: true, message: `Successfully connected to ${device.ipAddress} via ISAPI.` };
-  }
-
-  return { success: false, message: 'Cannot test connection. IP or Gateway not configured.' };
+  // Obtain userId from Next.js context and pass to backend for permission check
+  const userId = await getUserId(); 
+  const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/testDeviceConnection`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, deviceId }), // Pass userId and the original deviceId
+  });
+  return response;
 }

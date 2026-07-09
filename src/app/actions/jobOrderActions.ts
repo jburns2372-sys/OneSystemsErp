@@ -1,127 +1,89 @@
-// @ts-nocheck
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 
-// --- JOB ORDER CRUD ---
+const BACKEND_URL = process.env.AWS_BACKEND_URL || 'http://localhost:4000';
+const API_ROUTE_PREFIX = '/api/jobOrderActions'; // New common prefix for all actions
+
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const cookieStore = await cookies(); // `cookies()` is not awaitable
+  const session = cookieStore.get('session')?.value;
+  const activeProjectId = cookieStore.get('activeProjectId')?.value;
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+
+  const headers = new Headers(options.headers);
+  if (session) headers.set('x-user-session', session);
+  if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
+  if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
+  headers.set('Content-Type', 'application/json');
+
+  const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Backend Error: ${res.status} ${errorText}`);
+  }
+  return res.json();
+}
+
+// --- JOB ORDER READ (Now Proxied to AWS Backend) ---
 
 export async function getJobOrders(projectId?: string) {
-  return await prisma.jobOrder.findMany({
-    where: projectId ? { projectId } : undefined,
-    include: {
-      subcontractor: true,
-      project: true,
-    },
-    orderBy: { createdAt: 'desc' }
-  });
+  try {
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/getJobOrders`, {
+      method: 'POST',
+      body: JSON.stringify({ projectId })
+    });
+    return result.data; // Original returned array directly, backend returns { success: true, data: [...] }
+  } catch (error: any) {
+    console.error("Get Job Orders Error:", error);
+    // Original returned raw array or Prisma error, now returning consistent error structure
+    return { success: false, error: error.message };
+  }
 }
 
 export async function getJobOrderById(id: string) {
   try {
-    const jobOrder = await prisma.jobOrder.findUnique({
-      where: { id },
-      include: {
-        subcontractor: true,
-        project: true,
-        subcontractAccomplishments: true,
-        subcontractBillings: true
-      }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/getJobOrderById`, {
+      method: 'POST',
+      body: JSON.stringify({ id })
     });
-    return { success: true, data: jobOrder };
+    return result; // Original returned { success: true, data: {...} }, matches backend
   } catch (error: any) {
+    console.error("Get Job Order By Id Error:", error);
     return { success: false, error: error.message };
   }
 }
 
 export async function getConsolidatedBoqItemsByProjectId(projectId: string) {
   try {
-    const items = await prisma.consolidatedBOQItem.findMany({
-      where: { 
-        projectId,
-        quantity: { gt: 0 },
-        totalCost: { gt: 0 }
-      },
-      select: { id: true, category: true, description: true, totalCost: true, itemCode: true, quantity: true, unitCost: true, unit: true }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/getConsolidatedBoqItemsByProjectId`, {
+      method: 'POST',
+      body: JSON.stringify({ projectId })
     });
-    // Map unitCost to combinedUnitCost for form compatibility
-    const mapped = items.map(item => ({ ...item, combinedUnitCost: item.unitCost }));
-    return { success: true, items: mapped };
+    return result; // Original returned { success: true, items: [...] }, matches backend
   } catch (error: any) {
+    console.error("Get Consolidated BOQ Items Error:", error);
     return { success: false, error: error.message };
   }
 }
 
+// --- JOB ORDER MUTATIONS (Proxied to AWS Backend via new RPC-style endpoints) ---
+
 export async function createJobOrder(data: any) {
   try {
-    if (!data.jobNumber) {
-      data.jobNumber = 'JO-' + Date.now();
-    }
-
-    // Check for duplicate job order number
-    const existing = await prisma.jobOrder.findUnique({ where: { jobNumber: data.jobNumber } });
-    if (existing) {
-      return { success: false, error: `A Job Order with number "${data.jobNumber}" already exists. Please refresh the page to generate a new number.` };
-    }
-    
-    if (data.startDate) data.startDate = new Date(data.startDate);
-    if (data.completionDate) data.completionDate = new Date(data.completionDate);
-    
-    // Check threshold (simplified, configurable per user request)
-    const threshold = 250000;
-    if (data.contractAmount > threshold) {
-      data.isThresholdExceeded = true;
-      data.thresholdWarning = "This Job Order amount exceeds the standard Job Order limit. Consider converting this to a full subcontract.";
-    }
-
-    const boqReferenceIds = data.boqReferenceIds || [];
-
-    // Check BOQ Conflict: Ensure it's not already in a Subcontract
-    if (boqReferenceIds.length > 0) {
-      const pureBoqIds = boqReferenceIds.filter((id: string) => id !== '1_LOT');
-      if (pureBoqIds.length > 0) {
-        const existingSubcontract = await prisma.subcontractorBOQItem.findFirst({
-          where: { awardedBoqItemId: { in: pureBoqIds } }
-        });
-        if (existingSubcontract) {
-          return { 
-            success: false, 
-            error: `Conflict Error: One or more selected BOQ items are already assigned to an active Subcontract Package. You cannot issue a Job Order for subcontracted scope.` 
-          };
-        }
-      }
-    }
-
-    // Check for logical Duplicate Job Order (Same Project, Subcontractor, and BOQ Scope)
-    const existingJOs = await prisma.jobOrder.findMany({
-      where: { 
-        projectId: data.projectId, 
-        subcontractorId: data.subcontractorId 
-      }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/createJobOrder`, {
+      method: 'POST',
+      body: JSON.stringify(data)
     });
-
-    const isDuplicate = existingJOs.some(jo => {
-      const existingIds = Array.isArray(jo.boqReferenceIds) ? jo.boqReferenceIds : [];
-      if (existingIds.length === boqReferenceIds.length && existingIds.length > 0) {
-        const sortedExisting = [...existingIds].sort();
-        const sortedIncoming = [...boqReferenceIds].sort();
-        return sortedExisting.every((val, index) => val === sortedIncoming[index]);
-      }
-      return false;
-    });
-
-    if (isDuplicate) {
-      return { success: false, error: "Duplicate Error: A Job Order for this Subcontractor with the exact same BOQ scope already exists." };
-    }
-
-    // Remove UI-only fields that don't exist in the Prisma schema
-    const { durationDays, boqReferenceIds: _, jobOrderType, ...prismaData } = data;
-    prismaData.boqReferenceId = boqReferenceIds;
-
-    const result = await prisma.jobOrder.create({ data: prismaData });
+    
     revalidatePath('/subcontracting/job-orders');
     revalidatePath('/job-orders/dashboard');
-    return { success: true, data: result };
+    return result; // Original returned result of fetchWithAuth, matches backend
   } catch (error: any) {
     console.error("Create Job Order Error:", error);
     return { success: false, error: error.message };
@@ -130,52 +92,13 @@ export async function createJobOrder(data: any) {
 
 export async function updateJobOrder(id: string, data: any) {
   try {
-    if (data.startDate) data.startDate = new Date(data.startDate);
-    if (data.completionDate) data.completionDate = new Date(data.completionDate);
-    
-    const threshold = 250000;
-    if (data.contractAmount > threshold) {
-      data.isThresholdExceeded = true;
-      data.thresholdWarning = "This Job Order amount exceeds the standard Job Order limit. Consider converting this to a full subcontract.";
-    } else {
-      data.isThresholdExceeded = false;
-      data.thresholdWarning = null;
-    }
-
-    // Check if locked
-    const existing = await prisma.jobOrder.findUnique({
-      where: { id },
-      include: { subcontractAccomplishments: true, subcontractBillings: true }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/updateJobOrder`, {
+      method: 'POST',
+      body: JSON.stringify({ id, data }) // Pass both id and data in the body for the RPC call
     });
     
-    if (existing) {
-      const isLocked = existing.subcontractAccomplishments.some((a: any) => a.status === 'APPROVED') || 
-                       existing.subcontractBillings.some((b: any) => b.status === 'APPROVED_FOR_PAYMENT' || b.paymentStatus === 'PAID');
-      if (isLocked) {
-        throw new Error("Job Order is locked and cannot be edited because accomplishments or payments have been processed.");
-      }
-    }
-
-    // Store boqReferenceIds as JSON
-    const boqReferenceId = data.boqReferenceIds || [];
-
-    const { 
-      durationDays, 
-      project, 
-      subcontractor, 
-      subcontractAccomplishments,
-      subcontractBillings,
-      boqReferenceIds: _,
-      jobOrderType,
-      ...prismaData 
-    } = data;
-
-    prismaData.boqReferenceId = boqReferenceId;
-
-    const result = await prisma.jobOrder.update({ where: { id }, data: prismaData });
     revalidatePath('/job-orders/dashboard');
-    return { success: true, data: result };
-
+    return result; // Original returned result of fetchWithAuth, matches backend
   } catch (error: any) {
     console.error("Update Job Order Error:", error);
     return { success: false, error: error.message };
@@ -184,56 +107,28 @@ export async function updateJobOrder(id: string, data: any) {
 
 export async function deleteJobOrder(id: string) {
   try {
-    await prisma.jobOrder.delete({
-      where: { id }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/deleteJobOrder`, {
+      method: 'POST',
+      body: JSON.stringify({ id }) // Pass id in the body for the RPC call
     });
+    
     revalidatePath('/job-orders/dashboard');
-    return { success: true };
+    return result; // Original returned result of fetchWithAuth, matches backend
   } catch (error: any) {
+    console.error("Delete Job Order Error:", error);
     return { success: false, error: error.message };
   }
 }
 
 export async function updateJobOrderStatus(id: string, newStatus: any) {
   try {
-    const data: any = { status: newStatus };
-    
-    const jo = await prisma.jobOrder.findUnique({
-      where: { id },
-      include: { project: true }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/updateJobOrderStatus`, {
+      method: 'POST',
+      body: JSON.stringify({ id, newStatus }) // Pass both id and newStatus in the body
     });
     
-    if (!jo) throw new Error("Job order not found");
-
-    const result = await prisma.jobOrder.update({
-      where: { id },
-      data
-    });
-
-    const isApproved = newStatus === 'APPROVED';
-    if (isApproved && jo.status !== 'APPROVED' && jo.consolidatedBoqItemId) {
-      await prisma.commitmentLedger.create({
-        data: {
-          projectId: jo.projectId,
-          consolidatedBoqItemId: jo.consolidatedBoqItemId,
-          commitmentType: 'SUBCONTRACT',
-          subcontractorName: jo.subcontractor?.name || '',
-          approvedAmount: jo.contractAmount,
-          remainingCommitment: jo.contractAmount,
-          status: 'ACTIVE'
-        }
-      });
-
-      await prisma.consolidatedBOQItem.update({
-        where: { id: jo.consolidatedBoqItemId },
-        data: {
-          committedCost: { increment: jo.contractAmount }
-        }
-      });
-    }
-
     revalidatePath(`/job-orders/${id}`);
-    return { success: true, data: result };
+    return result; // Original returned result of fetchWithAuth, matches backend
   } catch (error: any) {
     console.error("Update Job Order Status Error:", error);
     return { success: false, error: error.message };
@@ -242,12 +137,13 @@ export async function updateJobOrderStatus(id: string, newStatus: any) {
 
 export async function unlockJobOrder(id: string) {
   try {
-    const result = await prisma.jobOrder.update({
-      where: { id },
-      data: { status: 'FOR_FINANCIAL_REVIEW' }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/unlockJobOrder`, {
+      method: 'POST',
+      body: JSON.stringify({ id }) // Pass id in the body for the RPC call
     });
+    
     revalidatePath(`/job-orders/${id}`);
-    return { success: true, data: result };
+    return result; // Original returned result of fetchWithAuth, matches backend
   } catch (error: any) {
     console.error("Unlock Job Order Error:", error);
     return { success: false, error: error.message };

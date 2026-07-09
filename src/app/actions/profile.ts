@@ -1,8 +1,34 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+
+// fetchWithAuth definition
+type FetchWithAuthOptions = RequestInit & {
+  // In a real application, you might add accessToken/refreshToken here
+  // or `fetchWithAuth` might automatically get them from cookies.
+};
+
+async function fetchWithAuth(url: string, options: FetchWithAuthOptions = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: response.statusText }));
+    // The backend error response format is { success: false, error: '...' }
+    // So we try to extract 'error' directly.
+    throw new Error(errorData.error || 'Something went wrong on the server.');
+  }
+
+  return response.json();
+}
 
 export async function updateProfile(formData: FormData) {
   const cookieStore = await cookies();
@@ -12,11 +38,13 @@ export async function updateProfile(formData: FormData) {
     return { success: false, error: 'Unauthorized. Please log in.' };
   }
 
+  // Extract formData into a plain object to send as JSON
   const name = formData.get('name') as string;
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
   const confirmPassword = formData.get('confirmPassword') as string;
 
+  // Client-side validation for immediate feedback
   if (!name || !email) {
     return { success: false, error: 'Name and email are required.' };
   }
@@ -26,32 +54,28 @@ export async function updateProfile(formData: FormData) {
   }
 
   try {
-    const dataToUpdate: any = {
+    const body = {
+      userId, // Pass userId to the backend
       name,
       email,
+      password,
+      confirmPassword,
     };
 
-    if (password) {
-      // In a real application, ensure you hash the password before saving. 
-      // Based on auth.ts, passwords here might be plain text for prototype, 
-      // but update this as per project security standards.
-      dataToUpdate.password = password;
-    }
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: dataToUpdate,
+    const result = await fetchWithAuth('/api/profile/updateProfile', {
+      method: 'POST',
+      body: JSON.stringify(body),
     });
 
-    revalidatePath('/');
-    revalidatePath('/profile');
-
-    return { success: true, message: 'Profile updated successfully!' };
-  } catch (error: any) {
-    // Handle unique constraint failure for email
-    if (error.code === 'P2002') {
-      return { success: false, error: 'Email is already in use by another account.' };
+    if (result.success) {
+      revalidatePath('/');
+      revalidatePath('/profile');
     }
-    return { success: false, error: 'An error occurred while updating the profile.' };
+
+    return result; // The backend should return { success: true, message: '...' } or { success: false, error: '...' }
+  } catch (error: any) {
+    console.error('Error in proxy updateProfile:', error);
+    // If fetchWithAuth throws an error, it will be caught here.
+    return { success: false, error: error.message || 'An unexpected error occurred.' };
   }
 }

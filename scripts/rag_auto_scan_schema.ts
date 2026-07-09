@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+const { PrismaClient, Prisma } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
@@ -57,7 +57,7 @@ async function main() {
     tablesAdded++;
 
     // 2. Add keywords for important fields to SCHEMA MAP
-    const hasProjectId = model.fields.some(f => f.name === 'projectId');
+    const hasProjectId = model.fields.some((f: any) => f.name === 'projectId');
     
     for (const field of model.fields) {
       if (field.kind === 'object' || field.name === 'id' || field.name === 'createdAt' || field.name === 'updatedAt') continue;

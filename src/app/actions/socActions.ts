@@ -1,116 +1,98 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/permissions';
+import { revalidatePath, revalidateTag } from 'next/cache'; // Include if needed, though not used in original
+
+/**
+ * A wrapper around `fetch` that adds authentication headers (if available)
+ * and handles API response parsing and error checking.
+ */
+async function fetchWithAuth<T>(url: string, options?: RequestInit): Promise<T> {
+  // In a real application, you'd add actual authentication logic here,
+  // e.g., fetching a token from a secure cookie or an auth provider.
+  const authHeaders: HeadersInit = {
+    'Content-Type': 'application/json',
+    // 'Authorization': `Bearer ${await getAuthToken()}`, // Example: replace with actual auth token retrieval
+  };
+
+  const fullUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001'}${url}`;
+
+  const response = await fetch(fullUrl, {
+    ...options,
+    headers: {
+      ...authHeaders,
+      ...options?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    let errorData: any = {};
+    try {
+      errorData = await response.json();
+    } catch (e) {
+      // If response is not JSON, just use status text
+      errorData.message = response.statusText;
+    }
+    const errorMessage = errorData.error || errorData.message || 'An unknown error occurred';
+    throw new Error(`API Error (${response.status}): ${errorMessage}`);
+  }
+
+  const result = await response.json();
+
+  // Check for the 'success' flag in the response body from the Express backend
+  if (result && typeof result === 'object' && 'success' in result && !result.success) {
+    throw new Error(result.error || 'Backend operation failed');
+  }
+
+  // Return the actual data payload from the backend response
+  return result.data as T;
+}
 
 export async function checkSocAccess(userId: string) {
-  const permissions = await getUserPermissions(userId);
-  if (!permissions.IS_ADMIN && !permissions.SYSTEM_SETTINGS?.canView) {
-    return false;
-  }
-  return true;
+  return fetchWithAuth<boolean>('/api/socActions/checkSocAccess', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
 }
 
 export async function getSocDashboardStats(includeSimulated: boolean = true) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const whereClause = includeSimulated ? {} : { simulated: false };
-
-  const [
-    totalEvents,
-    blockedThreats,
-    criticalThreats,
-    failedLogins,
-    aiAttacks,
-    fileThreats,
-    activeIncidents,
-  ] = await Promise.all([
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, ...whereClause } }),
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, OR: [{ status: 'BLOCKED' }, { result: 'BLOCKED' }, { blocked: true }], ...whereClause } }),
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, severity: { in: ['CRITICAL', 'Critical'] }, ...whereClause } }),
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, OR: [{ threatType: 'UNAUTHENTICATED_ACCESS' }, { category: 'Authentication' }], ...whereClause } }),
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, category: 'AI', ...whereClause } }),
-    prisma.securityEvent.count({ where: { timestamp: { gte: today }, category: 'FILE', ...whereClause } }),
-    prisma.securityIncident.count({ where: { status: { notIn: ['Resolved', 'Closed'] } } }),
-  ]);
-
-  return {
-    totalEvents,
-    blockedThreats,
-    criticalThreats,
-    failedLogins,
-    aiAttacks,
-    fileThreats,
-    activeIncidents,
-  };
+  return fetchWithAuth<{
+    totalEvents: number;
+    blockedThreats: number;
+    criticalThreats: number;
+    failedLogins: number;
+    aiAttacks: number;
+    fileThreats: number;
+    activeIncidents: number;
+  }>('/api/socActions/getSocDashboardStats', {
+    method: 'POST',
+    body: JSON.stringify({ includeSimulated }),
+  });
 }
 
 export async function getLiveThreatFeed(limit: number = 50, includeSimulated: boolean = true) {
-  const whereClause = includeSimulated ? {} : { simulated: false };
-  return await prisma.securityEvent.findMany({
-    take: limit,
-    where: whereClause,
-    orderBy: { timestamp: 'desc' },
-    select: {
-      id: true,
-      timestamp: true,
-      severity: true,
-      threatType: true,
-      sourceIp: true,
-      country: true,
-      city: true,
-      userEmail: true,
-      userRole: true,
-      module: true,
-      systemResponse: true,
-      result: true,
-      status: true,
-      simulated: true,
-      simulationRunId: true,
-      expectedResponse: true,
-      actualResponse: true,
-    }
+  return fetchWithAuth<Array<any>>('/api/socActions/getLiveThreatFeed', {
+    method: 'POST',
+    body: JSON.stringify({ limit, includeSimulated }),
   });
 }
 
 export async function getEventDetails(eventId: string) {
-  return await prisma.securityEvent.findUnique({
-    where: { id: eventId },
-    include: {
-      incident: true,
-    }
+  return fetchWithAuth<any>('/api/socActions/getEventDetails', {
+    method: 'POST',
+    body: JSON.stringify({ eventId }),
   });
 }
 
 export async function getThreatMapData(includeSimulated: boolean = true) {
-  const whereClause = includeSimulated 
-    ? { latitude: { not: null }, longitude: { not: null } }
-    : { latitude: { not: null }, longitude: { not: null }, simulated: false };
-
-  const recentEvents = await prisma.securityEvent.findMany({
-    take: 100,
-    orderBy: { timestamp: 'desc' },
-    where: whereClause,
-    select: {
-      id: true,
-      sourceIp: true,
-      latitude: true,
-      longitude: true,
-      severity: true,
-      status: true,
-      threatType: true,
-      country: true,
-      city: true,
-      simulated: true,
-    }
+  return fetchWithAuth<Array<any>>('/api/socActions/getThreatMapData', {
+    method: 'POST',
+    body: JSON.stringify({ includeSimulated }),
   });
-  return recentEvents;
 }
 
 export async function getCountermeasuresData(limit: number = 20) {
-    return await prisma.countermeasureLog.findMany({
-      take: limit,
-      orderBy: { timestamp: 'desc' },
-    });
+  return fetchWithAuth<Array<any>>('/api/socActions/getCountermeasuresData', {
+    method: 'POST',
+    body: JSON.stringify({ limit }),
+  });
 }

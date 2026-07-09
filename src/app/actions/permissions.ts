@@ -1,44 +1,49 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
+import { generateText } from 'ai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+
+const BACKEND_URL = process.env.AWS_BACKEND_URL || 'http://localhost:4000';
+
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const cookieStore = await cookies();
+  const session = cookieStore.get('session')?.value;
+  const activeProjectId = cookieStore.get('activeProjectId')?.value;
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+
+  const headers = new Headers(options.headers);
+  if (session) headers.set('x-user-session', session);
+  if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
+  if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
+  headers.set('Content-Type', 'application/json');
+
+  const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Backend Error: ${res.status} ${errorText}`);
+  }
+  return res.json();
+}
 
 export async function getRolesAndModules() {
-  const roles = await prisma.role.findMany({ orderBy: { roleName: 'asc' } });
-  const modules = await prisma.module.findMany({ orderBy: { moduleName: 'asc' } });
-  const rolePermissions = await prisma.rolePermission.findMany();
-
-  return { roles, modules, rolePermissions };
+  return await fetchWithAuth('/api/permissions/roles-modules');
 }
 
 export async function saveRolePermission(roleId: string, moduleId: string, field: string, value: boolean) {
-  const moduleInfo = await prisma.module.findUnique({ where: { id: moduleId } });
-  if (!moduleInfo) throw new Error("Module not found");
-
-  await prisma.rolePermission.upsert({
-    where: {
-      roleId_moduleId: {
-        roleId,
-        moduleId,
-      }
-    },
-    update: {
-      [field]: value
-    },
-    create: {
-      roleId,
-      moduleId,
-      moduleName: moduleInfo.moduleName,
-      [field]: value
-    }
+  await fetchWithAuth('/api/permissions/role-permission', {
+    method: 'POST',
+    body: JSON.stringify({ roleId, moduleId, field, value })
   });
 
   revalidatePath('/admin/permissions');
   return { success: true };
 }
-
-import { generateText } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,

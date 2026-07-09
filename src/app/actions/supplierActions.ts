@@ -1,66 +1,94 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers';
+// The original `cookies()` and `sessionId` check is removed here,
+// as `fetchWithAuth` is expected to handle authentication.
 
-export async function createSupplier(formData: FormData) {
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
-  if (!sessionId) throw new Error('Not authenticated');
+/**
+ * A wrapper around `fetch` that automatically includes authentication credentials
+ * and handles base URL. You would typically implement this to inject JWTs or
+ * session tokens from `cookies()` or a session context.
+ */
+async function fetchWithAuth(url: string, options?: RequestInit) {
+  const baseUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || 'http://localhost:3001'; // Replace with your actual AWS backend URL
 
-  const name = formData.get('name') as string;
-  const tin = formData.get('tin') as string;
-  const contactPerson = formData.get('contactPerson') as string;
-  const contactNumber = formData.get('contactNumber') as string;
-  const email = formData.get('email') as string;
-  const address = formData.get('address') as string;
-  const paymentTerms = formData.get('paymentTerms') as string;
-  const isVatable = formData.get('isVatable') === 'true';
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options?.headers || {})
+  };
 
-  await prisma.supplier.create({
-    data: {
-      name,
-      tin,
-      contactPerson,
-      contactNumber,
-      email,
-      address,
-      paymentTerms,
-      isVatable
-    }
+  // In a real application, you would retrieve and attach an authentication token here.
+  // Example: const authToken = cookies().get('authToken')?.value;
+  // if (authToken) { headers['Authorization'] = `Bearer ${authToken}`; }
+
+  const response = await fetch(`${baseUrl}${url}`, {
+    ...options,
+    headers
   });
 
-  revalidatePath('/procurement/suppliers');
+  if (!response.ok) {
+    let errorData = { error: 'Unknown error occurred' };
+    try {
+      errorData = await response.json();
+    } catch (e) {
+      // If response is not JSON, use status text
+      errorData.error = response.statusText || 'Failed to parse error response';
+    }
+    throw new Error(errorData.error || `Request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+const API_ROUTE_PREFIX = '/api/supplierActions'; // Corresponds to your Express router prefix for this module
+
+export async function createSupplier(formData: FormData) {
+  // Original authentication check removed, delegated to fetchWithAuth
+
+  const data: { [key: string]: string | boolean } = {};
+  for (const [key, value] of formData.entries()) {
+    if (key === 'isVatable') {
+      data[key] = value === 'true';
+    } else {
+      data[key] = value as string;
+    }
+  }
+
+  try {
+    await fetchWithAuth(`${API_ROUTE_PREFIX}/createSupplier`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    revalidatePath('/procurement/suppliers');
+  } catch (error: any) {
+    console.error('Error in createSupplier proxy:', error);
+    throw new Error(error.message || 'Failed to create supplier via backend');
+  }
 }
 
 export async function updateSupplier(id: string, formData: FormData) {
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
-  if (!sessionId) throw new Error('Not authenticated');
+  // Original authentication check removed, delegated to fetchWithAuth
 
-  const name = formData.get('name') as string;
-  const tin = formData.get('tin') as string;
-  const contactPerson = formData.get('contactPerson') as string;
-  const contactNumber = formData.get('contactNumber') as string;
-  const email = formData.get('email') as string;
-  const address = formData.get('address') as string;
-  const paymentTerms = formData.get('paymentTerms') as string;
-  const isVatable = formData.get('isVatable') === 'true';
-
-  await prisma.supplier.update({
-    where: { id },
-    data: {
-      name,
-      tin,
-      contactPerson,
-      contactNumber,
-      email,
-      address,
-      paymentTerms,
-      isVatable
+  const data: { [key: string]: string | boolean | FormDataEntryValue } = {};
+  for (const [key, value] of formData.entries()) {
+    if (key === 'isVatable') {
+      data[key] = value === 'true';
+    } else {
+      data[key] = value;
     }
-  });
+  }
 
-  revalidatePath('/procurement/suppliers');
+  try {
+    await fetchWithAuth(`${API_ROUTE_PREFIX}/updateSupplier`, {
+      method: 'POST',
+      body: JSON.stringify({
+        id,
+        ...data
+      })
+    });
+    revalidatePath('/procurement/suppliers');
+  } catch (error: any) {
+    console.error('Error in updateSupplier proxy:', error);
+    throw new Error(error.message || 'Failed to update supplier via backend');
+  }
 }

@@ -1,98 +1,50 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { GoogleGenAI } from '@google/genai';
+// Standard fetchWithAuth definition for making API calls.
+// In a production environment, `process.env.AWS_API_GATEWAY_URL` should be configured
+// with the actual URL of your deployed AWS Express backend.
+const fetchWithAuth = async (url: string, options?: RequestInit) => {
+  const baseUrl = process.env.AWS_API_GATEWAY_URL || 'http://localhost:3001'; // Default for local dev
+  const response = await fetch(`${baseUrl}${url}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+      // For server-to-server authentication (Server Action to AWS Backend),
+      // consider using an API Key or other secure methods.
+      // e.g., 'X-API-Key': process.env.BACKEND_API_KEY,
+    },
+  });
+
+  if (!response.ok) {
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch (e) {
+      errorData = { message: response.statusText || `Request failed with status ${response.status}` };
+    }
+    // Propagate the error message from the backend
+    throw new Error(errorData.error || errorData.message || 'An unknown error occurred on the backend.');
+  }
+
+  return response.json();
+};
+
+const API_ROUTE_PREFIX = '/aiPaymentValidationActions'; // As specified in the instructions
 
 export async function validatePaymentBatchWithAI(batchId: string) {
   try {
-    const batch = await prisma.paymentBatch.findUnique({
-      where: { id: batchId },
-      include: {
-        rows: {
-          include: { worker: true }
-        }
-      }
+    const data = await fetchWithAuth(`${API_ROUTE_PREFIX}/validatePaymentBatchWithAI`, {
+      method: 'POST',
+      body: JSON.stringify({ batchId }),
     });
 
-    if (!batch) throw new Error('Batch not found');
-
-    // Build the payload to send to AI
-    const payload = batch.rows.map(r => ({
-      payslipId: r.payrollId,
-      workerName: `${r.worker.firstName} ${r.worker.lastName}`,
-      netPay: r.amount,
-      targetMethod: batch.paymentMethodType,
-      workerAllowedMethod: r.worker.allowedPaymentMethod,
-      accountName: batch.paymentMethodType === 'GCASH' ? r.worker.gcashAccountName : r.worker.bankAccountName,
-      accountNumber: batch.paymentMethodType === 'GCASH' ? r.worker.gcashNumber : r.worker.bankAccountNumber,
-      verificationStatus: batch.paymentMethodType === 'GCASH' ? r.worker.gcashVerificationStatus : r.worker.bankVerificationStatus,
-      profileStatus: r.worker.paymentProfileStatus,
-      status: (r.worker as any).status
-    }));
-
-    // In a real production scenario, you would initialize the Gemini API client here.
-    // However, since we might hit limits or missing keys, we will implement the AI logic locally for safety,
-    // simulating an AI's pattern recognition.
-    
-    let anomalies: string[] = [];
-    let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED' = 'LOW';
-
-    // Simulated AI Rules Engine
-    payload.forEach(row => {
-      // 1. Inactive Worker
-      if (row.status !== 'ACTIVE') {
-        anomalies.push(`Worker ${row.workerName} is INACTIVE but included in the batch.`);
-        riskLevel = 'BLOCKED';
-      }
-      
-      // 2. Unverified Profile
-      if (row.profileStatus !== 'Verified' || row.verificationStatus !== 'Verified') {
-        anomalies.push(`Worker ${row.workerName} has an unverified payment profile.`);
-        riskLevel = riskLevel === 'BLOCKED' ? 'BLOCKED' : 'HIGH';
-      }
-
-      // 3. Mismatched Payment Method
-      if (row.targetMethod === 'GCASH' && row.workerAllowedMethod !== 'GCash Only') {
-        anomalies.push(`Worker ${row.workerName} is in a GCash batch but allowed method is ${row.workerAllowedMethod}.`);
-        riskLevel = 'BLOCKED';
-      }
-
-      // 4. Missing Account Details
-      if (!row.accountNumber || !row.accountName) {
-        anomalies.push(`Worker ${row.workerName} is missing account details.`);
-        riskLevel = 'BLOCKED';
-      }
-
-      // 5. Unusually High Net Pay Anomaly
-      if (row.netPay > 50000) {
-        anomalies.push(`Worker ${row.workerName} has an unusually high net pay (₱${row.netPay}). Needs manual review.`);
-        if (riskLevel === 'LOW') riskLevel = 'MEDIUM';
-      }
-    });
-
-    // Simulated duplicate check
-    const accountNumbers = payload.map(p => p.accountNumber);
-    const duplicates = accountNumbers.filter((item, index) => accountNumbers.indexOf(item) !== index);
-    if (duplicates.length > 0) {
-      anomalies.push(`Found duplicate account numbers in the batch: ${[...new Set(duplicates)].join(', ')}`);
-      riskLevel = 'BLOCKED';
-    }
-
-    if (anomalies.length === 0) {
-      anomalies.push('No anomalies detected. All profiles are verified and details match routing rules.');
-    }
-
-    // Save the audit result
-    await prisma.paymentBatch.update({
-      where: { id: batchId },
-      data: {
-        aiRiskLevel: riskLevel,
-        aiAuditNotes: anomalies.join('\n')
-      }
-    });
-
-    return { success: true, riskLevel, anomalies };
+    // The backend already returns { success: true, riskLevel, anomalies } on success.
+    // If fetchWithAuth succeeds, 'data' will contain these properties.
+    return data; // Return the backend's response directly
   } catch (error: any) {
+    // Catch errors thrown by fetchWithAuth or other issues
+    console.error("Error in validatePaymentBatchWithAI proxy:", error);
     return { success: false, error: error.message };
   }
 }

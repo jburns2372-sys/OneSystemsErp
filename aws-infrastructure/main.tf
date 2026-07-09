@@ -135,3 +135,61 @@ resource "aws_amplify_branch" "main_branch" {
   app_id      = aws_amplify_app.erp_amplify_app.id
   branch_name = "main"
 }
+
+# ------------------------------------------------------------------------------
+# 5. AWS Elastic Beanstalk (Node.js Backend)
+# ------------------------------------------------------------------------------
+resource "aws_iam_instance_profile" "eb_instance_profile" {
+  name = "onesystemserp-eb-profile-${var.environment}"
+  role = aws_iam_role.eb_role.name
+}
+
+resource "aws_iam_role" "eb_role" {
+  name = "onesystemserp-eb-role-${var.environment}"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eb_web_tier" {
+  role       = aws_iam_role.eb_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier"
+}
+
+resource "aws_elastic_beanstalk_application" "erp_backend" {
+  name        = "OneSystemsERP-Backend-${var.environment}"
+  description = "Node.js Express Backend for OneSystemsERP"
+}
+
+resource "aws_elastic_beanstalk_environment" "erp_backend_env" {
+  name                = "onesystemserp-backend-env-${var.environment}"
+  application         = aws_elastic_beanstalk_application.erp_backend.name
+  solution_stack_name = "64bit Amazon Linux 2023 v6.1.6 running Node.js 20"
+
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "IamInstanceProfile"
+    value     = aws_iam_instance_profile.eb_instance_profile.name
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "DATABASE_URL"
+    value     = "postgresql://${aws_db_instance.erp_database.username}:${aws_db_instance.erp_database.password}@${aws_db_instance.erp_database.endpoint}/${aws_db_instance.erp_database.db_name}"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:environment:proxy"
+    name      = "ProxyServer"
+    value     = "nginx"
+  }
+}

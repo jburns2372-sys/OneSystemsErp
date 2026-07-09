@@ -1,170 +1,70 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { generateText } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { revalidatePath, revalidateTag } from 'next/cache';
 
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+// This is a placeholder fetchWithAuth function. 
+// In a real application, ensure it correctly handles authentication tokens
+// (e.g., from cookies or server-side sessions) and your backend API URL.
+async function fetchWithAuth(url: string, options?: RequestInit) {
+  const headers = {
+    'Content-Type': 'application/json',
+    // 'Authorization': `Bearer ${yourAuthTokenHere}`, // Add your actual authentication token here
+    ...options?.headers,
+  };
+
+  const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API_URL}${url}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown backend error' }));
+    throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+const API_ROUTE_PREFIX = '/api/aiVariationValidationActions';
 
 export async function preCheckVariationOrder(voId: string, userId: string) {
   try {
-    const vo = await prisma.variationOrder.findUnique({
-      where: { id: voId },
-      include: {
-        items: true,
-        documents: true,
-        project: true
-      }
+    const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/preCheckVariationOrder`, {
+      method: 'POST',
+      body: JSON.stringify({ voId, userId }),
     });
 
-    if (!vo) throw new Error('Variation Order not found');
-
-    // Prepare context for the AI
-    const voDetails = JSON.stringify({
-      voNumber: vo.voNumber,
-      variationType: vo.variationType,
-      reason: vo.reasonForVariation,
-      detailedDescription: vo.detailedDescription,
-      originalContractAmount: vo.originalContractAmount,
-      netVariationAmount: vo.netVariationAmount,
-      percentageImpact: vo.percentageImpact,
-      items: vo.items,
-      uploadedDocuments: vo.documents.map(d => ({ fileType: d.fileType, category: d.documentCategory }))
-    });
-
-    const prompt = `
-      You are the AI Assistant for the Project Variation Order Module.
-      Your task is to analyze the following Variation Order (VO) and provide a comprehensive pre-check validation.
-
-      VO Details:
-      ${voDetails}
-
-      Please analyze the following areas:
-      1. Scope Validation: Are there potential duplicates or issues?
-      2. Quantity Validation: Are quantities justified based on the provided details?
-      3. Cost Validation: Are the unit costs and total amounts reasonable?
-      4. Document Completeness: Are there missing mandatory documents based on the variation type?
-      5. Risk Assessment: What is the overall risk (LOW, MEDIUM, HIGH, CRITICAL) and why?
-
-      Output your response as JSON in the exact following format:
-      {
-        "scopeValidation": { "result": "PASSED" | "PASSED_WITH_WARNING" | "FAILED", "findings": "...", "confidence": "HIGH" },
-        "quantityValidation": { "result": "PASSED" | "PASSED_WITH_WARNING" | "FAILED", "findings": "...", "confidence": "HIGH" },
-        "costValidation": { "result": "PASSED" | "PASSED_WITH_WARNING" | "FAILED", "findings": "...", "confidence": "HIGH" },
-        "documentCheck": { "result": "PASSED" | "FAILED", "missing": "...", "confidence": "HIGH" },
-        "riskAssessment": { "riskLevel": "LOW" | "MEDIUM" | "HIGH" | "CRITICAL", "findings": "...", "recommendedAction": "..." }
-      }
-    `;
-
-    const model = google('gemini-2.5-flash');
-
-    const result = await generateText({
-      model: model,
-      prompt: prompt,
-    });
-
-    let aiOutput;
-    try {
-      const cleanJson = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
-      aiOutput = JSON.parse(cleanJson);
-    } catch (parseError) {
-      console.error("AI JSON Parse Error:", result.text);
-      throw new Error("AI returned invalid format.");
+    if (response.success) {
+      // Revalidation: The original action updates the Variation Order, so revalidate relevant UI.
+      // Adjust these paths/tags to match your application's actual data fetching and caching strategy.
+      revalidateTag(`variationOrder-${voId}`); // Revalidate data for a specific Variation Order
+      revalidatePath(`/projects/[projectId]/variation-orders`); // Revalidate a list of Variation Orders
+      revalidatePath(`/projects/[projectId]/variation-orders/${voId}`); // Revalidate the detail page for a VO
+      return response.data;
+    } else {
+      throw new Error(response.error || 'Failed to run AI Pre-check from backend.');
     }
-
-    // Save Scope Validation
-    await prisma.aIVariationOrderValidation.create({
-      data: {
-        variationOrderId: voId,
-        validationType: 'SCOPE',
-        result: aiOutput.scopeValidation.result,
-        findings: aiOutput.scopeValidation.findings,
-        confidenceLevel: aiOutput.scopeValidation.confidence,
-        riskLevel: aiOutput.riskAssessment.riskLevel
-      }
-    });
-
-    // Save Quantity Validation
-    await prisma.aIVariationOrderValidation.create({
-      data: {
-        variationOrderId: voId,
-        validationType: 'QUANTITY',
-        result: aiOutput.quantityValidation.result,
-        findings: aiOutput.quantityValidation.findings,
-        confidenceLevel: aiOutput.quantityValidation.confidence,
-        riskLevel: aiOutput.riskAssessment.riskLevel
-      }
-    });
-
-    // Save Cost Validation
-    await prisma.aIVariationOrderValidation.create({
-      data: {
-        variationOrderId: voId,
-        validationType: 'COST',
-        result: aiOutput.costValidation.result,
-        findings: aiOutput.costValidation.findings,
-        confidenceLevel: aiOutput.costValidation.confidence,
-        riskLevel: aiOutput.riskAssessment.riskLevel
-      }
-    });
-
-    // Save Document Check
-    await prisma.aIVariationOrderValidation.create({
-      data: {
-        variationOrderId: voId,
-        validationType: 'DOCUMENT',
-        result: aiOutput.documentCheck.result,
-        findings: aiOutput.documentCheck.missing,
-        confidenceLevel: aiOutput.documentCheck.confidence,
-        riskLevel: aiOutput.riskAssessment.riskLevel,
-        missingRequirements: aiOutput.documentCheck.missing
-      }
-    });
-
-    // Update VO with overall risk
-    await prisma.variationOrder.update({
-      where: { id: voId },
-      data: {
-        aiValidationResult: 'COMPLETED',
-        aiRiskRating: aiOutput.riskAssessment.riskLevel
-      }
-    });
-
-    return aiOutput;
   } catch (error: any) {
+    console.error('Error calling preCheckVariationOrder proxy:', error);
     throw new Error('Failed to run AI Pre-check: ' + error.message);
   }
 }
 
 export async function askVariationOrderAssistant(voId: string, question: string) {
   try {
-    const vo = await prisma.variationOrder.findUnique({
-      where: { id: voId },
-      include: { items: true, documents: true, project: true }
+    const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/askVariationOrderAssistant`, {
+      method: 'POST',
+      body: JSON.stringify({ voId, question }),
     });
 
-    if (!vo) throw new Error('Variation Order not found');
-
-    const prompt = `
-      You are an expert ERP Project Variation Order Assistant.
-      Context VO: ${JSON.stringify(vo)}
-      
-      User Question: ${question}
-
-      Provide a helpful, precise, and professional response. Do not invent details not present in the context.
-    `;
-
-    const model = google('gemini-2.5-flash');
-
-    const result = await generateText({
-      model: model,
-      prompt: prompt,
-    });
-
-    return result.text;
+    if (response.success) {
+      // No revalidation needed for a read-only AI question that doesn't alter database state.
+      return response.data;
+    } else {
+      throw new Error(response.error || 'Failed to get AI answer from backend.');
+    }
   } catch (error: any) {
+    console.error('Error calling askVariationOrderAssistant proxy:', error);
     throw new Error('Failed to get AI answer: ' + error.message);
   }
 }

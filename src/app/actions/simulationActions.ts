@@ -1,83 +1,83 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { SimulationEngine, SimulationMode } from '@/lib/simulationEngine';
+import { revalidatePath, revalidateTag } from 'next/cache'; // Required imports even if not used in this specific scenario
 
-export async function runSimulationScenario(scenarioId: string, mode: SimulationMode) {
-  // Mock current user
-  const currentUser = await prisma.user.findFirst();
-  if (!currentUser) throw new Error('Unauthorized');
-  
-  // For demo, assume SUPER_ADMIN role
-  const role = 'SUPER_ADMIN';
+// Define SimulationMode if it's not globally available or needs explicit import in this file
+// For simplicity, we'll assume it's available or a string in this context.
+type SimulationMode = 'dryRun' | 'live'; // Example definition if not imported
 
-  // Check roles: Only Super Admin, Security Officer, SOC Manager, Developer Admin
-  const allowedRoles = ['SUPER_ADMIN', 'SECURITY_OFFICER', 'SOC_MANAGER', 'DEVELOPER_ADMIN'];
-  if (!allowedRoles.includes(role)) {
-    throw new Error('Forbidden: You do not have permission to run security simulations.');
+/**
+ * A wrapper around fetch that includes authentication logic and handles API responses.
+ * In a real application, this might retrieve a token from a cookie or session.
+ * For this migration, we assume the Server Action context implicitly handles some auth,
+ * or the AWS backend uses other means of authentication (e.g., API Gateway IAM).
+ */
+async function fetchWithAuth(url: string, options: RequestInit) {
+  const backendApiUrl = process.env.BACKEND_API_URL; // Ensure this env variable is set
+  if (!backendApiUrl) {
+    throw new Error('BACKEND_API_URL environment variable is not set.');
   }
 
-  return await SimulationEngine.runScenario(scenarioId, mode, currentUser.id);
+  const response = await fetch(backendApiUrl + url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Unknown error occurred on backend.' }));
+    throw new Error(errorData.error || errorData.message || `Backend error: ${response.status} ${response.statusText}`);
+  }
+
+  const jsonResponse = await response.json();
+
+  if (!jsonResponse.success) {
+    throw new Error(jsonResponse.error || 'Backend operation failed with no specific error message.');
+  }
+
+  return jsonResponse.data;
+}
+
+export async function runSimulationScenario(scenarioId: string, mode: SimulationMode) {
+  try {
+    const result = await fetchWithAuth('/api/simulationActions/runSimulationScenario', {
+      method: 'POST',
+      body: JSON.stringify({ scenarioId, mode }),
+    });
+    // The original code did not contain revalidatePath/revalidateTag.
+    // If a simulation run changes data that should trigger a revalidation, add it here.
+    // Example: revalidatePath('/dashboard');
+    return result;
+  } catch (error: any) {
+    console.error('Error proxying runSimulationScenario:', error);
+    throw error; // Re-throw to be handled by the UI or calling context
+  }
 }
 
 export async function getSimulationScenarios() {
-  const currentUser = await prisma.user.findFirst();
-  if (!currentUser) throw new Error('Unauthorized');
-
-  return await prisma.securitySimulationScenario.findMany({
-    orderBy: { category: 'asc' },
-  });
+  try {
+    const result = await fetchWithAuth('/api/simulationActions/getSimulationScenarios', {
+      method: 'POST',
+      body: JSON.stringify({}), // No arguments, but POST requests often expect a body
+    });
+    return result;
+  } catch (error: any) {
+    console.error('Error proxying getSimulationScenarios:', error);
+    throw error;
+  }
 }
 
 export async function getSimulationStats() {
-  const currentUser = await prisma.user.findFirst();
-  if (!currentUser) throw new Error('Unauthorized');
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const runsToday = await prisma.securitySimulationRun.count({
-    where: { startedAt: { gte: today } },
-  });
-
-  const passedRuns = await prisma.securitySimulationRun.count({
-    where: { 
-      startedAt: { gte: today },
-      overallResult: 'Passed'
-    },
-  });
-
-  const failedRuns = await prisma.securitySimulationRun.count({
-    where: { 
-      startedAt: { gte: today },
-      overallResult: 'Failed'
-    },
-  });
-
-  const allRuns = await prisma.securitySimulationRun.findMany({
-    where: { status: 'COMPLETED' },
-    select: { finalScore: true, detectionScore: true, responseScore: true, evidenceScore: true },
-  });
-
-  let avgFinalScore = 0;
-  let avgDetectionScore = 0;
-  let avgResponseScore = 0;
-  let avgEvidenceScore = 0;
-
-  if (allRuns.length > 0) {
-    avgFinalScore = allRuns.reduce((sum, run) => sum + (run.finalScore || 0), 0) / allRuns.length;
-    avgDetectionScore = allRuns.reduce((sum, run) => sum + (run.detectionScore || 0), 0) / allRuns.length;
-    avgResponseScore = allRuns.reduce((sum, run) => sum + (run.responseScore || 0), 0) / allRuns.length;
-    avgEvidenceScore = allRuns.reduce((sum, run) => sum + (run.evidenceScore || 0), 0) / allRuns.length;
+  try {
+    const result = await fetchWithAuth('/api/simulationActions/getSimulationStats', {
+      method: 'POST',
+      body: JSON.stringify({}), // No arguments
+    });
+    return result;
+  } catch (error: any) {
+    console.error('Error proxying getSimulationStats:', error);
+    throw error;
   }
-
-  return {
-    runsToday,
-    passedRuns,
-    failedRuns,
-    readinessScore: avgFinalScore,
-    detectionScore: avgDetectionScore,
-    responseScore: avgResponseScore,
-    evidenceScore: avgEvidenceScore,
-  };
 }

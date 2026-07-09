@@ -1,50 +1,49 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+// Standard fetchWithAuth wrapper. This would typically handle authentication headers.
+// The AWS_BACKEND_BASE_URL environment variable should point to your Express backend's base URL (e.g., 'https://your-api-gateway-id.execute-api.us-east-1.amazonaws.com/prod').
+async function fetchWithAuth(url: string, options?: RequestInit) {
+  const backendBaseUrl = process.env.AWS_BACKEND_BASE_URL;
+  if (!backendBaseUrl) {
+    throw new Error('AWS_BACKEND_BASE_URL is not defined in environment variables.');
+  }
 
-export async function askPayrollAssistant(question: string) {
+  const response = await fetch(backendBaseUrl + url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+
+  const responseData = await response.json();
+
+  if (!response.ok) {
+    // If the HTTP status is not OK (e.g., 500), throw an error with the backend's error message.
+    throw new Error(responseData.error || 'Something went wrong with the backend request.');
+  }
+
+  return responseData;
+}
+
+export async function askPayrollAssistant(question: string): Promise<string> {
   try {
-    // Basic AI intent recognition & data retrieval simulation.
-    // In a production app, we would pass the question and the database schema to an LLM.
+    const response = await fetchWithAuth('/api/payrollAiChat/askPayrollAssistant', {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    });
 
-    const lowerQuestion = question.toLowerCase();
-    
-    // Simulate network delay for AI thinking
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    if (lowerQuestion.includes('cash advance') || lowerQuestion.includes('advances')) {
-      const ledgers = await prisma.deductionLedger.findMany({
-        where: { type: 'CASH_ADVANCE', status: 'ACTIVE' },
-        include: { worker: true }
-      });
-      
-      if (ledgers.length === 0) return "Currently, there are no workers with active cash advances in the system.";
-      
-      let response = `There are ${ledgers.length} active cash advances:\n\n`;
-      ledgers.forEach(l => {
-        response += `- **${l.worker.firstName} ${l.worker.lastName}**: ₱${l.balance.toFixed(2)} remaining (deducting ₱${l.deductionPerPayroll}/cutoff).\n`;
-      });
-      return response;
+    // The backend is designed to return { success: true, data: '...' } on success
+    // and { success: false, error: '...' } on application-level errors (though HTTP errors are preferred).
+    if (response.success) {
+      return response.data;
+    } else {
+      // Fallback for application-level errors not caught by !response.ok
+      throw new Error(response.error || "An unknown error occurred on the backend.");
     }
-
-    if (lowerQuestion.includes('worker') || lowerQuestion.includes('employee')) {
-      const activeWorkers = await prisma.worker.count({ where: { employmentStatus: 'ACTIVE' } });
-      const inactiveWorkers = await prisma.worker.count({ where: { employmentStatus: 'INACTIVE' } });
-      return `We currently have **${activeWorkers} active workers** in the directory, and ${inactiveWorkers} inactive workers.`;
-    }
-
-    if (lowerQuestion.includes('cutoff') || lowerQuestion.includes('period')) {
-      const periods = await prisma.payrollPeriod.findMany({
-        where: { status: 'FOR_REVIEW' }
-      });
-      if (periods.length === 0) return "There are no payroll periods currently pending review.";
-      return `There is ${periods.length} payroll period currently pending your review and approval.`;
-    }
-
-    // Default fallback
-    return `I am your AI Payroll Assistant. Based on the database, I can answer questions about active cash advances, worker counts, cutoff statuses, and specific payslip computations. How can I help you?`;
-
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Error in proxy askPayrollAssistant:', error);
+    // Return the same user-friendly error message as the original Server Action
     return "I'm sorry, I encountered an error connecting to the database.";
   }
 }

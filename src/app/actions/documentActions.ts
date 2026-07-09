@@ -1,10 +1,33 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
-import fs from 'fs';
-import path from 'path';
 import { revalidatePath } from 'next/cache';
+import { prisma } from '@/lib/prisma'; // Prisma is used here for uploaderId lookup
+
+// Placeholder for your actual backend URL
+const AWS_BACKEND_BASE_URL = process.env.AWS_BACKEND_URL || 'http://localhost:3001';
+
+// IMPORTANT: Implement your actual authentication logic here.
+// This is a placeholder function that assumes auth is handled by cookies/headers
+// and passed through or the backend itself handles session validation.
+async function fetchWithAuth(url: string, options?: RequestInit) {
+  const headers = new Headers(options?.headers);
+  // Example: Attach a session token or API key if needed by your backend
+  // const sessionToken = cookies().get('session')?.value;
+  // if (sessionToken) {
+  //   headers.set('Authorization', `Bearer ${sessionToken}`);
+  // }
+  const response = await fetch(`${AWS_BACKEND_BASE_URL}${url}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+    throw new Error(errorData.error || response.statusText);
+  }
+  return response.json();
+}
 
 export async function uploadDocument(formData: FormData) {
   const file = formData.get('file') as File;
@@ -15,6 +38,7 @@ export async function uploadDocument(formData: FormData) {
     throw new Error('No file provided.');
   }
 
+  // Retrieve uploaderId here before sending to backend
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value;
   let uploaderId = null;
@@ -24,69 +48,50 @@ export async function uploadDocument(formData: FormData) {
     if (user) uploaderId = user.id;
   }
 
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'documents');
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-
-  const fileExtension = path.extname(file.name);
-  const baseName = path.basename(file.name, fileExtension);
-  const safeBaseName = baseName.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const uniqueName = `${safeBaseName}_${Date.now()}${fileExtension}`;
-  const filePath = path.join(uploadDir, uniqueName);
-
+  // Convert file to base64 for JSON transmission
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+  const fileContentBase64 = buffer.toString('base64');
 
-  fs.writeFileSync(filePath, buffer);
+  const body = JSON.stringify({
+    fileName: file.name,
+    fileContentBase64,
+    fileType: file.type || 'application/octet-stream',
+    fileSize: file.size,
+    category,
+    projectId,
+    uploaderId // Pass uploaderId to the backend
+  });
 
-  const fileUrl = `/uploads/documents/${uniqueName}`;
-
-  await prisma.document.create({
-    data: {
-      title: file.name,
-      category,
-      fileUrl,
-      fileType: file.type || 'application/octet-stream',
-      fileSize: file.size,
-      projectId: projectId || null,
-      uploaderId
-    }
+  const result = await fetchWithAuth('/api/documentActions/uploadDocument', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
   });
 
   revalidatePath('/documents');
-  return { success: true, message: 'Document uploaded successfully!' };
+  return result;
 }
 
 export async function getAllDocuments() {
-  const docs = await prisma.document.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      uploader: { select: { name: true, email: true } },
-      project: { select: { name: true } }
-    }
+  const docs = await fetchWithAuth('/api/documentActions/getAllDocuments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    // No body needed for GET, but instruction specifies POST with empty body often
+    body: JSON.stringify({}) 
   });
-
   return docs;
 }
 
 export async function deleteDocument(id: string) {
-  const doc = await prisma.document.findUnique({ where: { id } });
-  if (!doc) throw new Error('Document not found');
+  const body = JSON.stringify({ id });
 
-  // Try to delete physical file
-  try {
-    if (doc.fileUrl.startsWith('/uploads/documents/')) {
-      const filePath = path.join(process.cwd(), 'public', doc.fileUrl);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
-  } catch (e) {
-    console.error('Failed to delete physical file:', e);
-  }
+  const result = await fetchWithAuth('/api/documentActions/deleteDocument', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
 
-  await prisma.document.delete({ where: { id } });
   revalidatePath('/documents');
-  return { success: true };
+  return result;
 }

@@ -1,82 +1,58 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+
+// Placeholder for fetchWithAuth function
+// In a real application, this would handle authentication tokens etc.
+async function fetchWithAuth(url: string, options?: RequestInit) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      // 'Authorization': `Bearer ${await getAuthToken()}`, // Example for a real app
+      ...options?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json(); // Return JSON body
+}
 
 export async function createMaterialReturn(data: any) {
   try {
-    const { issuanceId, projectId, foremanId, items } = data;
-
-    // Generate MRS number (Material Return Slip)
-    const count = await prisma.materialReturn.count();
-    const mrsNumber = `MRS-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
-
-    const newReturn = await prisma.materialReturn.create({
-      data: {
-        mrsNumber,
-        issuanceId,
-        projectId,
-        foremanId,
-        items: {
-          create: items.map((item: any) => ({
-            returnedQty: item.returnedQty,
-            condition: item.condition,
-            issuanceItemId: item.issuanceItemId,
-            consolidatedBoqItemId: item.consolidatedBoqItemId,
-          }))
-        }
-      }
+    const result = await fetchWithAuth('/api/returnActions/createMaterialReturn', {
+      method: 'POST',
+      body: JSON.stringify({ data }), // Pass original 'data' object as 'data' property in body
     });
 
-    revalidatePath('/material-issuance');
-    return { success: true, data: newReturn };
+    if (result.success) {
+      revalidatePath('/material-issuance');
+    }
+    return result;
   } catch (error: any) {
-    console.error('Error creating material return:', error);
+    console.error('Error creating material return (Proxy):', error);
     return { success: false, error: error.message || 'Failed to create return slip' };
   }
 }
 
 export async function processMaterialReturn(returnId: string, warehousemanId: string) {
   try {
-    const materialReturn = await prisma.materialReturn.findUnique({
-      where: { id: returnId },
-      include: { items: true }
+    const result = await fetchWithAuth('/api/returnActions/processMaterialReturn', {
+      method: 'POST',
+      body: JSON.stringify({ returnId, warehousemanId }), // Pass arguments directly
     });
 
-    if (!materialReturn) throw new Error('Return slip not found');
-    if (materialReturn.status === 'COMPLETED') throw new Error('Return slip already completed');
-
-    // For each item with GOOD condition, decrease the consumedQty
-    for (const item of materialReturn.items) {
-      if (item.condition === 'GOOD') {
-        await prisma.consolidatedBOQItem.update({
-          where: { id: item.consolidatedBoqItemId },
-          data: {
-            consumedQty: { decrement: Number(item.returnedQty) }
-          }
-        });
-      }
+    if (result.success) {
+      revalidatePath('/material-issuance');
+      revalidatePath('/inventory');
     }
-
-    const updatedReturn = await prisma.materialReturn.update({
-      where: { id: returnId },
-      data: {
-        status: 'COMPLETED',
-        warehousemanId,
-        receiveDate: new Date()
-      }
-    });
-
-    await prisma.materialIssuance.update({
-      where: { id: materialReturn.issuanceId },
-      data: { status: 'COMPLETED' }
-    });
-
-    revalidatePath('/material-issuance');
-    revalidatePath('/inventory');
-    return { success: true, data: updatedReturn };
+    return result;
   } catch (error: any) {
-    console.error('Error processing material return:', error);
+    console.error('Error processing material return (Proxy):', error);
     return { success: false, error: error.message || 'Failed to process return slip' };
   }
 }

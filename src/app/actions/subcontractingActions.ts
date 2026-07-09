@@ -1,455 +1,302 @@
-// @ts-nocheck
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
-// --- SUBCONTRACTOR MASTER CRUD ---
+const BACKEND_URL = process.env.AWS_BACKEND_URL || 'http://localhost:4000';
+
+// --- Standard fetchWithAuth definition (as per instructions) ---
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const cookieStore = await cookies(); // No await needed if directly using cookies()
+  const session = cookieStore.get('session')?.value;
+  const activeProjectId = cookieStore.get('activeProjectId')?.value;
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+
+  const headers = new Headers(options.headers);
+  if (session) headers.set('x-user-session', session);
+  if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
+  if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
+  headers.set('Content-Type', 'application/json');
+
+  const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Backend Error: ${res.status} ${errorText}`);
+  }
+  return res.json();
+}
+
+// --- PROXIED SERVER ACTIONS ---
+const API_ROUTE_PREFIX = '/api/subcontractingActions'; // Defined by user request
 
 export async function getSubcontractors() {
-  return await prisma.subcontractor.findMany({
-    orderBy: { createdAt: 'desc' }
-  });
+  try {
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/getSubcontractors`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    return result.data; // Assuming backend wraps result in { success: true, data: ... }
+  } catch (error: any) {
+    console.error('Error in getSubcontractors:', error);
+    throw new Error('Failed to fetch subcontractors: ' + error.message);
+  }
 }
 
 export async function getSubcontractorById(id: string) {
-  return await prisma.subcontractor.findUnique({
-    where: { id },
-    include: {
-      packages: true,
-      jobOrders: true,
-      subcontractBillings: true,
-      backCharges: true
-    }
-  });
+  try {
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/getSubcontractorById`, {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    });
+    return result.data;
+  } catch (error: any) {
+    console.error('Error in getSubcontractorById:', error);
+    throw new Error('Failed to fetch subcontractor by ID: ' + error.message);
+  }
+}
+
+export async function getSubcontractPackages(projectId?: string) {
+  try {
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/getSubcontractPackages`, {
+      method: 'POST',
+      body: JSON.stringify({ projectId }),
+    });
+    return result.data;
+  } catch (error: any) {
+    console.error('Error in getSubcontractPackages:', error);
+    throw new Error('Failed to fetch subcontract packages: ' + error.message);
+  }
+}
+
+export async function getAccomplishments(packageId?: string) {
+  try {
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/getAccomplishments`, {
+      method: 'POST',
+      body: JSON.stringify({ packageId }),
+    });
+    return result.data;
+  } catch (error: any) {
+    console.error('Error in getAccomplishments:', error);
+    throw new Error('Failed to fetch accomplishments: ' + error.message);
+  }
+}
+
+export async function getBillings(packageId?: string) {
+  try {
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/getBillings`, {
+      method: 'POST',
+      body: JSON.stringify({ packageId }),
+    });
+    return result.data;
+  } catch (error: any) {
+    console.error('Error in getBillings:', error);
+    throw new Error('Failed to fetch billings: ' + error.message);
+  }
+}
+
+export async function getAwardedBoqItemsByProjectId(projectId: string) {
+  try {
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/getAwardedBoqItemsByProjectId`, {
+      method: 'POST',
+      body: JSON.stringify({ projectId }),
+    });
+    // Original function returns { success: true, items } directly
+    return result; 
+  } catch (error: any) {
+    console.error('Error in getAwardedBoqItemsByProjectId:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getSubcontractPackageById(id: string) {
+  try {
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/getSubcontractPackageById`, {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    });
+    return result.data;
+  } catch (error: any) {
+    console.error('Error in getSubcontractPackageById:', error);
+    throw new Error('Failed to fetch subcontract package by ID: ' + error.message);
+  }
 }
 
 export async function createSubcontractor(data: any) {
   try {
-    const result = await prisma.subcontractor.create({ data });
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/createSubcontractor`, {
+      method: 'POST',
+      body: JSON.stringify({ data })
+    });
     revalidatePath('/subcontracting/subcontractors');
-    return { success: true, data: result };
+    return result;
   } catch (error: any) {
-    console.error("Create Subcontractor Error:", error);
+    console.error('Error in createSubcontractor:', error);
     return { success: false, error: error.message };
   }
 }
 
 export async function updateSubcontractor(id: string, data: any) {
   try {
-    const result = await prisma.subcontractor.update({ where: { id }, data });
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/updateSubcontractor`, {
+      method: 'POST',
+      body: JSON.stringify({ id, data })
+    });
     revalidatePath('/subcontracting/subcontractors');
     revalidatePath(`/subcontracting/subcontractors/${id}`);
-    return { success: true, data: result };
+    return result;
   } catch (error: any) {
-    console.error("Update Subcontractor Error:", error);
+    console.error('Error in updateSubcontractor:', error);
     return { success: false, error: error.message };
   }
 }
 
 export async function deleteSubcontractor(id: string) {
   try {
-    await prisma.subcontractor.delete({ where: { id } });
-    revalidatePath('/subcontracting/subcontractors');
-    return { success: true };
-  } catch (error: any) {
-    console.error("Delete Subcontractor Error:", error);
-    return { success: false, error: error.message };
-  }
-}
-
-// --- SUBCONTRACT PACKAGE CRUD ---
-
-export async function getSubcontractPackages(projectId?: string) {
-  try {
-    const pkgFilter: any = {};
-    if (projectId) pkgFilter.projectId = projectId;
-  
-    const packages = await prisma.subcontractPackage.findMany({
-      where: pkgFilter,
-      include: {
-        subcontractor: {
-          include: { subcontractorBOQItems: true }
-        },
-        project: true,
-        accomplishments: true,
-        billings: true
-      },
-      orderBy: { createdAt: 'desc' }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/deleteSubcontractor`, {
+      method: 'POST',
+      body: JSON.stringify({ id }) // DELETE requests can have body, but POST for uniform mapping
     });
-    
-    return JSON.parse(JSON.stringify(packages));
+    revalidatePath('/subcontracting/subcontractors');
+    return result;
   } catch (error: any) {
-    console.error("Prisma Error in getSubcontractPackages:", error);
-    throw new Error('Failed to fetch subcontract packages: ' + error.message);
+    console.error('Error in deleteSubcontractor:', error);
+    return { success: false, error: error.message };
   }
 }
 
 export async function createSubcontractPackage(data: any) {
   try {
-    // Generate a unique package number if not provided
-    if (!data.packageNumber) {
-      data.packageNumber = 'SP-' + Date.now();
-    }
-    
-    const result = await prisma.subcontractPackage.create({ data });
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/createSubcontractPackage`, {
+      method: 'POST',
+      body: JSON.stringify({ data })
+    });
     revalidatePath('/subcontracting/packages');
-    return { success: true, data: result };
+    return result;
   } catch (error: any) {
-    console.error("Create Package Error:", error);
+    console.error('Error in createSubcontractPackage:', error);
     return { success: false, error: error.message };
   }
 }
 
 export async function updateSubcontractPackage(id: string, data: any) {
   try {
-    const result = await prisma.subcontractPackage.update({ where: { id }, data });
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/updateSubcontractPackage`, {
+      method: 'POST',
+      body: JSON.stringify({ id, data })
+    });
     revalidatePath('/subcontracting/packages');
     revalidatePath(`/subcontracting/packages/${id}`);
-    return { success: true, data: result };
+    return result;
   } catch (error: any) {
-    console.error("Update Package Error:", error);
+    console.error('Error in updateSubcontractPackage:', error);
     return { success: false, error: error.message };
   }
-}
-
-// --- SUBCONTRACT ACCOMPLISHMENTS ---
-
-export async function getAccomplishments(packageId?: string) {
-  return await prisma.subcontractAccomplishment.findMany({
-    where: packageId ? { packageId } : undefined,
-    include: {
-      package: {
-        include: { subcontractor: true, project: true }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
 }
 
 export async function createAccomplishment(data: any) {
   try {
-    // Perform threshold/quantity checks here if needed before saving
-    // Example: Check if cumulativePercent > 100
-    if (data.cumulativePercent > 100) {
-       return { success: false, error: "Cumulative accomplishment cannot exceed 100%" };
-    }
-
-    const result = await prisma.subcontractAccomplishment.create({ data });
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/createAccomplishment`, {
+      method: 'POST',
+      body: JSON.stringify({ data })
+    });
     revalidatePath('/subcontracting/accomplishments');
-    return { success: true, data: result };
+    return result;
   } catch (error: any) {
-    console.error("Create Accomplishment Error:", error);
+    console.error('Error in createAccomplishment:', error);
     return { success: false, error: error.message };
   }
-}
-
-// --- SUBCONTRACT BILLING ---
-
-export async function getBillings(packageId?: string) {
-  return await prisma.subcontractBilling.findMany({
-    where: packageId ? { packageId } : undefined,
-    include: {
-      subcontractor: true,
-      package: true,
-      jobOrder: true
-    },
-    orderBy: { createdAt: 'desc' }
-  });
 }
 
 export async function createBilling(data: any) {
   try {
-    if (!data.billingNumber) {
-      data.billingNumber = 'BILL-' + Date.now();
-    }
-
-    const result = await prisma.subcontractBilling.create({ data });
-    revalidatePath('/subcontracting/billings');
-    return { success: true, data: result };
-  } catch (error: any) {
-    console.error("Create Billing Error:", error);
-    return { success: false, error: error.message };
-  }
-}
-
-export async function getAwardedBoqItemsByProjectId(projectId: string) {
-  try {
-    const items = await prisma.awardedBOQItem.findMany({
-      where: { projectId },
-      select: { id: true, itemCode: true, category: true, description: true, unit: true, quantity: true, totalCost: true, combinedUnitCost: true }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/createBilling`, {
+      method: 'POST',
+      body: JSON.stringify({ data })
     });
-    return { success: true, items };
+    revalidatePath('/subcontracting/billings');
+    return result;
   } catch (error: any) {
+    console.error('Error in createBilling:', error);
     return { success: false, error: error.message };
   }
 }
 
 export async function createFullSubcontractPackage(packageData: any, boqItems: any[], powData: any) {
   try {
-    // 0. Check BOQ Conflict: Ensure none are already in a Job Order
-    if (boqItems && boqItems.length > 0) {
-      const awardedBoqIds = boqItems.map(item => item.id);
-      const conflictingJO = await prisma.jobOrder.findFirst({
-        where: { boqReferenceId: { in: awardedBoqIds } }
-      });
-      if (conflictingJO) {
-        return { 
-          success: false, 
-          error: `Conflict Error: BOQ item is already assigned to active Job Order (${conflictingJO.jobNumber}). You cannot subcontract a BOQ item that has an active Job Order.` 
-        };
-      }
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Prepare Dates
-      if (packageData.startDate) packageData.startDate = new Date(packageData.startDate);
-      if (packageData.targetCompletion) packageData.targetCompletion = new Date(packageData.targetCompletion);
-
-      if (!packageData.packageNumber) {
-        packageData.packageNumber = 'SP-' + Date.now();
-      }
-
-      // 2. Create the base package
-      const newPackage = await tx.subcontractPackage.create({
-        data: packageData
-      });
-
-      // 3. Create SubcontractorBOQItems (if any)
-      if (boqItems && boqItems.length > 0) {
-        const boqData = boqItems.map((item: any) => ({
-          subcontractorId: newPackage.subcontractorId,
-          awardedBoqItemId: item.id,
-          quantity: parseFloat(item.subcontractorQuantity) || 0,
-          unitCost: parseFloat(item.subcontractorUnitCost) || 0,
-          totalCost: (parseFloat(item.subcontractorQuantity) || 0) * (parseFloat(item.subcontractorUnitCost) || 0),
-        }));
-        
-        await tx.subcontractorBOQItem.createMany({
-          data: boqData
-        });
-      }
-
-      // 4. Create Program of Works
-      if (powData) {
-        if (powData.startDate) powData.startDate = new Date(powData.startDate);
-        if (powData.endDate) powData.endDate = new Date(powData.endDate);
-
-        await tx.programOfWorks.create({
-          data: {
-            ...powData,
-            packageId: newPackage.id
-          }
-        });
-      }
-
-      return newPackage;
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/createFullSubcontractPackage`, {
+      method: 'POST',
+      body: JSON.stringify({ packageData, boqItems, powData })
     });
-
     revalidatePath('/subcontracting/dashboard');
-    return { success: true, data: result };
+    return result;
   } catch (error: any) {
-    console.error("Full Subcontract Package Creation Error:", error);
+    console.error('Error in createFullSubcontractPackage:', error);
     return { success: false, error: error.message };
   }
 }
 
-export async function getSubcontractPackageById(id: string) {
-  return await prisma.subcontractPackage.findUnique({
-    where: { id },
-    include: {
-      project: true,
-      subcontractor: {
-        include: { subcontractorBOQItems: { include: { awardedBoqItem: true } } }
-      },
-      programOfWorks: true,
-      accomplishments: true,
-      billings: true,
-      jobOrders: true,
-    }
-  });
-}
-
 export async function deleteSubcontractPackage(id: string) {
   try {
-    // Delete associated Program of Works first
-    await prisma.programOfWorks.deleteMany({ where: { packageId: id } });
-    
-    // We do not delete SubcontractorBOQItems here unless we explicitly link them to packageId,
-    // but the current schema links them to Subcontractor.
-    
-    await prisma.subcontractPackage.delete({ where: { id } });
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/deleteSubcontractPackage`, {
+      method: 'POST',
+      body: JSON.stringify({ id }) // DELETE requests can have body, but POST for uniform mapping
+    });
     revalidatePath('/subcontracting/dashboard');
-    return { success: true };
+    return result;
   } catch (error: any) {
-    console.error("Delete Package Error:", error);
+    console.error('Error in deleteSubcontractPackage:', error);
     return { success: false, error: error.message };
   }
 }
 
 export async function updateFullSubcontractPackage(id: string, packageData: any, boqItems: any[], powData: any) {
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      if (packageData.startDate) packageData.startDate = new Date(packageData.startDate);
-      if (packageData.targetCompletion) packageData.targetCompletion = new Date(packageData.targetCompletion);
-
-      // We remove relation fields from the packageData before updating to avoid Prisma errors
-      const { project, subcontractor, programOfWorks, accomplishments, billings, jobOrders, ...cleanData } = packageData;
-
-      const updatedPackage = await tx.subcontractPackage.update({
-        where: { id },
-        data: cleanData
-      });
-
-      // Update BOQ items (simplified: delete all for this sub, recreate)
-      // Note: This is destructive to other packages if the sub shares items. 
-      // A better approach is to map them by ID if they exist, but SubcontractorBOQItem lacks packageId.
-      // We will leave BOQ items alone here unless explicitly requested to update, or just use upsert.
-      
-      // Update Program of Works
-      if (powData) {
-        if (powData.startDate) powData.startDate = new Date(powData.startDate);
-        if (powData.endDate) powData.endDate = new Date(powData.endDate);
-
-        const existingPow = await tx.programOfWorks.findFirst({ where: { packageId: id } });
-        if (existingPow) {
-          await tx.programOfWorks.update({
-            where: { id: existingPow.id },
-            data: powData
-          });
-        } else {
-          await tx.programOfWorks.create({
-            data: {
-              ...powData,
-              packageId: id
-            }
-          });
-        }
-      }
-
-      return updatedPackage;
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/updateFullSubcontractPackage`, {
+      method: 'POST',
+      body: JSON.stringify({ id, packageData, boqItems, powData })
     });
-
     revalidatePath('/subcontracting/dashboard');
-    return { success: true, data: result };
+    return result;
   } catch (error: any) {
-    console.error("Update Full Package Error:", error);
+    console.error('Error in updateFullSubcontractPackage:', error);
     return { success: false, error: error.message };
   }
 }
 
 export async function updateSubcontractPackageStatus(id: string, status: string) {
   try {
-    const isApproved = status === 'APPROVED';
-    
-    // Fetch package details to check previous status and get references for Ledger
-    const pkg = await prisma.subcontractPackage.findUnique({
-      where: { id },
-      include: { project: true }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/updateSubcontractPackageStatus`, {
+      method: 'POST',
+      body: JSON.stringify({ id, status })
     });
-    
-    if (!pkg) throw new Error("Package not found");
-
-    const result = await prisma.subcontractPackage.update({
-      where: { id },
-      data: { 
-        status: status as any,
-        isLocked: isApproved ? true : undefined
-      }
-    });
-
-    // [HOOK] Create CommitmentLedger for Subcontracting when APPROVED
-    // Ensure we don't duplicate commitment if it was already approved
-    if (isApproved && pkg.status !== 'APPROVED' && pkg.consolidatedBoqItemId) {
-      await prisma.commitmentLedger.create({
-        data: {
-          projectId: pkg.projectId,
-          consolidatedBoqItemId: pkg.consolidatedBoqItemId,
-          commitmentType: 'SUBCONTRACT',
-          subcontractorName: pkg.subcontractor?.name || '',
-          approvedAmount: pkg.contractAmount,
-          remainingCommitment: pkg.contractAmount,
-          status: 'ACTIVE'
-        }
-      });
-
-      await prisma.consolidatedBOQItem.update({
-        where: { id: pkg.consolidatedBoqItemId },
-        data: {
-          committedCost: { increment: pkg.contractAmount }
-        }
-      });
-    }
     revalidatePath(`/subcontracting/packages/${id}`);
     revalidatePath('/subcontracting/packages');
     revalidatePath('/subcontracting/dashboard');
     revalidatePath('/subcontracting/progress-hub');
     revalidatePath(`/subcontracting/progress-hub/${id}`);
-    return { success: true, data: result };
+    return result;
   } catch (error: any) {
-    console.error("Update Package Status Error:", error);
+    console.error('Error in updateSubcontractPackageStatus:', error);
     return { success: false, error: error.message };
   }
 }
 
 export async function unlockSubcontractPackage(id: string) {
   try {
-    const cookieStore = await cookies();
-    const sessionId = cookieStore.get('session')?.value;
-    if (!sessionId) throw new Error('Not authenticated');
-
-    const user = await prisma.user.findUnique({
-      where: { id: sessionId },
-      include: { userRoles: { include: { role: true } } }
+    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/unlockSubcontractPackage`, {
+      method: 'POST',
+      body: JSON.stringify({ id })
     });
-
-    const packageBillings = await prisma.subcontractBilling.findMany({
-      where: {
-        packageId: id,
-        status: { in: ['APPROVED_FOR_PAYMENT', 'PAID'] }
-      }
-    });
-
-    const hasCompletedPayments = packageBillings.length > 0;
-
-    let isAuthorized = false;
-    if (hasCompletedPayments) {
-      isAuthorized = user?.email === 'pd@gmail.com' ||
-        user?.role === 'PROJECT_DIRECTOR' ||
-        user?.role === 'SUPER_ADMIN' ||
-        user?.userRoles?.some(ur => ['SUPER_ADMIN', 'PROJECT_DIRECTOR'].includes(ur.role.roleCode));
-    } else {
-      isAuthorized = user?.email === 'pd@gmail.com' ||
-        user?.role === 'PROJECT_DIRECTOR' ||
-        user?.role === 'PROJECT_MANAGER' ||
-        user?.role === 'SUPER_ADMIN' ||
-        user?.userRoles?.some(ur => ['SUPER_ADMIN', 'PROJECT_DIRECTOR', 'PROJECT_MANAGER'].includes(ur.role.roleCode));
-    }
-
-    if (!isAuthorized) {
-      return { 
-        success: false, 
-        error: hasCompletedPayments 
-          ? 'Unauthorized: Since payment has been approved/completed, only the Project Director can unlock this package.'
-          : 'Unauthorized: Only Project Managers or Project Directors can unlock packages.' 
-      };
-    }
-
-    const result = await prisma.subcontractPackage.update({
-      where: { id },
-      data: { isLocked: false }
-    });
-
     revalidatePath(`/subcontracting/packages/${id}`);
     revalidatePath('/subcontracting/packages');
     revalidatePath(`/subcontracting/packages/${id}/edit`);
-    return { success: true, data: result };
+    return result;
   } catch (error: any) {
-    console.error("Unlock Package Error:", error);
+    console.error('Error in unlockSubcontractPackage:', error);
     return { success: false, error: error.message };
   }
 }
-
-
-

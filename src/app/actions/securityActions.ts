@@ -1,42 +1,37 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
-import { getUserPermissions } from '@/lib/permissions';
 
-export async function getSecurityEvents(limit = 100) {
+const BACKEND_URL = process.env.AWS_BACKEND_URL || 'http://localhost:4000';
+
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value;
-  if (!userId) throw new Error('Unauthorized');
+  const session = cookieStore.get('session')?.value;
+  const activeProjectId = cookieStore.get('activeProjectId')?.value;
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
 
-  const permissions = await getUserPermissions(userId);
-  if (!permissions.IS_ADMIN && !permissions.SYSTEM_SETTINGS?.canView) {
-    throw new Error('Unauthorized. SOC access required.');
-  }
+  const headers = new Headers(options.headers);
+  if (session) headers.set('x-user-session', session);
+  if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
+  if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
+  headers.set('Content-Type', 'application/json');
 
-  const events = await prisma.securityEvent.findMany({
-    take: limit,
-    orderBy: { timestamp: 'desc' },
+  const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+    ...options,
+    headers,
   });
 
-  return events;
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Backend Error: ${res.status} ${errorText}`);
+  }
+  return res.json();
+}
+
+export async function getSecurityEvents(limit = 100) {
+  return await fetchWithAuth(`/api/security/events?limit=${limit}`);
 }
 
 export async function getSecurityStats() {
-  const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value;
-  if (!userId) throw new Error('Unauthorized');
-
-  const permissions = await getUserPermissions(userId);
-  if (!permissions.IS_ADMIN && !permissions.SYSTEM_SETTINGS?.canView) {
-    throw new Error('Unauthorized. SOC access required.');
-  }
-
-  const [totalBlocked, criticalThreats, aiInjections] = await Promise.all([
-    prisma.securityEvent.count({ where: { status: 'BLOCKED' } }),
-    prisma.securityEvent.count({ where: { severity: 'CRITICAL' } }),
-    prisma.securityEvent.count({ where: { threatType: 'PROMPT_INJECTION_ATTEMPT' } }),
-  ]);
-
-  return { totalBlocked, criticalThreats, aiInjections };
+  return await fetchWithAuth(`/api/security/stats`);
 }

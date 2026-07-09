@@ -1,58 +1,57 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+// This `fetchWithAuth` function acts as a proxy to your AWS backend.
+// It assumes NEXT_PUBLIC_AWS_BACKEND_URL is configured in your Next.js environment variables
+// (e.g., .env.local, .env.production) and points to your AWS Express.js API base URL.
+async function fetchWithAuth(urlPath: string, options?: RequestInit) {
+  const backendUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL;
+  if (!backendUrl) {
+    throw new Error("NEXT_PUBLIC_AWS_BACKEND_URL is not defined in your environment.");
+  }
+
+  const response = await fetch(`${backendUrl}${urlPath}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers
+    }
+  });
+
+  if (!response.ok) {
+    let errorDetail = 'Unknown error occurred.';
+    try {
+      const errorResponse = await response.json();
+      errorDetail = errorResponse.error || errorResponse.message || errorDetail;
+    } catch (e) {
+      // If response is not JSON, use default error message
+    }
+    throw new Error(`Backend fetch failed: ${response.status} ${response.statusText} - ${errorDetail}`);
+  }
+
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(result.error || 'Operation failed on the server.');
+  }
+  return result;
+}
 
 export async function getFinancialReport() {
+  // Access cookies on the server side using Next.js headers API
   const { cookies } = await import('next/headers');
   const cookieStore = await cookies();
   const sessionId = cookieStore.get('session')?.value || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
-  const user = sessionId ? await prisma.user.findUnique({ where: { id: sessionId } }) : null;
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
-
-  const filter: any = {};
-  if (!isSuperAdmin && sessionId) {
-    filter.userAssignments = { some: { userId: sessionId, assignmentStatus: 'active' } };
-  }
-  if (activeProjectId) {
-    filter.id = activeProjectId;
-  }
-
-  const projects = await prisma.project.findMany({
-    where: filter,
-    select: {
-      id: true,
-      name: true,
-      contractAmount: true,
-      status: true,
-      expenses: {
-        select: { amount: true }
-      }
-    }
+  // Call the AWS backend through the fetchWithAuth proxy
+  const response = await fetchWithAuth('/reportActions/getFinancialReport', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId, activeProjectId })
   });
 
-  // Calculate outstanding payables globally for now
-  const unpaidPOs = await prisma.purchaseOrder.aggregate({
-    where: { status: { not: 'PAID' } },
-    _sum: { totalAmount: true }
-  });
-
-  const report = projects.map(p => {
-    const totalExpenses = p.expenses.reduce((sum, exp) => sum + exp.amount, 0);
-    return {
-      projectId: p.id,
-      projectName: p.name,
-      status: p.status,
-      budget: p.contractAmount || 0,
-      expenses: totalExpenses,
-      balance: (p.contractAmount || 0) - totalExpenses
-    };
-  });
-
+  // Return the data exactly as the original function did
   return {
-    projectFinancials: report,
-    globalOutstandingPayables: unpaidPOs._sum.totalAmount || 0
+    projectFinancials: response.projectFinancials,
+    globalOutstandingPayables: response.globalOutstandingPayables
   };
 }
 
@@ -62,49 +61,13 @@ export async function getProjectReport() {
   const sessionId = cookieStore.get('session')?.value || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
-  const user = sessionId ? await prisma.user.findUnique({ where: { id: sessionId } }) : null;
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
-
-  const filter: any = {};
-  if (!isSuperAdmin && sessionId) {
-    filter.userAssignments = { some: { userId: sessionId, assignmentStatus: 'active' } };
-  }
-  if (activeProjectId) {
-    filter.id = activeProjectId;
-  }
-
-  const projects = await prisma.project.findMany({
-    where: filter,
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      startDate: true,
-      endDate: true,
-      awardedBoqItems: {
-        select: { percentageAccomplished: true }
-      }
-    }
+  const response = await fetchWithAuth('/reportActions/getProjectReport', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId, activeProjectId })
   });
 
-  const report = projects.map(p => {
-    let avgAccomplishment = 0;
-    if (p.awardedBoqItems.length > 0) {
-      const sum = p.awardedBoqItems.reduce((acc, item) => acc + (item.percentageAccomplished || 0), 0);
-      avgAccomplishment = sum / p.awardedBoqItems.length;
-    }
-
-    return {
-      projectId: p.id,
-      projectName: p.name,
-      status: p.status,
-      startDate: p.startDate,
-      endDate: p.endDate,
-      accomplishment: avgAccomplishment
-    };
-  });
-
-  return report;
+  // The backend is expected to return { success: true, data: reportArray }
+  return response.data; 
 }
 
 export async function getInventoryReport() {
@@ -113,50 +76,11 @@ export async function getInventoryReport() {
   const sessionId = cookieStore.get('session')?.value || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
-  const user = sessionId ? await prisma.user.findUnique({ where: { id: sessionId } }) : null;
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
-
-  const baseProjectFilter: any = {};
-  if (!isSuperAdmin && sessionId) {
-    baseProjectFilter.userAssignments = { some: { userId: sessionId, assignmentStatus: 'active' } };
-  }
-
-  const filter: any = {
-    deliveredQty: {
-      gt: prisma.consolidatedBOQItem.fields.consumedQty
-    }
-  };
-
-  if (!isSuperAdmin && sessionId) {
-    filter.project = baseProjectFilter;
-  }
-  if (activeProjectId) {
-    filter.projectId = activeProjectId;
-  }
-
-  const items = await prisma.consolidatedBOQItem.findMany({
-    where: filter,
-    select: {
-      id: true,
-      category: true,
-      description: true,
-      unitCost: true,
-      deliveredQty: true,
-      consumedQty: true,
-    }
+  const response = await fetchWithAuth('/reportActions/getInventoryReport', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId, activeProjectId })
   });
 
-  const report = items.map(item => {
-    const qoh = item.deliveredQty - item.consumedQty;
-    return {
-      stockId: item.id,
-      category: item.category || 'Uncategorized',
-      description: item.description,
-      quantityOnHand: qoh,
-      estimatedUnitCost: item.unitCost,
-      totalEstimatedValue: qoh * item.unitCost
-    };
-  });
-
-  return report;
+  // The backend is expected to return { success: true, data: reportArray }
+  return response.data;
 }

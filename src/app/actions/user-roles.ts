@@ -1,53 +1,100 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { auth } from '@/auth'; // Assuming '@/auth' provides session
+import { redirect } from 'next/navigation';
+
+// Base URL for the AWS backend API. This should point to your AWS Express.js application.
+const BACKEND_API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL || 'http://localhost:3001'; // Default for local development
+
+/**
+ * A wrapper around fetch that includes authentication headers and handles API responses.
+ * Assumes the existence of an `auth` function from NextAuth.js or similar for session management.
+ */
+async function fetchWithAuth(url: string, options?: RequestInit) {
+  const session = await auth();
+  if (!session?.accessToken) {
+    // If not authenticated, redirect to login or throw an error
+    redirect('/api/auth/signin'); 
+  }
+
+  const headers = {
+    ...options?.headers,
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${session.accessToken}`,
+  };
+
+  // Construct the full URL for the backend endpoint
+  // The `url` parameter here will be like '/api/user-roles/functionName'
+  const fullUrl = `${BACKEND_API_BASE_URL}${url}`;
+
+  const response = await fetch(fullUrl, {
+    ...options,
+    headers,
+    // Prevent Next.js from aggressively caching fetch requests in Server Actions
+    cache: 'no-store', 
+  });
+
+  if (!response.ok) {
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch (e) {
+      // If JSON parsing fails, return a generic error message
+      errorData = { message: `Server error: ${response.statusText || 'Unknown'}` };
+    }
+    throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+const API_ROUTE_PREFIX = '/api/user-roles'; // This will be appended to BACKEND_API_BASE_URL
 
 export async function getUsersWithRoles() {
-  const users = await prisma.user.findMany({
-    include: {
-      userRoles: {
-        include: { role: true }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
+  const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/getUsersWithRoles`, {
+    method: 'POST',
   });
   
-  const roles = await prisma.role.findMany({ orderBy: { roleName: 'asc' } });
-  
-  return { users, roles };
+  // Assuming the backend returns { success: true, users: [...], roles: [...] } on success
+  if (response.success) {
+    return { users: response.users, roles: response.roles };
+  }
+  throw new Error(response.error || 'Failed to fetch users and roles.');
 }
 
 export async function assignRoleToUser(userId: string, roleId: string) {
-  const existing = await prisma.userRole.findUnique({
-    where: { userId_roleId: { userId, roleId } }
+  const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/assignRoleToUser`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, roleId }),
   });
-
-  if (!existing) {
-    await prisma.userRole.create({
-      data: { userId, roleId }
-    });
-  }
   
-  revalidatePath('/admin/user-roles');
-  return { success: true };
+  if (response.success) {
+    revalidatePath('/admin/user-roles');
+  }
+  return response; // Returns { success: true } or { success: false, error: ... }
 }
 
 export async function removeRoleFromUser(userId: string, roleId: string) {
-  await prisma.userRole.delete({
-    where: { userId_roleId: { userId, roleId } }
+  const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/removeRoleFromUser`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, roleId }),
   });
   
-  revalidatePath('/admin/user-roles');
-  return { success: true };
+  if (response.success) {
+    revalidatePath('/admin/user-roles');
+  }
+  return response; // Returns { success: true } or { success: false, error: ... }
 }
 
 export async function updateUserStatus(userId: string, status: string) {
-  await prisma.user.update({
-    where: { id: userId },
-    data: { status }
+  const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/updateUserStatus`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, status }),
   });
   
-  revalidatePath('/admin/user-roles');
-  return { success: true };
+  if (response.success) {
+    revalidatePath('/admin/user-roles');
+  }
+  return response; // Returns { success: true } or { success: false, error: ... }
 }

@@ -1,11 +1,36 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
-import { validateTransactionWithAI } from './aiValidationActions';
-import { getUserPermissions } from '@/lib/permissions';
-import { logAudit } from '@/lib/workflow';
+import { revalidatePath } from 'next/cache';
+
+const BACKEND_URL = process.env.AWS_BACKEND_URL || 'http://localhost:4000';
+
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const cookieStore = await cookies();
+  const session = cookieStore.get('session')?.value;
+  const activeProjectId = cookieStore.get('activeProjectId')?.value;
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+
+  const headers = new Headers(options.headers);
+  if (session) headers.set('x-user-session', session);
+  if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
+  if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
+  headers.set('Content-Type', 'application/json');
+
+  const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    if (res.status === 400 && errorText.includes('AI Blocked')) {
+      return res.json(); // Pass the validation block to frontend
+    }
+    throw new Error(`Backend Error: ${res.status} ${errorText}`);
+  }
+  return res.json();
+}
 
 export async function issuePayment(payableId: string, paymentData: {
   amount: number;
@@ -13,180 +38,34 @@ export async function issuePayment(payableId: string, paymentData: {
   paymentRef: string;
   paidAt: string;
 }) {
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
-  if (!sessionId) throw new Error('Unauthorized');
-
-  const user = await prisma.user.findUnique({ where: { id: sessionId } });
-  if (!user) throw new Error('Unauthorized');
-
-  const permissions = await getUserPermissions(user.id);
-  const canIssue = permissions?.PAYMENT_ISSUANCE?.canCreate;
-  if (!canIssue) {
-    throw new Error('You do not have permission to issue payments.');
-  }
-
-  // === AI VALIDATION INTERCEPTOR ===
-  const validation = await validateTransactionWithAI(
-    'Payment Issuance',
-    {
-      action: 'Issue Payment to Supplier',
-      amount: paymentData.amount,
-      paymentMethod: paymentData.paymentMethod,
-      paymentRef: paymentData.paymentRef,
-    },
-    user.id,
-    user.role
-  );
-
-  if (validation.validationStatus === 'BLOCKING ISSUE') {
-    return { 
-      success: false, 
-      error: `AI Blocked Transaction: ${validation.findings}`,
-      validationLogId: validation.validationLogId 
-    };
-  }
-  // =================================
-
-  const payable = await prisma.accountsPayable.findUnique({
-    where: { id: payableId },
-    include: {
-      po: {
-        include: { supplier: true, mr: true }
-      },
-      delivery: {
-        include: {
-          items: {
-            include: { consolidatedBoqItem: true }
-          }
-        }
-      }
-    }
+  const result = await fetchWithAuth('/api/finance/payment/issue', {
+    method: 'POST',
+    body: JSON.stringify({ payableId, paymentData })
   });
 
-  if (!payable) {
-    throw new Error('Payable record not found');
+  if (result.success) {
+    revalidatePath('/supplier-payables');
+    revalidatePath(`/supplier-payables/${payableId}`);
+    revalidatePath('/finance');
   }
 
-  // Calculate new paid amount
-  const newPaidAmount = payable.paidAmount + paymentData.amount;
-  
-  // Determine if fully paid or accrued (post-dated)
-  let newStatus = 'PAID';
-  let isAccrued = false;
-  
-  if (newPaidAmount < payable.amount) {
-    newStatus = 'PARTIALLY_PAID';
-  } else if (new Date(payable.dueDate) > new Date(paymentData.paidAt)) {
-    // If the due date of the payable is strictly after the payment/check date, it's post-dated (Accrued)
-    newStatus = 'ACCRUED';
-    isAccrued = true;
-  }
-
-  // Compute VAT
-  let calculatedNetAmount = newPaidAmount;
-  let calculatedVatAmount = 0;
-  if (payable.po.supplier.isVatable) {
-    calculatedNetAmount = newPaidAmount / 1.12;
-    calculatedVatAmount = newPaidAmount - calculatedNetAmount;
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.accountsPayable.update({
-      where: { id: payableId },
-      data: {
-        status: newStatus,
-        paidAmount: newPaidAmount,
-        netAmount: calculatedNetAmount,
-        vatAmount: calculatedVatAmount,
-        paymentMethod: paymentData.paymentMethod,
-        paymentRef: paymentData.paymentRef,
-        paidAt: new Date(paymentData.paidAt)
-      }
-    });
-
-    if (newStatus === 'PAID' || newStatus === 'ACCRUED') {
-      await tx.expense.create({
-        data: {
-          amount: newPaidAmount,
-          totalBreakdownAmount: newPaidAmount,
-          date: new Date(paymentData.paidAt),
-          category: 'MATERIALS',
-          description: `Payment to ${payable.po.supplier.name} for PO: ${payable.po.poNumber} | DR: ${payable.delivery.receiptNumber || 'N/A'}`,
-          receiptRef: payable.voucherNumber || paymentData.paymentRef,
-          supplierName: payable.po.supplier.name,
-          isAccrued: isAccrued,
-          netAmount: calculatedNetAmount,
-          vatAmount: calculatedVatAmount,
-          billingEligibility: 'BILLABLE',
-          status: 'APPROVED',
-          projectId: payable.po.mr.projectId,
-          loggedById: user.id,
-          costType: 'DIRECT',
-          breakdownItems: {
-            create: payable.delivery.items.map(item => ({
-              description: `${item.consolidatedBoqItem.itemCode}\n${item.consolidatedBoqItem.category ? item.consolidatedBoqItem.category.trim() + ' ' : ''}${item.consolidatedBoqItem.description}`.trim(),
-              quantity: item.quantity,
-              unit: item.consolidatedBoqItem.unit,
-              unitCost: item.consolidatedBoqItem.unitCost,
-              totalCost: item.quantity * item.consolidatedBoqItem.unitCost,
-              supplierName: payable.po.supplier.name,
-              purchaseReferenceNo: payable.po.poNumber,
-              receiptInvoiceNo: paymentData.paymentRef,
-              purchaseDate: payable.delivery.createdAt
-            }))
-          }
-        }
-      });
-    }
-  });
-
-  await logAudit(
-    user.id,
-    user.role || 'FINANCE_OFFICER',
-    'PAYMENT_ISSUANCE',
-    payableId,
-    'ISSUE_PAYMENT',
-    payable.status,
-    newStatus,
-    `Issued ${paymentData.paymentMethod} for ${paymentData.amount} (Ref: ${paymentData.paymentRef})`
-  );
-
-  revalidatePath('/supplier-payables');
-  revalidatePath(`/supplier-payables/${payableId}`);
-  revalidatePath('/finance');
-  
-  return { success: true };
+  return result;
 }
 
 export async function clearAccruedPayment(payableId: string) {
-  const session = await cookies();
-  const userStr = session.get('session')?.value;
-  if (!userStr) throw new Error('Unauthorized');
-
-  const payable = await prisma.accountsPayable.findUnique({
-    where: { id: payableId }
+  const result = await fetchWithAuth(`/api/finance/payment/${payableId}/clear-accrued`, {
+    method: 'PUT'
   });
 
-  if (!payable || payable.status !== 'ACCRUED') {
-    throw new Error('Only accrued payables can be cleared');
+  if (result.success) {
+    revalidatePath('/supplier-payables');
+    revalidatePath('/finance');
   }
-
-  await prisma.accountsPayable.update({
-    where: { id: payableId },
-    data: { status: 'PAID' }
-  });
-
-  revalidatePath('/supplier-payables');
-  revalidatePath('/finance');
+  return result;
 }
 
 export async function getConsolidatedItemsForProject(projectId: string) {
-  const items = await prisma.consolidatedBOQItem.findMany({
-    where: { projectId },
-    orderBy: { itemCode: 'asc' }
-  });
-  return items.filter(item => item.unit?.toLowerCase().includes('lot') || false);
+  return await fetchWithAuth(`/api/finance/consolidated-items/${projectId}`);
 }
 
 export async function logDirectExpense(data: {
@@ -210,56 +89,11 @@ export async function logDirectExpense(data: {
     isVat: boolean;
   }>;
 }) {
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
-  if (!sessionId) throw new Error('Unauthorized');
-
-  const totalBreakdownAmount = data.breakdowns.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
-  const totalAmount = data.netAmount + data.vatAmount;
-
-  const expense = await prisma.expense.create({
-    data: {
-      projectId: data.projectId,
-      amount: totalAmount,
-      totalBreakdownAmount: totalBreakdownAmount || totalAmount,
-      date: new Date(data.date),
-      category: data.category,
-      description: data.description,
-      receiptRef: data.voucherNo,
-      supplierName: data.supplierName,
-      isAccrued: data.isAccrued,
-      netAmount: data.netAmount,
-      vatAmount: data.vatAmount,
-      status: 'LOGGED',
-      loggedById: data.issuedById,
-      breakdownItems: {
-        create: data.breakdowns.map(bd => ({
-          description: bd.description,
-          quantity: bd.quantity,
-          unit: bd.unit,
-          unitCost: bd.unitPrice,
-          totalCost: bd.quantity * bd.unitPrice,
-          supplierName: bd.supplierName,
-        }))
-      }
-    }
+  const result = await fetchWithAuth('/api/finance/expense/log', {
+    method: 'POST',
+    body: JSON.stringify({ data })
   });
 
-  // If logging as a single item, we still create one generic breakdown item for consistency
-  if (data.breakdowns.length === 0) {
-     await prisma.expenseBreakdownItem.create({
-        data: {
-           expenseId: expense.id,
-           description: data.description,
-           quantity: 1,
-           unit: 'lot',
-           unitCost: data.netAmount,
-           totalCost: data.netAmount,
-           supplierName: data.supplierName
-        }
-     });
-  }
-
   revalidatePath('/expenses');
-  return expense.id;
+  return result.id;
 }

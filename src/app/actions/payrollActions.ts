@@ -1,125 +1,49 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
-import { validateTransactionWithAI } from './aiValidationActions';
-import { logAudit } from '@/lib/workflow';
+
+const BACKEND_URL = process.env.AWS_BACKEND_URL || 'http://localhost:4000';
+
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const cookieStore = await cookies();
+  const session = cookieStore.get('session')?.value;
+  const activeProjectId = cookieStore.get('activeProjectId')?.value;
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+
+  const headers = new Headers(options.headers);
+  if (session) headers.set('x-user-session', session);
+  if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
+  if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
+  headers.set('Content-Type', 'application/json');
+
+  const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    if (res.status === 400 && errorText.includes('AI Blocked')) {
+      return res.json(); // Pass the validation block to frontend
+    }
+    throw new Error(`Backend Error: ${res.status} ${errorText}`);
+  }
+  return res.json();
+}
 
 export async function createPayrollPeriod(data: any, userId: string) {
   try {
-    const { month, year, calendarRule, periodType, startDate, endDate, payrollDate, projectId, notes } = data;
-
-    // Check if period already exists
-    const existing = await prisma.payrollPeriod.findFirst({
-      where: { 
-        month: Number(month), 
-        year: Number(year), 
-        calendarRule,
-        periodType,
-        projectId: projectId || null
-      }
+    const result = await fetchWithAuth('/api/payroll/period/create', {
+      method: 'POST',
+      body: JSON.stringify(data)
     });
-
-    if (existing) {
-      throw new Error(`A payroll period for ${periodType} of ${month}/${year} already exists.`);
-    }
-
-    // === AI VALIDATION INTERCEPTOR ===
-    const validation = await validateTransactionWithAI(
-      'Payroll Generation',
-      {
-        action: 'Create New Payroll Period',
-        month,
-        year,
-        calendarRule,
-        periodType,
-        startDate,
-        endDate
-      },
-      userId,
-      'USER' // Need actual user session role ideally, defaulting for now
-    );
-
-    if (validation.validationStatus === 'BLOCKING ISSUE') {
-      return { 
-        success: false, 
-        error: `AI Blocked Transaction: ${validation.findings}`,
-        validationLogId: validation.validationLogId 
-      };
-    }
-    // =================================
-
-    // Generate Batch Number
-    const typeCode = periodType.replace('_', '').substring(0, 4);
-    const projCode = projectId ? '-PROJ' : '';
-    const batchNumber = `PAY-${year}-${String(month).padStart(2, '0')}-${typeCode}${projCode}-${Math.floor(Math.random() * 1000)}`;
-
-    const period = await prisma.payrollPeriod.create({
-      data: {
-        payrollBatchNumber: batchNumber,
-        month: Number(month),
-        year: Number(year),
-        calendarRule,
-        periodType,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        payrollDate: new Date(payrollDate),
-        projectId: projectId || null,
-        notes: notes || null,
-        status: 'DRAFT',
-        createdById: userId
-      }
-    });
-
-    // Map calendarRule to expected payrollCategory
-    const categoryMap: Record<string, string> = {
-      'WEEKLY': 'Weekly Salaried',
-      'SEMI_MONTHLY': 'Semi-Monthly',
-      'MONTHLY': 'Monthly'
-    };
-
-    const workerFilter: any = {};
-    if (projectId) workerFilter.assignedProjectId = projectId;
     
-    // Explicitly apply category filtering if mapped, ensuring only matching workers are processed
-    if (categoryMap[calendarRule]) {
-      workerFilter.payrollCategory = categoryMap[calendarRule];
+    if (result.success) {
+      revalidatePath('/payroll');
     }
-
-    // Load workers here automatically
-    const workers = await prisma.worker.findMany({
-      where: workerFilter
-    });
-
-    if (workers.length > 0) {
-      const payrollEntries = workers.map(w => ({
-        workerId: w.id,
-        payrollPeriodId: period.id,
-        projectId: projectId || null,
-        compensationType: w.employmentType === 'REGULAR' ? 'MONTHLY' : w.employmentType === 'PROJECT_BASED' ? 'PROJECT_BASED' : 'DAILY',
-        rate: w.dailyRate || 0,
-        basicPay: 0,
-        netPay: 0
-      }));
-
-      await prisma.payroll.createMany({
-        data: payrollEntries
-      });
-    }
-
-    await logAudit(
-      userId,
-      'HR_OFFICER', // Default role if not available
-      'PAYROLL',
-      period.id,
-      'CREATE_PAYROLL_PERIOD',
-      undefined,
-      'DRAFT',
-      `Created ${periodType} payroll period for ${month}/${year}`
-    );
-
-    revalidatePath('/payroll');
-    return { success: true, data: period };
+    
+    return result;
   } catch (error: any) {
     console.error('Error creating payroll period:', error);
     return { success: false, error: error.message || 'Failed to create payroll period' };

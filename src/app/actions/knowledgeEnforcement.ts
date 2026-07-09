@@ -1,6 +1,33 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+import { revalidatePath, revalidateTag } from 'next/cache'; // Included for completeness, though not used in original
+
+// Placeholder for `fetchWithAuth` function
+// In a real application, this would typically involve token authentication
+// and proper error handling specific to your auth setup.
+async function fetchWithAuth(url: string, options?: RequestInit) {
+  // Example: Add an Authorization header if needed
+  // const token = await getAuthToken(); // Assuming a function to get the auth token
+  const headers = {
+    'Content-Type': 'application/json',
+    // ... any other headers like Authorization
+    ...(options?.headers || {})
+  };
+
+  const response = await fetch(url, {
+    ...options,
+    headers
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(errorData.error || errorData.message || 'An unknown error occurred');
+  }
+
+  return response.json();
+}
+
+const BASE_API_ROUTE = '/api/knowledgeEnforcement'; // This needs to be configured in your Next.js API route handler
 
 /**
  * Fetches the active, mandatory knowledge rules applicable to a specific ERP module.
@@ -8,14 +35,11 @@ import { prisma } from '@/lib/prisma';
  */
 export async function getApplicableRulesForModule(moduleName: string) {
   try {
-    const rules = await prisma.knowledgeRuleReference.findMany({
-      where: {
-        moduleName: moduleName,
-        isMandatory: true
-      },
-      orderBy: { createdAt: 'desc' }
+    const response = await fetchWithAuth(`${BASE_API_ROUTE}/getApplicableRulesForModule`, {
+      method: 'POST',
+      body: JSON.stringify({ moduleName })
     });
-    return { success: true, data: rules };
+    return response; // response will already be { success: true, data: rules } or { success: false, error: message }
   } catch (error: any) {
     console.error(`Failed to fetch rules for module ${moduleName}:`, error);
     return { success: false, error: error.message };
@@ -38,21 +62,14 @@ export async function logKnowledgeAudit(data: {
   overrideReason?: string;
 }) {
   try {
-    const audit = await prisma.knowledgeRuleAuditLog.create({
-      data: {
-        transactionId: data.transactionId,
-        moduleName: data.moduleName,
-        notebookName: data.notebookName,
-        ruleApplied: data.ruleApplied,
-        validationResult: data.validationResult,
-        actionTaken: data.actionTaken,
-        userAction: data.userAction,
-        overrideRequested: data.overrideRequested || false,
-        overrideApprovedBy: data.overrideApprovedBy,
-        overrideReason: data.overrideReason
-      }
+    const response = await fetchWithAuth(`${BASE_API_ROUTE}/logKnowledgeAudit`, {
+      method: 'POST',
+      body: JSON.stringify(data)
     });
-    return { success: true, data: audit };
+    // If a revalidation is needed after logging an audit, uncomment one of these:
+    // revalidatePath('/some-audit-dashboard');
+    // revalidateTag('audit-logs');
+    return response;
   } catch (error: any) {
     console.error('Failed to log knowledge audit:', error);
     return { success: false, error: error.message };
@@ -64,12 +81,11 @@ export async function logKnowledgeAudit(data: {
  */
 export async function getRecentAuditLogsForModule(moduleName: string, limit: number = 5) {
   try {
-    const logs = await prisma.knowledgeRuleAuditLog.findMany({
-      where: { moduleName },
-      orderBy: { timestamp: 'desc' },
-      take: limit
+    const response = await fetchWithAuth(`${BASE_API_ROUTE}/getRecentAuditLogsForModule`, {
+      method: 'POST',
+      body: JSON.stringify({ moduleName, limit })
     });
-    return { success: true, data: logs };
+    return response;
   } catch (error: any) {
     console.error(`Failed to fetch audit logs for module ${moduleName}:`, error);
     return { success: false, error: error.message };
@@ -81,57 +97,17 @@ export async function getRecentAuditLogsForModule(moduleName: string, limit: num
  * Typically called once during setup or deployment.
  */
 export async function seedBaselineRules() {
-  const count = await prisma.knowledgeRuleReference.count();
-  if (count > 0) return { success: true, message: 'Already seeded' };
-
-  await prisma.knowledgeRuleReference.createMany({
-    data: [
-      {
-        notebookName: 'Progress Billing & Accomplishment Rules',
-        moduleName: 'Progress Billing',
-        ruleCategory: 'File Integrity',
-        ruleTitle: 'Excel Layout Preservation',
-        ruleDescription: 'The system must preserve the original Excel file structure, empty rows, and layout when parsing or exporting billing.',
-        validationType: 'Structural Check',
-        severity: 'BLOCK',
-        isMandatory: true,
-        sourceLink: '/knowledge/formulas_and_validation.md'
-      },
-      {
-        notebookName: 'Payroll Engine Computation Rules',
-        moduleName: 'Payroll',
-        ruleCategory: 'AI Compliance',
-        ruleTitle: 'Zero Net Pay Protection',
-        ruleDescription: 'Payroll submission must be blocked if net pay is zero or negative.',
-        validationType: 'Logic Pre-Check',
-        severity: 'BLOCK',
-        isMandatory: true,
-        sourceLink: '/knowledge/payroll_formulas_and_validation.md'
-      },
-      {
-        notebookName: 'Finance & Cash Management Rules',
-        moduleName: 'Petty Cash',
-        ruleCategory: 'Fund Disbursement',
-        ruleTitle: 'Insufficient Balance Block',
-        ruleDescription: 'The system must immediately block disbursement if the expense amount exceeds the current active balance.',
-        validationType: 'Financial Lock',
-        severity: 'BLOCK',
-        isMandatory: true,
-        sourceLink: '/knowledge/finance_formulas_and_validation.md'
-      },
-      {
-        notebookName: 'Procurement & Inventory Rules',
-        moduleName: 'Procurement',
-        ruleCategory: 'Accounts Payable',
-        ruleTitle: 'VAT Split Rules',
-        ruleDescription: 'For Vatable suppliers, the exact Gross / 1.12 BIR formula must be used.',
-        validationType: 'Accounting Logic',
-        severity: 'BLOCK',
-        isMandatory: true,
-        sourceLink: '/knowledge/procurement_formulas_and_validation.md'
-      }
-    ]
-  });
-
-  return { success: true, message: 'Seeded baseline rules' };
+  try {
+    const response = await fetchWithAuth(`${BASE_API_ROUTE}/seedBaselineRules`, {
+      method: 'POST',
+      body: JSON.stringify({}) // No arguments needed for this function
+    });
+    // If revalidation is needed after seeding, uncomment one of these:
+    // revalidatePath('/knowledge-rules-dashboard');
+    // revalidateTag('knowledge-rules');
+    return response;
+  } catch (error: any) {
+    console.error('Failed to seed baseline rules:', error);
+    return { success: false, error: error.message };
+  }
 }

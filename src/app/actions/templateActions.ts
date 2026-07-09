@@ -1,7 +1,25 @@
-"use server";
+'use server';
 
-import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+
+// --- Standard fetchWithAuth wrapper definition ---
+// This is a placeholder. In a real app, it would handle token injection, base URL, etc.
+// For demonstration, it just acts as a basic fetch wrapper.
+async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const apiUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || 'http://localhost:3001'; // Define your AWS backend URL
+  const url = `${apiUrl}${input}`;
+
+  // In a real app, you'd add authentication headers here, e.g., Bearer token
+  const headers = {
+    'Content-Type': 'application/json',
+    // 'Authorization': `Bearer ${await getAuthToken()}`, // Example for auth
+    ...(init?.headers || {})
+  };
+
+  const response = await fetch(url, { ...init, headers });
+  return response;
+}
+// --------------------------------------------------
 
 export async function saveTemplateAction(
   projectId: string,
@@ -10,197 +28,110 @@ export async function saveTemplateAction(
   parsedData: any
 ) {
   try {
-    const templateName = templateType === 'ar' ? "Accomplishment Report Template" : "Certificate of Payment Template";
-    const mappedType = templateType === 'ar' ? "ACCOMPLISHMENT_REPORT" : "CERTIFICATE_OF_PAYMENT";
-
-    // Sanitize parsedData to replace undefined with null for Prisma compatibility
-    const sanitizedData = JSON.parse(JSON.stringify(parsedData, (key, value) => 
-      value === undefined ? null : value
-    ));
-
-    // Create the template record
-    await prisma.documentTemplate.create({
-      data: {
+    const response = await fetchWithAuth('/api/templateActions/saveTemplateAction', {
+      method: 'POST',
+      body: JSON.stringify({
         projectId,
-        templateName,
-        templateType: mappedType,
+        templateType,
         fileName,
-        fileUrl: `/virtual/templates/${Date.now()}`,
-        parsedData: sanitizedData,
-        isLocked: false,
-      }
+        parsedData,
+      }),
     });
+    const data = await response.json();
 
-    revalidatePath("/accomplishments");
-    return { success: true };
+    if (response.ok && data.success) {
+      revalidatePath("/accomplishments");
+      return data;
+    } else {
+      console.error("Save Template Action Error:", data.error || 'Unknown error');
+      return { success: false, error: data.error || 'Unknown error' };
+    }
   } catch (error: any) {
-    console.error("Save Template Error:", error);
+    console.error("Save Template Action Network Error:", error);
     return { success: false, error: error.message };
   }
 }
 
 export async function deleteTemplateAction(templateId: string) {
   try {
-    const template = await prisma.documentTemplate.findUnique({ where: { id: templateId } });
-    if (template?.isLocked) {
-      throw new Error("Cannot delete a locked template.");
+    const response = await fetchWithAuth('/api/templateActions/deleteTemplateAction', {
+      method: 'POST',
+      body: JSON.stringify({ templateId }),
+    });
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      revalidatePath("/accomplishments");
+      return data;
+    } else {
+      console.error("Delete Template Action Error:", data.error || 'Unknown error');
+      return { success: false, error: data.error || 'Unknown error' };
     }
-    await prisma.documentTemplate.delete({ where: { id: templateId } });
-    revalidatePath("/accomplishments");
-    return { success: true };
   } catch (error: any) {
-    console.error("Delete Template Error:", error);
+    console.error("Delete Template Action Network Error:", error);
     return { success: false, error: error.message };
   }
 }
 
 export async function toggleLockTemplateAction(templateId: string, currentLockState: boolean) {
   try {
-    await prisma.documentTemplate.update({
-      where: { id: templateId },
-      data: { isLocked: !currentLockState }
+    const response = await fetchWithAuth('/api/templateActions/toggleLockTemplateAction', {
+      method: 'POST',
+      body: JSON.stringify({ templateId, currentLockState }),
     });
-    revalidatePath("/accomplishments");
-    return { success: true };
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      revalidatePath("/accomplishments");
+      return data;
+    } else {
+      console.error("Toggle Lock Template Action Error:", data.error || 'Unknown error');
+      return { success: false, error: data.error || 'Unknown error' };
+    }
   } catch (error: any) {
-    console.error("Lock Template Error:", error);
+    console.error("Toggle Lock Template Action Network Error:", error);
     return { success: false, error: error.message };
   }
 }
 
 export async function updateTemplateDataAction(templateId: string, parsedData: any) {
   try {
-    const template = await prisma.documentTemplate.findUnique({ where: { id: templateId } });
-    if (template?.isLocked) {
-      throw new Error("Cannot edit a locked template.");
-    }
-
-    const sanitizedData = JSON.parse(JSON.stringify(parsedData, (key, value) => 
-      value === undefined ? null : value
-    ));
-
-    await prisma.documentTemplate.update({
-      where: { id: templateId },
-      data: { parsedData: sanitizedData }
+    const response = await fetchWithAuth('/api/templateActions/updateTemplateDataAction', {
+      method: 'POST',
+      body: JSON.stringify({ templateId, parsedData }),
     });
-    revalidatePath("/accomplishments");
-    return { success: true };
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      revalidatePath("/accomplishments");
+      return data;
+    } else {
+      console.error("Update Template Data Action Error:", data.error || 'Unknown error');
+      return { success: false, error: data.error || 'Unknown error' };
+    }
   } catch (error: any) {
-    console.error("Update Template Error:", error);
+    console.error("Update Template Data Action Network Error:", error);
     return { success: false, error: error.message };
   }
 }
 
 export async function syncTemplateWithBOQAction(projectId: string, parsedData: any[]) {
   try {
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: { awardedBoqItems: true }
+    const response = await fetchWithAuth('/api/templateActions/syncTemplateWithBOQAction', {
+      method: 'POST',
+      body: JSON.stringify({ projectId, parsedData }),
     });
+    const data = await response.json();
 
-    if (!project) throw new Error("Project not found.");
-
-    const boqItems = project.awardedBoqItems;
-    if (boqItems.length === 0) throw new Error("No Awarded BOQ items found for this project.");
-
-    // Create a deep copy of parsedData (FortuneSheet Sheet[]) to mutate
-    const newData = JSON.parse(JSON.stringify(parsedData));
-
-    let synchronizedCount = 0;
-
-    for (const sheet of newData) {
-      if (!sheet.celldata || !Array.isArray(sheet.celldata)) continue;
-
-      // Group celldata by row for easier searching
-      const rows: { [r: number]: any[] } = {};
-      for (const cell of sheet.celldata) {
-        if (!rows[cell.r]) rows[cell.r] = [];
-        rows[cell.r].push(cell);
-      }
-
-      // Try to auto-detect columns based on common header names
-      let itemNoCol = -1;
-      let qtyCol = -1;
-      let unitCostCol = -1;
-      let totalCostCol = -1;
-
-      for (const r in rows) {
-        const rowCells = rows[r];
-        for (const cell of rowCells) {
-          const cellVal = String(cell.v?.m || cell.v?.v || "").toLowerCase().trim();
-          if (cellVal.includes("item") && cellVal.includes("no")) itemNoCol = cell.c;
-          if (cellVal === "qty" || cellVal === "quantity") qtyCol = cell.c;
-          if (cellVal.includes("unit") && cellVal.includes("cost")) unitCostCol = cell.c;
-          if (cellVal.includes("total") && cellVal.includes("cost")) totalCostCol = cell.c;
-        }
-
-        if (itemNoCol !== -1 && qtyCol !== -1 && unitCostCol !== -1) break;
-      }
-
-      // Process rows if columns were found
-      if (itemNoCol !== -1) {
-        for (const r in rows) {
-          const rowCells = rows[r];
-          const itemNoCell = rowCells.find(c => c.c === itemNoCol);
-          if (!itemNoCell) continue;
-
-          const cellItemNo = String(itemNoCell.v?.m || itemNoCell.v?.v || "").trim();
-          if (!cellItemNo) continue;
-
-          // Find match in BOQ
-          const match = boqItems.find(b => b.itemCode === cellItemNo);
-          if (match) {
-            let updated = false;
-
-            const updateCell = (colIdx: number, val: any) => {
-              let cell = rowCells.find(c => c.c === colIdx);
-              if (!cell) {
-                cell = { r: Number(r), c: colIdx, v: {} };
-                sheet.celldata.push(cell);
-              }
-              if (!cell.v) cell.v = {};
-              if (cell.v.v !== val) {
-                cell.v.v = val;
-                cell.v.m = String(val);
-                updated = true;
-              }
-            };
-
-            if (qtyCol !== -1) updateCell(qtyCol, match.quantity);
-            if (unitCostCol !== -1) updateCell(unitCostCol, match.combinedUnitCost);
-            if (totalCostCol !== -1) updateCell(totalCostCol, match.totalCost);
-            
-            if (updated) synchronizedCount++;
-          }
-        }
-      }
-
-      // Look for Total Contract Amount
-      for (const r in rows) {
-        const rowCells = rows[r];
-        for (const cell of rowCells) {
-          const cellVal = String(cell.v?.m || cell.v?.v || "").toLowerCase().trim();
-          if (cellVal.includes("contract amount") || cellVal.includes("total project cost") || cellVal.includes("contract cost")) {
-            // Update the immediate next cell
-            let nextCell = rowCells.find(c => c.c === cell.c + 1);
-            if (!nextCell) {
-              nextCell = { r: Number(r), c: cell.c + 1, v: {} };
-              sheet.celldata.push(nextCell);
-            }
-            if (!nextCell.v) nextCell.v = {};
-            if (nextCell.v.v !== project.contractAmount) {
-              nextCell.v.v = project.contractAmount;
-              nextCell.v.m = String(project.contractAmount);
-              synchronizedCount++;
-            }
-          }
-        }
-      }
+    if (response.ok && data.success) {
+      // No revalidatePath in original action for this function, so none here.
+      return data;
+    } else {
+      console.error("Sync Template with BOQ Action Error:", data.error || 'Unknown error');
+      return { success: false, error: data.error || 'Unknown error' };
     }
-
-    return { success: true, data: newData, count: synchronizedCount };
   } catch (error: any) {
-    console.error("Sync Template Error:", error);
+    console.error("Sync Template with BOQ Action Network Error:", error);
     return { success: false, error: error.message };
   }
 }

@@ -1,8 +1,36 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { validateTransactionWithAI } from './aiValidationActions';
+
+// Placeholder for fetchWithAuth, assuming it handles authentication and base URL
+const fetchWithAuth = async (
+  url: string,
+  options?: RequestInit & { cache?: RequestCache }
+) => {
+  // In a real application, this would fetch an auth token (e.g., from session/cookies)
+  // and add it to the headers. It might also prepend a base URL for the backend.
+  const baseUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || 'http://localhost:3001/api'; // Adjust as needed
+  const res = await fetch(`${baseUrl}${url}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      // 'Authorization': `Bearer ${authToken}`, // Example for auth
+      ...options?.headers,
+    },
+    // Server Actions are not always idempotent, so 'no-store' or specific caching behavior
+    // might be desired depending on the API and if data should always be fresh.
+    cache: options?.cache || 'no-store' 
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ message: 'Unknown error', success: false }));
+    throw new Error(errorData.error || errorData.message || 'Failed to fetch data');
+  }
+
+  return res.json();
+};
+
+const ROUTE_NAME = 'pettyCashActions'; // As requested in the prompt
 
 export async function createPettyCashAccount(data: {
   accountName: string;
@@ -15,21 +43,12 @@ export async function createPettyCashAccount(data: {
   reviewerId?: string;
 }) {
   try {
-    const account = await prisma.pettyCashAccount.create({
-      data: {
-        accountName: data.accountName,
-        department: data.department || null,
-        fundLimit: data.fundLimit,
-        replenishmentTrigger: data.replenishmentTrigger || null,
-        currentBalance: data.fundLimit, // Initial balance is the full limit
-        projectId: data.projectId || null,
-        custodianId: data.custodianId,
-        approverId: data.approverId || null,
-        reviewerId: data.reviewerId || null,
-      }
+    const result = await fetchWithAuth(`/${ROUTE_NAME}/createPettyCashAccount`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
     revalidatePath('/petty-cash');
-    return { success: true, account };
+    return result;
   } catch (error: any) {
     console.error('Error creating PC account:', error);
     return { success: false, error: error.message };
@@ -43,17 +62,12 @@ export async function updatePettyCashAccount(id: string, data: {
   custodianId: string;
 }) {
   try {
-    const account = await prisma.pettyCashAccount.update({
-      where: { id },
-      data: {
-        accountName: data.accountName,
-        fundLimit: data.fundLimit,
-        projectId: data.projectId || null,
-        custodianId: data.custodianId,
-      }
+    const result = await fetchWithAuth(`/${ROUTE_NAME}/updatePettyCashAccount`, {
+      method: 'POST',
+      body: JSON.stringify({ id, data }),
     });
     revalidatePath('/petty-cash');
-    return { success: true, account };
+    return result;
   } catch (error: any) {
     console.error('Error updating PC account:', error);
     return { success: false, error: error.message };
@@ -75,104 +89,17 @@ export async function logPettyCashExpense(data: {
   attachmentUrl?: string;
   isNoReceipt: boolean;
   remarks?: string;
-  // If it should sync to Expense
   createGeneralExpense?: boolean;
   projectId?: string;
   issuedById?: string;
 }) {
   try {
-    // === AI VALIDATION INTERCEPTOR ===
-    const validation = await validateTransactionWithAI(
-      'Expense Ledger', // using Expense Ledger since policies usually cover all expenses
-      {
-        action: 'Log Petty Cash Expense',
-        payee: data.payee,
-        purpose: data.purpose,
-        category: data.category,
-        amount: data.amount,
-        hasReceipt: !data.isNoReceipt
-      },
-      data.issuedById || 'unknown',
-      'USER' // Default role for now
-    );
-
-    if (validation.validationStatus === 'BLOCKING ISSUE') {
-      return { 
-        success: false, 
-        error: `AI Blocked Transaction: ${validation.findings}`,
-        validationLogId: validation.validationLogId 
-      };
-    }
-    // =================================
-
-    await prisma.$transaction(async (tx) => {
-      // 1. Get the account and check balance
-      const account = await tx.pettyCashAccount.findUnique({ where: { id: data.accountId } });
-      if (!account) throw new Error('Account not found');
-      if (account.currentBalance < data.amount) throw new Error('Insufficient petty cash balance');
-
-      // 2. Optional: Create General Expense entry if billable to project
-      let generalExpenseId = null;
-      if (data.createGeneralExpense && data.projectId && data.issuedById) {
-        const genExp = await tx.expense.create({
-          data: {
-            project: { connect: { id: data.projectId } },
-            receiptRef: `PC-${Date.now()}`,
-            date: data.date,
-            category: data.category,
-            description: data.purpose,
-            loggedBy: { connect: { id: data.issuedById } },
-            supplierName: data.payee,
-            netAmount: data.netAmount,
-            vatAmount: data.vatAmount,
-            amount: data.amount,
-            isAccrued: false,
-            breakdownItems: {
-              create: [{
-                description: data.purpose,
-                quantity: 1,
-                unit: 'lot',
-                unitCost: data.netAmount,
-                totalCost: data.netAmount,
-                supplierName: data.payee
-              }]
-            }
-          }
-        });
-        generalExpenseId = genExp.id;
-      }
-
-      // 3. Create Petty Cash Expense
-      const pcExpense = await tx.pettyCashExpense.create({
-        data: {
-          account: { connect: { id: data.accountId } },
-          date: data.date,
-          payee: data.payee,
-          purpose: data.purpose,
-          category: data.category,
-          amount: data.amount,
-          isVat: data.isVat,
-          netAmount: data.netAmount,
-          vatAmount: data.vatAmount,
-          billingEligibility: data.billingEligibility,
-          receiptNumber: data.receiptNumber || null,
-          attachmentUrl: data.attachmentUrl || null,
-          isNoReceipt: data.isNoReceipt,
-          remarks: data.remarks || null,
-          status: 'PENDING',
-          ...(generalExpenseId ? { expense: { connect: { id: generalExpenseId } } } : {})
-        }
-      });
-
-      // 4. Update Account Balance
-      await tx.pettyCashAccount.update({
-        where: { id: data.accountId },
-        data: { currentBalance: { decrement: data.amount } }
-      });
+    const result = await fetchWithAuth(`/${ROUTE_NAME}/logPettyCashExpense`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
-
     revalidatePath(`/petty-cash/${data.accountId}`, 'page');
-    return { success: true };
+    return result;
   } catch (error: any) {
     console.error('Error logging PC expense:', error);
     return { success: false, error: error.message };
@@ -181,48 +108,12 @@ export async function logPettyCashExpense(data: {
 
 export async function createPettyCashReplenishment(accountId: string, expenseIds: string[]) {
   try {
-    return await prisma.$transaction(async (tx) => {
-      const account = await tx.pettyCashAccount.findUnique({ where: { id: accountId } });
-      if (!account) throw new Error('Account not found');
-
-      // Verify all expenses are valid and PENDING
-      const expenses = await tx.pettyCashExpense.findMany({
-        where: {
-          id: { in: expenseIds },
-          accountId: accountId,
-          status: 'PENDING',
-          replenishmentId: null
-        }
-      });
-
-      if (expenses.length !== expenseIds.length) {
-        throw new Error('Some expenses are invalid or already replenished.');
-      }
-
-      const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-
-      // Create the Replenishment Request
-      const req = await tx.pettyCashReplenishment.create({
-        data: {
-          accountId,
-          requestNumber: `PCR-${Date.now()}`,
-          status: 'DRAFT',
-          fundLimit: account.fundLimit,
-          beginningBalance: account.fundLimit, // Typically it's replenished back to fund limit
-          totalExpenses: totalExpenses,
-          cashOnHand: account.currentBalance,
-          amountRequested: totalExpenses, // Usually request exactly what was spent
-        }
-      });
-
-      // Link expenses to this replenishment
-      await tx.pettyCashExpense.updateMany({
-        where: { id: { in: expenseIds } },
-        data: { replenishmentId: req.id }
-      });
-
-      return { success: true, req };
+    const result = await fetchWithAuth(`/${ROUTE_NAME}/createPettyCashReplenishment`, {
+      method: 'POST',
+      body: JSON.stringify({ accountId, expenseIds }),
     });
+    // Original function didn't have revalidatePath, so none here.
+    return result;
   } catch (error: any) {
     console.error('Error creating PC replenishment:', error);
     return { success: false, error: error.message };
@@ -231,13 +122,14 @@ export async function createPettyCashReplenishment(accountId: string, expenseIds
 
 export async function submitPettyCashReplenishment(id: string) {
   try {
-    await prisma.pettyCashReplenishment.update({
-      where: { id },
-      data: { status: 'SUBMITTED' }
+    const result = await fetchWithAuth(`/${ROUTE_NAME}/submitPettyCashReplenishment`, {
+      method: 'POST',
+      body: JSON.stringify({ id }),
     });
     revalidatePath('/petty-cash');
-    return { success: true };
+    return result;
   } catch (error: any) {
+    console.error('Error submitting PC replenishment:', error);
     return { success: false, error: error.message };
   }
 }
@@ -249,34 +141,14 @@ export async function processPettyCashReplenishment(
   approverId?: string
 ) {
   try {
-    return await prisma.$transaction(async (tx) => {
-      const req = await tx.pettyCashReplenishment.findUnique({ where: { id } });
-      if (!req) throw new Error('Request not found');
-
-      const status = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-      
-      const updated = await tx.pettyCashReplenishment.update({
-        where: { id },
-        data: {
-          status,
-          reviewerAction: action,
-          reviewerRemarks: reviewerRemarks || null,
-          approverId: approverId || null,
-          approvalDate: action === 'APPROVE' ? new Date() : null,
-        }
-      });
-
-      // If rejected, unlink the expenses so they can be grouped again
-      if (action === 'REJECT') {
-        await tx.pettyCashExpense.updateMany({
-          where: { replenishmentId: id },
-          data: { replenishmentId: null, status: 'PENDING' }
-        });
-      }
-
-      return { success: true, req: updated };
+    const result = await fetchWithAuth(`/${ROUTE_NAME}/processPettyCashReplenishment`, {
+      method: 'POST',
+      body: JSON.stringify({ id, action, reviewerRemarks, approverId }),
     });
+    // Original function didn't have revalidatePath, so none here.
+    return result;
   } catch (error: any) {
+    console.error('Error processing PC replenishment:', error);
     return { success: false, error: error.message };
   }
 }
@@ -288,40 +160,14 @@ export async function releasePettyCashReplenishment(
   receiverId: string
 ) {
   try {
-    return await prisma.$transaction(async (tx) => {
-      const req = await tx.pettyCashReplenishment.findUnique({ 
-        where: { id },
-        include: { account: true, expenses: true }
-      });
-      if (!req || req.status !== 'APPROVED') throw new Error('Request not found or not approved');
-
-      // Update request to RELEASED and CLOSED
-      const updated = await tx.pettyCashReplenishment.update({
-        where: { id },
-        data: {
-          status: 'CLOSED',
-          releaseDate: new Date(),
-          releaseMode,
-          releaseRefNo,
-          receiverId
-        }
-      });
-
-      // Mark all expenses as LIQUIDATED
-      await tx.pettyCashExpense.updateMany({
-        where: { replenishmentId: id },
-        data: { status: 'LIQUIDATED' }
-      });
-
-      // Restore Account Balance
-      await tx.pettyCashAccount.update({
-        where: { id: req.accountId },
-        data: { currentBalance: { increment: req.amountRequested } }
-      });
-
-      return { success: true, req: updated };
+    const result = await fetchWithAuth(`/${ROUTE_NAME}/releasePettyCashReplenishment`, {
+      method: 'POST',
+      body: JSON.stringify({ id, releaseMode, releaseRefNo, receiverId }),
     });
+    // Original function didn't have revalidatePath, so none here.
+    return result;
   } catch (error: any) {
+    console.error('Error releasing PC replenishment:', error);
     return { success: false, error: error.message };
   }
 }

@@ -1,26 +1,61 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
-export async function updatePOStatus(poId: string, status: string) {
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
-  
-  if (!sessionId) throw new Error('Not authenticated');
+// Standard fetchWithAuth definition
+async function fetchWithAuth(url: string, options: RequestInit) {
+  // In a real application, this would handle authentication tokens (e.g., from cookies, JWT, etc.)
+  // For this example, we'll just forward the request, ensuring JSON content type.
+  // Replace '/api' with your actual AWS backend API endpoint if it's different.
+  const API_BASE_URL = process.env.NEXT_PUBLIC_AWS_API_BASE_URL || 'http://localhost:3001'; // Example base URL
 
-  const data: any = { status };
-  
-  if (status === 'ISSUED') {
-    data.approverId = sessionId; // The Project Director approves
-  }
-
-  await prisma.purchaseOrder.update({
-    where: { id: poId },
-    data
+  const response = await fetch(`${API_BASE_URL}${url}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+      // Add auth token if available, e.g.:
+      // 'Authorization': `Bearer ${getAuthTokenFromCookieOrSession()}`
+    },
   });
 
-  revalidatePath(`/procurement/${poId}`);
-  revalidatePath('/procurement/purchase-orders');
+  if (!response.ok) {
+    let errorData: any;
+    try {
+      errorData = await response.json();
+    } catch (e) {
+      errorData = { message: 'Unknown error', status: response.status };
+    }
+    throw new Error(errorData.error || errorData.message || `Failed to fetch data with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function updatePOStatus(poId: string, status: string) {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get('session')?.value; // This session ID might represent the approverId
+  
+  if (!sessionId) {
+    throw new Error('Not authenticated');
+  }
+
+  const body: { poId: string; status: string; approverId?: string } = { poId, status };
+  
+  if (status === 'ISSUED') {
+    body.approverId = sessionId; // Pass the sessionId as approverId to the backend
+  }
+
+  const result = await fetchWithAuth('/poUpdates/updatePOStatus', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+  if (result.success) {
+    revalidatePath(`/procurement/${poId}`);
+    revalidatePath('/procurement/purchase-orders');
+  } else {
+    throw new Error(result.error || 'Failed to update PO status');
+  }
 }

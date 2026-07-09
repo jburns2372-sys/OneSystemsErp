@@ -1,222 +1,69 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
-import { requirePermission } from '@/lib/permissions';
-import { submitTransaction, approveTransaction } from '@/lib/workflow';
-import { validateTransactionWithAI } from './aiValidationActions';
+import { revalidatePath } from 'next/cache';
+
+const BACKEND_URL = process.env.AWS_BACKEND_URL || 'http://localhost:4000';
+
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const cookieStore = await cookies();
+  const session = cookieStore.get('session')?.value;
+  const activeProjectId = cookieStore.get('activeProjectId')?.value;
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+
+  const headers = new Headers(options.headers);
+  if (session) headers.set('x-user-session', session);
+  if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
+  if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
+  headers.set('Content-Type', 'application/json');
+
+  const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Backend Error: ${res.status} ${errorText}`);
+  }
+  return res.json();
+}
 
 export async function createPOFromMRF(mrId: string, items: { consolidatedBoqItemId: string, quantity: number, unitCost: number, supplierId: string }[]) {
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
-  
-  if (!sessionId) {
-    throw new Error('Not authenticated');
-  }
-
-  const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
-  if (!currentUser) throw new Error('User not found');
-
-  await requirePermission(currentUser.id, 'PURCHASE_ORDER', 'canCreate');
-
-  // Group items by supplierId
-  const supplierGroups = items.reduce((groups: Record<string, any[]>, item) => {
-    if (!groups[item.supplierId]) {
-      groups[item.supplierId] = [];
-    }
-    groups[item.supplierId].push(item);
-    return groups;
-  }, {});
-
-  // === AI VALIDATION INTERCEPTOR ===
-  const validation = await validateTransactionWithAI(
-    'Purchase Order Generation',
-    {
-      action: 'Generate Purchase Orders from MRF',
-      mrId,
-      itemsToProcure: items
-    },
-    currentUser.id,
-    currentUser.role || 'PURCHASING_OFFICER'
-  );
-
-  if (validation.validationStatus === 'BLOCKING ISSUE') {
-    return { 
-      success: false, 
-      error: `AI Blocked Transaction: ${validation.findings}`,
-      validationLogId: validation.validationLogId 
-    };
-  }
-  // =================================
-
-  const createdPOIds = [];
-  
-  // Get highest PO number for safe incrementing
-  const currentYear = new Date().getFullYear();
-  const prefix = `PO-${currentYear}-`;
-  const lastPO = await prisma.purchaseOrder.findFirst({
-    where: { poNumber: { startsWith: prefix } },
-    orderBy: { poNumber: 'desc' },
-    select: { poNumber: true }
+  const result = await fetchWithAuth('/api/procurement/po/from-mrf', {
+    method: 'POST',
+    body: JSON.stringify({ mrId, items })
   });
 
-  let count = 0;
-  if (lastPO && lastPO.poNumber) {
-    const lastInt = parseInt(lastPO.poNumber.substring(prefix.length), 10);
-    if (!isNaN(lastInt)) count = lastInt;
+  if (result.success) {
+    revalidatePath('/procurement/purchase-orders');
+    revalidatePath('/material-requests');
   }
 
-  // Create a PO for each supplier
-  for (const supplierId of Object.keys(supplierGroups)) {
-    const supplierItems = supplierGroups[supplierId];
-    
-    // Fetch supplier to check VAT status
-    const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } });
-    const isVatable = supplier?.isVatable ?? false;
-
-    const totalAmount = supplierItems.reduce((acc, item) => acc + (item.quantity * item.unitCost), 0);
-    
-    let netAmount = totalAmount;
-    let vatAmount = 0;
-
-    if (isVatable) {
-      // Government accepted formula: Gross Amount / 1.12 = Vatable Amount (Net Amount)
-      netAmount = totalAmount / 1.12;
-      vatAmount = totalAmount - netAmount; // Equivalent to netAmount * 0.12
-    }
-    
-    count++;
-    const poNumber = `PO-${new Date().getFullYear()}-${String(count).padStart(4, '0')}`;
-
-    const po = await prisma.purchaseOrder.create({
-      data: {
-        poNumber,
-        status: 'FOR_REVIEW', // Sends it to Project Director
-        supplierId,
-        mrId,
-        preparerId: sessionId,
-        totalAmount,
-        netAmount,
-        vatAmount,
-        items: {
-          create: supplierItems.map(item => ({
-            quantity: item.quantity,
-            unitCost: item.unitCost,
-            consolidatedBoqItemId: item.consolidatedBoqItemId
-          }))
-        }
-      }
-    });
-
-    // Enforce Workflow Submission
-    await submitTransaction(currentUser.id, currentUser.role || 'PURCHASING_OFFICER', 'PURCHASE_ORDER', po.id);
-    
-    createdPOIds.push(po.id);
-  }
-
-  // Mark MRF as procured
-  await prisma.materialRequest.update({
-    where: { id: mrId },
-    data: { status: 'FULLY_PROCURED' }
-  });
-
-  revalidatePath('/procurement/purchase-orders');
-  revalidatePath('/material-requests');
-  
-  return { success: true, createdPOIds };
+  return result;
 }
 
 export async function approvePurchaseOrder(poId: string) {
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
-  
-  if (!sessionId) throw new Error('Not authenticated');
-
-  const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
-  if (!currentUser) throw new Error('User not found');
-
-  await requirePermission(currentUser.id, 'PURCHASE_ORDER', 'canApprove');
-
-  const po = await prisma.purchaseOrder.findUnique({
-    where: { id: poId },
-    include: {
-      items: true,
-      mr: true,
-      supplier: true
-    }
-  });
-  if (!po) throw new Error('PO not found');
-
-  // Maker-Checker specific to PO logic
-  if (po.preparerId === currentUser.id && currentUser.role !== 'SUPER_ADMIN' && currentUser.role !== 'ADMIN') {
-    throw new Error('Self-approval blocked by Workflow Engine.');
-  }
-
-  await prisma.purchaseOrder.update({
-    where: { id: poId },
-    data: {
-      status: 'APPROVED',
-      approverId: currentUser.id
-    }
+  const result = await fetchWithAuth(`/api/procurement/po/${poId}/approve`, {
+    method: 'POST'
   });
 
-  // [HOOK] Create CommitmentLedger entries for each item
-  if (po.mr && po.mr.projectId) {
-    for (const item of po.items) {
-      if (item.consolidatedBoqItemId) {
-        // Also update the committedCost on the Procurement Benchmark
-        const lineTotal = item.quantity * item.unitCost;
-        
-        await prisma.commitmentLedger.create({
-          data: {
-            projectId: po.mr.projectId,
-            consolidatedBoqItemId: item.consolidatedBoqItemId,
-            commitmentType: 'PURCHASE_ORDER',
-            supplierName: po.supplier?.name || '',
-            approvedAmount: lineTotal,
-            remainingCommitment: lineTotal,
-            status: 'ACTIVE'
-          }
-        });
-
-        await prisma.consolidatedBOQItem.update({
-          where: { id: item.consolidatedBoqItemId },
-          data: {
-            committedCost: { increment: lineTotal }
-          }
-        });
-      }
-    }
+  if (result.success) {
+    revalidatePath('/procurement/purchase-orders');
   }
 
-  await approveTransaction(currentUser.id, currentUser.role || 'PROJECT_DIRECTOR', 'PURCHASE_ORDER', po.id, 'Approved PO digitally');
-
-  revalidatePath('/procurement/purchase-orders');
-  return { success: true };
+  return result;
 }
 
 export async function submitPOForApproval(poId: string) {
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
-  
-  if (!sessionId) throw new Error('Not authenticated');
-
-  const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
-  if (!currentUser) throw new Error('User not found');
-
-  const po = await prisma.purchaseOrder.findUnique({ where: { id: poId } });
-  if (!po) throw new Error('PO not found');
-
-  await prisma.purchaseOrder.update({
-    where: { id: poId },
-    data: { status: 'FOR_REVIEW' }
+  const result = await fetchWithAuth(`/api/procurement/po/${poId}/submit`, {
+    method: 'POST'
   });
 
-  await submitTransaction(currentUser.id, currentUser.role || 'PURCHASING_OFFICER', 'PURCHASE_ORDER', po.id);
+  if (result.success) {
+    revalidatePath(`/procurement/purchase-orders/${poId}`);
+    revalidatePath('/procurement/purchase-orders');
+  }
 
-  revalidatePath(`/procurement/purchase-orders/${poId}`);
-  revalidatePath('/procurement/purchase-orders');
-  return { success: true };
+  return result;
 }
-

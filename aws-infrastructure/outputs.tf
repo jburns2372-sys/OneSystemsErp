@@ -23,3 +23,8 @@ output "amplify_app_id" {
   description = "The ID of the deployed AWS Amplify app."
   value       = aws_amplify_app.erp_amplify_app.id
 }
+
+output "backend_api_url" {
+  description = "The URL of the deployed Elastic Beanstalk Backend API."
+  value       = "http://${aws_elastic_beanstalk_environment.erp_backend_env.cname}"
+}

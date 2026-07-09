@@ -1,58 +1,56 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { generateText } from 'ai';
-import { google } from '@ai-sdk/google';
+import { revalidatePath } from 'next/cache';
+
+// Placeholder for fetchWithAuth - replace with actual implementation for auth if needed.
+// Assumes NEXT_PUBLIC_API_URL environment variable is set to your AWS backend URL.
+const fetchWithAuth = async <T = any>(endpoint: string, options?: RequestInit): Promise<T> => {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!apiUrl) {
+    throw new Error('NEXT_PUBLIC_API_URL is not defined. Please set it in your environment variables.');
+  }
+
+  const headers = {
+    'Content-Type': 'application/json',
+    // Add authentication headers here if your AWS backend requires them,
+    // e.g., 'Authorization': `Bearer ${await getAuthToken()}`
+    ...options?.headers,
+  };
+
+  const response = await fetch(`${apiUrl}${endpoint}`, {
+    ...options,
+    headers,
+    cache: options?.cache || 'no-store' // Server Actions typically want fresh data
+  });
+
+  if (!response.ok) {
+    let errorData: any = {};
+    try {
+      errorData = await response.json();
+    } catch (e) {
+      // If response is not JSON, use statusText
+      errorData.message = response.statusText;
+    }
+    throw new Error(errorData.error || errorData.message || `API request failed with status ${response.status}`);
+  }
+  return response.json();
+};
 
 export async function askERPAssistant(question: string) {
   try {
-    // 1. Fetch the Knowledge Center Context
-    const activeRules = await prisma.knowledgeRecord.findMany({
-      where: { status: 'Approved' },
-      select: {
-        title: true,
-        description: true,
-        relatedModule: true,
-        documentType: true,
-        notebookUrl: true,
-      }
+    const data = await fetchWithAuth('/api/aiAssistantActions/askERPAssistant', {
+      method: 'POST',
+      body: JSON.stringify({ question }),
     });
 
-    // 2. Build the context prompt
-    const knowledgeContext = activeRules.map(rule => `
-[${rule.documentType}] - ${rule.relatedModule}: ${rule.title}
-Details: ${rule.description}
-Reference: ${rule.notebookUrl || 'None'}
-`).join('\n');
+    // No revalidatePath/Tag in original, so not adding here.
+    // If a revalidation was present in the original, it would go here:
+    // revalidatePath('/some-path'); 
 
-    const systemPrompt = `
-You are the ONESYSTEMS AI ERP Assistant. You help construction and project management users navigate the ERP.
-
-MANDATORY ERP KNOWLEDGE ENFORCEMENT:
-The Knowledge Center notebooks are the absolute source-of-truth references for all ERP rules, formulas, and validations.
-You MUST ALWAYS consult the applicable Knowledge Center notebook before answering, validating, generating, correcting, or approving any transaction related to Finance, Procurement, Payroll, or Progress Billing.
-You MUST NOT rely on assumptions when a notebook rule exists.
-If the user asks why a transaction is blocked, locked, recalculated, rejected, or flagged, you MUST explain the answer based on the applicable notebook rule.
-If the user asks you to change a formula, override validation, bypass approval, or edit a locked transaction, you MUST first check if the request violates the notebook rules.
-If the request violates a saved rule, you MUST WARN the user and require an authorized override or formal notebook revision.
-You must never silently override notebook rules. If there is a conflict between existing code/UI behavior and the notebook, the notebook rule PREVAILS.
-
-When citing a rule, explicitly mention the Notebook Name, the Rule Title, and the Module it applies to.
-
-### ACTIVE KNOWLEDGE CENTER CONTEXT ###
-${knowledgeContext}
-`;
-
-    const { text } = await generateText({
-      model: google('gemini-2.5-flash'),
-      system: systemPrompt,
-      prompt: question,
-      temperature: 0.2, // Low temperature for factual rule-based answers
-    });
-
-    return { success: true, answer: text };
+    return data; // This will be { success: true, answer: string } or { success: false, error: string }
   } catch (error: any) {
-    console.error('AI Assistant Error:', error);
-    return { success: false, error: error.message || 'Failed to process AI request.' };
+    console.error('Server Action Proxy Error:', error);
+    // Mimic the original error structure
+    return { success: false, error: error.message || 'Failed to process AI request through proxy.' };
   }
 }

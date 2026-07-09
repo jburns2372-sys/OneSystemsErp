@@ -1,9 +1,31 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { CognitoIdentityProviderClient, InitiateAuthCommand } from "@aws-sdk/client-cognito-identity-provider";
+
+// Standard fetchWithAuth wrapper
+async function fetchWithAuth(url: string, options?: RequestInit) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || `HTTP error! Status: ${response.status}`);
+  }
+  
+  // Assuming backend always returns { success: boolean, error?: string, ... }
+  if (data.success === false) {
+    throw new Error(data.error || 'Operation failed on backend');
+  }
+
+  return data;
+}
 
 export async function login(formData: FormData) {
   const email = formData.get('email') as string;
@@ -14,57 +36,56 @@ export async function login(formData: FormData) {
   }
 
   try {
-    const client = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
-    
-    // Authenticate with Amazon Cognito
-    const command = new InitiateAuthCommand({
-      AuthFlow: "USER_PASSWORD_AUTH",
-      ClientId: process.env.COGNITO_CLIENT_ID || "",
-      AuthParameters: {
-        USERNAME: email,
-        PASSWORD: password,
-      },
+    const data = await fetchWithAuth('/api/auth/login', { // Call AWS backend via API route 'auth'
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
     });
 
-    await client.send(command);
+    // If backend reports success and provides user info
+    if (data.success && data.user) {
+      // Create simple session cookie
+      const cookieStore = await cookies();
+      cookieStore.set('session', data.user.id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7 // 1 week
+      });
 
-    // Authentication successful in Cognito, now get internal user mapping
-    const user = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (!user) {
-      return { error: 'User authenticated in AWS but not found in ERP system' };
-    }
-
-    // Create simple session cookie
-    const cookieStore = await cookies();
-    cookieStore.set('session', user.id, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7 // 1 week
-    });
-
-    if (user.role === 'DIRECTORS') {
-      redirect('/executive/home');
+      if (data.user.role === 'DIRECTORS') {
+        redirect('/executive/home');
+      } else {
+        redirect('/');
+      }
     } else {
-      redirect('/');
+      // This case should ideally be caught by fetchWithAuth throwing an error,
+      // but as a fallback for unexpected successful-but-no-user responses.
+      return { error: data.error || 'Login failed due to unexpected response' };
     }
+
   } catch (error: any) {
-    console.error("Auth Error:", error);
-    // Handle Cognito specific errors
-    if (error.name === 'NotAuthorizedException' || error.name === 'UserNotFoundException') {
-        return { error: 'Invalid email or password' };
-    }
-    return { error: 'Authentication error: ' + (error.message || 'Unknown error') };
+    console.error("Auth Error (Next.js Proxy):", error);
+    return { error: error.message || 'Authentication error: Unknown error' };
   }
 }
 
 export async function logout() {
-  const cookieStore = await cookies();
-  cookieStore.delete('session');
-  cookieStore.delete('simulatedRole');
-  redirect('/login');
+  try {
+    // Call the backend endpoint (even if it performs no specific server-side logic for logout)
+    await fetchWithAuth('/api/auth/logout', { method: 'POST' });
+
+    const cookieStore = await cookies();
+    cookieStore.delete('session');
+    cookieStore.delete('simulatedRole');
+    redirect('/login');
+  } catch (error: any) {
+    console.error("Logout Error (Next.js Proxy):", error);
+    // Even if the backend call fails, attempt to clear client-side cookies for a better UX
+    const cookieStore = await cookies();
+    cookieStore.delete('session');
+    cookieStore.delete('simulatedRole');
+    redirect('/login'); // Redirect anyway
+    return { error: error.message || 'Logout failed, but session cleared.' };
+  }
 }

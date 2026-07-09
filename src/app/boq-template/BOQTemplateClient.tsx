@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { generateBOQTemplate } from "@/app/actions/boqTemplateService";
-import { uploadAndParseBOQ, approveBOQUpload } from "@/app/actions/boqUploadParser";
+import { uploadAndParseBOQ, checkBoqUploadStatus, approveBOQUpload } from "@/app/actions/boqUploadParser";
 import { Download, Upload, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -65,25 +65,48 @@ export default function BOQTemplateClient({ projects }: { projects: { id: string
         try {
           const base64 = (event.target?.result as string).split(",")[1];
           const res = await uploadAndParseBOQ(projectId, base64, file.name);
-          if (res.success) {
-            setUploadResult(res);
-            if (res.status === "VALIDATION_FAILED") {
-              toast.error("Validation failed. Please review the errors.");
-            } else {
-              toast.success("File uploaded and validated successfully!");
-            }
-            // Auto-scroll down to the validation report
-            setTimeout(() => {
-              window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-            }, 100);
-          } else {
-            toast.error(res.error || "Upload failed");
+          
+          if (!res.success) {
+             toast.error(res.error || "Upload failed");
+             setIsUploading(false);
+             e.target.value = "";
+             return;
           }
+
+          // Polling logic for background job
+          const jobId = res.jobId;
+          const pollInterval = setInterval(async () => {
+             const statusRes = await checkBoqUploadStatus(jobId);
+             
+             if (statusRes.success && statusRes.status === 'COMPLETED') {
+                clearInterval(pollInterval);
+                const finalResult = statusRes.result;
+                setUploadResult(finalResult);
+                
+                if (finalResult.status === "VALIDATION_FAILED") {
+                  toast.error("Validation failed. Please review the errors.");
+                } else {
+                  toast.success("File uploaded and validated successfully!");
+                }
+                
+                setTimeout(() => {
+                  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                }, 100);
+                setIsUploading(false);
+                e.target.value = "";
+             } else if (statusRes.success && statusRes.status === 'FAILED') {
+                clearInterval(pollInterval);
+                toast.error(statusRes.error || "Processing failed");
+                setIsUploading(false);
+                e.target.value = "";
+             }
+             // If PENDING or PROCESSING, just continue polling
+          }, 3000); // Check every 3 seconds
+
         } catch (innerErr: any) {
           toast.error(innerErr.message || "An unexpected error occurred during upload");
-        } finally {
           setIsUploading(false);
-          e.target.value = ""; // Reset file input so same file can be selected again
+          e.target.value = "";
         }
       };
       reader.readAsDataURL(file);

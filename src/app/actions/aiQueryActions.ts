@@ -1,101 +1,57 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 
-async function getUserId() {
-  const cookieStore = await cookies();
-  return cookieStore.get('session')?.value || '';
-}
+// Placeholder for fetchWithAuth function
+// In a real application, this would handle base URL, authentication tokens,
+// error handling, and other common fetch concerns.
+async function fetchWithAuth(url: string, options?: RequestInit) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options?.headers || {}),
+  };
 
-async function verifyAccess() {
-  const userId = await getUserId();
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) throw new Error('Unauthorized');
+  // Assume NEXT_PUBLIC_AWS_BACKEND_URL is set in your Next.js environment variables
+  const response = await fetch(`${process.env.NEXT_PUBLIC_AWS_BACKEND_URL}${url}`, {
+    ...options,
+    headers,
+    // Ensure cookies are forwarded if needed by the backend for session management
+    // For this specific migration, we're explicitly passing relevant cookie values in the body.
+    // 'credentials': 'include' might be used for other auth patterns.
+  });
 
-  const cookieStore = await cookies();
-  const simulatedRole = cookieStore.get('simulatedRole')?.value;
-  
-  const effectiveRole = (simulatedRole && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS')) 
-    ? simulatedRole 
-    : user.role;
-
-  const allowedRoles = ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'PROJECT_DIRECTOR', 'DIRECTORS'];
-
-  if (!allowedRoles.includes(effectiveRole)) {
-    throw new Error('Unauthorized: Executive Intelligence access required');
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+    throw new Error(errorData.error || response.statusText || 'Failed to fetch data from backend');
   }
-  return user;
+
+  return response.json();
 }
 
 export async function processExecutiveQuery(query: string): Promise<string> {
-  await verifyAccess();
-  
   const cookieStore = await cookies();
-  const currentProjectId = cookieStore.get('executive_projectId')?.value || 'ALL';
+  // Extract cookie values needed by the backend logic
+  const userId = cookieStore.get('session')?.value || '';
+  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+  const executive_projectId = cookieStore.get('executive_projectId')?.value;
 
-  const q = query.toLowerCase();
+  // Call the AWS backend endpoint
+  const response = await fetchWithAuth('/api/aiQueryActions/processExecutiveQuery', {
+    method: 'POST',
+    body: JSON.stringify({
+      query, // Original function argument
+      userId, // Pass userId from cookie to backend for verification
+      simulatedRole, // Pass simulatedRole from cookie to backend for verification
+      executive_projectId // Pass project ID from cookie to backend for query filtering
+    }),
+  });
 
-  // Keyword Matching Logic
-
-  // 1. Contract / Budget Queries
-  if (q.includes('contract') || q.includes('budget') || q.includes('how much') || q.includes('amount')) {
-    const projectFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
-    if (currentProjectId !== 'ALL') {
-      projectFilter.id = currentProjectId;
-    }
-
-    const projects = await prisma.project.findMany({
-      where: projectFilter,
-      select: { name: true, contractAmount: true }
-    });
-    
-    if (projects.length === 0) return 'There are currently no active projects with recorded contract amounts in the database.';
-    
-    let total = 0;
-    let response = 'Here are the contract amounts for the active projects in the database:\n\n';
-    
-    projects.forEach(p => {
-      total += p.contractAmount;
-      response += `- **${p.name}**: ₱${p.contractAmount.toLocaleString()}\n`;
-    });
-    
-    response += `\n**Total Active Portfolio Value:** ₱${total.toLocaleString()}`;
-    return response;
+  // Handle the response from the backend
+  if (!response.success) {
+    throw new Error(response.error || 'Failed to process query');
   }
 
-  // 2. Risk / Delays / Validation Queries
-  if (q.includes('risk') || q.includes('delay') || q.includes('validate') || q.includes('overbilling') || q.includes('validation')) {
-    const scoreFilter: any = {};
-    if (currentProjectId !== 'ALL') {
-      scoreFilter.projectId = currentProjectId;
-    }
+  // No revalidatePath or revalidateTag in original, so none needed here.
 
-    const scores = await prisma.projectValidationScore.findMany({
-      where: scoreFilter,
-      include: { project: { select: { name: true } } },
-      orderBy: { validationConfidenceScore: 'asc' } // Lowest score first
-    });
-
-    if (scores.length === 0) return 'I could not find any AI validation records in the database.';
-
-    const highRisk = scores.filter(s => s.riskLevel === 'RED' || s.riskLevel === 'ORANGE' || s.riskLevel === 'YELLOW');
-    
-    if (highRisk.length === 0) {
-      return 'All projects are currently maintaining a GREEN validation status with no immediate risks detected in the system.';
-    }
-
-    let response = 'Based on the latest database validation runs, here are the projects with notable risk levels:\n\n';
-    highRisk.forEach(s => {
-      response += `- **${s.project.name}**: Risk Level **${s.riskLevel}**. AI Confidence Score: **${s.validationConfidenceScore.toFixed(1)}%**. Evidence completeness is at ${s.evidenceCompletenessScore.toFixed(0)}%.\n`;
-    });
-
-    if (q.includes('overbilling')) {
-      response += '\nIf there is a high variance between reported progress and AI validated progress with a YELLOW or RED risk level, there is a risk of overbilling. I recommend holding further disbursements for these specific projects pending a site inspection.';
-    }
-    return response;
-  }
-
-  // Fallback for unrelated queries to prevent hallucination
-  return "I cannot find factual data related to your query in the ERP database. As an AI strictly integrated with this project management system, I only provide answers based on recorded budgets, validations, and project statuses.";
+  return response.result;
 }

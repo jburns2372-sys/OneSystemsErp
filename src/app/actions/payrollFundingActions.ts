@@ -1,160 +1,73 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { requirePermission } from '@/lib/permissions';
-import { submitTransaction, approveTransaction } from '@/lib/workflow';
+
+// Placeholder for fetchWithAuth - replace with your actual implementation
+const fetchWithAuth = async (
+  url: string,
+  options: RequestInit
+): Promise<any> => {
+  // In a real application, you would add authentication headers here.
+  // For example, by getting a token from cookies or a session.
+  const headers = {
+    'Content-Type': 'application/json',
+    // 'Authorization': `Bearer ${YOUR_AUTH_TOKEN}`,
+    ...options.headers,
+  };
+
+  // Ensure process.env.NEXT_PUBLIC_API_BASE_URL is defined in your .env file (e.g., http://localhost:3001)
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001'; // Default for development
+  const response = await fetch(baseUrl + url, {
+    ...options,
+    headers,
+  });
+
+  // Parse error responses from the backend.
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(errorData.error || errorData.message || `API Error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
 
 export async function createFundingRequest(periodId: string, destinationAccountId: string, userId: string, boqItemId?: string) {
   try {
-    const currentUser = await prisma.user.findFirst();
-    if (currentUser) {
-      userId = currentUser.id;
-      await requirePermission(currentUser.id, 'PAYROLL', 'canSubmit');
-    }
-
-    const period = await prisma.payrollPeriod.findUnique({
-      where: { id: periodId },
-      include: { payrolls: true }
+    const data = await fetchWithAuth('/api/payrollFundingActions/createFundingRequest', {
+      method: 'POST',
+      body: JSON.stringify({ periodId, destinationAccountId, userId, boqItemId }),
     });
 
-    if (!period) throw new Error('Payroll period not found');
-    if (!period.isLocked) throw new Error('Payroll must be locked before requesting funding');
-
-    const totalNetPay = period.payrolls.reduce((sum, p) => sum + p.netPay, 0);
-    // Rough estimate for transfer charges
-    const estimatedCharges = 500; 
-    const totalRequiredFunding = totalNetPay + estimatedCharges;
-
-    const account = await prisma.payrollBankAccount.findUnique({
-      where: { id: destinationAccountId }
-    });
-
-    if (!account) throw new Error('Destination account not found');
-
-    const availablePayrollBalance = account.currentAvailableBalance;
-    const fundingShortage = Math.max(0, totalRequiredFunding - availablePayrollBalance);
-
-    const fundingRequestNumber = `FR-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-
-    const request = await prisma.payrollFundingRequest.create({
-      data: {
-        fundingRequestNumber,
-        payrollPeriodId: periodId,
-        destinationAccountId,
-        totalNetPay,
-        estimatedCharges,
-        totalRequiredFunding,
-        availablePayrollBalance,
-        fundingShortage,
-        preparedById: userId,
-        fundingStatus: 'PENDING'
-      }
-    });
-
-    if (currentUser) {
-      await submitTransaction(currentUser.id, 'HR_OFFICER', 'PAYROLL', request.id);
-    }
-
-    if (boqItemId) {
-      const awardedItem = await prisma.awardedBOQItem.findUnique({
-        where: { id: boqItemId }
-      });
-      
-      const targetProjectId = period.projectId || awardedItem?.projectId;
-
-      if (targetProjectId) {
-        await prisma.expense.create({
-          data: {
-            amount: totalRequiredFunding,
-            netAmount: totalNetPay,
-            vatAmount: 0,
-            date: new Date(),
-            category: 'PAYROLL',
-            description: `Payroll Funding Request ${fundingRequestNumber}`,
-            receiptRef: fundingRequestNumber,
-            status: 'PENDING',
-            projectId: targetProjectId,
-            loggedById: userId,
-            awardedBoqItemId: boqItemId
-          }
-        });
-      }
+    if (!data.success) {
+      // Backend error messages are passed through
+      throw new Error(data.error || 'Failed to create funding request');
     }
 
     revalidatePath(`/payroll/${periodId}`);
-    return { success: true, requestId: request.id };
+    return { success: true, requestId: data.requestId };
   } catch (error: any) {
-    console.error('Error creating funding request:', error);
+    console.error('Error creating funding request via proxy:', error);
     return { success: false, error: error.message };
   }
 }
 
 export async function approveFundingRequest(requestId: string, userId: string) {
   try {
-    const request = await prisma.payrollFundingRequest.findUnique({
-      where: { id: requestId },
-      include: { destinationAccount: true }
+    const data = await fetchWithAuth('/api/payrollFundingActions/approveFundingRequest', {
+      method: 'POST',
+      body: JSON.stringify({ requestId, userId }),
     });
 
-    if (!request) throw new Error('Funding request not found');
-
-    const currentUser = await prisma.user.findFirst();
-    if (currentUser) {
-      userId = currentUser.id;
-      await requirePermission(currentUser.id, 'PAYROLL', 'canApprove');
-      
-      // Enforce Maker-Checker
-      if (request.preparedById === userId && currentUser.role !== 'SUPER_ADMIN' && currentUser.role !== 'ADMIN') {
-        throw new Error('Self-approval is strictly prohibited. The Maker cannot be the Approver.');
-      }
-      
-      await approveTransaction(currentUser.id, currentUser.role, 'PAYROLL', request.id, 'Approved Payroll Funding');
+    if (!data.success) {
+      // Backend error messages are passed through
+      throw new Error(data.error || 'Failed to approve funding request');
     }
 
-    // Update account balance
-    await prisma.payrollBankAccount.update({
-      where: { id: request.destinationAccountId },
-      data: {
-        currentAvailableBalance: { increment: request.totalRequiredFunding },
-        reservedPayrollBalance: { increment: request.totalRequiredFunding }
-      }
-    });
-
-    // Create Ledger
-    await prisma.payrollBankLedger.create({
-      data: {
-        payrollBankAccountId: request.destinationAccountId,
-        transactionType: 'FUNDING',
-        amount: request.totalRequiredFunding,
-        balanceAfter: request.destinationAccount.currentAvailableBalance + request.totalRequiredFunding,
-        referenceId: request.id,
-        referenceNumber: request.fundingRequestNumber,
-        remarks: 'Funding Approved & Transferred',
-        createdById: userId
-      }
-    });
-
-    // Update Request
-    await prisma.payrollFundingRequest.update({
-      where: { id: requestId },
-      data: {
-        fundingStatus: 'FUNDED',
-        approvedById: userId,
-        dateFunded: new Date()
-      }
-    });
-
-    // Automatically approve the linked BOQ expense if one exists
-    await prisma.expense.updateMany({
-      where: { receiptRef: request.fundingRequestNumber },
-      data: { status: 'APPROVED', approverId: userId }
-    });
-
-    revalidatePath(`/payroll/${request.payrollPeriodId}`);
+    // The backend now returns payrollPeriodId for revalidation.
+    revalidatePath(`/payroll/${data.payrollPeriodId}`); 
     return { success: true };
   } catch (error: any) {
-    console.error('Error approving funding request:', error);
+    console.error('Error approving funding request via proxy:', error);
     return { success: false, error: error.message };
   }
 }
