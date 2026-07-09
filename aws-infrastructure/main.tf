@@ -54,6 +54,25 @@ resource "aws_s3_bucket_cors_configuration" "erp_bucket_cors" {
 # ------------------------------------------------------------------------------
 # 2. Amazon RDS (PostgreSQL Database)
 # ------------------------------------------------------------------------------
+resource "aws_security_group" "erp_db_sg" {
+  name        = "onesystemserp-db-sg-${var.environment}"
+  description = "Allow inbound PostgreSQL traffic"
+
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 resource "aws_db_instance" "erp_database" {
   identifier           = "onesystemserp-db-${var.environment}"
   allocated_storage    = 20
@@ -65,6 +84,7 @@ resource "aws_db_instance" "erp_database" {
   parameter_group_name = "default.postgres15"
   skip_final_snapshot  = true
   publicly_accessible  = true
+  vpc_security_group_ids = [aws_security_group.erp_db_sg.id]
 }
 
 # ------------------------------------------------------------------------------
@@ -108,7 +128,6 @@ resource "aws_amplify_app" "erp_amplify_app" {
   environment_variables = {
     DATABASE_URL      = "postgresql://${aws_db_instance.erp_database.username}:${aws_db_instance.erp_database.password}@${aws_db_instance.erp_database.endpoint}/${aws_db_instance.erp_database.db_name}"
     COGNITO_CLIENT_ID = aws_cognito_user_pool_client.erp_pool_client.id
-    AWS_REGION        = var.aws_region
   }
 }
 

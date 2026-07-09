@@ -44,3 +44,7 @@ next-env.d.ts
 
 .vercel
 .env*
+
+aws-infrastructure/.terraform/
+aws-infrastructure/terraform.exe
+aws-infrastructure/*.tfstate*
