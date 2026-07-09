@@ -66,10 +66,7 @@ export async function getLiveThreatFeed(limit: number = 50, includeSimulated: bo
       systemResponse: true,
       result: true,
       status: true,
-      simulated: true,
-      simulationRunId: true,
-      expectedResponse: true,
-      actualResponse: true,
+
     }
   });
 }

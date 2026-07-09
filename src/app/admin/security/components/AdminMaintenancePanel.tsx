@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { clearCurrentSimulationRun, clearAllSimulationData } from '@/app/actions/simulationClearActions';
+import { clearCurrentSimulationRun, clearAllSimulationRuns } from '@/app/actions/simulationClearActions';
 import { getSimulationStats } from '@/app/actions/simulationActions';
 import { AlertOctagon, Archive, Trash2, ShieldAlert } from 'lucide-react';
 

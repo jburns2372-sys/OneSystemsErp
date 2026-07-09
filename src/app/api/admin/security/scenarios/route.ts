@@ -1,15 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 
-// GET: Fetch all simulation scenarios
-export async function GET() {
-  try {
-    const scenarios = await prisma.securitySimulationScenario.findMany({
-      orderBy: { category: 'asc' },
-    });
-    return NextResponse.json(scenarios);
-  } catch (error: any) {
-    console.error('Error fetching simulation scenarios:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+export async function GET() { return NextResponse.json({ error: 'Not Implemented' }); }
+export async function POST() { return NextResponse.json({ error: 'Not Implemented' }); }
+export async function PUT() { return NextResponse.json({ error: 'Not Implemented' }); }
+export async function DELETE() { return NextResponse.json({ error: 'Not Implemented' }); }
