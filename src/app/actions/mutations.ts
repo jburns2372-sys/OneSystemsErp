@@ -480,10 +480,7 @@ export async function createProject(formData: FormData) {
       endDate,
       originalContractDuration,
       originalCompletionDate: endDate,
-      letterheadLine1: extractedLine1 || null,
-      letterheadLine2: extractedLine2 || null,
-      letterheadLine3: extractedLine3 || null,
-      letterheadLogo: extractedLogo || null,
+
       awardedBoqItems: {
         create: parsedItems
       }
