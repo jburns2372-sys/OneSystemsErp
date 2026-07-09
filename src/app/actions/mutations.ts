@@ -769,10 +769,7 @@ export async function uploadProcurementBenchmark(formData: FormData) {
         where: { id: projectId },
         data: {
           contractAmountVATInclusive: true,
-          letterheadLine1: line1,
-          letterheadLine2: line2,
-          letterheadLine3: line3,
-          letterheadLogo: logoData || undefined,
+
         }
       });
     } else {
