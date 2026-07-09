@@ -44,7 +44,7 @@ export default function AdminMaintenancePanel() {
     try {
       let res;
       if (modalAction === 'ALL') {
-        res = await clearAllSimulationData(archiveBeforeClear);
+        res = await clearAllSimulationRuns(archiveBeforeClear);
       } else if (modalAction === 'CURRENT' && currentRunId) {
         res = await clearCurrentSimulationRun(currentRunId, archiveBeforeClear);
       }
