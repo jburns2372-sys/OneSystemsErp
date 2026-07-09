@@ -1,6 +1,85 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { parseWorkbook } from '@/lib/excel/excel-workbook-parser';
+import { extractBOQItems } from '@/lib/boq/boq-item-extractor';
+import { validateFormulas } from '@/lib/excel/excel-formula-validator';
+import fs from 'fs';
+import path from 'path';
 
-export async function GET() { return NextResponse.json({ error: 'Not Implemented' }); }
-export async function POST() { return NextResponse.json({ error: 'Not Implemented' }); }
-export async function PUT() { return NextResponse.json({ error: 'Not Implemented' }); }
-export async function DELETE() { return NextResponse.json({ error: 'Not Implemented' }); }
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }>}) {
+  try {
+    const formData = await req.formData();
+    const file = formData.get('file') as File;
+    if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+
+    const projectId = (await params).id;
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 1. Save Layer 1: Source File
+    const dir = path.join(process.cwd(), 'public', 'uploads', 'templates', projectId);
+    fs.mkdirSync(dir, { recursive: true });
+    const safeName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const filePath = path.join(dir, safeName);
+    fs.writeFileSync(filePath, buffer);
+
+    // 2. Create Upload Record
+    const upload = await prisma.uploadedWorkbookFile.create({
+      data: {
+        projectId,
+        originalFilename: file.name,
+        storagePath: filePath,
+        preservedOriginalUrl: `/uploads/templates/${projectId}/${safeName}`,
+        uploadedBy: 'SYSTEM_USER', // Or from session
+        status: 'PROCESSING'
+      }
+    });
+
+    // 3. Parse & Snapshot Layer
+    const { layout, cellCount, workbook } = await parseWorkbook(buffer, upload.id, projectId);
+    const sheet = workbook.getWorksheet('BOQ_DATA_ENTRY');
+    
+    if (!sheet) {
+      await prisma.uploadedWorkbookFile.update({
+        where: { id: upload.id },
+        data: { status: 'FAILED', validationStatus: 'CRITICAL_ERROR', validationErrorsJson: JSON.stringify({ error: "Missing BOQ_DATA_ENTRY sheet" }) }
+      });
+      return NextResponse.json({ error: 'Missing BOQ_DATA_ENTRY sheet' }, { status: 400 });
+    }
+
+    // 4. Extract BOQ Structured Data
+    const { itemsCount } = await extractBOQItems(sheet, upload.id, projectId);
+
+    // 5. Validate Formulas
+    const validation = await validateFormulas(sheet, upload.id);
+
+    // 6. Finalize Status
+    const finalStatus = validation.success ? 'SUCCESS' : 'WARNINGS';
+    await prisma.uploadedWorkbookFile.update({
+      where: { id: upload.id },
+      data: {
+        status: 'PENDING_COMMIT',
+        validationStatus: finalStatus,
+        recognizedTemplate: true,
+        workbookMetadataJson: JSON.stringify({ cellCount, itemsCount, warnings: validation.warnings })
+      }
+    });
+
+    // 7. Audit
+    await prisma.workbookExtractionAudit.create({
+      data: {
+        uploadedWorkbookFileId: upload.id,
+        projectId,
+        action: 'TEMPLATE_UPLOADED_AND_PARSED',
+        status: 'SUCCESS',
+        message: `Parsed ${itemsCount} items. ${validation.criticalErrors} critical errors, ${validation.warnings} warnings.`
+      }
+    });
+
+    return NextResponse.json({ success: true, uploadId: upload.id });
+
+  } catch (error: any) {
+    console.error(error);
+    return NextResponse.json({ error: error.message || 'Upload failed' }, { status: 500 });
+  }
+}

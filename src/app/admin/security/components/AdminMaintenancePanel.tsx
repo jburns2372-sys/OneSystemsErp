@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { clearCurrentSimulationRun, clearAllSimulationRuns } from '@/app/actions/simulationClearActions';
+import { clearCurrentSimulationRun, clearAllSimulationData } from '@/app/actions/simulationClearActions';
 import { getSimulationStats } from '@/app/actions/simulationActions';
 import { AlertOctagon, Archive, Trash2, ShieldAlert } from 'lucide-react';
 
@@ -44,7 +44,7 @@ export default function AdminMaintenancePanel() {
     try {
       let res;
       if (modalAction === 'ALL') {
-        res = await clearAllSimulationRuns(archiveBeforeClear);
+        res = await clearAllSimulationData(archiveBeforeClear);
       } else if (modalAction === 'CURRENT' && currentRunId) {
         res = await clearCurrentSimulationRun(currentRunId, archiveBeforeClear);
       }

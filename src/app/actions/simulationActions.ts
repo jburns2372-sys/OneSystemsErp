@@ -24,24 +24,60 @@ export async function getSimulationScenarios() {
   const currentUser = await prisma.user.findFirst();
   if (!currentUser) throw new Error('Unauthorized');
 
-  return [];
+  return await prisma.securitySimulationScenario.findMany({
+    orderBy: { category: 'asc' },
+  });
 }
 
 export async function getSimulationStats() {
   const currentUser = await prisma.user.findFirst();
   if (!currentUser) throw new Error('Unauthorized');
 
-  return {
-    runsToday: 0,
-    passedRuns: 0,
-    failedRuns: 0,
-    readinessScore: 0,
-    detectionScore: 0,
-    responseScore: 0,
-    evidenceScore: 0,
-  };
-}
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-export async function getRecentSimulationRuns() {
-  return [];
+  const runsToday = await prisma.securitySimulationRun.count({
+    where: { startedAt: { gte: today } },
+  });
+
+  const passedRuns = await prisma.securitySimulationRun.count({
+    where: { 
+      startedAt: { gte: today },
+      overallResult: 'Passed'
+    },
+  });
+
+  const failedRuns = await prisma.securitySimulationRun.count({
+    where: { 
+      startedAt: { gte: today },
+      overallResult: 'Failed'
+    },
+  });
+
+  const allRuns = await prisma.securitySimulationRun.findMany({
+    where: { status: 'COMPLETED' },
+    select: { finalScore: true, detectionScore: true, responseScore: true, evidenceScore: true },
+  });
+
+  let avgFinalScore = 0;
+  let avgDetectionScore = 0;
+  let avgResponseScore = 0;
+  let avgEvidenceScore = 0;
+
+  if (allRuns.length > 0) {
+    avgFinalScore = allRuns.reduce((sum, run) => sum + (run.finalScore || 0), 0) / allRuns.length;
+    avgDetectionScore = allRuns.reduce((sum, run) => sum + (run.detectionScore || 0), 0) / allRuns.length;
+    avgResponseScore = allRuns.reduce((sum, run) => sum + (run.responseScore || 0), 0) / allRuns.length;
+    avgEvidenceScore = allRuns.reduce((sum, run) => sum + (run.evidenceScore || 0), 0) / allRuns.length;
+  }
+
+  return {
+    runsToday,
+    passedRuns,
+    failedRuns,
+    readinessScore: avgFinalScore,
+    detectionScore: avgDetectionScore,
+    responseScore: avgResponseScore,
+    evidenceScore: avgEvidenceScore,
+  };
 }

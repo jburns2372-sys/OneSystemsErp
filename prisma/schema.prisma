@@ -1,11 +1,11 @@
 generator client {
   provider = "prisma-client-js"
-  
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -4159,36 +4159,48 @@ model SecurityEvent {
   sessionId           String?
   message             String?
   blocked             Boolean   @default(false)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+
+  // Simulation Tracking Fields
+  simulationRunId  String?
+  expectedResponse String?
+  actualResponse   String?
+  simulationPassed Boolean?
+  simulationRun    SecuritySimulationRun? @relation(fields: [simulationRunId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   incident SecurityIncident? @relation(fields: [incidentId], references: [id])
 }
 
 model SecurityIncident {
-  id                String    @id @default(cuid())
-  title             String
-  description       String
-  severity          String
-  status            String
-  assignedTo        String?
-  affectedUserId    String?
-  affectedProjectId String?
-  affectedModule    String?
-  sourceIp          String?
-  countermeasure    String?
-  result            String?
-  dataExposure      String?
-  relatedEventIds   String?   // JSON Array
-  rootCause         String?
-  resolutionNotes   String?
-  adminNotes        String?
-  openedAt          DateTime  @default(now())
-  closedAt          DateTime?
-  createdBy         String?
-  updatedAt         DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  title                 String
+  description           String
+  severity              String
+  status                String
+  assignedTo            String?
+  affectedUserId        String?
+  affectedProjectId     String?
+  affectedModule        String?
+  sourceIp              String?
+  countermeasure        String?
+  result                String?
+  dataExposure          String?
+  relatedEventIds       String? // JSON Array
+  timelineJson          String?
+  evidenceJson          String?
+  linkedSimulationRunId String?
+  rootCause             String?
+  resolutionNotes       String?
+  adminNotes            String?
+  openedAt              DateTime  @default(now())
+  closedAt              DateTime?
+  createdBy             String?
+  updatedAt             DateTime  @updatedAt
 
-  events SecurityEvent[]
+  events        SecurityEvent[]
+  simulationRun SecuritySimulationRun? @relation("IncidentSimulationRun", fields: [linkedSimulationRunId], references: [id])
 }
 
 model SecurityRule {
@@ -4206,19 +4218,19 @@ model SecurityRule {
 }
 
 model UserSessionSecurityLog {
-  id             String    @id @default(cuid())
-  userId         String
-  sourceIp       String?
-  userAgent      String?
-  device         String?
+  id                  String    @id @default(cuid())
+  userId              String
+  sourceIp            String?
+  userAgent           String?
+  device              String?
   approximateLocation String?
-  loginAt        DateTime  @default(now())
-  lastActivityAt DateTime  @default(now())
-  revokedAt      DateTime?
-  revokedBy      String?
-  status         String    @default("ACTIVE")
-  riskScore      Float?
-  createdAt      DateTime  @default(now())
+  loginAt             DateTime  @default(now())
+  lastActivityAt      DateTime  @default(now())
+  revokedAt           DateTime?
+  revokedBy           String?
+  status              String    @default("ACTIVE")
+  riskScore           Float?
+  createdAt           DateTime  @default(now())
 }
 
 model AIQuerySecurityLog {
@@ -4255,42 +4267,45 @@ model FileSecurityLog {
   createdAt      DateTime @default(now())
 }
 
-
 model ThreatIp {
-  id             String    @id @default(cuid())
-  ipAddress      String    @unique
-  country        String?
-  city           String?
-  region         String?
-  latitude       Float?
-  longitude      Float?
-  isp            String?
-  asn            String?
-  organization   String?
-  firstSeen      DateTime  @default(now())
-  lastSeen       DateTime  @default(now())
-  attemptCount   Int       @default(0)
-  severity       String?
-  status         String    @default("NEW")
-  notes          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id           String   @id @default(cuid())
+  ipAddress    String   @unique
+  country      String?
+  city         String?
+  region       String?
+  latitude     Float?
+  longitude    Float?
+  isp          String?
+  asn          String?
+  organization String?
+  firstSeen    DateTime @default(now())
+  lastSeen     DateTime @default(now())
+  attemptCount Int      @default(0)
+  severity     String?
+  status       String   @default("NEW")
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model CountermeasureLog {
-  id                 String    @id @default(cuid())
+  id                 String   @id @default(cuid())
   securityEventId    String?
   countermeasureType String
   description        String
   result             String?
-  performedBySystem  Boolean   @default(true)
+  responseTimeMs     Int?
+  expectedResult     String?
+  actualResult       String?
+  passed             Boolean?
+  performedBySystem  Boolean  @default(true)
   performedByUserId  String?
-  timestamp          DateTime  @default(now())
-  createdAt          DateTime  @default(now())
+  timestamp          DateTime @default(now())
+  createdAt          DateTime @default(now())
 }
 
 model SensitiveExportLog {
-  id                 String    @id @default(cuid())
+  id                 String   @id @default(cuid())
   userId             String
   userEmail          String?
   role               String?
@@ -4300,8 +4315,99 @@ model SensitiveExportLog {
   recordCount        Int?
   dataClassification String?
   sourceIp           String?
-  approved           Boolean   @default(true)
-  blocked            Boolean   @default(false)
+  approved           Boolean  @default(true)
+  blocked            Boolean  @default(false)
   reason             String?
-  createdAt          DateTime  @default(now())
+  createdAt          DateTime @default(now())
+}
+
+model SecuritySimulationScenario {
+  id                     String   @id @default(cuid())
+  name                   String
+  description            String?
+  category               String
+  severity               String
+  targetModule           String
+  targetRoute            String?
+  simulatedRole          String?
+  simulatedSourceIp      String?
+  simulatedCountry       String?
+  simulatedCity          String?
+  latitude               Float?
+  longitude              Float?
+  mitreTechnique         String?
+  owaspCategory          String?
+  expectedDetection      String?
+  expectedCountermeasure String?
+  passFailCriteria       String?
+  enabled                Boolean  @default(true)
+  createdBy              String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  runs SecuritySimulationRun[]
+}
+
+model SecuritySimulationCampaign {
+  id                   String   @id @default(cuid())
+  name                 String
+  description          String?
+  severity             String
+  scenarioSequenceJson String
+  status               String
+  createdBy            String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  runs SecuritySimulationRun[]
+}
+
+model SecuritySimulationRun {
+  id             String    @id @default(cuid())
+  scenarioId     String?
+  campaignId     String?
+  runMode        String // Event-Only, Controlled Negative, Campaign
+  environment    String
+  status         String // Pending, Running, Completed, Failed
+  initiatedBy    String?
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  detectionScore Float?
+  responseScore  Float?
+  evidenceScore  Float?
+  finalScore     Float?
+  overallResult  String?
+  notes          String?
+
+  scenario  SecuritySimulationScenario? @relation(fields: [scenarioId], references: [id])
+  campaign  SecuritySimulationCampaign? @relation(fields: [campaignId], references: [id])
+  events    SecurityEvent[]
+  incidents SecurityIncident[]          @relation("IncidentSimulationRun")
+}
+
+model SecuritySimulationArchive {
+  id                           String    @id @default(cuid())
+  archiveNumber                String
+  simulationRunId              String?
+  campaignId                   String?
+  scenarioName                 String?
+  runMode                      String?
+  environment                  String?
+  initiatedBy                  String?
+  clearedBy                    String?
+  startedAt                    DateTime?
+  completedAt                  DateTime?
+  clearedAt                    DateTime  @default(now())
+  totalEventsArchived          Int?
+  totalIncidentsArchived       Int?
+  totalCountermeasuresArchived Int?
+  detectionScore               Float?
+  responseScore                Float?
+  evidenceScore                Float?
+  finalScore                   Float?
+  overallResult                String?
+  archiveJson                  String?   @db.Text
+  exportedPdfUrl               String?
+  exportedExcelUrl             String?
+  createdAt                    DateTime  @default(now())
 }
