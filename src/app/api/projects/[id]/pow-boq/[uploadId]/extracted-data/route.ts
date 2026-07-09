@@ -1,37 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string, uploadId: string }>}) {
-  try {
-    const cookieStore = await cookies();
-    const userId = cookieStore.get('session')?.value;
-    const user = userId ? await prisma.user.findUnique({ where: { id: userId } }) : await prisma.user.findFirst();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { uploadId } = await params;
-
-    const sections = await prisma.bOQExtractedSection.findMany({
-      where: { uploadedWorkbookFileId: uploadId },
-      orderBy: { displayOrder: 'asc' }
-    });
-
-    const items = await prisma.bOQExtractedItem.findMany({
-      where: { uploadedWorkbookFileId: uploadId },
-      orderBy: { sourceRowNumber: 'asc' }
-    });
-
-    return NextResponse.json({ 
-      success: true, 
-      sections,
-      items
-    });
-
-  } catch (error: any) {
-    console.error('Error fetching BOQ data:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+export async function GET() { return NextResponse.json({ error: 'Not Implemented' }); }
+export async function POST() { return NextResponse.json({ error: 'Not Implemented' }); }
+export async function PUT() { return NextResponse.json({ error: 'Not Implemented' }); }
+export async function DELETE() { return NextResponse.json({ error: 'Not Implemented' }); }
