@@ -48,3 +48,5 @@ next-env.d.ts
 aws-infrastructure/.terraform/
 aws-infrastructure/terraform.exe
 aws-infrastructure/*.tfstate*
+
+aws-infrastructure/terraform.tfvars
