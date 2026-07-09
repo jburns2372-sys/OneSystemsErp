@@ -50,6 +50,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         templateCode,
         templateVersion,
         originalFilename: file.name,
+        mimeType: file.type || "application/octet-stream",
+        fileSize: file.size,
         fileHash: hash,
         storagePath: publicUrl,
         uploadedBy: user.id || 'system',

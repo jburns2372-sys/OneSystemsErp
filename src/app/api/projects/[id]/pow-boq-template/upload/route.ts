@@ -28,10 +28,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       data: {
         projectId,
         originalFilename: file.name,
+        fileHash: "pending",
+        mimeType: file.type || "application/octet-stream",
+        fileSize: file.size,
         storagePath: filePath,
         preservedOriginalUrl: `/uploads/templates/${projectId}/${safeName}`,
         uploadedBy: 'SYSTEM_USER', // Or from session
-        status: 'PROCESSING'
+        extractionStatus: 'PROCESSING'
       }
     });
 
@@ -42,7 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!sheet) {
       await prisma.uploadedWorkbookFile.update({
         where: { id: upload.id },
-        data: { status: 'FAILED', validationStatus: 'CRITICAL_ERROR', validationErrorsJson: JSON.stringify({ error: "Missing BOQ_DATA_ENTRY sheet" }) }
+        data: { extractionStatus: 'FAILED', validationStatus: 'CRITICAL_ERROR', metadataJson: JSON.stringify({ error: "Missing BOQ_DATA_ENTRY sheet" }) }
       });
       return NextResponse.json({ error: 'Missing BOQ_DATA_ENTRY sheet' }, { status: 400 });
     }
@@ -58,10 +61,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await prisma.uploadedWorkbookFile.update({
       where: { id: upload.id },
       data: {
-        status: 'PENDING_COMMIT',
+        commitStatus: 'PENDING',
+        extractionStatus: 'SUCCESS',
         validationStatus: finalStatus,
-        recognizedTemplate: true,
-        workbookMetadataJson: JSON.stringify({ cellCount, itemsCount, warnings: validation.warnings })
+        recognizedTemplate: "BOQ_TEMPLATE_V1",
+        metadataJson: JSON.stringify({ cellCount, itemsCount, warnings: validation.warnings })
       }
     });
 

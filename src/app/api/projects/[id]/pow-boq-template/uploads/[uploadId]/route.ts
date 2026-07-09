@@ -6,10 +6,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const upload = await prisma.uploadedWorkbookFile.findUnique({
       where: { id: (await params).uploadId },
       include: {
-        cellSnapshots: true,
-        layoutSnapshots: true,
-        extractedSections: { include: { extractedItems: true } },
-        formulaValidations: true
+        extractedSections: { include: { items: true } },
+        formulaValidations: true,
+        templateValidations: true
       }
     });
     if (!upload) return NextResponse.json({ error: 'Not found' }, { status: 404 });
