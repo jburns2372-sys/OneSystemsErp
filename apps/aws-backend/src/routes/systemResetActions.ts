@@ -14,7 +14,7 @@ const router = Router();
 
 router.post('/resetTransactionData', async (req, res) => {
   try {
-    const { confirmationText, sessionId } = req.body; // sessionId expected from proxy
+    const { confirmationText, sessionId, simulatedRole } = req.body; // sessionId/simulatedRole expected from proxy
 
     if (confirmationText !== 'RESET TRANSACTION DATA ONLY') {
       return res.status(400).json({ success: false, error: 'Invalid confirmation text.' });
@@ -32,7 +32,9 @@ router.post('/resetTransactionData', async (req, res) => {
 
     if (!currentUser) throw new Error('User not found');
 
-    if (currentUser.role !== 'SUPER_ADMIN') {
+    const effectiveRole = simulatedRole || currentUser.role;
+
+    if (effectiveRole !== 'SUPER_ADMIN') {
       throw new Error('Unauthorized Action: Only SUPER_ADMIN can perform a master reset.');
     }
 
@@ -322,8 +324,9 @@ router.post('/resetTransactionData', async (req, res) => {
 
 router.post('/getCurrentUserRole', async (req, res) => {
   try {
-    const { sessionId } = req.body; // sessionId expected from proxy
+    const { sessionId, simulatedRole } = req.body; // sessionId expected from proxy
 
+    if (simulatedRole) return res.json({ success: true, role: simulatedRole });
     if (!sessionId) return res.json({ success: true, role: null });
     const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
     return res.json({ success: true, role: currentUser?.role || null });

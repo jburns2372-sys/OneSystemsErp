@@ -37,11 +37,12 @@ export async function resetTransactionData(confirmationText: string) {
   try {
     const cookieStore = await cookies();
     const sessionId = cookieStore.get('session')?.value;
+    const simulatedRole = cookieStore.get('simulatedRole')?.value;
 
     const response = await fetchWithAuth(`${AWS_BACKEND_API_BASE}/${ROUTE_NAME}/resetTransactionData`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ confirmationText, sessionId }),
+      body: JSON.stringify({ confirmationText, sessionId, simulatedRole }),
     });
 
     const data = await response.json();
@@ -62,11 +63,17 @@ export async function getCurrentUserRole() {
   try {
     const cookieStore = await cookies();
     const sessionId = cookieStore.get('session')?.value;
+    const simulatedRole = cookieStore.get('simulatedRole')?.value;
+    
+    // Fast path: if UI role is simulated, return it immediately for the UI to adapt
+    if (simulatedRole) {
+      return simulatedRole;
+    }
 
     const response = await fetchWithAuth(`${AWS_BACKEND_API_BASE}/${ROUTE_NAME}/getCurrentUserRole`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId }), // Pass sessionId to backend
+      body: JSON.stringify({ sessionId, simulatedRole }), // Pass to backend
     });
 
     const data = await response.json();
