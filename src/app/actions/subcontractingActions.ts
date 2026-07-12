@@ -227,7 +227,7 @@ export async function createBilling(data: any) {
 
 export async function createFullSubcontractPackage(packageData: any, boqItems: any[], powData: any) {
   try {
-    const result = await fetchWithAuth(`${API_ROUTE_PREFIX}/createFullSubcontractPackage`, {
+    const result = await fetchWithAuth(`/api/subcontracting/packages/full`, {
       method: 'POST',
       body: JSON.stringify({ packageData, boqItems, powData })
     });
