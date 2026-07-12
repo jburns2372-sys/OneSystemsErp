@@ -29,7 +29,31 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
 }
 
 export async function getDashboardStats() {
-  return fetchWithAuth('/api/projects/dashboard-stats');
+  try {
+    return await fetchWithAuth('/api/projects/dashboard-stats');
+  } catch (error) {
+    console.error('Failed to fetch dashboard stats from backend:', error);
+    return {
+      pendingAIOverrides: 0,
+      totalProjects: 0,
+      totalBudget: 0,
+      totalPayables: 0,
+      totalAccomplishments: 0,
+      pendingMRFs: 0,
+      pendingPettyCash: 0,
+      activePayrollPeriods: 0,
+      openCanvassing: 0,
+      activePurchaseOrders: 0,
+      expectedDeliveries: 0,
+      totalIssuances: 0,
+      totalSuppliers: 0,
+      totalWorkers: 0,
+      totalUsers: 0,
+      totalAuditLogs: 0,
+      totalDailyLogs: 0,
+      totalJobOrders: 0
+    };
+  }
 }
 
 export async function assignProjectManager(projectId: string, managerId: string | null) {
