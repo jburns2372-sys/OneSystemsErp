@@ -277,9 +277,10 @@ model ProcurementBenchmarkItem {
   quantity    Float
   unitCost    Float
   totalCost   Float
-  status      String  @default("PENDING")
+  status      String       @default("PENDING")
   projectId   String
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  mappings    BOQMapping[]
 }
 
 model ConsolidatedBOQItem {
@@ -342,19 +343,21 @@ model ConsolidatedBOQItem {
 }
 
 model BOQMapping {
-  id                    String              @id @default(cuid())
-  mappingType           String
-  allocationPercentage  Float?
-  allocationQuantity    Float?
-  remarks               String?
-  aiConfidenceScore     Float?
-  status                String              @default("APPROVED")
-  awardedBoqItemId      String
-  consolidatedBoqItemId String
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
-  awardedBoqItem        AwardedBOQItem      @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  id                         String                    @id @default(cuid())
+  mappingType                String
+  allocationPercentage       Float?
+  allocationQuantity         Float?
+  remarks                    String?
+  aiConfidenceScore          Float?
+  status                     String                    @default("APPROVED")
+  awardedBoqItemId           String?
+  procurementBenchmarkItemId String?
+  consolidatedBoqItemId      String
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  consolidatedBoqItem        ConsolidatedBOQItem       @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+  awardedBoqItem             AwardedBOQItem?           @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  procurementBenchmarkItem   ProcurementBenchmarkItem? @relation(fields: [procurementBenchmarkItemId], references: [id], onDelete: Cascade)
 }
 
 model Supplier {

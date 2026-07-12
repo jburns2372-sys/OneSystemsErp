@@ -17,11 +17,11 @@ router.post('/:projectId/auto-consolidate', async (req, res) => {
     // Full auto-consolidation logic migrated from Next.js Server Actions
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      select: { boqLocked: true }
+      select: { procurementBenchmarkLocked: true }
     });
 
-    if (!project?.boqLocked) {
-      throw new Error('Project BOQ is not locked. Lock it first before consolidating.');
+    if (!project?.procurementBenchmarkLocked) {
+      throw new Error('Procurement Benchmark is not locked. Lock it first before consolidating.');
     }
 
     const existing = await prisma.consolidatedBOQItem.count({
@@ -40,17 +40,17 @@ router.post('/:projectId/auto-consolidate', async (req, res) => {
       });
     }
 
-    const awardedItems = await prisma.awardedBOQItem.findMany({
+    const benchmarkItems = await prisma.procurementBenchmarkItem.findMany({
       where: { projectId }
     });
 
-    if (awardedItems.length === 0) {
-      throw new Error('No Awarded BOQ items found to consolidate.');
+    if (benchmarkItems.length === 0) {
+      throw new Error('No Procurement Benchmark items found to consolidate.');
     }
 
     const groups = new Map<string, any>();
 
-    for (const item of awardedItems) {
+    for (const item of benchmarkItems) {
       let oldItemCode = item.itemCode || 'N/A';
       if (oldItemCode === 'N/A' || oldItemCode.trim() === '') {
         oldItemCode = item.description.trim(); // Fallback category to description if missing
@@ -157,7 +157,7 @@ router.post('/:projectId/auto-consolidate', async (req, res) => {
             data: {
               mappingType: group.items.length > 1 ? 'MANY_TO_ONE' : 'ONE_TO_ONE',
               aiConfidenceScore: 98.5, // Simulated high confidence score for exact text match
-              awardedBoqItemId: item.id,
+              procurementBenchmarkItemId: item.id,
               consolidatedBoqItemId: consolidated.id
             }
           });
