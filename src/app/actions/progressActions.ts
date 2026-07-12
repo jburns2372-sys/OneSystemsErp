@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
+import { uploadToS3 as put } from '@/lib/s3';
+import fs from 'fs';
 
 const PDFParse = require('pdf-parse');
 const BACKEND_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL) || 'http://localhost:4000';
@@ -108,17 +110,31 @@ export async function createAccomplishment(formData: FormData) {
     const file = formData.get('file') as File | null;
     let inspectionReport = null;
 
-    // We process the file locally since it's saving to public/uploads
     if (file && file.size > 0) {
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
-      
       const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
-      const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
-      const filePath = join(uploadDir, fileName);
-      
-      await writeFile(filePath, buffer);
-      inspectionReport = `/uploads/accomplishments/${fileName}`;
+
+      if (process.env.BLOB_READ_WRITE_TOKEN) {
+        const blob = await put(`accomplishments/${fileName}`, buffer, {
+          access: 'public',
+          addRandomSuffix: true,
+        });
+        inspectionReport = blob.url;
+      } else {
+        console.warn("BLOB_READ_WRITE_TOKEN is missing. Falling back to local filesystem for upload.");
+        try {
+          const uploadDir = join(process.cwd(), 'public', 'uploads', 'accomplishments');
+          if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+          }
+          const filePath = join(uploadDir, fileName);
+          await writeFile(filePath, buffer);
+          inspectionReport = `/uploads/accomplishments/${fileName}`;
+        } catch (err) {
+          console.warn("Could not save file to local filesystem (likely Vercel read-only environment). Continuing without saving file.", err);
+        }
+      }
     }
 
     const packageId = formData.get('packageId') as string | null;
