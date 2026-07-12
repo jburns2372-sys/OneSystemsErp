@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { generateObject } from 'ai';
-import { openai } from '@ai-sdk/openai';
-import { z } from 'zod';
+import { GoogleGenAI, Type, Schema } from '@google/genai';
 import crypto from 'crypto';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -148,35 +146,63 @@ Please do the following:
 BOQ Items:
 ${JSON.stringify(payload, null, 2)}`;
 
-          const schema = z.object({
-            phases: z.array(z.object({
-              code: z.string().describe("Unique phase code e.g. WBS-1"),
-              name: z.string().describe("Phase name"),
-              pct: z.number().describe("Percentage of total project duration (0.0 to 1.0)"),
-              orderIndex: z.number().optional()
-            })).describe("Logical construction phases"),
-            activities: z.array(z.object({
-              id: z.string().describe("The exact id of the BOQ item e.g. ITEM_0"),
-              wbsCode: z.string().describe("The phase code this activity belongs to"),
-              durationDays: z.number().describe("Estimated duration in days")
-            })).describe("The assigned phases and durations for each BOQ item"),
-            dependencies: z.array(z.object({
-              predecessorCode: z.string().describe("The id of the predecessor activity e.g. ITEM_0"),
-              successorCode: z.string().describe("The id of the successor activity e.g. ITEM_1"),
-              type: z.string().describe("Dependency type: FS, SS, FF, or SF. Default is FS.")
-            })).describe("Logical dependencies between activities").optional().default([])
-          });
+          const schema: Schema = {
+            type: Type.OBJECT,
+            properties: {
+              phases: {
+                type: Type.ARRAY,
+                description: "Logical construction phases",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    code: { type: Type.STRING, description: "Unique phase code e.g. WBS-1" },
+                    name: { type: Type.STRING, description: "Phase name" },
+                    pct: { type: Type.NUMBER, description: "Percentage of total project duration (0.0 to 1.0)" },
+                    orderIndex: { type: Type.NUMBER }
+                  }
+                }
+              },
+              activities: {
+                type: Type.ARRAY,
+                description: "The assigned phases and durations for each BOQ item",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING, description: "The exact id of the BOQ item e.g. ITEM_0" },
+                    wbsCode: { type: Type.STRING, description: "The phase code this activity belongs to" },
+                    durationDays: { type: Type.NUMBER, description: "Estimated duration in days" }
+                  }
+                }
+              },
+              dependencies: {
+                type: Type.ARRAY,
+                description: "Logical dependencies between activities",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    predecessorCode: { type: Type.STRING, description: "The id of the predecessor activity e.g. ITEM_0" },
+                    successorCode: { type: Type.STRING, description: "The id of the successor activity e.g. ITEM_1" },
+                    type: { type: Type.STRING, description: "Dependency type: FS, SS, FF, or SF. Default is FS." }
+                  }
+                }
+              }
+            }
+          };
 
-          let result;
+          let result: any;
           try {
-            const { object } = await generateObject({
-              model: openai('gpt-4o-mini'),
-              schema: schema,
-              prompt: prompt,
+            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+            const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: prompt,
+              config: {
+                responseMimeType: 'application/json',
+                responseSchema: schema
+              }
             });
-            result = object;
+            result = JSON.parse(response.text || '{}');
           } catch (aiError: any) {
-            console.error("OpenAI schedule generation failed", aiError);
+            console.error("GenAI schedule generation failed", aiError);
             throw new Error('Failed to generate schedule: ' + aiError.message);
           }
 
