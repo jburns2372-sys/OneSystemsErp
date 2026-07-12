@@ -145,6 +145,7 @@ router.post('/:projectId/auto-consolidate', async (req, res) => {
             description: group.description,
             unit: group.unit,
             quantity: group.quantity,
+            revisedQuantity: group.quantity,
             unitCost: unitCost,
             totalCost: group.totalCost,
             status: 'PENDING' // Awaiting final approval from procurement
@@ -224,6 +225,7 @@ router.post('/:projectId/upload', async (req, res) => {
         description: item.description,
         unit: item.unit,
         quantity: item.quantity,
+        revisedQuantity: item.quantity,
         unitCost: item.unitCost,
         totalCost: item.totalCost,
         status: item.status,
@@ -250,6 +252,7 @@ router.post('/items', async (req, res) => {
         description,
         unit,
         quantity,
+        revisedQuantity: quantity,
         unitCost,
         totalCost: quantity * unitCost,
         status: 'MANUAL_ADDITION', // Or another appropriate status
