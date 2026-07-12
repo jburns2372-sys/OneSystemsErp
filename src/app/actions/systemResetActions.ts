@@ -4,6 +4,8 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 
+export const maxDuration = 60;
+
 /**
  * A wrapper around `fetch` that automatically includes authentication headers.
  * Assumes the existence of a session cookie or similar mechanism for authentication.
