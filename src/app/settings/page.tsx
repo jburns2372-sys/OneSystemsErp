@@ -89,6 +89,9 @@ export default function SettingsPage() {
         </div>
 
         {/* STANDARD OPERATIONS - MASTER RESET */}
+        <div style={{ padding: '1rem', color: 'gray', fontSize: '0.8rem' }}>
+          Diagnostic: Detected Role is [{userRole}]
+        </div>
         {userRole === 'SUPER_ADMIN' && (
         <div style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '1px solid var(--glass-border)', maxWidth: '700px' }}>
           <h2 style={{ color: '#ef4444', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
