@@ -4,7 +4,7 @@
 // It assumes NEXT_PUBLIC_AWS_BACKEND_URL is configured in your Next.js environment variables
 // (e.g., .env.local, .env.production) and points to your AWS Express.js API base URL.
 async function fetchWithAuth(urlPath: string, options?: RequestInit) {
-  const backendUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL;
+  const backendUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL);
   if (!backendUrl) {
     throw new Error("NEXT_PUBLIC_AWS_BACKEND_URL is not defined in your environment.");
   }

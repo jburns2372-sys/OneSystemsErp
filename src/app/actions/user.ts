@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || process.env.AWS_BACKEND_URL || 'http://localhost:3001';
 
 // Placeholder fetchWithAuth definition
 // In a real application, this would likely be imported from a utility file.

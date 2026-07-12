@@ -20,7 +20,7 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
 
   // IMPORTANT: Configure this environment variable to point to your AWS Express backend URL.
   // Example: 'https://your-aws-lambda-api-gateway-url.amazonaws.com'
-  const baseUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || 'http://localhost:3001'; 
+  const baseUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:3001'; 
 
   const response = await fetch(`${baseUrl}${url}`, {
     ...options,
