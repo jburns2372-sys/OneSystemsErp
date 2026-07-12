@@ -140,7 +140,7 @@ export default function ConsolidatedBOQViewer({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
         <div>
           <h2 style={{ color: isFullscreen ? '#fff' : 'var(--text-primary)', margin: 0 }}>
-            {showRevised && hasAnyVOImpact ? 'Revised Procurement Benchmark' : 'Procurement Benchmark BOQ Overview'}
+            {showRevised && hasAnyVOImpact ? 'Revised Master Materials List' : 'Master Materials List Overview'}
           </h2>
           <p style={{ margin: '8px 0 0 0', color: isFullscreen ? '#aaa' : 'var(--text-secondary)', fontSize: '0.95rem' }}>
             {totalItems} grouped items &bull; 
