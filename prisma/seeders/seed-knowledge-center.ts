@@ -99,6 +99,76 @@ A "Master Reset" is a destructive database operation that wipes all existing tra
       version: 'v1.0',
       summary: masterResetInstructions,
       tags: 'reset, database, seed, mandatory'
+    },
+    {
+      title: 'SOP: Project Scheduling & AI Simulation',
+      description: 'Rules for AI-assisted scheduling, boundary clamping, and phase summarization.',
+      notebookType: 'SOP',
+      documentType: 'Markdown',
+      status: 'Approved',
+      version: 'v1.0',
+      summary: '# Project Scheduling Rules\n1. AI generated activities must strictly adhere to project start and end dates (Boundary Clamping).\n2. Activities must be wrapped in batch Prisma transactions to prevent timeouts.\n3. The Phase Summary view must aggregate data hierarchically.',
+      tags: 'scheduling, ai, simulation, mandatory'
+    },
+    {
+      title: 'SOP: Variation Orders (VO)',
+      description: 'Rules for processing subcontractor and client variation orders.',
+      notebookType: 'SOP',
+      documentType: 'Markdown',
+      status: 'Approved',
+      version: 'v1.0',
+      summary: '# Variation Orders\n1. VOs require justification from the PM.\n2. Approvals must go through the Executive Dashboard if they exceed budget thresholds.\n3. Costs are drawn from the benchmark BOQ if available.',
+      tags: 'vo, variation, orders, mandatory'
+    },
+    {
+      title: 'SOP: Subcontracting',
+      description: 'Rules for subcontract packaging, billing, and progress evaluation.',
+      notebookType: 'SOP',
+      documentType: 'Markdown',
+      status: 'Approved',
+      version: 'v1.0',
+      summary: '# Subcontracting\n1. Subcontractors must be seeded into the system before packaging.\n2. Progress Billings must be matched against physical site accomplishments (photos required).\n3. Payments are routed to the Finance Officer.',
+      tags: 'subcontracting, billing, mandatory'
+    },
+    {
+      title: 'SOP: Security Operations Center (SOC)',
+      description: 'Rules for system security, audit logging, and RBAC.',
+      notebookType: 'SOP',
+      documentType: 'Markdown',
+      status: 'Approved',
+      version: 'v1.0',
+      summary: '# Security Operations Center\n1. Every action is logged in the Audit Trail.\n2. Access is governed by the PBAC (Project-Based Access Control) system context headers.\n3. Drafts and simulated roles are heavily restricted.',
+      tags: 'security, soc, audit, mandatory'
+    },
+    {
+      title: 'SOP: Equipment & Fleet Management',
+      description: 'Rules for GPS webhooks, utilization tracking, and maintenance.',
+      notebookType: 'SOP',
+      documentType: 'Markdown',
+      status: 'Approved',
+      version: 'v1.0',
+      summary: '# Equipment Management\n1. Heavy equipment logs rely on incoming Hikvision/Geotab GPS webhooks.\n2. Utilization logs must tie back to specific project job orders.\n3. Maintenance schedules are calculated based on engine hours.',
+      tags: 'equipment, fleet, gps, mandatory'
+    },
+    {
+      title: 'SOP: ERP Assistant (JBurns AI)',
+      description: 'Rules for the Live Database RAG system and chatbot integration.',
+      notebookType: 'SOP',
+      documentType: 'Markdown',
+      status: 'Approved',
+      version: 'v1.0',
+      summary: '# ERP Assistant\n1. Uses a 5-step semantic pipeline (Intent -> Expansion -> PBAC/RBAC -> Multi-Search -> Compare/Summarize).\n2. Adheres to the Master Ontology for database term mapping.\n3. Automatically applies PBAC restrictions so users only query allowed projects.',
+      tags: 'ai, assistant, chatbot, rag, mandatory'
+    },
+    {
+      title: 'SOP: OpenAI & Gemini Provider Settings',
+      description: 'Rules for multi-model AI orchestration.',
+      notebookType: 'SOP',
+      documentType: 'Markdown',
+      status: 'Approved',
+      version: 'v1.0',
+      summary: '# AI Providers\n1. @google/genai is primarily used for structured JSON scheduling tasks.\n2. @ai-sdk/openai is leveraged for semantic extraction and Chat UI.\n3. Both require valid environment variables securely configured on Vercel.',
+      tags: 'openai, gemini, ai, settings, mandatory'
     }
   ];
 
