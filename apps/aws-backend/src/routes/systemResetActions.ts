@@ -30,12 +30,16 @@ router.post('/resetTransactionData', async (req, res) => {
       currentUser = await prisma.user.findFirst();
     }
 
-    if (!currentUser) throw new Error('User not found');
+    const userCount = await prisma.user.count();
+    let effectiveRole = simulatedRole;
 
-    const effectiveRole = simulatedRole || currentUser.role;
-
-    if (effectiveRole !== 'SUPER_ADMIN') {
-      throw new Error('Unauthorized Action: Only SUPER_ADMIN can perform a master reset.');
+    if (userCount > 0) {
+      if (!currentUser) throw new Error('User not found');
+      effectiveRole = simulatedRole || currentUser.role;
+      
+      if (effectiveRole !== 'SUPER_ADMIN') {
+        throw new Error('Unauthorized Action: Only SUPER_ADMIN can perform a master reset.');
+      }
     }
 
     // 1. Create a Backup First
@@ -329,6 +333,12 @@ router.post('/getCurrentUserRole', async (req, res) => {
     if (simulatedRole) return res.json({ success: true, role: simulatedRole });
     if (!sessionId) return res.json({ success: true, role: null });
     const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
+    
+    if (!currentUser) {
+      const userCount = await prisma.user.count();
+      if (userCount === 0) return res.json({ success: true, role: 'SUPER_ADMIN' });
+    }
+
     return res.json({ success: true, role: currentUser?.role || null });
   } catch (e: any) {
     console.error('Failed to get current user role:', e);
