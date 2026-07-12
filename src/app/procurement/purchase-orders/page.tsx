@@ -31,7 +31,10 @@ export default async function ProcurementPage() {
     };
   }
 
-  const mrFilter: any = { status: 'APPROVED' };
+  const mrFilter: any = { 
+    status: 'APPROVED',
+    purchaseOrders: { none: {} } 
+  };
   if (!isSuperAdmin) mrFilter.project = baseProjectFilter;
   if (activeProjectId) mrFilter.projectId = activeProjectId;
 
