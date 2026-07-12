@@ -29,16 +29,26 @@ const fetchWithAuth = async (url: string, options?: RequestInit) => {
 const API_ROUTE_PREFIX = '/api/user'; // This will be your Next.js API route that proxies to AWS
 
 export async function getSystemRoles() {
-  const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/getSystemRoles`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-  const json = await response.json();
-  if (!json.success) {
-    console.error('Failed to get system roles:', json.error);
-    return []; // Return empty array on failure as per original function return type expectations
+  try {
+    const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/getSystemRoles`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      console.error("Failed to get system roles: API returned non-JSON response.");
+      return [];
+    }
+    const json = await response.json();
+    if (!json.success) {
+      console.error('Failed to get system roles:', json.error);
+      return []; // Return empty array on failure
+    }
+    return json.data; // Expecting `data` to be roles.map(r => r.name)
+  } catch (error) {
+    console.error('Network error in getSystemRoles:', error);
+    return [];
   }
-  return json.data; // Expecting `data` to be roles.map(r => r.name)
 }
 
 export async function deleteSystemRole(roleName: string) {
