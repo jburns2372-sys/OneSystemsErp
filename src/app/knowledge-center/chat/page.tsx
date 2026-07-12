@@ -127,14 +127,14 @@ export default function ChatPage() {
         />
         <button
           type="submit"
-          disabled={isLoading || !input.trim()}
+          disabled={isLoading || !input?.trim()}
           style={{
             padding: '0 25px',
             borderRadius: '12px',
-            background: isLoading || !input.trim() ? 'rgba(255,255,255,0.1)' : 'var(--accent-color)',
-            color: isLoading || !input.trim() ? 'var(--text-secondary)' : '#000',
+            background: isLoading || !input?.trim() ? 'rgba(255,255,255,0.1)' : 'var(--accent-color)',
+            color: isLoading || !input?.trim() ? 'var(--text-secondary)' : '#000',
             border: 'none',
-            cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
+            cursor: isLoading || !input?.trim() ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
