@@ -203,11 +203,11 @@ router.post('/resetTransactionData', async (req, res) => {
       // --- PHASE 12: Seed Reference Data (Requested by User) ---
       await tx.worker.createMany({
         data: [
-          { firstName: 'Sample', lastName: 'Foreman', role: 'Foreman', defaultRate: 800 },
-          { firstName: 'Sample', lastName: 'Mason', role: 'Skilled', defaultRate: 650 },
-          { firstName: 'Sample', lastName: 'Carpenter', role: 'Skilled', defaultRate: 650 },
-          { firstName: 'Sample', lastName: 'Helper 1', role: 'Unskilled', defaultRate: 500 },
-          { firstName: 'Sample', lastName: 'Helper 2', role: 'Unskilled', defaultRate: 500 }
+          { firstName: 'Sample', lastName: 'Foreman', designation: 'Foreman', workerCategory: 'SKILLED', dailyRate: 800 },
+          { firstName: 'Sample', lastName: 'Mason', designation: 'Mason', workerCategory: 'SKILLED', dailyRate: 650 },
+          { firstName: 'Sample', lastName: 'Carpenter', designation: 'Carpenter', workerCategory: 'SKILLED', dailyRate: 650 },
+          { firstName: 'Sample', lastName: 'Helper 1', designation: 'Helper', workerCategory: 'UNSKILLED', dailyRate: 500 },
+          { firstName: 'Sample', lastName: 'Helper 2', designation: 'Helper', workerCategory: 'UNSKILLED', dailyRate: 500 }
         ]
       });
 
