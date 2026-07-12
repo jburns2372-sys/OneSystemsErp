@@ -213,21 +213,21 @@ router.post('/resetTransactionData', async (req, res) => {
 
       await tx.subcontractor.createMany({
         data: [
-          { name: 'Sample Steel Works Subcon', type: 'Specialty', contactPerson: 'Juan Dela Cruz', status: 'ACTIVE' },
-          { name: 'Sample Painting Subcon', type: 'Specialty', contactPerson: 'Pedro Penduko', status: 'ACTIVE' },
-          { name: 'Sample Electrical Subcon', type: 'Specialty', contactPerson: 'John Doe', status: 'ACTIVE' },
-          { name: 'Sample Plumbing Subcon', type: 'Specialty', contactPerson: 'Jane Doe', status: 'ACTIVE' },
-          { name: 'Sample Tile Works Subcon', type: 'Specialty', contactPerson: 'Mario Rossi', status: 'ACTIVE' }
+          { name: 'Sample Steel Works Subcon', businessType: 'CORPORATION', contactPerson: 'Juan Dela Cruz' },
+          { name: 'Sample Painting Subcon', businessType: 'CORPORATION', contactPerson: 'Pedro Penduko' },
+          { name: 'Sample Electrical Subcon', businessType: 'CORPORATION', contactPerson: 'John Doe' },
+          { name: 'Sample Plumbing Subcon', businessType: 'CORPORATION', contactPerson: 'Jane Doe' },
+          { name: 'Sample Tile Works Subcon', businessType: 'CORPORATION', contactPerson: 'Mario Rossi' }
         ]
       });
 
       await tx.supplier.createMany({
         data: [
-          { name: 'Sample Hardware Supplier', contactPerson: 'Supplier Contact 1', status: 'ACTIVE' },
-          { name: 'Sample Cement Supplier', contactPerson: 'Supplier Contact 2', status: 'ACTIVE' },
-          { name: 'Sample Electrical Supplier', contactPerson: 'Supplier Contact 3', status: 'ACTIVE' },
-          { name: 'Sample Lumber Supplier', contactPerson: 'Supplier Contact 4', status: 'ACTIVE' },
-          { name: 'Sample Paints Supplier', contactPerson: 'Supplier Contact 5', status: 'ACTIVE' }
+          { name: 'Sample Hardware Supplier', contactPerson: 'Supplier Contact 1' },
+          { name: 'Sample Cement Supplier', contactPerson: 'Supplier Contact 2' },
+          { name: 'Sample Electrical Supplier', contactPerson: 'Supplier Contact 3' },
+          { name: 'Sample Lumber Supplier', contactPerson: 'Supplier Contact 4' },
+          { name: 'Sample Paints Supplier', contactPerson: 'Supplier Contact 5' }
         ]
       });
 
