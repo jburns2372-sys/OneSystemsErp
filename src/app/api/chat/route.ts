@@ -5,7 +5,7 @@ import { getUserPermissions } from '@/lib/permissions';
 import { generateEmbedding, cosineSimilarity } from '@/lib/ai-indexer';
 import { detectIntents, expandKeywords } from '@/lib/rag-intelligence';
 import { evaluateComparison } from '@/lib/ai-comparison-engine';
-import { google } from '@ai-sdk/google';
+import { openai } from '@ai-sdk/openai';
 import { streamText, tool, jsonSchema } from 'ai';
 import { z } from 'zod';
 import { logSecurityEvent } from '@/lib/securityEngine';
@@ -56,8 +56,8 @@ export async function POST(req: Request) {
     }
   }
 
-  if (!process.env.GEMINI_API_KEY) {
-    return new Response("System Error: GEMINI_API_KEY is missing in the environment variables. Please configure it in your Vercel dashboard to enable the AI Knowledge Center.", { status: 500 });
+  if (!process.env.OPENAI_API_KEY) {
+    return new Response("System Error: OPENAI_API_KEY is missing in the environment variables. Please configure it in your Vercel dashboard or local .env file to enable the AI Knowledge Center.", { status: 500 });
   }
 
   // 1. Generate embedding for user's question
@@ -250,7 +250,7 @@ ${staticContext}
   // 5. Generate AI Response
   try {
     const result = await streamText({
-      model: google('gemini-2.5-flash'),
+      model: openai('gpt-4o-mini'),
       system: systemPrompt,
       messages,
       onFinish: async ({ text }) => {
