@@ -126,7 +126,7 @@ router.post('/:projectId/auto-consolidate', async (req, res) => {
 
     let index = 1;
 
-    // Use a transaction for safety
+    // Use a transaction for safety with a longer timeout since there are thousands of BOQ mappings
     await prisma.$transaction(async (tx) => {
       for (const group of groups.values()) {
         // Calculate weighted unit cost. If quantity is 0, fallback to 0.
@@ -163,6 +163,9 @@ router.post('/:projectId/auto-consolidate', async (req, res) => {
           });
         }
       }
+    }, {
+      maxWait: 10000,
+      timeout: 120000 // 2 minutes to accommodate thousands of AI heuristic mappings
     });
 
     res.json({ success: true, message: 'Auto-consolidation complete.' });
