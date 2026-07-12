@@ -30,7 +30,7 @@ async function fetchWithAuth(url: string, options?: RequestInit): Promise<Respon
   });
 }
 
-const AWS_BACKEND_API_BASE = process.env.AWS_BACKEND_API_BASE || 'http://localhost:3000/api'; // Replace with your actual AWS API Gateway/Express endpoint
+const AWS_BACKEND_API_BASE = process.env.AWS_BACKEND_API_BASE || (process.env.NEXT_PUBLIC_API_BASE_URL ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/api` : 'http://localhost:4000/api');
 const ROUTE_NAME = 'systemResetActions';
 
 export async function resetTransactionData(confirmationText: string) {
