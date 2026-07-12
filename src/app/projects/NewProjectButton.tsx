@@ -214,9 +214,6 @@ export default function NewProjectButton({ users }: { users?: {id: string, name:
         indirectCost: 0,
         combinedUnitCost: unitCost,
         totalCost,
-        materialUnitCost: materialCost,
-        laborUnitCost: laborCost,
-        equipmentUnitCost: equipmentCost,
         status: 'PENDING',
         processingType: 'MATERIAL_EQUIPMENT'
       };

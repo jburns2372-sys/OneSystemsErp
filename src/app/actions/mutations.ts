@@ -278,17 +278,10 @@ export async function createProject(formData: FormData) {
           description: descCell,
           unit: unit || "LOT",
           quantity: qty,
-          materialUnitCost: getNum(getSafeCell(row, cMat)),
-          laborUnitCost: getNum(getSafeCell(row, cLab)),
-          equipmentUnitCost: getNum(getSafeCell(row, cEqu)),
           directCost: getNum(getSafeCell(row, cTdc)),
-          ocmAmount: getNum(getSafeCell(row, cOcm)),
-          cpAmount: getNum(getSafeCell(row, cCp)),
-          vatAmount: getNum(getSafeCell(row, cVat)),
           indirectCost: getNum(getSafeCell(row, cTic)),
           combinedUnitCost: getNum(getSafeCell(row, cUc)),
           totalCost: amount,
-          percentageOfTotal: getNum(getSafeCell(row, cPct)) * 100,
           status: 'PENDING',
           processingType: 'MATERIAL_EQUIPMENT'
         });
@@ -423,7 +416,10 @@ export async function createProject(formData: FormData) {
     if (aiResult.name) name = aiResult.name;
     if (aiResult.location) location = aiResult.location;
     if (aiResult.contractAmount) contractAmount = aiResult.contractAmount;
-    parsedItems = aiResult.items;
+    parsedItems = aiResult.items.map((item: any) => {
+      const { materialUnitCost, laborUnitCost, equipmentUnitCost, ...rest } = item;
+      return rest;
+    });
     
     // Fallback if AI didn't compute total contract amount correctly
     if (contractAmount === 0 && parsedItems.length > 0) {

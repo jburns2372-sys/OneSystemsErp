@@ -165,6 +165,10 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`OneSystemsERP AWS Backend listening on port ${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`OneSystemsERP AWS Backend listening on port ${PORT}`);
+  });
+}
+
+export default app;
