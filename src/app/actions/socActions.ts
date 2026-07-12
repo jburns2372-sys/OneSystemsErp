@@ -1,98 +1,149 @@
 'use server';
 
-import { revalidatePath, revalidateTag } from 'next/cache'; // Include if needed, though not used in original
-
-/**
- * A wrapper around `fetch` that adds authentication headers (if available)
- * and handles API response parsing and error checking.
- */
-async function fetchWithAuth<T>(url: string, options?: RequestInit): Promise<T> {
-  // In a real application, you'd add actual authentication logic here,
-  // e.g., fetching a token from a secure cookie or an auth provider.
-  const authHeaders: HeadersInit = {
-    'Content-Type': 'application/json',
-    // 'Authorization': `Bearer ${await getAuthToken()}`, // Example: replace with actual auth token retrieval
-  };
-
-  const fullUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL) || 'http://localhost:4000'}${url}`;
-
-  const response = await fetch(fullUrl, {
-    ...options,
-    headers: {
-      ...authHeaders,
-      ...options?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    let errorData: any = {};
-    try {
-      errorData = await response.json();
-    } catch (e) {
-      // If response is not JSON, just use status text
-      errorData.message = response.statusText;
-    }
-    const errorMessage = errorData.error || errorData.message || 'An unknown error occurred';
-    throw new Error(`API Error (${response.status}): ${errorMessage}`);
-  }
-
-  const result = await response.json();
-
-  // Check for the 'success' flag in the response body from the Express backend
-  if (result && typeof result === 'object' && 'success' in result && !result.success) {
-    throw new Error(result.error || 'Backend operation failed');
-  }
-
-  // Return the actual data payload from the backend response
-  return result.data as T;
-}
+import { prisma } from '@/lib/prisma';
+import { getUserPermissions } from '@/lib/permissions';
 
 export async function checkSocAccess(userId: string) {
-  return fetchWithAuth<boolean>('/api/socActions/checkSocAccess', {
-    method: 'POST',
-    body: JSON.stringify({ userId }),
-  });
+  try {
+    if (!userId) throw new Error('userId is required');
+    const permissions = await getUserPermissions(userId);
+    const hasAccess = !!(permissions as any).IS_ADMIN || !!(permissions as any).SYSTEM_SETTINGS?.canView;
+    return hasAccess;
+  } catch (error: any) {
+    console.error('Error in checkSocAccess:', error);
+    return false;
+  }
 }
 
 export async function getSocDashboardStats(includeSimulated: boolean = true) {
-  return fetchWithAuth<{
-    totalEvents: number;
-    blockedThreats: number;
-    criticalThreats: number;
-    failedLogins: number;
-    aiAttacks: number;
-    fileThreats: number;
-    activeIncidents: number;
-  }>('/api/socActions/getSocDashboardStats', {
-    method: 'POST',
-    body: JSON.stringify({ includeSimulated }),
-  });
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const whereClause: any = includeSimulated ? {} : { simulated: false };
+
+    const [
+      totalEvents,
+      blockedThreats,
+      criticalThreats,
+      failedLogins,
+      aiAttacks,
+      fileThreats,
+      activeIncidents,
+    ] = await Promise.all([
+      prisma.securityEvent.count({ where: { timestamp: { gte: today }, ...whereClause } }),
+      prisma.securityEvent.count({ where: { timestamp: { gte: today }, OR: [{ status: 'BLOCKED' }, { result: 'BLOCKED' }, { blocked: true }], ...whereClause } }),
+      prisma.securityEvent.count({ where: { timestamp: { gte: today }, severity: { in: ['CRITICAL', 'Critical'] }, ...whereClause } }),
+      prisma.securityEvent.count({ where: { timestamp: { gte: today }, OR: [{ threatType: 'UNAUTHENTICATED_ACCESS' }, { category: 'Authentication' }], ...whereClause } }),
+      prisma.securityEvent.count({ where: { timestamp: { gte: today }, category: 'AI', ...whereClause } }),
+      prisma.securityEvent.count({ where: { timestamp: { gte: today }, category: 'FILE', ...whereClause } }),
+      prisma.securityIncident.count({ where: { status: { notIn: ['Resolved', 'Closed'] } } }),
+    ]);
+
+    return {
+      totalEvents,
+      blockedThreats,
+      criticalThreats,
+      failedLogins,
+      aiAttacks,
+      fileThreats,
+      activeIncidents,
+    };
+  } catch (error: any) {
+    console.error('Error in getSocDashboardStats:', error);
+    return { totalEvents: 0, blockedThreats: 0, criticalThreats: 0, failedLogins: 0, aiAttacks: 0, fileThreats: 0, activeIncidents: 0 };
+  }
 }
 
 export async function getLiveThreatFeed(limit: number = 50, includeSimulated: boolean = true) {
-  return fetchWithAuth<Array<any>>('/api/socActions/getLiveThreatFeed', {
-    method: 'POST',
-    body: JSON.stringify({ limit, includeSimulated }),
-  });
+  try {
+    const whereClause: any = includeSimulated ? {} : { simulated: false };
+    const data = await prisma.securityEvent.findMany({
+      take: limit,
+      where: whereClause,
+      orderBy: { timestamp: 'desc' },
+      select: {
+        id: true,
+        timestamp: true,
+        severity: true,
+        threatType: true,
+        sourceIp: true,
+        country: true,
+        city: true,
+        userEmail: true,
+        userRole: true,
+        module: true,
+        systemResponse: true,
+        result: true,
+        status: true,
+        simulated: true,
+        simulationRunId: true,
+        expectedResponse: true,
+        actualResponse: true,
+      }
+    });
+    return data;
+  } catch (error: any) {
+    console.error('Error in getLiveThreatFeed:', error);
+    return [];
+  }
 }
 
 export async function getEventDetails(eventId: string) {
-  return fetchWithAuth<any>('/api/socActions/getEventDetails', {
-    method: 'POST',
-    body: JSON.stringify({ eventId }),
-  });
+  try {
+    if (!eventId) throw new Error('eventId is required');
+    const data = await prisma.securityEvent.findUnique({
+      where: { id: eventId },
+      include: {
+        incident: true,
+      }
+    });
+    return data;
+  } catch (error: any) {
+    console.error('Error in getEventDetails:', error);
+    return null;
+  }
 }
 
 export async function getThreatMapData(includeSimulated: boolean = true) {
-  return fetchWithAuth<Array<any>>('/api/socActions/getThreatMapData', {
-    method: 'POST',
-    body: JSON.stringify({ includeSimulated }),
-  });
+  try {
+    const whereClause: any = includeSimulated
+      ? { latitude: { not: null }, longitude: { not: null } }
+      : { latitude: { not: null }, longitude: { not: null }, simulated: false };
+
+    const recentEvents = await prisma.securityEvent.findMany({
+      take: 100,
+      orderBy: { timestamp: 'desc' },
+      where: whereClause,
+      select: {
+        id: true,
+        sourceIp: true,
+        latitude: true,
+        longitude: true,
+        severity: true,
+        status: true,
+        threatType: true,
+        country: true,
+        city: true,
+        simulated: true,
+      }
+    });
+    return recentEvents;
+  } catch (error: any) {
+    console.error('Error in getThreatMapData:', error);
+    return [];
+  }
 }
 
 export async function getCountermeasuresData(limit: number = 20) {
-  return fetchWithAuth<Array<any>>('/api/socActions/getCountermeasuresData', {
-    method: 'POST',
-    body: JSON.stringify({ limit }),
-  });
+  try {
+    const data = await prisma.countermeasureLog.findMany({
+      take: limit,
+      orderBy: { timestamp: 'desc' },
+    });
+    return data;
+  } catch (error: any) {
+    console.error('Error in getCountermeasuresData:', error);
+    return [];
+  }
 }
