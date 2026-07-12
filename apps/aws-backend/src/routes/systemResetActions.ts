@@ -200,6 +200,71 @@ router.post('/resetTransactionData', async (req, res) => {
       await tx.supplier.deleteMany({});
       await tx.subcontractor.deleteMany({});
 
+      // --- PHASE 12: Seed Reference Data (Requested by User) ---
+      await tx.worker.createMany({
+        data: [
+          { firstName: 'Sample', lastName: 'Foreman', role: 'Foreman', defaultRate: 800 },
+          { firstName: 'Sample', lastName: 'Mason', role: 'Skilled', defaultRate: 650 },
+          { firstName: 'Sample', lastName: 'Carpenter', role: 'Skilled', defaultRate: 650 },
+          { firstName: 'Sample', lastName: 'Helper 1', role: 'Unskilled', defaultRate: 500 },
+          { firstName: 'Sample', lastName: 'Helper 2', role: 'Unskilled', defaultRate: 500 }
+        ]
+      });
+
+      await tx.subcontractor.createMany({
+        data: [
+          { name: 'Sample Steel Works Subcon', type: 'Specialty', contactPerson: 'Juan Dela Cruz', status: 'ACTIVE' },
+          { name: 'Sample Painting Subcon', type: 'Specialty', contactPerson: 'Pedro Penduko', status: 'ACTIVE' },
+          { name: 'Sample Electrical Subcon', type: 'Specialty', contactPerson: 'John Doe', status: 'ACTIVE' },
+          { name: 'Sample Plumbing Subcon', type: 'Specialty', contactPerson: 'Jane Doe', status: 'ACTIVE' },
+          { name: 'Sample Tile Works Subcon', type: 'Specialty', contactPerson: 'Mario Rossi', status: 'ACTIVE' }
+        ]
+      });
+
+      await tx.supplier.createMany({
+        data: [
+          { name: 'Sample Hardware Supplier', contactPerson: 'Supplier Contact 1', status: 'ACTIVE' },
+          { name: 'Sample Cement Supplier', contactPerson: 'Supplier Contact 2', status: 'ACTIVE' },
+          { name: 'Sample Electrical Supplier', contactPerson: 'Supplier Contact 3', status: 'ACTIVE' },
+          { name: 'Sample Lumber Supplier', contactPerson: 'Supplier Contact 4', status: 'ACTIVE' },
+          { name: 'Sample Paints Supplier', contactPerson: 'Supplier Contact 5', status: 'ACTIVE' }
+        ]
+      });
+
+      const rolesToSeed = [
+        { email: 'sample.purchasing@onesystemserp.com', name: 'Sample Purchasing', roleCode: 'PURCHASING_OFFICER' },
+        { email: 'sample.finance@onesystemserp.com', name: 'Sample Finance', roleCode: 'FINANCE_OFFICER' },
+        { email: 'sample.accounting@onesystemserp.com', name: 'Sample Accounting', roleCode: 'ACCOUNTING_OFFICER' },
+        { email: 'sample.billing@onesystemserp.com', name: 'Sample Billing', roleCode: 'BILLING_OFFICER' },
+        { email: 'sample.engineer@onesystemserp.com', name: 'Sample Site Engineer', roleCode: 'SITE_ENGINEER' }
+      ];
+
+      for (const u of rolesToSeed) {
+        let user = await tx.user.findFirst({ where: { email: u.email } });
+        if (!user) {
+          user = await tx.user.create({
+            data: {
+              name: u.name,
+              email: u.email,
+              passwordHash: '$2b$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+              status: 'ACTIVE',
+              defaultRole: u.roleCode
+            }
+          });
+        }
+        const roleRecord = await tx.role.findFirst({ where: { roleCode: u.roleCode } });
+        if (roleRecord) {
+          const existingUserRole = await tx.userRole.findFirst({
+            where: { userId: user.id, roleId: roleRecord.id }
+          });
+          if (!existingUserRole) {
+            await tx.userRole.create({
+              data: { userId: user.id, roleId: roleRecord.id }
+            });
+          }
+        }
+      }
+
       // ============================================================================
       // PROTECTED (NOT deleted):
       //   User, UserRole, SystemRole, Role, RolePermission, Module,

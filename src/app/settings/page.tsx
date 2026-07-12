@@ -111,11 +111,11 @@ export default function SettingsPage() {
                   <li>All Material Issuances & Returns</li>
                   <li>All Expenses & Petty Cash</li>
                   <li>All Subcontracts & Job Orders</li>
-                  <li>All Payroll, DTRs & Workers</li>
+                  <li>All Payroll, DTRs & Workers (except 5 reference samples)</li>
                   <li>All Accomplishments & Billings</li>
                   <li>All Variation Orders</li>
                   <li>All Documents & Evidence Files</li>
-                  <li>All Suppliers & Subcontractors</li>
+                  <li>All Suppliers & Subcontractors (except 5 reference samples)</li>
                   <li>All AI Logs & Audit Trails</li>
                   <li>All Uploaded Files</li>
                 </ul>
@@ -125,7 +125,7 @@ export default function SettingsPage() {
               <div style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.15)', borderRadius: '6px', padding: '1rem' }}>
                 <h4 style={{ color: '#22c55e', margin: '0 0 0.5rem 0', fontSize: '0.85rem', letterSpacing: '0.5px' }}>🛡️ WILL BE PRESERVED</h4>
                 <ul style={{ margin: 0, padding: '0 0 0 1.2rem', color: 'var(--text-secondary)', fontSize: '0.8rem', lineHeight: '1.8' }}>
-                  <li>System Users & Accounts</li>
+                  <li>System Users & Accounts (plus 5 key role templates)</li>
                   <li>System Roles (all 31 roles)</li>
                   <li>Access Rights Matrix (359 rules)</li>
                   <li>Modules & Workflow Templates</li>
@@ -133,6 +133,7 @@ export default function SettingsPage() {
                   <li>Document Templates</li>
                   <li>Government Tax Tables (SSS, BIR)</li>
                   <li>Bank Accounts & Payment Providers</li>
+                  <li>5 Reference Templates (Workers, Suppliers, Subcon)</li>
                 </ul>
               </div>
             </div>
