@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateCPM } from '@/lib/cpm-engine';
-import { GoogleGenAI, Type, Schema } from '@google/genai';
+import { generateObject } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
 import * as crypto from 'crypto';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -128,55 +130,28 @@ CRITICAL RULES:
 Activities:
 ${JSON.stringify(activityPayload, null, 2)}`;
 
-    const schema: Schema = {
-      type: Type.OBJECT,
-      properties: {
-        phases: {
-          type: Type.ARRAY,
-          description: "Logical construction phases",
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              code: { type: Type.STRING, description: "Unique phase code e.g. PH-1" },
-              name: { type: Type.STRING, description: "Phase name" },
-              pct: { type: Type.NUMBER, description: "Percentage of total project duration (0.0 to 1.0)" },
-              orderedActivityIds: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
-                description: "Chronological sequence of activity IDs to be executed in this phase"
-              }
-            }
-          }
-        }
-      }
-    };
+    const schema = z.object({
+      phases: z.array(z.object({
+        code: z.string().describe("Unique phase code e.g. PH-1"),
+        name: z.string().describe("Phase name"),
+        pct: z.number().describe("Percentage of total project duration (0.0 to 1.0)"),
+        orderedActivityIds: z.array(z.string()).describe("Chronological sequence of activity IDs to be executed in this phase")
+      })).describe("Logical construction phases")
+    });
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    let response;
+    let result;
     try {
-      response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: schema
-        }
+      const { object } = await generateObject({
+        model: openai('gpt-4o-mini'),
+        schema: schema,
+        prompt: prompt,
       });
+      result = object;
     } catch (aiError: any) {
-      console.warn("gemini-2.5-flash failed, falling back to gemini-2.0-flash...", aiError.message);
-      response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: schema
-        }
-      });
+      console.error("OpenAI schedule simulation failed", aiError);
+      throw new Error('Failed to simulate schedule: ' + aiError.message);
     }
 
-    let jsonText = response.text || '{}';
-    jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const result = JSON.parse(jsonText);
     const phases = result.phases || [];
     console.log("SIMULATION PHASES:", JSON.stringify(phases));
 
