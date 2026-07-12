@@ -7,7 +7,7 @@ import path from 'path';
 import Papa from 'papaparse';
 import { uploadToS3 as put } from '@/lib/s3';
 
-const BACKEND_URL = process.env.AWS_BACKEND_URL || 'http://localhost:4000';
+const BACKEND_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL) || 'http://localhost:4000';
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const cookieStore = await cookies();

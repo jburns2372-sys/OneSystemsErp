@@ -29,7 +29,7 @@ async function fetchWithAuth(url: string, options: RequestInit) {
     body = JSON.stringify({ userId: session, simulatedRole }); // Case for empty original body
   }
 
-  const response = await fetch(`${process.env.AWS_BACKEND_URL}${url}`, {
+  const response = await fetch(`${(process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL)}${url}`, {
     ...options,
     headers,
     body,
