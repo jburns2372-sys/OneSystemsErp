@@ -91,14 +91,31 @@ A "Master Reset" is a destructive database operation that wipes all existing tra
       tags: 'pbac, rbac, roles, permissions, mandatory'
     },
     {
-      title: 'SOP: Database Master Reset Protocol',
-      description: 'Instructions on how a master reset works and safety rules.',
+      title: 'SOP: Database Master Reset Protocol & System Restore',
+      description: 'Instructions for non-destructive functional restoration and hard wipes. Restricted to Superadmin.',
       notebookType: 'SOP',
       documentType: 'Markdown',
       status: 'Approved',
-      version: 'v1.0',
-      summary: masterResetInstructions,
-      tags: 'reset, database, seed, mandatory'
+      version: 'v2.0',
+      summary: `
+# Database Master Reset Protocol & System Restore
+
+## ⚠️ RESTRICTED TO SUPERADMIN ONLY ⚠️
+
+### 1. Non-Destructive System Restore (Antigravity Command)
+If functional rules, SOPs, access rights, or AI instructions go missing or get corrupted, you can trigger a **Non-Destructive Restore**.
+**Command**: Ask the AI Assistant to "Run the system_restore skill" or "Trigger master restore".
+**Action**: The AI will execute \`npx tsx prisma/seeders/seed-knowledge-center.ts\`.
+**Safety**: This ONLY repopulates system logic and Knowledge Records. It **DOES NOT** erase or modify any live user transaction data (e.g., job orders, accomplishments, material requests) performed on the online app.
+
+### 2. Destructive Reset (Erasing Processed Data)
+If a total hard wipe is needed to erase all processed data (distinct from the functional rules):
+- Use \`npm run clear:seed\` to clear dummy data only.
+- Use \`npx prisma migrate reset\` to wipe everything to zero.
+**Safety**: Hard wipes should generally only be done on the local app, NOT the online production app.
+- Pushing to GitHub/Vercel will only push functional code/data and will safely preserve the online app's live database transactions.
+`,
+      tags: 'reset, database, seed, mandatory, superadmin, restore, antigravity'
     },
     {
       title: 'SOP: Project Scheduling & AI Simulation',
