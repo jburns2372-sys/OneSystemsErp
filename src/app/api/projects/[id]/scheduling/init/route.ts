@@ -152,7 +152,7 @@ ${JSON.stringify(payload, null, 2)}`;
               code: z.string().describe("Unique phase code e.g. WBS-1"),
               name: z.string().describe("Phase name"),
               pct: z.number().describe("Percentage of total project duration (0.0 to 1.0)"),
-              orderIndex: z.number().optional()
+              orderIndex: z.number().describe("Index order of the phase (e.g. 1, 2, 3)")
             })).describe("Logical construction phases"),
             activities: z.array(z.object({
               id: z.string().describe("The exact id of the BOQ item e.g. ITEM_0"),
@@ -163,7 +163,7 @@ ${JSON.stringify(payload, null, 2)}`;
               predecessorCode: z.string().describe("The id of the predecessor activity e.g. ITEM_0"),
               successorCode: z.string().describe("The id of the successor activity e.g. ITEM_1"),
               type: z.string().describe("Dependency type: FS, SS, FF, or SF. Default is FS.")
-            })).describe("Logical dependencies between activities").optional().default([])
+            })).describe("Logical dependencies between activities")
           });
 
           let result;
