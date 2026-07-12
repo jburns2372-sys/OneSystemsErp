@@ -1,7 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { revalidatePath, revalidateTag } from 'next/cache'; // Included for reference, though not used in original
+import { revalidatePath } from 'next/cache';
 
 /**
  * Helper to fetch data from the authenticated backend.
@@ -9,7 +9,8 @@ import { revalidatePath, revalidateTag } from 'next/cache'; // Included for refe
  * (e.g., JWT from session cookies) to requests and managing the backend base URL.
  */
 async function fetchWithAuth(url: string, options?: RequestInit) {
-  const authToken = cookies().get('session')?.value; // Example: get session token from cookie
+  const cookieStore = await cookies();
+  const authToken = cookieStore.get('session')?.value;
 
   const headers = new Headers(options?.headers);
   headers.set('Content-Type', 'application/json');
