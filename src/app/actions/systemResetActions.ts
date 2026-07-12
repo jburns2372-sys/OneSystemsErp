@@ -47,134 +47,242 @@ export async function resetTransactionData(confirmationText: string) {
       throw new Error('Unauthorized Action: Only SUPER_ADMIN can perform a master reset.');
     }
     
+    await prisma.$transaction([
+  prisma.aIValidationLog.deleteMany({}),
+  prisma.auditLog.deleteMany({}),
+  prisma.aIValidationEvidence.deleteMany({}),
+  prisma.aIValidationFinding.deleteMany({}),
+  prisma.aIDuplicatePhotoCheck.deleteMany({}),
+  prisma.aIHumanReview.deleteMany({}),
+  prisma.aIValidationRun.deleteMany({}),
+  prisma.aIWorkerValidationResult.deleteMany({}),
+  prisma.aIValidationResult.deleteMany({}),
+  prisma.aIReferenceUsageLog.deleteMany({}),
+  prisma.aINotification.deleteMany({}),
+  prisma.aISearchLog.deleteMany({}),
+  prisma.aIAuditFinding.deleteMany({}),
+  prisma.aIRiskScore.deleteMany({}),
+  prisma.aIValidationOverride.deleteMany({}),
+  prisma.aITransactionValidation.deleteMany({}),
+  prisma.notebookReferenceApprovalLog.deleteMany({}),
+  prisma.notebookReferenceIndexLog.deleteMany({}),
+  prisma.userLoginLog.deleteMany({}),
+  prisma.paymentLog.deleteMany({}),
+  prisma.payrollAuditLog.deleteMany({}),
+  prisma.revisionRequest.deleteMany({}),
+  prisma.lockedRecord.deleteMany({}),
+  prisma.transactionWorkflow.deleteMany({}),
+  prisma.quotationItem.deleteMany({}),
+  prisma.supplierQuotation.deleteMany({}),
+  prisma.canvassItem.deleteMany({}),
+  prisma.canvassForm.deleteMany({}),
+  prisma.purchaseOrderItem.deleteMany({}),
+  prisma.purchaseOrder.deleteMany({}),
+  prisma.materialRequestItem.deleteMany({}),
+  prisma.materialRequest.deleteMany({}),
+  prisma.equipmentAIValidation.deleteMany({}),
+  prisma.equipmentTelemetry.deleteMany({}),
+  prisma.equipmentMaintenance.deleteMany({}),
+  prisma.equipmentUtilization.deleteMany({}),
+  prisma.equipmentDeployment.deleteMany({}),
+  prisma.equipment.deleteMany({}),
+  prisma.accountsPayable.deleteMany({}),
+  prisma.deliveryItem.deleteMany({}),
+  prisma.delivery.deleteMany({}),
+  prisma.consumptionItem.deleteMany({}),
+  prisma.consumptionLog.deleteMany({}),
+  prisma.returnItem.deleteMany({}),
+  prisma.materialReturn.deleteMany({}),
+  prisma.issuanceItem.deleteMany({}),
+  prisma.materialIssuance.deleteMany({}),
+  prisma.expenseApprovalLog.deleteMany({}),
+  prisma.expenseAIValidation.deleteMany({}),
+  prisma.expenseProofFile.deleteMany({}),
+  prisma.expenseBreakdownItem.deleteMany({}),
+  prisma.pettyCashExpense.deleteMany({}),
+  prisma.pettyCashReplenishment.deleteMany({}),
+  prisma.expense.deleteMany({}),
+  prisma.pettyCashAccount.deleteMany({}),
+  prisma.subcontractBilling.deleteMany({}),
+  prisma.subcontractAccomplishment.deleteMany({}),
+  prisma.jobOrder.deleteMany({}),
+  prisma.subcontractorBOQItem.deleteMany({}),
+  prisma.programOfWorks.deleteMany({}),
+  prisma.subcontractPackage.deleteMany({}),
+  prisma.backCharge.deleteMany({}),
+  prisma.accomplishmentRecord.deleteMany({}),
+  prisma.paymentRecord.deleteMany({}),
+  prisma.paymentFallbackRecommendation.deleteMany({}),
+  prisma.paymentException.deleteMany({}),
+  prisma.paymentBatchRow.deleteMany({}),
+  prisma.paymentBatch.deleteMany({}),
+  prisma.payrollFundingRequest.deleteMany({}),
+  prisma.payrollApproval.deleteMany({}),
+  prisma.deductionLog.deleteMany({}),
+  prisma.deductionLedger.deleteMany({}),
+  prisma.payrollDeduction.deleteMany({}),
+  prisma.payrollEarning.deleteMany({}),
+  prisma.allowance.deleteMany({}),
+  prisma.payroll.deleteMany({}),
+  prisma.dailyTimeRecord.deleteMany({}),
+  prisma.workerDocument.deleteMany({}),
+  prisma.payrollPeriod.deleteMany({}),
+  prisma.worker.deleteMany({}),
+  prisma.projectAccomplishmentAIFinding.deleteMany({}),
+  prisma.projectAccomplishmentFileVersion.deleteMany({}),
+  prisma.projectAccomplishmentFile.deleteMany({}),
+  prisma.bOQLotBreakdown.deleteMany({}),
+  prisma.accomplishmentItem.deleteMany({}),
+  prisma.accomplishment.deleteMany({}),
+  prisma.inspection.deleteMany({}),
+  prisma.billingDeduction.deleteMany({}),
+  prisma.billingItem.deleteMany({}),
+  prisma.billing.deleteMany({}),
+  prisma.payment.deleteMany({}),
+  prisma.aIVariationOrderValidation.deleteMany({}),
+  prisma.variationOrderDocument.deleteMany({}),
+  prisma.variationOrderApproval.deleteMany({}),
+  prisma.variationOrderItem.deleteMany({}),
+  prisma.variationOrder.deleteMany({}),
+  prisma.evidenceFile.deleteMany({}),
+  prisma.projectCamera.deleteMany({}),
+  prisma.liveCameraSnapshot.deleteMany({}),
+  prisma.bOQMapping.deleteMany({}),
+  prisma.awardedBOQItem.deleteMany({}),
+  prisma.consolidatedBOQItem.deleteMany({}),
+  prisma.project.deleteMany({}),
+  prisma.supplier.deleteMany({}),
+  prisma.subcontractor.deleteMany({})
+]);
+
     await prisma.$transaction(async (tx) => {
       // --- PHASE 1: Logs, AI Results, Activity Tracking ---
-      await tx.aIValidationLog.deleteMany({});
-      await tx.auditLog.deleteMany({});
-      await tx.aIValidationEvidence.deleteMany({});
-      await tx.aIValidationFinding.deleteMany({});
-      await tx.aIDuplicatePhotoCheck.deleteMany({});
-      await tx.aIHumanReview.deleteMany({});
-      await tx.aIValidationRun.deleteMany({});
-      await tx.aIWorkerValidationResult.deleteMany({});
-      await tx.aIValidationResult.deleteMany({});
-      await tx.aIReferenceUsageLog.deleteMany({});
-      await tx.aINotification.deleteMany({});
-      await tx.aISearchLog.deleteMany({});
-      await tx.aIAuditFinding.deleteMany({});
-      await tx.aIRiskScore.deleteMany({});
-      await tx.aIValidationOverride.deleteMany({});
-      await tx.aITransactionValidation.deleteMany({});
-      await tx.notebookReferenceApprovalLog.deleteMany({});
-      await tx.notebookReferenceIndexLog.deleteMany({});
-      await tx.userLoginLog.deleteMany({});
-      await tx.paymentLog.deleteMany({});
-      await tx.payrollAuditLog.deleteMany({});
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
 
       // --- PHASE 2: Transaction Workflows & Locks ---
-      await tx.revisionRequest.deleteMany({});
-      await tx.lockedRecord.deleteMany({});
-      await tx.transactionWorkflow.deleteMany({});
+      
+      
+      
 
       // --- PHASE 3: Canvassing & Procurement ---
-      await tx.quotationItem.deleteMany({});
-      await tx.supplierQuotation.deleteMany({});
-      await tx.canvassItem.deleteMany({});
-      await tx.canvassForm.deleteMany({});
-      await tx.purchaseOrderItem.deleteMany({});
-      await tx.purchaseOrder.deleteMany({});
-      await tx.materialRequestItem.deleteMany({});
-      await tx.materialRequest.deleteMany({});
+      
+      
+      
+      
+      
+      
+      
+      
 
       // --- PHASE 4: Delivery, Inventory & Equipment ---
-      await tx.equipmentAIValidation.deleteMany({});
-      await tx.equipmentTelemetry.deleteMany({});
-      await tx.equipmentMaintenance.deleteMany({});
-      await tx.equipmentUtilization.deleteMany({});
-      await tx.equipmentDeployment.deleteMany({});
-      await tx.equipment.deleteMany({});
+      
+      
+      
+      
+      
+      
 
-      await tx.accountsPayable.deleteMany({});
-      await tx.deliveryItem.deleteMany({});
-      await tx.delivery.deleteMany({});
-      await tx.consumptionItem.deleteMany({});
-      await tx.consumptionLog.deleteMany({});
-      await tx.returnItem.deleteMany({});
-      await tx.materialReturn.deleteMany({});
-      await tx.issuanceItem.deleteMany({});
-      await tx.materialIssuance.deleteMany({});
+      
+      
+      
+      
+      
+      
+      
+      
+      
 
       // --- PHASE 5: Expenses & Petty Cash ---
-      await tx.expenseApprovalLog.deleteMany({});
-      await tx.expenseAIValidation.deleteMany({});
-      await tx.expenseProofFile.deleteMany({});
-      await tx.expenseBreakdownItem.deleteMany({});
-      await tx.pettyCashExpense.deleteMany({});
-      await tx.pettyCashReplenishment.deleteMany({});
-      await tx.expense.deleteMany({});
-      await tx.pettyCashAccount.deleteMany({});
+      
+      
+      
+      
+      
+      
+      
+      
 
       // --- PHASE 6: Subcontracting ---
-      await tx.subcontractBilling.deleteMany({});
-      await tx.subcontractAccomplishment.deleteMany({});
-      await tx.jobOrder.deleteMany({});
-      await tx.subcontractorBOQItem.deleteMany({});
-      await tx.programOfWorks.deleteMany({});
-      await tx.subcontractPackage.deleteMany({});
-      await tx.backCharge.deleteMany({});
-      await tx.accomplishmentRecord.deleteMany({});
-      await tx.paymentRecord.deleteMany({});
+      
+      
+      
+      
+      
+      
+      
+      
+      
 
       // --- PHASE 7: Payments & Banking Transactions ---
-      await tx.paymentFallbackRecommendation.deleteMany({});
-      await tx.paymentException.deleteMany({});
-      await tx.paymentBatchRow.deleteMany({});
-      await tx.paymentBatch.deleteMany({});
-      await tx.payrollFundingRequest.deleteMany({});
+      
+      
+      
+      
+      
 
       // --- PHASE 8: Payroll & HR (ALL workers deleted per user instruction) ---
-      await tx.payrollApproval.deleteMany({});
-      await tx.deductionLog.deleteMany({});
-      await tx.deductionLedger.deleteMany({});
-      await tx.payrollDeduction.deleteMany({});
-      await tx.payrollEarning.deleteMany({});
-      await tx.allowance.deleteMany({});
-      await tx.payroll.deleteMany({});
-      await tx.dailyTimeRecord.deleteMany({});
-      await tx.workerDocument.deleteMany({});
-      await tx.payrollPeriod.deleteMany({});
-      await tx.worker.deleteMany({});  // Workers are wiped — admin can re-add manually
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+        // Workers are wiped — admin can re-add manually
 
       // --- PHASE 9: Accomplishments, Billings, Variation Orders ---
-      await tx.projectAccomplishmentAIFinding.deleteMany({});
-      await tx.projectAccomplishmentFileVersion.deleteMany({});
-      await tx.projectAccomplishmentFile.deleteMany({});
-      await tx.bOQLotBreakdown.deleteMany({});
-      await tx.accomplishmentItem.deleteMany({});
-      await tx.accomplishment.deleteMany({});
-      await tx.inspection.deleteMany({});
-      await tx.billingDeduction.deleteMany({});
-      await tx.billingItem.deleteMany({});
-      await tx.billing.deleteMany({});
-      await tx.payment.deleteMany({});
-      await tx.aIVariationOrderValidation.deleteMany({});
-      await tx.variationOrderDocument.deleteMany({});
-      await tx.variationOrderApproval.deleteMany({});
-      await tx.variationOrderItem.deleteMany({});
-      await tx.variationOrder.deleteMany({});
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
 
       // --- PHASE 10: Documents & Evidence ---
-      await tx.evidenceFile.deleteMany({});
-      await tx.projectCamera.deleteMany({});
-      await tx.liveCameraSnapshot.deleteMany({});
+      
+      
+      
 
       // --- PHASE 11: Core Master Data (Projects, BOQs, Suppliers, Subcontractors) ---
-      await tx.bOQMapping.deleteMany({});
-      await tx.awardedBOQItem.deleteMany({});
-      await tx.consolidatedBOQItem.deleteMany({});
-      await tx.project.deleteMany({});
-      await tx.supplier.deleteMany({});
-      await tx.subcontractor.deleteMany({});
+      
+      
+      
+      
+      
+      
 
       // --- PHASE 12: Seed Reference Data (Requested by User) ---
       await tx.worker.createMany({
