@@ -15,30 +15,13 @@ export async function getUserPermissions(userId: string) {
   const cookieStore = await cookies();
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
 
-  let [user, userRoles] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-    prisma.userRole.findMany({
-      where: { userId },
-      include: {
-        role: {
-          include: {
-            rolePermissions: true
-          }
-        }
-      }
-    })
-  ]);
-
-  // Fallback to demo user if session is invalid or missing
-  if (!user) {
-    const demoUser = await prisma.user.findFirst({
-      where: { email: 'jburns@demo.com' },
-      select: { id: true, role: true }
-    });
-    if (demoUser) {
-      user = demoUser;
-      userRoles = await prisma.userRole.findMany({
-        where: { userId: demoUser.id },
+  let user = null;
+  let userRoles = [];
+  try {
+    const results = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+      prisma.userRole.findMany({
+        where: { userId },
         include: {
           role: {
             include: {
@@ -46,7 +29,36 @@ export async function getUserPermissions(userId: string) {
             }
           }
         }
+      })
+    ]);
+    user = results[0];
+    userRoles = results[1] as any;
+  } catch (error) {
+    console.error("Database connection failed in getUserPermissions:", error);
+  }
+
+  // Fallback to demo user if session is invalid or missing
+  if (!user) {
+    try {
+      const demoUser = await prisma.user.findFirst({
+        where: { email: 'jburns@demo.com' },
+        select: { id: true, role: true }
       });
+      if (demoUser) {
+        user = demoUser;
+        userRoles = await prisma.userRole.findMany({
+          where: { userId: demoUser.id },
+          include: {
+            role: {
+              include: {
+                rolePermissions: true
+              }
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Database connection failed for demo user fallback in getUserPermissions:", error);
     }
   }
 
