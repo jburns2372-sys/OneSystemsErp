@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
-import { uploadToS3 as put } from '@/lib/s3';
+import { uploadToS3 as put } from '../../../../src/lib/s3';
 import ExcelJS from "exceljs";
 import fs from 'fs';
 import path from 'path';

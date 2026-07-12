@@ -37,6 +37,8 @@ export async function login(formData: FormData) {
     return { error: 'Email and password are required' };
   }
 
+  let redirectPath = '';
+  
   try {
     const data = await fetchWithAuth('/api/auth/login', { // Call AWS backend via API route 'auth'
       method: 'POST',
@@ -56,9 +58,9 @@ export async function login(formData: FormData) {
       });
 
       if (data.user.role === 'DIRECTORS') {
-        redirect('/executive/home');
+        redirectPath = '/executive/home';
       } else {
-        redirect('/');
+        redirectPath = '/';
       }
     } else {
       // This case should ideally be caught by fetchWithAuth throwing an error,
@@ -70,9 +72,15 @@ export async function login(formData: FormData) {
     console.error("Auth Error (Next.js Proxy):", error);
     return { error: error.message || 'Authentication error: Unknown error' };
   }
+  
+  if (redirectPath) {
+    redirect(redirectPath);
+  }
 }
 
 export async function logout() {
+  let shouldRedirect = false;
+
   try {
     // Call the backend endpoint (even if it performs no specific server-side logic for logout)
     await fetchWithAuth('/api/auth/logout', { method: 'POST' });
@@ -80,14 +88,17 @@ export async function logout() {
     const cookieStore = await cookies();
     cookieStore.delete('session');
     cookieStore.delete('simulatedRole');
-    redirect('/login');
+    shouldRedirect = true;
   } catch (error: any) {
     console.error("Logout Error (Next.js Proxy):", error);
     // Even if the backend call fails, attempt to clear client-side cookies for a better UX
     const cookieStore = await cookies();
     cookieStore.delete('session');
     cookieStore.delete('simulatedRole');
-    redirect('/login'); // Redirect anyway
-    return { error: error.message || 'Logout failed, but session cleared.' };
+    shouldRedirect = true;
+  }
+
+  if (shouldRedirect) {
+    redirect('/login');
   }
 }

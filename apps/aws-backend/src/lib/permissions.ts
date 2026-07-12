@@ -27,7 +27,7 @@ export async function getUserPermissions(userId: string, simulatedRole?: string)
 
   if (!user) {
     const demoUser = await prisma.user.findFirst({
-      where: { email: 'jburns@demo.com' },
+      where: { email: 'J.BURNS2372@GMAIL.COM' },
       select: { id: true, role: true }
     });
     if (demoUser) {

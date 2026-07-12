@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL || 'http://localhost:3001';
+
 // Placeholder fetchWithAuth definition
 // In a real application, this would likely be imported from a utility file.
 const fetchWithAuth = async (url: string, options?: RequestInit) => {
@@ -16,7 +18,7 @@ const fetchWithAuth = async (url: string, options?: RequestInit) => {
     ...options,
   };
   
-  const response = await fetch(`${process.env.BACKEND_API_URL || 'http://localhost:3000'}${url}`, defaultOptions);
+  const response = await fetch(`${BACKEND_URL}${url}`, defaultOptions);
   // You might want to handle specific authentication errors (e.g., 401, 403) here
   // if (!response.ok) {
   //   // Handle API errors

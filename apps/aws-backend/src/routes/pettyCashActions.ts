@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient(); // Adjust path as per AWS project structure
-import { validateTransactionWithAI } from '../services/aiValidationActions'; // Adjust path as per AWS project structure
+import { validateTransactionWithAI } from '../lib/aiValidation'; // Adjust path as per AWS project structure
 
 const router = Router();
 

@@ -57,7 +57,7 @@ export default async function RootLayout({
     if (!user) {
       // Fallback for demo
       user = await import('@/lib/prisma').then(m => m.prisma.user.findFirst({
-        where: { email: 'jburns@demo.com' },
+        where: { email: 'J.BURNS2372@GMAIL.COM' },
         select: { id: true, name: true, email: true, role: true }
       }));
     }

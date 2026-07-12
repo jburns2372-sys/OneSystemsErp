@@ -23,8 +23,12 @@ export default async function Home() {
   
   if (!currentUser) {
     // Fallback for demo
-    currentUser = await prisma.user.findFirst({
-      where: { email: 'jburns@demo.com' },
+    const demoUser = await prisma.user.findFirst({
+      where: { email: 'J.BURNS2372@GMAIL.COM' },
+      select: { id: true, role: true }
+    });
+    currentUser = await prisma.user.findUnique({
+      where: { id: demoUser?.id },
       include: { userRoles: { include: { role: true } } }
     });
   }
