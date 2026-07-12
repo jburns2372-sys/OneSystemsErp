@@ -71,27 +71,22 @@ export async function getCurrentUserRole() {
       return simulatedRole;
     }
 
-    // Fast path: if database is completely wiped (0 users), allow Master Reset
-    const userCount = await prisma.user.count();
-    if (userCount === 0) {
-      return 'SUPER_ADMIN';
+    // Direct database check instead of relying on external AWS proxy which fails on Vercel
+    if (!sessionId) {
+      return null;
     }
 
-    const response = await fetchWithAuth(`${AWS_BACKEND_API_BASE}/${ROUTE_NAME}/getCurrentUserRole`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, simulatedRole }), // Pass to backend
-    });
-
-    const data = await response.json();
-
-    if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Failed to fetch user role');
-    }
+    const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
     
-    return data.role || null;
+    // Emergency empty state override
+    if (!currentUser) {
+      const userCount = await prisma.user.count();
+      if (userCount === 0) return 'SUPER_ADMIN';
+    }
+
+    return currentUser?.role || null;
   } catch (e: any) {
-    console.error('Failed to get current user role (proxy):', e);
+    console.error('Failed to get current user role (Prisma direct):', e);
     return null;
   }
 }
