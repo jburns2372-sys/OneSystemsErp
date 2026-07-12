@@ -3,9 +3,11 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL || 'http://localhost:3001';
+
 // Standard fetchWithAuth wrapper
 async function fetchWithAuth(url: string, options?: RequestInit) {
-  const response = await fetch(url, {
+  const response = await fetch(`${BACKEND_URL}${url}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
