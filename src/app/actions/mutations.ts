@@ -1012,6 +1012,12 @@ export async function deleteProcurementBenchmark(projectId: string) {
     where: { projectId }
   });
 
+  // Reset the locked status so the user can upload a new benchmark
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { procurementBenchmarkLocked: false }
+  });
+
   revalidatePath(`/projects/${projectId}`);
   revalidatePath('/projects');
 }
