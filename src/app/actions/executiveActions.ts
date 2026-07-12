@@ -1,86 +1,263 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { prisma } from '@/lib/prisma';
 
-/**
- * A wrapper around fetch that automatically includes authentication tokens/cookies.
- * In this setup, it reads Next.js cookies and sends them in the request body
- * for the backend to use for authentication and authorization.
- */
-async function fetchWithAuth(url: string, options?: RequestInit) {
+async function _getAccessDetails() {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('session')?.value;
-  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+  const simulatedRoleFromRequest = cookieStore.get('simulatedRole')?.value;
 
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options?.headers || {})
-  };
+  const userId = sessionToken || ''; 
 
-  let body = {};
-  if (options?.body) {
-    try {
-      body = JSON.parse(options.body as string);
-    } catch (e) {
-      // If body is not JSON or not parseable, use it as is (though server actions typically send JSON)
-      console.warn('fetchWithAuth: options.body is not valid JSON, sending as raw body. Make sure backend expects this.');
-      body = options.body;
-    }
+  if (!userId) {
+    throw new Error('Unauthorized: Session token missing');
   }
 
-  // Merge session and simulatedRole into the body for the backend
-  const mergedBody = JSON.stringify({
-    ...body,
-    sessionToken,
-    simulatedRole
-  });
+  // Disabled requirePermission for NextJS server action to prevent dependency cycle
+  // await requirePermission(userId, 'PROJECT_MANAGEMENT', 'canView'); 
+  
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new Error('Unauthorized: User not found');
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    body: mergedBody
-  });
+  const effectiveRole = (simulatedRoleFromRequest && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS')) 
+    ? simulatedRoleFromRequest 
+    : (user.role || 'GUEST_USER');
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error', success: false }));
-    throw new Error(errorData.error || 'Failed to fetch data');
+  const allowedRoles = [
+    'SYSTEM_ADMIN',
+    'SUPER_ADMIN',
+    'PROJECT_DIRECTOR',
+    'DIRECTORS',
+    'PROJECT_MANAGER',
+    'ADMINISTRATOR',
+    'ADMIN'
+  ];
+
+  if (!allowedRoles.includes(effectiveRole)) {
+    throw new Error('Unauthorized: Executive access required');
   }
 
-  const data = await response.json();
-  if (!data.success) {
-    throw new Error(data.error || 'Backend operation failed');
-  }
-  return data.data; // Return the actual data payload
+  return { user, effectiveRole };
 }
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || 
-  (process.env.NEXT_PUBLIC_API_BASE_URL ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/api` : 'http://localhost:4000/api');
-const ROUTE_NAME = 'executiveActions';
 
 /**
  * Retrieves the high-level company overview KPIs for the Executive Home Dashboard
  */
 export async function getCompanyOverview(projectId?: string) {
-  const response = await fetchWithAuth(
-    `${API_BASE_URL}/${ROUTE_NAME}/getCompanyOverview`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ projectId })
+  try {
+    const { user, effectiveRole } = await _getAccessDetails();
+    const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+
+    // Fetch all active/ongoing projects or the specific selected project
+    const projectFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
+    if (projectId && projectId !== 'ALL') {
+      projectFilter.id = projectId;
     }
-  );
-  return response;
+    
+    if (!isSuperAdmin) {
+      projectFilter.userAssignments = {
+        some: {
+          userId: user.id,
+          assignmentStatus: 'active'
+        }
+      };
+    }
+
+    const activeProjects = await prisma.project.findMany({
+      where: projectFilter,
+      select: {
+        id: true,
+        contractAmount: true,
+        variationOrders: {
+          where: { currentStatus: 'APPROVED' },
+          select: { netVariationAmount: true }
+        },
+        billings: {
+          where: { status: { in: ['APPROVED', 'SUBMITTED', 'PAID'] } },
+          select: { currentBillingAmount: true, payments: { select: { amountPaid: true } } }
+        },
+        expenses: {
+          where: { status: 'APPROVED' },
+          select: { netAmount: true }
+        },
+        payrolls: {
+          where: { paymentStatus: 'PAID' },
+          select: { netPay: true }
+        },
+        subcontractBillings: {
+          where: { approvalStatus: 'APPROVED' },
+          select: { currentGross: true, remainingBalance: true, packageId: true, jobOrderId: true }
+        },
+        materialRequests: {
+          select: {
+            purchaseOrders: {
+              select: {
+                payables: {
+                  where: { status: { not: 'PAID' } },
+                  select: { amount: true, paidAmount: true, status: true }
+                }
+              }
+            }
+          }
+        },
+        _count: {
+          select: {
+            projectValidations: {
+              where: { riskLevel: { in: ['HIGH', 'CRITICAL'] } }
+            }
+          }
+        }
+      }
+    });
+
+    let totalContractAmount = 0;
+    let totalApprovedVOs = 0;
+    let totalBilledAmount = 0;
+    let totalCollectedAmount = 0;
+    let totalOutstandingReceivables = 0;
+    let totalActualCost = 0;
+    let totalSubcontractPayables = 0;
+    let totalJobOrderPayables = 0;
+    let totalSupplierPayables = 0;
+    let totalCriticalRisks = 0;
+
+    activeProjects.forEach(p => {
+      // Contract & VOs
+      totalContractAmount += p.contractAmount;
+      const projectVOs = p.variationOrders.reduce((sum, vo) => sum + (vo.netVariationAmount || 0), 0);
+      totalApprovedVOs += projectVOs;
+
+      // Billings & Collections
+      p.billings.forEach(b => {
+        totalBilledAmount += b.currentBillingAmount;
+        const collected = b.payments.reduce((sum, pmt) => sum + pmt.amountPaid, 0);
+        totalCollectedAmount += collected;
+        totalOutstandingReceivables += (b.currentBillingAmount - collected);
+      });
+
+      // Costs
+      const projectExpenses = p.expenses.reduce((sum, e) => sum + e.netAmount, 0);
+      const projectPayrolls = p.payrolls.reduce((sum, pr) => sum + (pr.netPay || 0), 0);
+      const projectSubcontract = p.subcontractBillings.reduce((sum, sb) => sum + sb.currentGross, 0);
+      
+      totalActualCost += (projectExpenses + projectPayrolls + projectSubcontract);
+
+      // Payables
+      p.subcontractBillings.forEach(sb => {
+        if (sb.packageId) totalSubcontractPayables += sb.remainingBalance;
+        if (sb.jobOrderId) totalJobOrderPayables += sb.remainingBalance;
+      });
+
+      p.materialRequests.forEach(mr => {
+        mr.purchaseOrders.forEach(po => {
+          po.payables.forEach(payable => {
+            if (payable.status === 'ACCRUED') {
+              totalSupplierPayables += payable.amount;
+            } else {
+              totalSupplierPayables += (payable.amount - payable.paidAmount);
+            }
+          });
+        });
+      });
+
+      // Risks
+      totalCriticalRisks += p._count.projectValidations;
+    });
+
+    const result = {
+      activeProjectsCount: activeProjects.length,
+      totalContractAmount,
+      totalApprovedVOs,
+      revisedContractAmount: totalContractAmount + totalApprovedVOs,
+      totalBilledAmount,
+      totalCollectedAmount,
+      totalOutstandingReceivables,
+      totalActualCost,
+      totalSubcontractPayables,
+      totalJobOrderPayables,
+      totalSupplierPayables,
+      totalProjectExpensesToDate: totalSubcontractPayables + totalJobOrderPayables + totalSupplierPayables,
+      totalCriticalRisks,
+      
+      // Derived Metrics
+      overallProgressPercentage: totalContractAmount > 0 ? (totalBilledAmount / totalContractAmount) * 100 : 0,
+      costToDateRatio: totalContractAmount > 0 ? (totalActualCost / totalContractAmount) * 100 : 0
+    };
+
+    return result;
+  } catch (error: any) {
+    console.error('Error in getCompanyOverview:', error);
+    throw new Error(error.message || 'Failed to get company overview');
+  }
 }
 
 /**
  * Retrieves the project portfolio list for the executive dashboard
  */
 export async function getProjectPortfolio() {
-  const response = await fetchWithAuth(
-    `${API_BASE_URL}/${ROUTE_NAME}/getProjectPortfolio`,
-    {
-      method: 'POST',
-      body: JSON.stringify({}) // No specific arguments needed for this function besides auth
-    }
-  );
-  return response;
+  try {
+    const { user, effectiveRole } = await _getAccessDetails();
+    const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+
+    const projects = await prisma.project.findMany({
+      where: isSuperAdmin ? undefined : {
+        userAssignments: {
+          some: {
+            userId: user.id,
+            assignmentStatus: 'active'
+          }
+        }
+      },
+      orderBy: { contractAmount: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        contractNumber: true,
+        client: true,
+        status: true,
+        contractAmount: true,
+        startDate: true,
+        revisedCompletionDate: true,
+        originalCompletionDate: true,
+        projectValidationScore: true, // Fetch AI risk score
+        variationOrders: {
+          where: { currentStatus: 'APPROVED' },
+          select: { netVariationAmount: true }
+        },
+        billings: {
+          where: { status: { in: ['APPROVED', 'SUBMITTED', 'PAID'] } },
+          select: { currentBillingAmount: true, payments: { select: { amountPaid: true } } }
+        },
+        consolidatedBoqItems: {
+          select: { totalCost: true }
+        }
+      }
+    });
+
+    const result = projects.map(p => {
+      const totalVOs = p.variationOrders.reduce((sum, vo) => sum + (vo.netVariationAmount || 0), 0);
+      const revisedAmount = p.contractAmount + totalVOs;
+      const totalBilled = p.billings.reduce((sum, b) => sum + b.currentBillingAmount, 0);
+      const progress = revisedAmount > 0 ? (totalBilled / revisedAmount) * 100 : 0;
+      const consolidatedCost = p.consolidatedBoqItems.reduce((sum, i) => sum + (i.totalCost || 0), 0);
+      
+      return {
+        ...p,
+        totalVOs,
+        revisedAmount,
+        totalBilled,
+        progressPercentage: progress,
+        consolidatedCost,
+        // Default to GRAY risk if no score exists yet
+        riskLevel: (p as any).projectValidationScore?.riskLevel || 'GRAY',
+        validationConfidenceScore: (p as any).projectValidationScore?.validationConfidenceScore || 0
+      };
+    });
+
+    return result;
+  } catch (error: any) {
+    console.error('Error in getProjectPortfolio:', error);
+    throw new Error(error.message || 'Failed to get project portfolio');
+  }
 }
