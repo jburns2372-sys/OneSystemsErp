@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import prisma from '@/lib/prisma';
 
 /**
  * A wrapper around `fetch` that automatically includes authentication headers.
@@ -68,6 +69,12 @@ export async function getCurrentUserRole() {
     // Fast path: if UI role is simulated, return it immediately for the UI to adapt
     if (simulatedRole) {
       return simulatedRole;
+    }
+
+    // Fast path: if database is completely wiped (0 users), allow Master Reset
+    const userCount = await prisma.user.count();
+    if (userCount === 0) {
+      return 'SUPER_ADMIN';
     }
 
     const response = await fetchWithAuth(`${AWS_BACKEND_API_BASE}/${ROUTE_NAME}/getCurrentUserRole`, {
