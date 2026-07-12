@@ -14,7 +14,7 @@ async function fetchWithAuth<T>(url: string, options?: RequestInit): Promise<T> 
     // 'Authorization': `Bearer ${await getAuthToken()}`, // Example: replace with actual auth token retrieval
   };
 
-  const fullUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001'}${url}`;
+  const fullUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || process.env.AWS_BACKEND_URL || 'http://localhost:4000'}${url}`;
 
   const response = await fetch(fullUrl, {
     ...options,
