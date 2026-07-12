@@ -20,7 +20,7 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
   if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
   // Only set Content-Type if a body is present and it's JSON
-  if (options.body && typeof options.body === 'string' && options.headers?.['Content-Type'] !== 'multipart/form-data') {
+  if (options.body && typeof options.body === 'string') {
     headers.set('Content-Type', 'application/json');
   }
 
