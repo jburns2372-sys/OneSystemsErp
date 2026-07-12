@@ -1,9 +1,14 @@
 import { PrismaClient } from '@prisma/client';
 
+import { seedKnowledgeCenter } from './seeders/seed-knowledge-center';
+
 const prisma = new PrismaClient();
 
 async function main() {
   console.log("Seeding Comprehensive Subcontracting Data...");
+
+  // 0. Ensure critical AI and validation rules are always seeded first to survive DB resets
+  await seedKnowledgeCenter();
 
   // 1. Ensure a Project exists
   let project = await prisma.project.findFirst();

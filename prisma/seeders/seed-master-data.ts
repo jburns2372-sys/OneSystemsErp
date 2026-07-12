@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { seedWorkers } from './seed-workers';
 import { seedSuppliers } from './seed-suppliers';
 import { seedSubcontractors } from './seed-subcontractors';
+import { seedKnowledgeCenter } from './seed-knowledge-center';
 
 const prisma = new PrismaClient();
 
@@ -9,6 +10,7 @@ async function main() {
   console.log('--- STARTING MASTER DATA SEED ---');
   
   try {
+    await seedKnowledgeCenter();
     await seedWorkers();
     await seedSuppliers();
     await seedSubcontractors();
