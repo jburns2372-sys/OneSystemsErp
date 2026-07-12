@@ -53,7 +53,8 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
   return data.data; // Return the actual data payload
 }
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:3001/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || 
+  (process.env.NEXT_PUBLIC_API_BASE_URL ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/api` : 'http://localhost:4000/api');
 const ROUTE_NAME = 'executiveActions';
 
 /**
