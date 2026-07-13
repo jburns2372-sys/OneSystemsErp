@@ -28,54 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'No activities to simulate.' }, { status: 400 });
     }
 
-    // ==========================================
-    // Execute Standard Operations Procedure: Purge Junk Data before simulation
-    // ==========================================
-    
-    // 1. Identify Junk Keywords
-    const junkKeywords = ['DIRECT COST OCM (12%) PROFIT', '(2)'];
-
-    for (const keyword of junkKeywords) {
-      // Find Junk Activities
-      const junkActs = await prisma.scheduleActivity.findMany({
-        where: { scheduleId: schedule.id, name: { contains: keyword } }
-      });
-
-      if (junkActs.length > 0) {
-        const junkActIds = junkActs.map(a => a.id);
-        
-        // Delete Dependencies
-        await prisma.scheduleDependency.deleteMany({
-          where: { OR: [{ predecessorId: { in: junkActIds } }, { successorId: { in: junkActIds } }] }
-        });
-
-        // Delete BOQ Mappings
-        await prisma.scheduleBOQMapping.deleteMany({
-          where: { activityId: { in: junkActIds } }
-        });
-
-        // Delete Activities
-        await prisma.scheduleActivity.deleteMany({
-          where: { id: { in: junkActIds } }
-        });
-      }
-
-      // Delete Junk BOQ Items
-      await prisma.awardedBOQItem.deleteMany({
-        where: { projectId, description: { contains: keyword } }
-      });
-    }
-
-    // Re-fetch activities after cleanup to ensure we don't pass deleted ones to AI
-    const refreshedSchedule = await prisma.projectSchedule.findUnique({
-      where: { projectId },
-      include: { activities: { orderBy: { activityCode: 'asc' } } }
-    });
-    
-    if (!refreshedSchedule) {
-      return NextResponse.json({ error: 'Schedule not found after cleanup' }, { status: 404 });
-    }
-    // ==========================================
+    // We no longer purge any data to ensure 100% financial balancing with the Awarded BOQ.
 
     // Fetch awarded BOQ items to feed to AI for mapping
     const awardedItems = await prisma.awardedBOQItem.findMany({
@@ -97,7 +50,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }));
 
     // Filter out previous AI-generated activities
-    const activities = refreshedSchedule.activities.filter(a => a.activityCode !== 'AI-GEN');
+    const activities = schedule.activities.filter(a => a.activityCode !== 'AI-GEN');
     
     // Fallbacks
     let startDate = new Date('2026-06-12T00:00:00.000Z');
@@ -136,10 +89,10 @@ Please do the following:
 
 CRITICAL RULES:
 - EVERY SINGLE Awarded BOQ Material ID provided in the input MUST be assigned to exactly one phase. Do not leave any BOQ item unassigned, or the project financials will not balance.
-- The FIRST phase (e.g. PH-1 Mobilization & Site Setup) MUST ONLY contain General Requirements and Preliminaries. This includes activities related to: Mobilization, Demobilization, Quality Standard and Control, Security, Safety and Protection, Site Management Work, Temporary Works, Transportation, and Permits.
+- The FIRST phase MUST ONLY contain General Requirements and Preliminaries. This includes activities related to: Mobilization, Demobilization, Warehouse, Off Site Barracks, Quality Standard and Control, Security, Safety and Protection, Site Management Work, Temporary Works, Transportation, Permits, OCM, Profit, and Tax.
 - DO NOT put physical construction works, demolition, chipping, restoration, or general "Consumables" into the first phase. They belong in subsequent construction phases.
 - Within each phase, the \`orderedActivityIds\` array MUST be strictly ordered chronologically from what starts first to what finishes last.
-- For the FIRST phase, true mobilization tasks (like 'Mobilization', 'Site Management', 'Permits', 'Temporary Works') MUST be at the very beginning of the \`orderedActivityIds\` array.
+- For the FIRST phase, true mobilization tasks (like 'Mobilization', 'Warehouse', 'Off Site Barracks', 'Site Management', 'Permits', 'Temporary Works') MUST be at the very beginning of the \`orderedActivityIds\` array.
 
 Activities:
 ${JSON.stringify(activityPayload, null, 2)}
@@ -149,7 +102,7 @@ ${JSON.stringify(boqPayload, null, 2)}`;
 
     const schema = z.object({
       phases: z.array(z.object({
-        code: z.string().describe("Unique phase code e.g. PH-1"),
+        code: z.string().describe("Must strictly follow the format: Phase 1, Phase 2, etc."),
         name: z.string().describe("Phase name"),
         pct: z.number().describe("Percentage of total project duration (0.0 to 1.0)"),
         orderedActivityIds: z.array(z.string()).describe("Chronological sequence of activity IDs to be executed in this phase"),
