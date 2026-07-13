@@ -79,7 +79,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // Fetch awarded BOQ items to feed to AI for mapping
     const awardedItems = await prisma.awardedBOQItem.findMany({
-      where: { projectId }
+      where: { 
+        projectId,
+        totalCost: { gt: 0 } 
+      }
     });
 
     if (awardedItems.length === 0) {
