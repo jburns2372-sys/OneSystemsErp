@@ -31,18 +31,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // We no longer purge any data to ensure 100% financial balancing with the Awarded BOQ.
 
     // Fetch consolidated BOQ items to feed to AI for mapping
-    const awardedItems = await prisma.consolidatedBOQItem.findMany({
+    const consolidatedItems = await prisma.consolidatedBOQItem.findMany({
       where: { 
         projectId,
         totalCost: { gt: 0 } 
       }
     });
 
-    if (awardedItems.length === 0) {
+    const rawAwardedItems = await prisma.awardedBOQItem.findMany({
+      where: { projectId }
+    });
+
+    if (consolidatedItems.length === 0) {
        return NextResponse.json({ error: 'No Consolidated BOQ items found to simulate phasing.' }, { status: 400 });
     }
 
-    const boqPayload = awardedItems.map(item => ({
+    const boqPayload = consolidatedItems.map(item => ({
       id: item.id,
       description: item.description,
       quantity: item.quantity,
@@ -215,7 +219,7 @@ ${JSON.stringify(boqPayload, null, 2)}`;
     }
     
     if (activePhases.length > 0) {
-      for (const boq of awardedItems) {
+      for (const boq of consolidatedItems) {
         if (!assignedBoqIds.has(boq.id)) {
           activePhases[activePhases.length - 1].assignedBOQItemIds.push(boq.id);
         }
@@ -257,7 +261,7 @@ ${JSON.stringify(boqPayload, null, 2)}`;
       
       if (phase.assignedBOQItemIds && Array.isArray(phase.assignedBOQItemIds)) {
         for (const boqId of phase.assignedBOQItemIds) {
-          const boqItem = awardedItems.find(b => b.id === boqId);
+          const boqItem = consolidatedItems.find(b => b.id === boqId);
           if (boqItem) {
             const actId = crypto.randomUUID();
             activityData.push({
@@ -276,11 +280,16 @@ ${JSON.stringify(boqPayload, null, 2)}`;
               unit: boqItem.unit
             });
 
-            boqMappingData.push({
-              activityId: actId,
-              awardedBoqItemId: boqId,
-              mappedQuantity: boqItem.quantity || 1
-            });
+            // Map the underlying raw AwardedBOQItems to satisfy the foreign key constraint
+            const matchingRawItems = rawAwardedItems.filter(r => r.description === boqItem.description);
+            for (const raw of matchingRawItems) {
+              boqMappingData.push({
+                id: crypto.randomUUID(),
+                activityId: actId,
+                awardedBoqItemId: raw.id,
+                mappedQuantity: raw.quantity || 1
+              });
+            }
             
             // Link activities within the phase (Finish-to-Start)
             if (prevActIdInPhase) {
