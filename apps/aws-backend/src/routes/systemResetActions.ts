@@ -202,6 +202,18 @@ router.post('/resetTransactionData', async (req, res) => {
       await tx.bOQMapping.deleteMany({});
       await tx.awardedBOQItem.deleteMany({});
       await tx.consolidatedBOQItem.deleteMany({});
+      await tx.scheduleRevisionRequest.deleteMany({});
+      await tx.scheduleRecoveryPlan.deleteMany({});
+      await tx.scheduleDelayRecord.deleteMany({});
+      await tx.scheduleProgressUpdate.deleteMany({});
+      await tx.schedulePOWMapping.deleteMany({});
+      await tx.scheduleBOQMapping.deleteMany({});
+      await tx.scheduleMilestone.deleteMany({});
+      await tx.scheduleDependency.deleteMany({});
+      await tx.scheduleActivity.deleteMany({});
+      await tx.scheduleWBS.deleteMany({});
+      await tx.projectSchedule.deleteMany({});
+      await tx.projectUserAssignment.deleteMany({});
       await tx.project.deleteMany({});
       await tx.supplier.deleteMany({});
       await tx.subcontractor.deleteMany({});
