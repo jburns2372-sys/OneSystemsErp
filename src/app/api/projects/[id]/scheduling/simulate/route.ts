@@ -70,32 +70,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const diffTime = Math.abs(targetDate.getTime() - startDate.getTime());
     const totalDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
-    // 2. Intelligent AI Phasing based on actual Activities
-    const activityPayload = activities.map(a => ({
-      id: a.id,
-      name: a.name
-    }));
+    // 2. Intelligent AI Phasing based on Awarded BOQ Materials
+    // We no longer feed template activities to the AI, we generate activities directly from the BOQ.
 
 const prompt = `You are an expert construction project manager. 
-I have a list of project activities and an existing total project duration of ${totalDays} days.
+I have a list of Awarded BOQ Materials and an existing total project duration of ${totalDays} days.
 The project starts on ${startDate.toDateString()} and ends on ${targetDate.toDateString()}.
-I need to group these activities into highly detailed, logical construction phases and sequence them correctly.
+I need to group these BOQ materials into highly detailed, logical construction phases.
 Please do the following:
 1. YOU MUST GENERATE EXACTLY 10 highly detailed construction sub-phases based on industry standards (e.g. Pre-construction & Mobilization, Earthworks, Foundation, Superstructure, Roof Framing, Exterior Finishes, MEPF, Interior Partitions, Architectural Finishes, Testing & Handover).
 2. For each sub-phase, estimate its percentage of the total project duration (pct, must sum to 1.0).
-3. For each sub-phase, provide an ordered array of 'orderedActivityIds' representing the recommended chronological sequence of works within that phase. Every activity provided in the input MUST be assigned to exactly one phase.
+3. For each sub-phase, assign the relevant Awarded BOQ item IDs from the list provided that correspond to the work in that phase.
 4. Carefully analyze and sequence the project phases according to strict industry standard construction workflows.
-5. For each sub-phase, assign the relevant Awarded BOQ item IDs from the list provided that correspond to the work in that phase.
 
 CRITICAL RULES:
 - EVERY SINGLE Awarded BOQ Material ID provided in the input MUST be assigned to exactly one phase. Do not leave any BOQ item unassigned, or the project financials will not balance.
-- The FIRST phase MUST ONLY contain General Requirements and Preliminaries. This includes activities related to: Mobilization, Demobilization, Warehouse, Off Site Barracks, Quality Standard and Control, Security, Safety and Protection, Site Management Work, Temporary Works, Transportation, Permits, OCM, Profit, and Tax.
+- The FIRST phase MUST ONLY contain General Requirements and Preliminaries. This includes activities related to: Mobilization, Warehouse, Off Site Barracks, Site Management, Temporary Works, Permits, OCM, Profit, and Tax.
 - DO NOT put physical construction works, demolition, chipping, restoration, or general "Consumables" into the first phase. They belong in subsequent construction phases.
-- Within each phase, the \`orderedActivityIds\` array MUST be strictly ordered chronologically from what starts first to what finishes last.
-- For the FIRST phase, true mobilization tasks (like 'Mobilization', 'Warehouse', 'Off Site Barracks', 'Site Management', 'Permits', 'Temporary Works') MUST be at the very beginning of the \`orderedActivityIds\` array.
-
-Activities:
-${JSON.stringify(activityPayload, null, 2)}
+- The TENTH (last) phase MUST ALWAYS be named "Phase 10: Project Acceptance and Demobilization".
 
 Awarded BOQ Materials:
 ${JSON.stringify(boqPayload, null, 2)}`;
@@ -103,9 +95,8 @@ ${JSON.stringify(boqPayload, null, 2)}`;
     const schema = z.object({
       phases: z.array(z.object({
         code: z.string().describe("Must strictly follow the format: Phase 1, Phase 2, etc."),
-        name: z.string().describe("Phase name"),
+        name: z.string().describe("Phase name (Phase 10 MUST be 'Project Acceptance and Demobilization')"),
         pct: z.number().describe("Percentage of total project duration (0.0 to 1.0)"),
-        orderedActivityIds: z.array(z.string()).describe("Chronological sequence of activity IDs to be executed in this phase"),
         assignedBOQItemIds: z.array(z.string()).describe("Array of Awarded BOQ item IDs mapped to this phase")
       })).length(10).describe("Exactly 10 logical construction phases")
     });
@@ -140,17 +131,16 @@ ${JSON.stringify(boqPayload, null, 2)}`;
     // Prepare the transaction array
     const txOperations = [];
 
-    // Clear previous AI mapping
+    // Clear previous AI mapping and ALL existing template activities
     txOperations.push(
       prisma.scheduleDependency.deleteMany({
         where: { scheduleId: schedule.id }
       }),
-      prisma.scheduleActivity.updateMany({
-        where: { scheduleId: schedule.id },
-        data: { wbsId: null }
+      prisma.scheduleBOQMapping.deleteMany({
+        where: { activity: { scheduleId: schedule.id } }
       }),
       prisma.scheduleActivity.deleteMany({
-        where: { scheduleId: schedule.id, activityCode: 'AI-GEN' }
+        where: { scheduleId: schedule.id }
       }),
       prisma.scheduleWBS.deleteMany({
         where: { scheduleId: schedule.id }
@@ -205,27 +195,22 @@ ${JSON.stringify(boqPayload, null, 2)}`;
       activePhases.push(p);
     }
 
-    // Assign existing activities to the AI phases based on the explicit ordered sequence
-    const activityMap = new Map(activities.map(a => [a.id, a]));
-    const assignedIds = new Set<string>();
-
+    // Catch any orphaned BOQ items and append them to the final phase
+    const assignedBoqIds = new Set<string>();
     for (const phase of activePhases) {
-      if (phase.orderedActivityIds && Array.isArray(phase.orderedActivityIds)) {
-        for (const actId of phase.orderedActivityIds) {
-          const act = activityMap.get(actId);
-          if (act && !assignedIds.has(actId)) {
-            phase.acts.push(act);
-            assignedIds.add(actId);
-          }
+      if (phase.assignedBOQItemIds && Array.isArray(phase.assignedBOQItemIds)) {
+        for (const boqId of phase.assignedBOQItemIds) {
+          assignedBoqIds.add(boqId);
         }
+      } else {
+        phase.assignedBOQItemIds = [];
       }
     }
-
-    // Catch any orphaned activities and append them to the final phase
+    
     if (activePhases.length > 0) {
-      for (const act of activities) {
-        if (!assignedIds.has(act.id)) {
-          activePhases[activePhases.length - 1].acts.push(act);
+      for (const boq of awardedItems) {
+        if (!assignedBoqIds.has(boq.id)) {
+          activePhases[activePhases.length - 1].assignedBOQItemIds.push(boq.id);
         }
       }
     }
@@ -259,145 +244,83 @@ ${JSON.stringify(boqPayload, null, 2)}`;
         }
       }
 
-      // Create an AI-injected anchor activity for this phase
-      const aiAnchorId = `ai_anchor_${phase.wbsId}`;
-      activityData.push({
-        id: aiAnchorId,
-        scheduleId: schedule.id,
-        wbsId: phase.wbsId,
-        name: `${phase.name} (AI Anchor)`,
-        activityCode: 'AI-GEN',
-        plannedDuration: phase.days,
-        plannedStartDate: mainStart,
-        plannedFinishDate: mainFinish,
-        status: aiAnchorStatus,
-        actualProgressPercent: aiAnchorProgress,
-        actualStartDate: aiAnchorActualStart
-      });
-
-      // Map AI assigned BOQ items to the AI Anchor Activity
+      // Create Schedule Activities dynamically from assigned BOQ items
+      let actOrder = 1;
+      let prevActIdInPhase: string | null = null;
+      
       if (phase.assignedBOQItemIds && Array.isArray(phase.assignedBOQItemIds)) {
         for (const boqId of phase.assignedBOQItemIds) {
-          boqMappingData.push({
-            activityId: aiAnchorId,
-            awardedBoqItemId: boqId,
-            mappedQuantity: 1 // Default proportion
-          });
-        }
-      }
-
-      // Link AI Anchor to Previous Phase's AI Anchor (FS)
-      if (prevMainActId) {
-        dependencyData.push({
-          scheduleId: schedule.id,
-          predecessorId: prevMainActId,
-          successorId: aiAnchorId,
-          type: 'FS',
-          lagDays: 0
-        });
-      }
-
-      if (phase.acts.length > 0) {
-        const numActs = phase.acts.length;
-        const staggerDays = phase.days / numActs;
-        // Cap activity duration: cannot exceed phase window
-        const duration = Math.max(1, Math.min(Math.floor(phase.days / 2), phase.days));
-
-        for (let i = 0; i < numActs; i++) {
-          const act = phase.acts[i];
-          const lagFromStart = Math.floor(i * staggerDays);
-          
-          const actStart = new Date(mainStart);
-          actStart.setDate(actStart.getDate() + lagFromStart);
-          
-          const actFinish = new Date(actStart);
-          actFinish.setDate(actFinish.getDate() + duration - 1);
-          // Clamp finish to phase end and project target date
-          if (actFinish > mainFinish) actFinish.setTime(mainFinish.getTime());
-          if (actFinish > targetDate) actFinish.setTime(targetDate.getTime());
-
-          const existingAct = activityMap.get(act.id);
-          let actStatus = 'NOT_STARTED';
-          let actProgress = 0;
-          let actualStart = null;
-          
-          // Preserve manual overrides if they exist
-          if (existingAct && (existingAct.actualProgressPercent > 0 || existingAct.status !== 'NOT_STARTED' || existingAct.actualStartDate)) {
-            actStatus = existingAct.status;
-            actProgress = existingAct.actualProgressPercent || 0;
-            actualStart = existingAct.actualStartDate;
-          } else {
-            // Auto-commence logic for unstarted activities
-            const today = new Date();
-            if (actStart <= today) {
-              actualStart = actStart;
-              const lapsedDays = Math.ceil((today.getTime() - actStart.getTime()) / (1000 * 60 * 60 * 24));
-              if (lapsedDays >= duration) {
-                actStatus = 'COMPLETED';
-                actProgress = 100;
-              } else {
-                actStatus = 'IN_PROGRESS';
-                actProgress = Math.round((lapsedDays / duration) * 100);
-              }
-            }
-          }
-
-          activityUpdates.push({
-            id: act.id,
-            data: {
+          const boqItem = awardedItems.find(b => b.id === boqId);
+          if (boqItem) {
+            const actId = crypto.randomUUID();
+            activityData.push({
+              id: actId,
+              scheduleId: schedule.id,
               wbsId: phase.wbsId,
-              plannedDuration: duration,
-              plannedStartDate: actStart,
-              plannedFinishDate: actFinish,
-              status: actStatus,
-              actualProgressPercent: actProgress,
-              actualStartDate: actualStart
-            }
-          });
+              name: boqItem.description,
+              activityCode: `BOQ-${actOrder}`,
+              plannedDuration: phase.days,
+              plannedStartDate: mainStart,
+              plannedFinishDate: mainFinish,
+              status: aiAnchorStatus,
+              actualProgressPercent: aiAnchorProgress,
+              actualStartDate: aiAnchorActualStart,
+              plannedQuantity: boqItem.quantity,
+              unit: boqItem.unit
+            });
 
-          if (i === 0) {
-            // First activity depends on the Anchor
-            dependencyData.push({
-              scheduleId: schedule.id,
-              predecessorId: aiAnchorId,
-              successorId: act.id,
-              type: 'SS',
-              lagDays: 0
+            boqMappingData.push({
+              activityId: actId,
+              awardedBoqItemId: boqId,
+              mappedQuantity: boqItem.quantity || 1
             });
-          } else {
-            // Subsequent activities depend on the previous one sequentially
-            const prevAct = phase.acts[i - 1];
-            const incrementalLag = Math.floor(i * staggerDays) - Math.floor((i - 1) * staggerDays);
             
-            dependencyData.push({
-              scheduleId: schedule.id,
-              predecessorId: prevAct.id,
-              successorId: act.id,
-              type: 'SS',
-              lagDays: incrementalLag
-            });
+            // Link activities within the phase (Finish-to-Start)
+            if (prevActIdInPhase) {
+               dependencyData.push({
+                 scheduleId: schedule.id,
+                 predecessorId: prevActIdInPhase,
+                 successorId: actId,
+                 type: 'FS',
+                 lagDays: 0
+               });
+            }
+            prevActIdInPhase = actId;
+            actOrder++;
           }
         }
       }
 
-      prevMainActId = aiAnchorId;
+      // Link the first activity of this phase to the last activity of the previous phase
+      if (prevMainActId && phase.assignedBOQItemIds.length > 0) {
+        const firstActOfPhase = activityData.find(a => a.wbsId === phase.wbsId && a.activityCode === 'BOQ-1');
+        if (firstActOfPhase) {
+          dependencyData.push({
+            scheduleId: schedule.id,
+            predecessorId: prevMainActId,
+            successorId: firstActOfPhase.id,
+            type: 'FS',
+            lagDays: 0
+          });
+        }
+      }
+      
+      if (prevActIdInPhase) {
+         prevMainActId = prevActIdInPhase;
+      }
+      
       currentDate = new Date(mainFinish);
       currentDate.setDate(currentDate.getDate() + 1);
       // Prevent advancing past the project target date
       if (currentDate > targetDate) currentDate.setTime(targetDate.getTime());
     }
 
-    console.log(`Writing ${wbsData.length} WBS, ${activityData.length} Anchor Acts, ${dependencyData.length} Deps, ${activityUpdates.length} Updates`);
+    console.log(`Writing ${wbsData.length} WBS, ${activityData.length} Acts, ${dependencyData.length} Deps`);
 
     if (wbsData.length > 0) txOperations.push(prisma.scheduleWBS.createMany({ data: wbsData }));
     if (activityData.length > 0) txOperations.push(prisma.scheduleActivity.createMany({ data: activityData }));
     if (dependencyData.length > 0) txOperations.push(prisma.scheduleDependency.createMany({ data: dependencyData }));
     if (boqMappingData.length > 0) txOperations.push(prisma.scheduleBOQMapping.createMany({ data: boqMappingData }));
-    
-    // Batch all updates into the transaction array instead of sequential interactive tx
-    for (const u of activityUpdates) {
-      txOperations.push(prisma.scheduleActivity.update({ where: { id: u.id }, data: u.data }));
-    }
 
     await prisma.$transaction(txOperations);
 

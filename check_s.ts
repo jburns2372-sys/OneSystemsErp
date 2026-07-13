@@ -1,0 +1,1 @@
+import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function main() { const s = await prisma.projectSchedule.findFirst({ where: { projectId: 'cmrispdp5000zvcqs8p16dxkc' } }); console.log(s); } main();
