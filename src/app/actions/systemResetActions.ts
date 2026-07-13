@@ -203,8 +203,8 @@ export async function resetTransactionData(confirmationText: string) {
           { email: 'manager@onesystemserp.com', name: 'Project Manager', roleCode: 'PROJECT_MANAGER' },
           { email: 'purchasing@onesystemserp.com', name: 'Purchasing Officer', roleCode: 'PURCHASING_OFFICER' },
           { email: 'finance@onesystemserp.com', name: 'Finance Officer', roleCode: 'FINANCE_OFFICER' },
-          { email: 'accounting@onesystemserp.com', name: 'Accounting Officer', roleCode: 'ACCOUNTING_OFFICER' },
-          { email: 'billing@onesystemserp.com', name: 'Billing Officer', roleCode: 'BILLING_OFFICER' },
+          { email: 'accounting@onesystemserp.com', name: 'Accountant', roleCode: 'ACCOUNTANT' },
+          { email: 'billing@onesystemserp.com', name: 'Billing Engineer', roleCode: 'BILLING_ENGINEER' },
           { email: 'engineer@onesystemserp.com', name: 'Site Engineer', roleCode: 'SITE_ENGINEER' },
           { email: 'admin@onesystemserp.com', name: 'Site Admin', roleCode: 'SITE_ADMIN' }
         ];
