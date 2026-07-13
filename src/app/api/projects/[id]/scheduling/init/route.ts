@@ -20,7 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     // Check if schedule already exists
-    const existingSchedule = await prisma.projectSchedule.findUnique({
+    const existingSchedule = await prisma.projectSchedule.findFirst({
       where: { projectId }
     });
 
@@ -323,7 +323,7 @@ ${JSON.stringify(payload, null, 2)}`;
                 mappingsToInsert.push({
                   activityId: newActId,
                   awardedBoqItemId: item.id,
-                  mappedQuantity: item.quantity
+                  allocatedQuantity: item.quantity
                 });
               }
             }
@@ -333,7 +333,7 @@ ${JSON.stringify(payload, null, 2)}`;
             await prisma.scheduleActivity.createMany({ data: activitiesToInsert });
           }
           if (mappingsToInsert.length > 0) {
-            await prisma.scheduleBOQMapping.createMany({ data: mappingsToInsert });
+            await prisma.scheduleBOQAllocation.createMany({ data: mappingsToInsert });
           }
 
           // 3. Create Dependencies — use SS (Start-to-Start) within each phase for overlap
@@ -380,7 +380,7 @@ ${JSON.stringify(payload, null, 2)}`;
             mapsToInsert.push({
               activityId: actId,
               awardedBoqItemId: item.id,
-              mappedQuantity: item.quantity
+              allocatedQuantity: item.quantity
             });
           }
 
@@ -388,7 +388,7 @@ ${JSON.stringify(payload, null, 2)}`;
             await prisma.scheduleActivity.createMany({ data: actsToInsert });
           }
           if (mapsToInsert.length > 0) {
-            await prisma.scheduleBOQMapping.createMany({ data: mapsToInsert });
+            await prisma.scheduleBOQAllocation.createMany({ data: mapsToInsert });
           }
         }
       }
@@ -398,7 +398,7 @@ ${JSON.stringify(payload, null, 2)}`;
       where: { id: newSchedule.id },
       include: {
         wbsNodes: true,
-        activities: { include: { boqMappings: true } }
+        activities: { include: { boqAllocations: true } }
       }
     });
 
@@ -409,8 +409,8 @@ ${JSON.stringify(payload, null, 2)}`;
     // Rollback: If we fail anywhere after creating the schedule but before returning, delete it so the user isn't stuck.
     try {
       const { id: projectId } = await params;
-      const stuckSchedule = await prisma.projectSchedule.findUnique({ where: { projectId }, include: { _count: { select: { activities: true } } } });
-      if (stuckSchedule && stuckSchedule._count.activities === 0) {
+      const stuckSchedule = await prisma.projectSchedule.findFirst({ where: { projectId, status: 'DRAFT' }, include: { activities: true } });
+      if (stuckSchedule && stuckSchedule.activities.length === 0) {
         await prisma.projectSchedule.delete({ where: { id: stuckSchedule.id } });
       }
     } catch (cleanupError) {

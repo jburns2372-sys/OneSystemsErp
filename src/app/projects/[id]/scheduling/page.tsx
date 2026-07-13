@@ -2,6 +2,21 @@ import React from "react";
 import { prisma } from "@/lib/prisma";
 import SchedulingHubClient from "./SchedulingHubClient";
 
+function serializePrisma(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj?.toNumber === 'function') return obj.toNumber();
+  if (obj instanceof Date) return obj; // RSC supports Date
+  if (Array.isArray(obj)) return obj.map(serializePrisma);
+  if (typeof obj === 'object') {
+    const res: any = {};
+    for (const key in obj) {
+      res[key] = serializePrisma(obj[key]);
+    }
+    return res;
+  }
+  return obj;
+}
+
 export default async function ProjectSchedulingHub({ params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
 
@@ -9,6 +24,11 @@ export default async function ProjectSchedulingHub({ params }: { params: Promise
     where: { id: projectId },
     include: {
       projectSchedule: {
+        where: {
+          status: {
+            notIn: ['FAILED_GENERATION', 'FAILED_VALIDATION', 'INVALID_GENERATED_DRAFT', 'LEGACY_INVALID_DRAFT', 'EMPTY_DRAFT', 'ARCHIVED']
+          }
+        },
         include: {
           wbsNodes: {
             orderBy: { orderIndex: 'asc' }
@@ -17,7 +37,7 @@ export default async function ProjectSchedulingHub({ params }: { params: Promise
             include: {
               assignedTo: { select: { id: true, name: true, email: true } },
               wbs: true,
-              boqMappings: {
+              boqAllocations: {
                 include: {
                   awardedBoqItem: { select: { id: true, itemCode: true, description: true, quantity: true, totalCost: true, combinedUnitCost: true, directCost: true } }
                 }
@@ -40,7 +60,38 @@ export default async function ProjectSchedulingHub({ params }: { params: Promise
   // Also prefetch Awarded BOQ for the setup wizard if schedule doesn't exist
   let awardedBoq = null;
 
-  if (!project.projectSchedule) {
+  // Since projectSchedule is now an array, we must apply selection logic
+  const schedules = project.projectSchedule || [];
+  
+  // Exclude empty schedules
+  const validSchedules = schedules.filter(s => 
+    s.activities && s.activities.length > 0 &&
+    s.wbsNodes && s.wbsNodes.length > 0
+  );
+
+  // Priority selection logic
+  let selectedSchedule = null;
+  
+  // 1. ACTIVE_BASELINE
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'ACTIVE_BASELINE');
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'BASELINE');
+  
+  // 2. READY_FOR_REVIEW
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'READY_FOR_REVIEW');
+  
+  // 3. DRAFT_BASELINE
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'DRAFT_BASELINE');
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'DRAFT');
+  
+  // 4. LEGACY_BASELINE
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'LEGACY_BASELINE');
+  
+  // Fallback to the newest if any remain and no priority match
+  if (!selectedSchedule && validSchedules.length > 0) {
+    selectedSchedule = validSchedules.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+  }
+
+  if (!selectedSchedule) {
     awardedBoq = await prisma.awardedBOQItem.findMany({
       where: { projectId },
       orderBy: { itemCode: 'asc' }
@@ -55,11 +106,14 @@ export default async function ProjectSchedulingHub({ params }: { params: Promise
     }
   }
 
+  const serializedProject = serializePrisma(project);
+  const serializedBoq = serializePrisma(awardedBoq);
+
   return (
     <SchedulingHubClient 
-      project={project} 
-      initialSchedule={project.projectSchedule} 
-      awardedBoq={awardedBoq}
+      project={serializedProject} 
+      initialSchedule={selectedSchedule ? serializePrisma(selectedSchedule) : null} 
+      awardedBoq={serializedBoq}
     />
   );
 }

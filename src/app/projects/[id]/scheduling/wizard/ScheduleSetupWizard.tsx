@@ -29,12 +29,37 @@ export default function ScheduleSetupWizard({
     }
   };
 
+  const [loadingStep, setLoadingStep] = useState(0);
+  const loadingMessages = [
+    'Initializing Schedule Engine...',
+    '1/14: Loading Project Context...',
+    '2/14: Analyzing Locked Awarded BOQ...',
+    '3/14: Classifying Project Type...',
+    '4/14: Determining Discipline Constraints...',
+    '5/14: Selecting Phase Templates...',
+    '6/14: Generating Dynamic WBS...',
+    '7/14: Grouping BOQ Items into Activities...',
+    '8/14: Estimating Durations via Productivity Rates...',
+    '9/14: Generating Logic & Dependencies...',
+    '10/14: Running CPM (Forward & Backward Pass)...',
+    '11/14: Clamping to Project Boundaries...',
+    '12/14: Executing Financial Reconciliation...',
+    '13/14: Validating Differences (= 0.00)...',
+    '14/14: Finalizing Baseline Draft...'
+  ];
+
   const handleCreateSchedule = async () => {
     setLoading(true);
+    setLoadingStep(0);
     setError('');
     
+    // Simulate progression for the UI since it happens in one backend call
+    const timer = setInterval(() => {
+      setLoadingStep(prev => (prev < loadingMessages.length - 1 ? prev + 1 : prev));
+    }, 1500);
+
     try {
-      const res = await fetch(`/api/projects/${project.id}/scheduling/init`, {
+      const res = await fetch(`/api/projects/${project.id}/scheduling/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -48,12 +73,21 @@ export default function ScheduleSetupWizard({
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create schedule');
+      clearInterval(timer);
+      
+      if (!res.ok || !data.success) {
+        if (data.stage && data.message) {
+          throw new Error(`Failed Stage: [${data.stage}]\nReason: ${data.message} ${data.errorCode ? `(${data.errorCode})` : ''}`);
+        }
+        throw new Error(data.error || data.message || 'Failed to create schedule');
+      }
 
-      onScheduleCreated(data.schedule);
+      onScheduleCreated(data.schedule || data); // pass refresh trigger
     } catch (err: any) {
+      clearInterval(timer);
       setError(err.message);
     } finally {
+      clearInterval(timer);
       setLoading(false);
     }
   };
@@ -66,7 +100,9 @@ export default function ScheduleSetupWizard({
       </p>
 
       {error && (
-        <div style={{ padding: '15px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '6px', marginBottom: '20px' }}>
+        <div style={{ padding: '15px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '6px', marginBottom: '20px', whiteSpace: 'pre-wrap' }}>
+          <strong>Generation Error</strong>
+          <br/><br/>
           {error}
         </div>
       )}
@@ -157,11 +193,11 @@ export default function ScheduleSetupWizard({
             <button 
               onClick={handleCreateSchedule}
               disabled={loading}
-              style={{ padding: '10px 24px', backgroundColor: 'var(--accent-color)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+              style={{ padding: '10px 24px', backgroundColor: 'var(--accent-color)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', minWidth: '250px', justifyContent: 'center' }}
             >
               {loading && <span className="spinner" style={{ width: '16px', height: '16px', border: '2px solid #000', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 1s linear infinite' }}></span>}
               {loading 
-                ? (consolidateBoq ? '🧠 AI Simulating Schedule (approx. 20-30s)...' : 'Initializing Schedule...') 
+                ? loadingMessages[loadingStep]
                 : 'Create Project Schedule'}
             </button>
           </div>

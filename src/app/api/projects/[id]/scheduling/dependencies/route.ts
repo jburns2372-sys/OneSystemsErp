@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'An activity cannot depend on itself' }, { status: 400 });
     }
 
-    const schedule = await prisma.projectSchedule.findUnique({
+    const schedule = await prisma.projectSchedule.findFirst({
       where: { projectId },
       include: {
         activities: { select: { id: true } },

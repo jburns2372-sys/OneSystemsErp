@@ -89,6 +89,7 @@ model User {
   chatbotFeedbacks             ChatbotFeedback[]             @relation("UserChatbotFeedbacks")
   chatSessions                 AiChatSession[]               @relation("UserAiChatSessions")
   chatMessages                 AiChatMessage[]               @relation("UserAiChatMessages")
+  scheduleGenerationAudits     ScheduleGenerationAudit[]
 }
 
 model SystemRole {
@@ -158,6 +159,8 @@ model Project {
   fleetTrips                      FleetTrip[]
   geofences                       Geofence[]
   jobOrders                       JobOrder[]
+  boqAllocations                  ScheduleBOQAllocation[]          @relation("ProjectBOQAllocations")
+  scheduleGenerationAudits        ScheduleGenerationAudit[]
   knowledgeReferences             KnowledgeReference[]
   issuances                       MaterialIssuance[]
   materialRequests                MaterialRequest[]
@@ -180,7 +183,7 @@ model Project {
   subcontractorVariationOrders    SubcontractorVariationOrder[]    @relation("ProjectSubcontractorVOs")
   clientVariationOrders           ClientVariationOrder[]           @relation("ProjectClientVOs")
   valueEngineeringRecords         ValueEngineeringRecord[]         @relation("ProjectVERecords")
-  projectSchedule                 ProjectSchedule?
+  projectSchedule                 ProjectSchedule[]
   userAssignments                 ProjectUserAssignment[]
 }
 
@@ -265,7 +268,7 @@ model AwardedBOQItem {
   subcontractorVariationOrders   SubcontractorVariationOrder[] @relation("AwardedSubcontractorVOs")
   clientVariationOrders          ClientVariationOrder[]        @relation("AwardedClientVOs")
   valueEngineeringRecords        ValueEngineeringRecord[]      @relation("AwardedVERecords")
-  scheduleMappings               ScheduleBOQMapping[]
+  scheduleAllocations            ScheduleBOQAllocation[]
 }
 
 model ProcurementBenchmarkItem {
@@ -304,6 +307,7 @@ model ConsolidatedBOQItem {
   revisedTotalCost             Float                         @default(0)
   wasteAllowance               Float                         @default(0)
   revisedBenchmarkUnitCost     Float                         @default(0)
+  scheduleAllocations          ScheduleBOQAllocation[]
   requestedQuantity            Float                         @default(0)
   purchasedQuantity            Float                         @default(0)
   issuedQuantity               Float                         @default(0)
@@ -3601,7 +3605,7 @@ model ValueEngineeringRecord {
 
 model ProjectSchedule {
   id                 String    @id @default(cuid())
-  projectId          String    @unique
+  projectId          String
   name               String
   description        String?
   baselineStartDate  DateTime?
@@ -3615,6 +3619,19 @@ model ProjectSchedule {
   workingDays        Int       @default(0)
   holidays           String? // JSON string of dates
   workDaysConfig     String? // JSON e.g. ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  
+  lockedBOQVersionId String?
+  lockedBOQChecksum  String?
+  baselineRevision   Int       @default(0)
+  awardedContractAmount Decimal @default(0)
+  scheduledAmount    Decimal   @default(0)
+  differenceAmount   Decimal   @default(0)
+  generatedBy        String?
+  approvedBy         String?
+  generatedAt        DateTime?
+  approvedAt         DateTime?
+  generationRulesVersion String?
+
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -3626,6 +3643,7 @@ model ProjectSchedule {
   delayRecords    ScheduleDelayRecord[]
   recoveryPlans   ScheduleRecoveryPlan[]
   revisions       ScheduleRevisionRequest[]
+  boqAllocations  ScheduleBOQAllocation[] @relation("ScheduleBOQAllocations")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
@@ -3674,6 +3692,14 @@ model ScheduleActivity {
   criticalPath          Boolean   @default(false)
   totalFloat            Int       @default(0)
   freeFloat             Int       @default(0)
+  
+  activityType          String?
+  systemOrArea          String?
+  predecessorData       String? // JSON representation for complex dependencies
+  allocatedAmount       Decimal   @default(0)
+  classificationConfidence Float?
+  aiRationale           String?
+
   assignedToId          String?
   subcontractorId       String?
   jobOrderId            String?
@@ -3686,7 +3712,7 @@ model ScheduleActivity {
 
   predecessors    ScheduleDependency[]     @relation("SuccessorActivity")
   successors      ScheduleDependency[]     @relation("PredecessorActivity")
-  boqMappings     ScheduleBOQMapping[]
+  boqAllocations  ScheduleBOQAllocation[]
   powMappings     SchedulePOWMapping[]
   progressUpdates ScheduleProgressUpdate[]
   delayRecords    ScheduleDelayRecord[]
@@ -3719,15 +3745,31 @@ model ScheduleMilestone {
   schedule ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
 }
 
-model ScheduleBOQMapping {
+model ScheduleBOQAllocation {
   id               String @id @default(cuid())
   activityId       String
   awardedBoqItemId String
   mappedQuantity   Float  @default(0)
   mappedWeight     Float  @default(0)
+  
+  // Upgrade Phase B: New fields for detailed BOQ allocation ledger
+  scheduleId          String?
+  projectId           String?
+  phaseId             String?
+  boqLineId           String? // References ConsolidatedBOQItem.id
+  allocationMode      String? // SINGLE, QUANTITY_SPLIT, PERCENTAGE_SPLIT, REFERENCE_ONLY, ZERO_COST_REQUIREMENT
+  awardedQuantity     Decimal?
+  allocatedQuantity   Decimal?
+  allocatedPercentage Decimal?
+  awardedAmount       Decimal?
+  allocatedAmount     Decimal?
+  allocationReason    String?
 
-  activity       ScheduleActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  awardedBoqItem AwardedBOQItem   @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  activity            ScheduleActivity      @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  awardedBoqItem      AwardedBOQItem        @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  consolidatedBoqItem ConsolidatedBOQItem?  @relation(fields: [boqLineId], references: [id], onDelete: Cascade)
+  schedule            ProjectSchedule?      @relation("ScheduleBOQAllocations", fields: [scheduleId], references: [id], onDelete: Cascade)
+  project             Project?              @relation("ProjectBOQAllocations", fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model SchedulePOWMapping {
@@ -4594,6 +4636,33 @@ model ProjectBOQVersion {
   updatedAt                    DateTime  @updatedAt
 }
 
+model ScheduleGenerationAudit {
+  id                 String   @id @default(cuid())
+  projectId          String
+  userId             String?
+  action             String
+  previousScheduleId String?
+  newScheduleId      String?
+  lockedBOQVersionId String?
+  lockedBOQChecksum  String?
+  generationRequestId String?
+  modelIdentifier    String?
+  promptVersion      String?
+  schemaVersion      String?
+  schedulingRulesVersion String?
+  reasoningSetting   String?
+  requestTimestamp   DateTime?
+  responseTimestamp  DateTime?
+  tokenUsage         String?  // JSON { prompt, completion, total }
+  resultStatus       String?
+  validationResults  String?  // JSON
+  correctionAttemptCount Int @default(0)
+  timestamp          DateTime @default(now())
+
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user               User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model WorkbookExtractionAudit {
   id                     String    @id @default(cuid())
   uploadedWorkbookFileId String
@@ -4610,5 +4679,20 @@ model WorkbookExtractionAudit {
 
   file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
   project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model AIConfiguration {
+  id                      String   @id @default(cuid())
+  primaryPlanningModel    String   @default("gpt-4o")
+  secondaryClassificationModel String @default("gpt-4o-mini")
+  fallbackModel           String   @default("gpt-3.5-turbo")
+  reasoningEffort         String   @default("high")
+  maxOutputTokens         Int      @default(4096)
+  timeoutMs               Int      @default(60000)
+  retryLimit              Int      @default(2)
+  promptVersion           String   @default("v1.0")
+  jsonSchemaVersion       String   @default("v1.0")
+  schedulingRulesVersion  String   @default("v1.0")
+  updatedAt               DateTime @updatedAt
 }
 

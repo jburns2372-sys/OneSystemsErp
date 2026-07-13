@@ -6,14 +6,14 @@ import { prisma } from '@/lib/prisma';
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: projectId } = await params;
-    const schedule = await prisma.projectSchedule.findUnique({
+    const schedule = await prisma.projectSchedule.findFirst({
       where: { projectId },
       include: {
         activities: {
           include: {
             wbs: true,
             assignedTo: { select: { id: true, name: true, email: true } },
-            boqMappings: { include: { awardedBoqItem: { select: { id: true, itemCode: true, description: true } } } },
+            boqAllocations: { include: { awardedBoqItem: { select: { id: true, itemCode: true, description: true } } } },
             predecessors: true,
             successors: true
           },
@@ -41,8 +41,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const body = await req.json();
     const { name, activityCode, description, wbsId, plannedDuration, plannedStartDate, plannedFinishDate, unit, plannedQuantity } = body;
 
-    const schedule = await prisma.projectSchedule.findUnique({
-      where: { projectId }
+    const schedule = await prisma.projectSchedule.findFirst({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' }
     });
 
     if (!schedule) {

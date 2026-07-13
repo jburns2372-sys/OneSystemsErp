@@ -141,7 +141,7 @@ export async function resetTransactionData(confirmationText: string) {
       prisma.scheduleDelayRecord.deleteMany({}),
       prisma.scheduleProgressUpdate.deleteMany({}),
       prisma.schedulePOWMapping.deleteMany({}),
-      prisma.scheduleBOQMapping.deleteMany({}),
+      prisma.scheduleBOQAllocation.deleteMany({}),
       prisma.scheduleMilestone.deleteMany({}),
       prisma.scheduleDependency.deleteMany({}),
       prisma.scheduleActivity.deleteMany({}),
@@ -151,7 +151,7 @@ export async function resetTransactionData(confirmationText: string) {
       prisma.project.deleteMany({}),
       prisma.supplier.deleteMany({}),
       prisma.subcontractor.deleteMany({}),
-    ], { timeout: 60000 });
+    ]);
 
     // ============================================================================
     // PHASE 2: Seed reference data templates

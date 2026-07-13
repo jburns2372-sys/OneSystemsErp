@@ -17,7 +17,7 @@ interface Activity {
   unit: string | null;
   plannedQuantity: number;
   wbs?: { id: string; code: string; name: string; orderIndex?: number } | null;
-  boqMappings?: any[];
+  boqAllocations?: any[];
   predecessors?: any[];
   successors?: any[];
 }
@@ -317,7 +317,7 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
               return sortedGroups.map(groupName => {
                 const phaseBoqs = new Map<string, { code: string; desc: string; unit: string; qty: number; cost: number }>();
                 grouped[groupName].forEach(act => {
-                  (act.boqMappings || []).forEach((mapping: any) => {
+                  (act.boqAllocations || []).forEach((mapping: any) => {
                     const item = mapping.awardedBoqItem;
                     if (!item) return;
                     
@@ -340,8 +340,8 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                       }
                     }
                     
-                    const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (mapping.mappedQuantity / item.quantity) : 0;
-                    phaseBoqs.get(key)!.qty += mapping.mappedQuantity;
+                    const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (mapping.allocatedQuantity / item.quantity) : 0;
+                    phaseBoqs.get(key)!.qty += mapping.allocatedQuantity;
                     phaseBoqs.get(key)!.cost += proportionalCost;
                   });
                 });
@@ -474,10 +474,10 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                     return groupActivities.map((act) => {
                     const i = globalIndex++;
 
-                    const activityTotalCost = (act.boqMappings || []).reduce((sum: number, mapping: any) => {
+                    const activityTotalCost = (act.boqAllocations || []).reduce((sum: number, mapping: any) => {
                       const item = mapping.awardedBoqItem;
                       if (!item) return sum;
-                      const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (mapping.mappedQuantity / item.quantity) : 0;
+                      const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (mapping.allocatedQuantity / item.quantity) : 0;
                       return sum + proportionalCost;
                     }, 0);
                     const formattedActivityCost = `₱ ${activityTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

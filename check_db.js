@@ -2,11 +2,8 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
-  const items = await prisma.procurementBenchmarkItem.findMany({
-    orderBy: { totalCost: 'desc' },
-    take: 20
-  });
-  console.log(items);
+  const result = await prisma.$queryRaw`SELECT column_name FROM information_schema.columns WHERE table_name = 'ScheduleWBS'`;
+  console.log(result);
 }
 
-main().finally(() => prisma.$disconnect());
+main().catch(console.error).finally(() => prisma.$disconnect());

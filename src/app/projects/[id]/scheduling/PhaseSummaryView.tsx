@@ -68,12 +68,15 @@ export default function PhaseSummaryView({ schedule }: { schedule: any }) {
                 phaseProgressSum += (a.actualProgressPercent || 0);
 
                 // Compute cost
-                const activityCost = (a.boqMappings || []).reduce((sum: number, mapping: any) => {
+                const activityCost = (a.boqAllocations || []).reduce((sum: number, mapping: any) => {
+                  if (mapping.allocatedAmount != null) {
+                    return sum + Number(mapping.allocatedAmount);
+                  }
                   const item = mapping.awardedBoqItem;
                   if (!item) return sum;
                   const revisedQty = item.revisedContractQuantity || item.quantity || 0;
                   const totalAmount = item.revisedContractAmount || item.totalCost || 0;
-                  const proportionalCost = revisedQty > 0 ? totalAmount * (mapping.mappedQuantity / revisedQty) : totalAmount;
+                  const proportionalCost = revisedQty > 0 ? totalAmount * (mapping.allocatedQuantity / revisedQty) : totalAmount;
                   return sum + proportionalCost;
                 }, 0);
                 phaseTotalCost += activityCost;
@@ -83,6 +86,9 @@ export default function PhaseSummaryView({ schedule }: { schedule: any }) {
               if (phaseStart && phaseFinish) {
                 const diffTime = Math.abs(phaseFinish.getTime() - phaseStart.getTime());
                 phaseDuration = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              } else {
+                // Fallback to summing up the AI's proposed durations if CPM hasn't run yet
+                phaseDuration = acts.reduce((sum: number, a: any) => sum + (a.plannedDuration || 0), 0);
               }
               const avgProgress = acts.length > 0 ? Math.round(phaseProgressSum / acts.length) : 0;
 
@@ -122,12 +128,15 @@ export default function PhaseSummaryView({ schedule }: { schedule: any }) {
                   const acts = grouped[groupName];
                   let phaseCost = 0;
                   acts.forEach((a: any) => {
-                    const actCost = (a.boqMappings || []).reduce((sum: number, mapping: any) => {
+                    const actCost = (a.boqAllocations || []).reduce((sum: number, mapping: any) => {
+                      if (mapping.allocatedAmount != null) {
+                        return sum + Number(mapping.allocatedAmount);
+                      }
                       const item = mapping.awardedBoqItem;
                       if (!item) return sum;
                       const revisedQty = item.revisedContractQuantity || item.quantity || 0;
                       const totalAmount = item.revisedContractAmount || item.totalCost || 0;
-                      return sum + (revisedQty > 0 ? totalAmount * (mapping.mappedQuantity / revisedQty) : totalAmount);
+                      return sum + (revisedQty > 0 ? totalAmount * (mapping.allocatedQuantity / revisedQty) : totalAmount);
                     }, 0);
                     phaseCost += actCost;
                   });

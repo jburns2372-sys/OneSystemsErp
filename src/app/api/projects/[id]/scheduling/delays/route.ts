@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: projectId } = await params;
-    const schedule = await prisma.projectSchedule.findUnique({
+    const schedule = await prisma.projectSchedule.findFirst({
       where: { projectId },
       include: {
         delayRecords: {
@@ -32,7 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const body = await req.json();
     const { activityId, delayStartDate, delayEndDate, delayDays, category, cause, impactToCriticalPath } = body;
 
-    const schedule = await prisma.projectSchedule.findUnique({
+    const schedule = await prisma.projectSchedule.findFirst({
       where: { projectId }
     });
 
