@@ -237,12 +237,19 @@ router.post('/resetTransactionData', async (req, res) => {
         ]
       });
 
+      // Clean up old sample users that were previously seeded
+      await tx.userRole.deleteMany({ where: { user: { email: { startsWith: 'sample.' } } } });
+      await tx.user.deleteMany({ where: { email: { startsWith: 'sample.' } } });
+
       const rolesToSeed = [
-        { email: 'sample.purchasing@onesystemserp.com', name: 'Sample Purchasing', roleCode: 'PURCHASING_OFFICER' },
-        { email: 'sample.finance@onesystemserp.com', name: 'Sample Finance', roleCode: 'FINANCE_OFFICER' },
-        { email: 'sample.accounting@onesystemserp.com', name: 'Sample Accounting', roleCode: 'ACCOUNTING_OFFICER' },
-        { email: 'sample.billing@onesystemserp.com', name: 'Sample Billing', roleCode: 'BILLING_OFFICER' },
-        { email: 'sample.engineer@onesystemserp.com', name: 'Sample Site Engineer', roleCode: 'SITE_ENGINEER' }
+        { email: 'director@onesystemserp.com', name: 'Project Director', roleCode: 'PROJECT_DIRECTOR' },
+        { email: 'manager@onesystemserp.com', name: 'Project Manager', roleCode: 'PROJECT_MANAGER' },
+        { email: 'purchasing@onesystemserp.com', name: 'Purchasing Officer', roleCode: 'PURCHASING_OFFICER' },
+        { email: 'finance@onesystemserp.com', name: 'Finance Officer', roleCode: 'FINANCE_OFFICER' },
+        { email: 'accounting@onesystemserp.com', name: 'Accounting Officer', roleCode: 'ACCOUNTING_OFFICER' },
+        { email: 'billing@onesystemserp.com', name: 'Billing Officer', roleCode: 'BILLING_OFFICER' },
+        { email: 'engineer@onesystemserp.com', name: 'Site Engineer', roleCode: 'SITE_ENGINEER' },
+        { email: 'admin@onesystemserp.com', name: 'Site Admin', roleCode: 'SITE_ADMIN' }
       ];
 
       for (const u of rolesToSeed) {
@@ -252,8 +259,20 @@ router.post('/resetTransactionData', async (req, res) => {
             data: {
               name: u.name,
               email: u.email,
-              passwordHash: '$2b$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+              passwordHash: '$2b$10$6VGqOkFNU48h/2NcmMYShuHLyRKZ9wlbVDfEtGpxSuhZO5t9A8O5u', // admin001
+              password: 'admin001', // fallback
+              role: u.roleCode,
               status: 'ACTIVE',
+              defaultRole: u.roleCode
+            }
+          });
+        } else {
+          user = await tx.user.update({
+            where: { id: user.id },
+            data: {
+              passwordHash: '$2b$10$6VGqOkFNU48h/2NcmMYShuHLyRKZ9wlbVDfEtGpxSuhZO5t9A8O5u',
+              password: 'admin001',
+              role: u.roleCode,
               defaultRole: u.roleCode
             }
           });
