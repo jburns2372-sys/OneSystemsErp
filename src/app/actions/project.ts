@@ -1,6 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 
 const BACKEND_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL) || 'http://localhost:4000';
 
@@ -65,9 +66,11 @@ export async function assignProjectManager(projectId: string, managerId: string 
 
 export async function deleteProject(projectId: string) {
   try {
-    return await fetchWithAuth(`/api/projects/${projectId}`, {
+    const res = await fetchWithAuth(`/api/projects/${projectId}`, {
       method: 'DELETE'
     });
+    revalidatePath('/projects');
+    return res;
   } catch (error: any) {
     console.error('Error deleting project:', error);
     return { success: false, error: error.message || 'Failed to delete project' };
