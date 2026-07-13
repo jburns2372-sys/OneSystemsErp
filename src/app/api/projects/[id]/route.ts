@@ -32,7 +32,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     await prisma.awardedBOQItem.deleteMany({ where: { projectId } });
     await prisma.consolidatedBOQItem.deleteMany({ where: { projectId } });
     await prisma.materialRequest.deleteMany({ where: { projectId } });
-    await prisma.projectAssignment.deleteMany({ where: { projectId } });
+    await prisma.projectUserAssignment.deleteMany({ where: { projectId } });
 
     // Now delete the project itself
     await prisma.project.delete({
