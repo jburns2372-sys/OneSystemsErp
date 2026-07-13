@@ -129,10 +129,9 @@ export default function SchedulingHubClient({
               fontWeight: 'bold' 
             }}>{schedule.status}</span></span>
             
-            {schedule.status !== 'BASELINE' && (
-              <button
-                onClick={handleDeleteSchedule}
-                disabled={isDeleting}
+            <button
+              onClick={handleDeleteSchedule}
+              disabled={isDeleting}
                 style={{
                   background: 'transparent',
                   border: '1px solid #ef4444',
@@ -149,7 +148,6 @@ export default function SchedulingHubClient({
               >
                 {isDeleting ? 'Deleting...' : '🗑️ Delete Schedule'}
               </button>
-            )}
           </div>
         </div>
 

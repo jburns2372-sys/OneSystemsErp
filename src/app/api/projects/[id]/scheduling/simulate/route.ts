@@ -77,14 +77,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     // ==========================================
 
-    // Fetch consolidated BOQ items to feed to AI
-    const consolidatedItems = await prisma.consolidatedBOQItem.findMany({
+    // Fetch awarded BOQ items to feed to AI for mapping
+    const awardedItems = await prisma.awardedBOQItem.findMany({
       where: { projectId }
     });
 
-    if (consolidatedItems.length === 0) {
-       return NextResponse.json({ error: 'No BOQ items found to simulate phasing.' }, { status: 400 });
+    if (awardedItems.length === 0) {
+       return NextResponse.json({ error: 'No Awarded BOQ items found to simulate phasing.' }, { status: 400 });
     }
+
+    const boqPayload = awardedItems.map(item => ({
+      id: item.id,
+      description: item.description,
+      quantity: item.quantity,
+      unit: item.unit
+    }));
 
     // Filter out previous AI-generated activities
     const activities = refreshedSchedule.activities.filter(a => a.activityCode !== 'AI-GEN');
@@ -115,11 +122,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const prompt = `You are an expert construction project manager. 
 I have a list of project activities and an existing total project duration of ${totalDays} days.
+The project starts on ${startDate.toDateString()} and ends on ${targetDate.toDateString()}.
 I need to group these activities into logical construction phases and sequence them correctly.
 Please do the following:
 1. Define 3 to 6 logical construction sub-phases (e.g. Mobilization & Site Setup, Rough-ins, Equipment Installation, Testing). Provide a unique 'code' for each sub-phase (e.g. PH-1).
 2. For each sub-phase, estimate its percentage of the total project duration (pct, must sum to 1.0).
 3. For each sub-phase, provide an ordered array of 'orderedActivityIds' representing the recommended chronological sequence of works within that phase. Every activity provided in the input MUST be assigned to exactly one phase.
+4. Carefully analyze and sequence the project phases according to strict industry standard construction workflows.
+5. For each sub-phase, assign the relevant Awarded BOQ item IDs from the list provided that correspond to the work in that phase.
 
 CRITICAL RULES:
 - The FIRST phase (e.g. PH-1 Mobilization & Site Setup) MUST ONLY contain General Requirements and Preliminaries. This includes activities related to: Mobilization, Demobilization, Quality Standard and Control, Security, Safety and Protection, Site Management Work, Temporary Works, Transportation, and Permits.
@@ -128,14 +138,18 @@ CRITICAL RULES:
 - For the FIRST phase, true mobilization tasks (like 'Mobilization', 'Site Management', 'Permits', 'Temporary Works') MUST be at the very beginning of the \`orderedActivityIds\` array.
 
 Activities:
-${JSON.stringify(activityPayload, null, 2)}`;
+${JSON.stringify(activityPayload, null, 2)}
+
+Awarded BOQ Materials:
+${JSON.stringify(boqPayload, null, 2)}`;
 
     const schema = z.object({
       phases: z.array(z.object({
         code: z.string().describe("Unique phase code e.g. PH-1"),
         name: z.string().describe("Phase name"),
         pct: z.number().describe("Percentage of total project duration (0.0 to 1.0)"),
-        orderedActivityIds: z.array(z.string()).describe("Chronological sequence of activity IDs to be executed in this phase")
+        orderedActivityIds: z.array(z.string()).describe("Chronological sequence of activity IDs to be executed in this phase"),
+        assignedBOQItemIds: z.array(z.string()).describe("Array of Awarded BOQ item IDs mapped to this phase")
       })).describe("Logical construction phases")
     });
 
@@ -190,6 +204,7 @@ ${JSON.stringify(activityPayload, null, 2)}`;
     const activityData: any[] = [];
     const dependencyData: any[] = [];
     const activityUpdates: any[] = [];
+    const boqMappingData: any[] = [];
 
     // Create root Construction Phase
     const constructionWbsId = crypto.randomUUID();
@@ -273,8 +288,10 @@ ${JSON.stringify(activityPayload, null, 2)}`;
 
       let aiAnchorStatus = 'NOT_STARTED';
       let aiAnchorProgress = 0;
+      let aiAnchorActualStart = null;
       const today = new Date();
       if (mainStart <= today) {
+        aiAnchorActualStart = mainStart;
         const lapsedDays = Math.ceil((today.getTime() - mainStart.getTime()) / (1000 * 60 * 60 * 24));
         if (lapsedDays >= phase.days) {
           aiAnchorStatus = 'COMPLETED';
@@ -297,8 +314,20 @@ ${JSON.stringify(activityPayload, null, 2)}`;
         plannedStartDate: mainStart,
         plannedFinishDate: mainFinish,
         status: aiAnchorStatus,
-        actualProgressPercent: aiAnchorProgress
+        actualProgressPercent: aiAnchorProgress,
+        actualStartDate: aiAnchorActualStart
       });
+
+      // Map AI assigned BOQ items to the AI Anchor Activity
+      if (phase.assignedBOQItemIds && Array.isArray(phase.assignedBOQItemIds)) {
+        for (const boqId of phase.assignedBOQItemIds) {
+          boqMappingData.push({
+            activityId: aiAnchorId,
+            awardedBoqItemId: boqId,
+            mappedQuantity: 1 // Default proportion
+          });
+        }
+      }
 
       // Link AI Anchor to Previous Phase's AI Anchor (FS)
       if (prevMainActId) {
@@ -330,17 +359,29 @@ ${JSON.stringify(activityPayload, null, 2)}`;
           if (actFinish > mainFinish) actFinish.setTime(mainFinish.getTime());
           if (actFinish > targetDate) actFinish.setTime(targetDate.getTime());
 
+          const existingAct = activityMap.get(act.id);
           let actStatus = 'NOT_STARTED';
           let actProgress = 0;
-          const today = new Date();
-          if (actStart <= today) {
-            const lapsedDays = Math.ceil((today.getTime() - actStart.getTime()) / (1000 * 60 * 60 * 24));
-            if (lapsedDays >= duration) {
-              actStatus = 'COMPLETED';
-              actProgress = 100;
-            } else {
-              actStatus = 'IN_PROGRESS';
-              actProgress = Math.round((lapsedDays / duration) * 100);
+          let actualStart = null;
+          
+          // Preserve manual overrides if they exist
+          if (existingAct && (existingAct.actualProgressPercent > 0 || existingAct.status !== 'NOT_STARTED' || existingAct.actualStartDate)) {
+            actStatus = existingAct.status;
+            actProgress = existingAct.actualProgressPercent || 0;
+            actualStart = existingAct.actualStartDate;
+          } else {
+            // Auto-commence logic for unstarted activities
+            const today = new Date();
+            if (actStart <= today) {
+              actualStart = actStart;
+              const lapsedDays = Math.ceil((today.getTime() - actStart.getTime()) / (1000 * 60 * 60 * 24));
+              if (lapsedDays >= duration) {
+                actStatus = 'COMPLETED';
+                actProgress = 100;
+              } else {
+                actStatus = 'IN_PROGRESS';
+                actProgress = Math.round((lapsedDays / duration) * 100);
+              }
             }
           }
 
@@ -352,7 +393,8 @@ ${JSON.stringify(activityPayload, null, 2)}`;
               plannedStartDate: actStart,
               plannedFinishDate: actFinish,
               status: actStatus,
-              actualProgressPercent: actProgress
+              actualProgressPercent: actProgress,
+              actualStartDate: actualStart
             }
           });
 
@@ -393,6 +435,7 @@ ${JSON.stringify(activityPayload, null, 2)}`;
     if (wbsData.length > 0) txOperations.push(prisma.scheduleWBS.createMany({ data: wbsData }));
     if (activityData.length > 0) txOperations.push(prisma.scheduleActivity.createMany({ data: activityData }));
     if (dependencyData.length > 0) txOperations.push(prisma.scheduleDependency.createMany({ data: dependencyData }));
+    if (boqMappingData.length > 0) txOperations.push(prisma.scheduleBOQMapping.createMany({ data: boqMappingData }));
     
     // Batch all updates into the transaction array instead of sequential interactive tx
     for (const u of activityUpdates) {
