@@ -4898,7 +4898,7 @@ model ScheduleReviewComment {
   createdAt             DateTime              @default(now())
   resolvedAt            DateTime?
 
-  schedule   ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  schedule   ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
   createdBy  User            @relation("ScheduleCommentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   resolvedBy User?           @relation("ScheduleCommentResolvedBy", fields: [resolvedById], references: [id], onDelete: Restrict)
 }
@@ -4945,7 +4945,7 @@ model FinancialDataWaiver {
   revokedAt               DateTime?
   revocationReason        String?               @db.Text
 
-  schedule    ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  schedule    ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
   requestedBy User            @relation("FinancialWaiverRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
   approvedBy  User?           @relation("FinancialWaiverApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
 }
@@ -4963,6 +4963,6 @@ model ScheduleRevisionReason {
   createdByRoleSnapshot String
   createdAt             DateTime             @default(now())
 
-  schedule  ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  schedule  ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
   createdBy User            @relation("ScheduleRevisionReasonCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 }
