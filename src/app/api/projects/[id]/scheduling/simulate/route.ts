@@ -30,8 +30,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // We no longer purge any data to ensure 100% financial balancing with the Awarded BOQ.
 
-    // Fetch awarded BOQ items to feed to AI for mapping
-    const awardedItems = await prisma.awardedBOQItem.findMany({
+    // Fetch consolidated BOQ items to feed to AI for mapping
+    const awardedItems = await prisma.consolidatedBOQItem.findMany({
       where: { 
         projectId,
         totalCost: { gt: 0 } 
@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
 
     if (awardedItems.length === 0) {
-       return NextResponse.json({ error: 'No Awarded BOQ items found to simulate phasing.' }, { status: 400 });
+       return NextResponse.json({ error: 'No Consolidated BOQ items found to simulate phasing.' }, { status: 400 });
     }
 
     const boqPayload = awardedItems.map(item => ({
