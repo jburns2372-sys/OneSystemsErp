@@ -90,6 +90,16 @@ model User {
   chatSessions                 AiChatSession[]               @relation("UserAiChatSessions")
   chatMessages                 AiChatMessage[]               @relation("UserAiChatMessages")
   scheduleGenerationAudits     ScheduleGenerationAudit[]
+
+  generatedSchedules             ProjectSchedule[]        @relation("ScheduleGeneratedBy")
+  activatedSchedules             ProjectSchedule[]        @relation("ScheduleActivatedBy")
+  scheduleApprovalActions        ScheduleApproval[]       @relation("ScheduleApprovalActor")
+  reviewCommentsCreated          ScheduleReviewComment[]  @relation("ScheduleCommentCreatedBy")
+  reviewCommentsResolved         ScheduleReviewComment[]  @relation("ScheduleCommentResolvedBy")
+  baselineActivationActions      BaselineActivation[]     @relation("BaselineActivationActor")
+  financialWaiversRequested      FinancialDataWaiver[]    @relation("FinancialWaiverRequestedBy")
+  financialWaiversApproved       FinancialDataWaiver[]    @relation("FinancialWaiverApprovedBy")
+  scheduleRevisionReasonsCreated ScheduleRevisionReason[] @relation("ScheduleRevisionReasonCreatedBy")
 }
 
 model SystemRole {
@@ -3631,8 +3641,8 @@ model ProjectSchedule {
   generatedAt            DateTime?
   approvedAt             DateTime?
   generationRulesVersion String?
-  validationMetrics  String?   @db.Text
-  feasibilityFlags   String?   @db.Text
+  validationMetrics      String?   @db.Text
+  feasibilityFlags       String?   @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3648,6 +3658,53 @@ model ProjectSchedule {
   boqAllocations  ScheduleBOQAllocation[]   @relation("ScheduleBOQAllocations")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // --- Phase 3 Additions ---
+  workflowStatus ProjectScheduleWorkflowStatus @default(AI_GENERATED_DRAFT)
+  reviewRound    Int                           @default(1)
+  revisionNumber Int?
+  revisionCode   String?
+
+  parentScheduleId   String?
+  previousBaselineId String?
+
+  projectStartDate      DateTime?
+  projectCompletionDate DateTime?
+
+  openAiModelIdentifier   String?
+  promptVersion           String?
+  schedulingEngineVersion String?
+  validationRulesVersion  String?
+
+  generatedById String?
+  activatedById String?
+  activatedAt   DateTime?
+
+  activationSnapshotHash String?
+  rowVersion             Int     @default(1)
+
+  parentSchedule ProjectSchedule?  @relation("ScheduleRevisionParent", fields: [parentScheduleId], references: [id], onDelete: Restrict)
+  childRevisions ProjectSchedule[] @relation("ScheduleRevisionParent")
+
+  previousBaseline     ProjectSchedule?  @relation("PreviousApprovedBaseline", fields: [previousBaselineId], references: [id], onDelete: Restrict)
+  supersedingBaselines ProjectSchedule[] @relation("PreviousApprovedBaseline")
+
+  generatedByUser User? @relation("ScheduleGeneratedBy", fields: [generatedById], references: [id], onDelete: Restrict)
+  activatedBy     User? @relation("ScheduleActivatedBy", fields: [activatedById], references: [id], onDelete: Restrict)
+
+  approvals            ScheduleApproval[]
+  reviewComments       ScheduleReviewComment[]
+  baselineActivations  BaselineActivation[]
+  financialDataWaivers FinancialDataWaiver[]
+  revisionReasons      ScheduleRevisionReason[]
+
+  @@unique([id, projectId])
+  @@unique([projectId, revisionNumber])
+  @@unique([projectId, revisionCode])
+  @@index([projectId, workflowStatus])
+  @@index([parentScheduleId])
+  @@index([previousBaselineId])
+  @@index([lockedBOQVersionId])
 }
 
 model ScheduleWBS {
@@ -4701,4 +4758,211 @@ model AIConfiguration {
   jsonSchemaVersion            String   @default("v1.0")
   schedulingRulesVersion       String   @default("v1.0")
   updatedAt                    DateTime @updatedAt
+}
+
+// ==================================================
+// PHASE 3 BASELINE REVIEW & APPROVAL ENUMS
+// ==================================================
+
+enum ProjectScheduleWorkflowStatus {
+  AI_GENERATED_DRAFT
+  INVALID_GENERATED_DRAFT
+  READY_FOR_REVIEW
+
+  UNDER_TECHNICAL_REVIEW
+  TECHNICAL_REVISIONS_REQUIRED
+  TECHNICALLY_APPROVED
+
+  UNDER_CONTRACT_REVIEW
+  CONTRACT_REVISIONS_REQUIRED
+  CONTRACT_APPROVED
+
+  UNDER_FINANCE_REVIEW
+  FINANCE_REVISIONS_REQUIRED
+  FINANCE_APPROVED
+
+  PENDING_BASELINE_APPROVAL
+
+  ACTIVE_BASELINE
+  SUPERSEDED_BASELINE
+  ARCHIVED_BASELINE
+
+  REJECTED
+}
+
+enum ScheduleApprovalStage {
+  TECHNICAL
+  CONTRACT
+  FINANCE
+  FINAL_ACTIVATION
+}
+
+enum ScheduleApprovalDecision {
+  APPROVE
+  RETURN_FOR_REVISION
+  REJECT
+  REQUEST_CLARIFICATION
+}
+
+enum ScheduleCommentType {
+  TECHNICAL
+  FINANCIAL
+  BOQ_ALLOCATION
+  SEQUENCE
+  DURATION
+  PRODUCTIVITY
+  CREW
+  WORK_FRONT
+  CPM
+  CONTRACT_DATE
+  COMMISSIONING
+  CLOSEOUT
+}
+
+enum ScheduleCommentStatus {
+  OPEN
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum FinancialWaiverStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  REVOKED
+}
+
+enum ScheduleRevisionType {
+  AI_REGENERATION
+  TECHNICAL_CORRECTION
+  CONTRACT_CORRECTION
+  FINANCIAL_CORRECTION
+  RECOVERY
+  VARIATION_ORDER
+  TIME_EXTENSION
+  SUSPENSION_RESUMPTION
+  METHODOLOGY_CHANGE
+  RESOURCE_CHANGE
+  CLIENT_INSTRUCTION
+}
+
+// ==================================================
+// PHASE 3 BASELINE REVIEW & APPROVAL MODELS
+// ==================================================
+
+model ScheduleApproval {
+  id                   String                   @id @default(cuid())
+  projectId            String
+  scheduleId           String
+  reviewRound          Int
+  revisionCode         String?
+  approvalStage        ScheduleApprovalStage
+  decision             ScheduleApprovalDecision
+  reviewerId           String
+  reviewerNameSnapshot String
+  reviewerRoleSnapshot String
+  comments             String?                  @db.Text
+  validationSnapshot   Json?
+  snapshotVersion      String
+  scheduleSnapshotHash String?
+  lockedBOQChecksum    String?
+  decidedAt            DateTime                 @default(now())
+  createdAt            DateTime                 @default(now())
+
+  schedule ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
+  reviewer User            @relation("ScheduleApprovalActor", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  @@index([projectId, scheduleId])
+  @@index([scheduleId, reviewRound])
+  @@index([scheduleId, approvalStage])
+  @@index([reviewerId])
+}
+
+model ScheduleReviewComment {
+  id                    String                @id @default(cuid())
+  projectId             String
+  scheduleId            String
+  reviewRound           Int
+  activityId            String?
+  phaseId               String?
+  commentType           ScheduleCommentType
+  comment               String                @db.Text
+  status                ScheduleCommentStatus @default(OPEN)
+  createdById           String
+  createdByNameSnapshot String
+  createdByRoleSnapshot String
+  resolvedById          String?
+  resolutionComment     String?               @db.Text
+  createdAt             DateTime              @default(now())
+  resolvedAt            DateTime?
+
+  schedule   ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  createdBy  User            @relation("ScheduleCommentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  resolvedBy User?           @relation("ScheduleCommentResolvedBy", fields: [resolvedById], references: [id], onDelete: Restrict)
+}
+
+model BaselineActivation {
+  id                      String   @id @default(cuid())
+  projectId               String
+  scheduleId              String
+  reviewRound             Int
+  revisionCode            String
+  previousBaselineId      String?
+  validationSnapshot      Json
+  snapshotVersion         String
+  scheduleSnapshotHash    String
+  lockedBOQChecksum       String?
+  activatedById           String
+  activatedByNameSnapshot String
+  activatedByRoleSnapshot String
+  activatedAt             DateTime @default(now())
+  createdAt               DateTime @default(now())
+
+  schedule    ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
+  activatedBy User            @relation("BaselineActivationActor", fields: [activatedById], references: [id], onDelete: Restrict)
+}
+
+model FinancialDataWaiver {
+  id                      String                @id @default(cuid())
+  projectId               String
+  scheduleId              String
+  reason                  String                @db.Text
+  affectedFields          Json
+  normalizationMethod     String
+  migrationDeadline       DateTime?
+  requestedById           String
+  requestedByNameSnapshot String
+  requestedByRoleSnapshot String
+  approvedById            String?
+  approvedByNameSnapshot  String?
+  approvedByRoleSnapshot  String?
+  approvedAt              DateTime?
+  expiresAt               DateTime?
+  status                  FinancialWaiverStatus @default(PENDING)
+  createdAt               DateTime              @default(now())
+  revokedAt               DateTime?
+  revocationReason        String?               @db.Text
+
+  schedule    ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  requestedBy User            @relation("FinancialWaiverRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedBy  User?           @relation("FinancialWaiverApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+}
+
+model ScheduleRevisionReason {
+  id                    String               @id @default(cuid())
+  projectId             String
+  scheduleId            String
+  parentScheduleId      String?
+  revisionType          ScheduleRevisionType
+  reason                String               @db.Text
+  supportingReference   String?
+  createdById           String
+  createdByNameSnapshot String
+  createdByRoleSnapshot String
+  createdAt             DateTime             @default(now())
+
+  schedule  ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  createdBy User            @relation("ScheduleRevisionReasonCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 }
