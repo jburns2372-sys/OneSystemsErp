@@ -219,9 +219,11 @@ ${JSON.stringify(boqPayload, null, 2)}`;
     }
     
     if (activePhases.length > 0) {
+      // Put orphaned execution items into the penultimate phase (Execution) so the Final phase remains purely Acceptance/Demobilization
+      const orphanTargetIndex = activePhases.length > 1 ? activePhases.length - 2 : 0;
       for (const boq of consolidatedItems) {
         if (!assignedBoqIds.has(boq.id)) {
-          activePhases[activePhases.length - 1].assignedBOQItemIds.push(boq.id);
+          activePhases[orphanTargetIndex].assignedBOQItemIds.push(boq.id);
         }
       }
     }
