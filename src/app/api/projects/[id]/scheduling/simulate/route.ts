@@ -114,7 +114,7 @@ ${JSON.stringify(boqPayload, null, 2)}`;
       throw new Error('Failed to simulate schedule: ' + aiError.message);
     }
 
-    const phases = result.phases || [];
+    const phases: any[] = result.phases || [];
     console.log("SIMULATION PHASES:", JSON.stringify(phases));
 
     if (phases.length === 0) {
