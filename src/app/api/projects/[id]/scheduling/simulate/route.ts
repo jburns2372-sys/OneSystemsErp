@@ -42,6 +42,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       where: { projectId }
     });
 
+    const boqMappingsList = await prisma.bOQMapping.findMany({
+      where: { 
+        consolidatedBoqItem: { projectId } 
+      }
+    });
+
     if (consolidatedItems.length === 0) {
        return NextResponse.json({ error: 'No Consolidated BOQ items found to simulate phasing.' }, { status: 400 });
     }
@@ -282,15 +288,18 @@ ${JSON.stringify(boqPayload, null, 2)}`;
               unit: boqItem.unit
             });
 
-            // Map the underlying raw AwardedBOQItems to satisfy the foreign key constraint
-            const matchingRawItems = rawAwardedItems.filter(r => r.description === boqItem.description);
-            for (const raw of matchingRawItems) {
-              boqMappingData.push({
-                id: crypto.randomUUID(),
-                activityId: actId,
-                awardedBoqItemId: raw.id,
-                mappedQuantity: raw.quantity || 1
-              });
+            // Map the underlying raw AwardedBOQItems using the true BOQMapping ledger
+            const mappingsForThisBoq = boqMappingsList.filter(m => m.consolidatedBoqItemId === boqId && m.awardedBoqItemId);
+            for (const mapRecord of mappingsForThisBoq) {
+              const raw = rawAwardedItems.find(r => r.id === mapRecord.awardedBoqItemId);
+              if (raw) {
+                boqMappingData.push({
+                  id: crypto.randomUUID(),
+                  activityId: actId,
+                  awardedBoqItemId: raw.id,
+                  mappedQuantity: raw.quantity || 1
+                });
+              }
             }
             
             // Link activities within the phase (Finish-to-Start)
