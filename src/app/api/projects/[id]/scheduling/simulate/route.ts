@@ -123,15 +123,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const prompt = `You are an expert construction project manager. 
 I have a list of project activities and an existing total project duration of ${totalDays} days.
 The project starts on ${startDate.toDateString()} and ends on ${targetDate.toDateString()}.
-I need to group these activities into logical construction phases and sequence them correctly.
+I need to group these activities into highly detailed, logical construction phases and sequence them correctly.
 Please do the following:
-1. Define 3 to 6 logical construction sub-phases (e.g. Mobilization & Site Setup, Rough-ins, Equipment Installation, Testing). Provide a unique 'code' for each sub-phase (e.g. PH-1).
+1. Define 8 to 15 highly detailed, granular construction sub-phases based on industry standards for comprehensive project management (e.g. Pre-construction & Mobilization, Earthworks & Excavation, Foundation & Substructure, Superstructure Framing, Roof Framing & Roofing, Exterior Masonry & Finishes, Rough-ins (MEPF), Interior Partitions, Architectural Finishes, Fixtures & Equipment Installation, Testing & Commissioning, Demobilization & Handover). Provide a unique 'code' for each sub-phase (e.g. PH-1).
 2. For each sub-phase, estimate its percentage of the total project duration (pct, must sum to 1.0).
 3. For each sub-phase, provide an ordered array of 'orderedActivityIds' representing the recommended chronological sequence of works within that phase. Every activity provided in the input MUST be assigned to exactly one phase.
 4. Carefully analyze and sequence the project phases according to strict industry standard construction workflows.
 5. For each sub-phase, assign the relevant Awarded BOQ item IDs from the list provided that correspond to the work in that phase.
 
 CRITICAL RULES:
+- EVERY SINGLE Awarded BOQ Material ID provided in the input MUST be assigned to exactly one phase. Do not leave any BOQ item unassigned, or the project financials will not balance.
 - The FIRST phase (e.g. PH-1 Mobilization & Site Setup) MUST ONLY contain General Requirements and Preliminaries. This includes activities related to: Mobilization, Demobilization, Quality Standard and Control, Security, Safety and Protection, Site Management Work, Temporary Works, Transportation, and Permits.
 - DO NOT put physical construction works, demolition, chipping, restoration, or general "Consumables" into the first phase. They belong in subsequent construction phases.
 - Within each phase, the \`orderedActivityIds\` array MUST be strictly ordered chronologically from what starts first to what finishes last.
