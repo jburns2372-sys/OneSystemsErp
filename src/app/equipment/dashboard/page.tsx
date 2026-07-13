@@ -22,9 +22,9 @@ export default async function EquipmentHub() {
     getAIDashboardStats().catch(() => ({ openFindings: 0, resolvedFindings: 0, criticalFindings: 0, highFindings: 0, safetyEvents: 0 }))
   ]);
 
-  const activeEquipment = equipment.filter(e => e.status === 'ACTIVE').length;
-  const maintenanceCount = equipment.filter(e => e.status === 'MAINTENANCE').length;
-  const fmsConnected = equipment.filter(e => e.fmsDeviceId).length;
+  const activeEquipment = equipment.filter((e: { status?: string }) => e.status === 'ACTIVE').length;
+  const maintenanceCount = equipment.filter((e: { status?: string }) => e.status === 'MAINTENANCE').length;
+  const fmsConnected = equipment.filter((e: { fmsDeviceId?: string }) => e.fmsDeviceId).length;
 
   return (
     <div className={styles.dashboardContainer} style={{ maxWidth: '1400px' }}>

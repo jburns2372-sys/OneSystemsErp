@@ -15,7 +15,7 @@ export default function ValidationModal({ periodId, onClose, onSuccess }: { peri
       if (res.success) {
         setValidationResult(res);
       } else {
-        setError(res.error);
+        setError(res.error || '');
       }
       setIsValidating(false);
     }
@@ -28,7 +28,7 @@ export default function ValidationModal({ periodId, onClose, onSuccess }: { peri
     if (res.success) {
       onSuccess();
     } else {
-      setError(res.error);
+      setError(res.error || '');
       setIsSubmitting(false);
     }
   };

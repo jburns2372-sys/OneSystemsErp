@@ -92,10 +92,10 @@ export async function getUserPermissions(userId: string) {
   }
 
   // Then aggregate from userRoles relationship if it exists
-  userRoles.forEach(ur => {
+  userRoles.forEach((ur: { role: { isActive: boolean; rolePermissions: any[]; roleCode?: string; roleName?: string } }) => {
     if (!ur.role.isActive) return;
 
-    ur.role.rolePermissions.forEach(rp => {
+    ur.role.rolePermissions.forEach((rp: { moduleName: string; [key: string]: any }) => {
       if (!aggregatedPermissions[rp.moduleName]) {
         aggregatedPermissions[rp.moduleName] = { ...rp };
       } else {
@@ -125,7 +125,7 @@ export async function getUserPermissions(userId: string) {
   // >>> GUEST USER OVERRIDE <<<
   // The Prompt requires a universal READ-ONLY / VIEW-ONLY system role.
   const isGuestUser = user?.role === 'GUEST_USER' || user?.role === 'GUEST USER' || 
-                      userRoles.some(ur => ur.role.roleCode === 'GUEST_USER' || ur.role.roleName === 'GUEST USER');
+                      userRoles.some((ur: { role: { roleCode?: string; roleName?: string } }) => ur.role.roleCode === 'GUEST_USER' || ur.role.roleName === 'GUEST USER');
 
   if (isGuestUser) {
     aggregatedPermissions['IS_ADMIN'] = false;

@@ -78,12 +78,15 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
 
     if (pricedBoqLines.length === 0) throw new Error("No valid priced BOQ details found. Cannot generate schedule.");
 
-    const pricedTotal = pricedBoqLines.reduce((sum, item) => sum + (item.totalCost || 0), 0);
-    const awardedContractAmount = Number(project.contractAmount || 0);
+    const awardedTotal = pricedBoqLines.reduce(
+      (sum, item) => sum.plus(new Prisma.Decimal(item.totalCost?.toString() || "0")),
+      new Prisma.Decimal(0)
+    );
+    const awardedContractAmount = new Prisma.Decimal(project.contractAmount?.toString() || "0");
 
     // Simple epsilon check for floating point mismatch
-    if (awardedContractAmount > 0 && Math.abs(pricedTotal - awardedContractAmount) > 1.0) {
-       console.warn(`BOQ Total (${pricedTotal}) does not match Awarded Contract Amount (${awardedContractAmount}). Scheduling proceeds with BOQ Total.`);
+    if (awardedContractAmount.gt(0) && awardedTotal.minus(awardedContractAmount).abs().toNumber() > 1.0) {
+       console.warn(`BOQ Total (${awardedTotal.toNumber()}) does not match Awarded Contract Amount (${awardedContractAmount.toNumber()}). Scheduling proceeds with BOQ Total.`);
     }
 
     const boqLines = pricedBoqLines;
@@ -155,8 +158,38 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
       unit: item.unit
     }));
 
+    const ActivitySchema = z.object({
+      temporaryActivityKey: z.string(),
+      activityName: z.string(),
+      durationMethod: z.enum(['PRODUCTION_QUANTITY', 'CHILD_WORK_PACKAGES', 'FIXED_TECHNICAL_DURATION', 'LEVEL_OF_EFFORT', 'MILESTONE']),
+      discipline: z.string(),
+      assignedBOQItemIds: z.array(z.string()),
+      productivityAssumption: z.number().nullable().describe("Daily output rate per crew. Must be > 0 if PRODUCTION_QUANTITY"),
+      crewCountAssumption: z.number().nullable().describe("Number of assigned crews. Minimum 1."),
+      workFrontAssumption: z.number().nullable().describe("Number of independent work fronts. Minimum 1."),
+      fixedTechnicalDuration: z.number().nullable().describe("Duration in days if FIXED_TECHNICAL_DURATION or duration if CHILD_WORK_PACKAGES overrides it, otherwise null"),
+      predecessors: z.array(z.object({
+        key: z.string().describe("temporaryActivityKey of the predecessor"),
+        type: z.enum(['FS', 'SS', 'FF', 'SF']),
+        lag: z.number()
+      })),
+      confidence: z.number()
+    });
+
+    const PhaseSchema = z.object({
+      phaseName: z.string(),
+      rationale: z.string(),
+      activities: z.array(ActivitySchema)
+    });
+
+    const ProposalSchema = z.object({
+      phases: z.array(PhaseSchema)
+    });
+
+    type AIProposalType = z.infer<typeof ProposalSchema>;
+
     let retryCount = 0;
-    let aiProposal: any = null;
+    let aiProposal: AIProposalType | null = null;
     let validationErrors: string[] = [];
     
     // STAGE 9 - CORRECTION LOOP
@@ -193,33 +226,12 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
 
         const { object } = await generateObject({
           model: openai(AI_CONFIG.models.primaryPlanning),
-          schema: z.object({
-            phases: z.array(z.object({
-              phaseName: z.string(),
-              rationale: z.string(),
-              activities: z.array(z.object({
-                temporaryActivityKey: z.string(),
-                activityName: z.string(),
-                durationMethod: z.enum(['PRODUCTION_QUANTITY', 'CHILD_WORK_PACKAGES', 'FIXED_TECHNICAL_DURATION', 'LEVEL_OF_EFFORT', 'MILESTONE']),
-                discipline: z.string(),
-                assignedBOQItemIds: z.array(z.string()),
-                productivityAssumption: z.number().nullable().describe("Daily output rate per crew. Must be > 0 if PRODUCTION_QUANTITY"),
-                crewCountAssumption: z.number().nullable().describe("Number of assigned crews. Minimum 1."),
-                workFrontAssumption: z.number().nullable().describe("Number of independent work fronts. Minimum 1."),
-                fixedTechnicalDuration: z.number().nullable().describe("Duration in days if FIXED_TECHNICAL_DURATION or duration if CHILD_WORK_PACKAGES overrides it, otherwise null"),
-                predecessors: z.array(z.object({
-                  key: z.string().describe("temporaryActivityKey of the predecessor"),
-                  type: z.enum(['FS', 'SS', 'FF', 'SF']),
-                  lag: z.number()
-                })),
-                confidence: z.number()
-              }))
-            }))
-          }),
+          schema: ProposalSchema,
           prompt
         });
 
-        aiProposal = object;
+        // Strictly validate with Zod before using
+        aiProposal = ProposalSchema.parse(object);
 
         // STAGE 8 - DETERMINISTIC VALIDATION & AUTO-CORRECTION
         validationErrors = [];
@@ -246,24 +258,31 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
         const unassigned = boqPayload.filter(b => !assignedIds.has(b.id));
         if (unassigned.length > 0) {
           validationErrors.push(`Auto-assigned ${unassigned.length} missing BOQ items.`);
-          if (aiProposal.phases.length > 0) {
-            aiProposal.phases[0].activities.push({
-              activityName: 'Miscellaneous Works (Auto-Assigned)',
-              discipline: 'General',
-              assignedBOQItemIds: unassigned.map(u => u.id),
-              predecessors: [],
-              confidence: 0.5
-            });
-          }
+          aiProposal.phases[0].activities.push({
+            temporaryActivityKey: `AUTO_${crypto.randomUUID()}`,
+            activityName: 'Miscellaneous Works (Auto-Assigned)',
+            durationMethod: 'CHILD_WORK_PACKAGES',
+            discipline: 'General',
+            assignedBOQItemIds: unassigned.map(u => u.id),
+            productivityAssumption: null,
+            crewCountAssumption: null,
+            workFrontAssumption: null,
+            fixedTechnicalDuration: 1,
+            predecessors: [],
+            confidence: 0.5
+          });
         }
 
         let finalPhase = aiProposal.phases[aiProposal.phases.length - 1];
-        if (finalPhase.phaseName !== "Project Acceptance and Demobilization") {
+        if (!finalPhase.phaseName.toLowerCase().includes("demobilization")) {
           aiProposal.phases.push({
             phaseName: "Project Acceptance and Demobilization",
             rationale: "Auto-added mandatory final phase",
             activities: []
           });
+        } else {
+          // ensure the exact string is enforced for the final validation gate
+          finalPhase.phaseName = "Project Acceptance and Demobilization";
         }
 
         // We auto-corrected everything, so we can always break successfully
@@ -323,9 +342,12 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
 
     let seq = 1;
     let actSeq = 1;
-    let totalAmount = new Decimal(0);
     
     const dependencyData: Prisma.ScheduleDependencyCreateManyInput[] = [];
+
+    if (!aiProposal) {
+      throw new Error("AI Proposal is null after max retries");
+    }
 
     // Pass 1: Build Maps and Calculate Durations
     const actIdMap = new Map<string, string>();
@@ -367,25 +389,49 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
           durationDays = maxProdDuration;
         }
 
+        let metadata: import('@/lib/cpm-engine').CPMActivityMetadata;
+        const baseMeta = {
+          discipline: act.discipline,
+          aiConfidence: act.confidence,
+          sourceBoqLineIds: act.assignedBOQItemIds,
+          originalCrewCount: act.crewCountAssumption || 1,
+        };
+
+        if (act.durationMethod === 'PRODUCTION_QUANTITY') {
+          metadata = {
+            ...baseMeta,
+            method: 'PRODUCTION_QUANTITY',
+            crewCount: act.crewCountAssumption || 1,
+            workFronts: act.workFrontAssumption || 1,
+            prodRate: act.productivityAssumption || 1,
+            boqAssigned: act.assignedBOQItemIds
+          };
+        } else if (act.durationMethod === 'FIXED_TECHNICAL_DURATION') {
+          metadata = {
+            ...baseMeta,
+            method: 'FIXED_TECHNICAL_DURATION',
+            fixedTechnicalDuration: act.fixedTechnicalDuration || undefined
+          };
+        } else if (act.durationMethod === 'CHILD_WORK_PACKAGES') {
+          metadata = { ...baseMeta, method: 'CHILD_WORK_PACKAGES' };
+        } else if (act.durationMethod === 'LEVEL_OF_EFFORT') {
+          metadata = { ...baseMeta, method: 'LEVEL_OF_EFFORT' };
+        } else {
+          metadata = { ...baseMeta, method: 'MILESTONE' };
+        }
+
         cpmActivities.push({
           id: actId,
           name: act.activityName,
           duration: durationDays,
-          metadata: { // Attach data for feasibility updates
-             actRef: act,
-             crewCount: act.crewCountAssumption || 1,
-             workFronts: act.workFrontAssumption || 1,
-             prodRate: act.productivityAssumption || 1,
-             method: act.durationMethod,
-             boqAssigned: act.assignedBOQItemIds
-          }
+          metadata
         });
       }
     }
 
     // Pass 2: Build CPM Dependencies
     const cpmDependencies: CPMDependency[] = [];
-    for (const p of aiProposal.phases) {
+    for (const p of aiProposal!.phases) {
       for (const act of p.activities) {
         const successorId = actIdMap.get(act.temporaryActivityKey);
         if (successorId && act.predecessors) {
@@ -422,7 +468,7 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
       // Augment crews on critical path activities that are PRODUCTION_QUANTITY
       let updatedAny = false;
       for (const act of cpmActivities) {
-        if (cpmResult.results.get(act.id)?.isCritical && act.metadata.method === 'PRODUCTION_QUANTITY') {
+        if (cpmResult.results.get(act.id)?.isCritical && act.metadata?.method === 'PRODUCTION_QUANTITY') {
           act.metadata.crewCount *= 2;
           act.metadata.workFronts += 1;
           
@@ -446,7 +492,7 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
           feasibilityFlags.push({
             activityId: act.id,
             action: 'CREW_AUGMENTATION',
-            originalCrewCount: act.metadata.actRef.crewCountAssumption || 1,
+            originalCrewCount: act.metadata.originalCrewCount || 1,
             proposedCrewCount: act.metadata.crewCount,
             originalDuration: oldDuration,
             proposedDuration: maxProdDuration,
@@ -467,12 +513,12 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
       DATES: exceedContract ? "EXCEEDS_CONTRACT" : "WITHIN_CONTRACT",
       SEQUENCE: "VALID",
       CPM: cpmResult.results.size > 0 ? "CALCULATED" : "NOT_CALCULATED",
-      PHASES: aiProposal.phases[aiProposal.phases.length - 1].phaseName === "Project Acceptance and Demobilization" ? "VALID" : "INVALID_FINAL_PHASE",
+      PHASES: aiProposal!.phases[aiProposal!.phases.length - 1].phaseName === "Project Acceptance and Demobilization" ? "VALID" : "INVALID_FINAL_PHASE",
       OVERALL: exceedContract ? "INFEASIBLE" : "READY_FOR_REVIEW"
     };
 
     // Pass 3: Exact Financial Reconciliation, Date Assignment, and Final Validation
-    for (const p of aiProposal.phases) {
+    for (const p of aiProposal!.phases) {
       const phaseWbsId = crypto.randomUUID();
       phaseWbsData.push({
         id: phaseWbsId, scheduleId: schedule.id, parentId: rootWbsId, code: `PH-${seq}`, name: p.phaseName, level: 2, orderIndex: seq++
@@ -483,7 +529,7 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
         const cpmAct = cpmResult.results.get(actId)!;
         const cpmInputAct = cpmActivities.find(a => a.id === actId)!;
 
-        let actAmount = new Decimal(0);
+        let actAmount = new Prisma.Decimal(0);
         let qty = 0;
         let unit = 'lot';
 
@@ -501,37 +547,46 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
               const boq = boqLines.find(b => b.id === originalBoqId);
               if (boq) {
                 const finalAwardedId = boq.id;
+                const boqTotalCost = new Prisma.Decimal(boq.totalCost?.toString() || "0");
 
-                actAmount = actAmount.plus(boq.totalCost);
-                totalAmount = totalAmount.plus(boq.totalCost);
+                actAmount = actAmount.plus(boqTotalCost);
                 qty += Number(boq.quantity);
                 unit = boq.unit || 'lot';
 
                 allocationData.push({
                   id: crypto.randomUUID(), scheduleId: schedule.id, projectId, activityId: actId,
                   awardedBoqItemId: finalAwardedId, allocatedQuantity: boq.quantity,
-                  allocatedAmount: boq.totalCost, allocationMode: 'SINGLE'
+                  allocatedAmount: boqTotalCost, allocationMode: 'SINGLE'
                 });
               }
             }
           }
+        }
+        
+        let prodRate = null;
+        let crewCount = null;
+        let workFronts = null;
+        if (cpmInputAct.metadata?.method === 'PRODUCTION_QUANTITY') {
+          prodRate = cpmInputAct.metadata.prodRate;
+          crewCount = cpmInputAct.metadata.crewCount;
+          workFronts = cpmInputAct.metadata.workFronts;
         }
 
         activityData.push({
           id: actId, scheduleId: schedule.id, wbsId: phaseWbsId, name: act.activityName,
           activityCode: `ACT-${actSeq++}`, plannedDuration: cpmAct.earlyFinish - cpmAct.earlyStart,
           plannedStartDate, plannedFinishDate, unit, plannedQuantity: qty,
-          durationMethod: cpmInputAct.metadata.method,
-          productivityAssumption: cpmInputAct.metadata.prodRate,
-          crewCountAssumption: cpmInputAct.metadata.crewCount,
-          workFrontAssumption: cpmInputAct.metadata.workFronts,
-          activityType: cpmInputAct.metadata.method,
+          durationMethod: cpmInputAct.metadata?.method || act.durationMethod,
+          productivityAssumption: prodRate,
+          crewCountAssumption: crewCount,
+          workFrontAssumption: workFronts,
+          activityType: cpmInputAct.metadata?.method || act.durationMethod,
           discipline: act.discipline,
           criticalPath: cpmAct.isCritical,
           totalFloat: cpmAct.totalFloat,
           freeFloat: cpmAct.freeFloat,
           allocatedAmount: actAmount,
-          aiRationale: act.rationale || '',
+          aiRationale: p.rationale || '',
           status: 'NOT_STARTED'
         });
       }
@@ -550,14 +605,55 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
     }
 
     // Semantic Validation & Status Rules
-    const awardedContractAmount = project.contractAmount || 0;
-    const boqTotal = new Decimal(pricedTotal);
-    const difference = new Decimal(totalAmount).minus(awardedContractAmount);
+    const scheduledTotal = allocationData.reduce(
+      (sum, alloc) => sum.plus(new Prisma.Decimal(alloc.allocatedAmount?.toString() || "0")),
+      new Prisma.Decimal(0)
+    );
+    const awardedTotalTx = boqLines.reduce(
+      (sum, line) => sum.plus(new Prisma.Decimal(line.totalCost?.toString() || "0")),
+      new Prisma.Decimal(0)
+    );
+    
+    const difference = scheduledTotal.minus(awardedTotalTx);
 
-    if (difference.abs().toNumber() > 1.0) {
+    // Line-level verification
+    let uniqueAllocatedBOQ = new Set<string>();
+    let overallocated = 0;
+    let underallocated = 0;
+
+    for (const line of boqLines) {
+      const lineAllocations = allocationData.filter(a => a.awardedBoqItemId === line.id);
+      if (lineAllocations.length > 0) uniqueAllocatedBOQ.add(line.id);
+      
+      const lineSum = lineAllocations.reduce(
+        (sum, a) => sum.plus(new Prisma.Decimal(a.allocatedAmount?.toString() || "0")),
+        new Prisma.Decimal(0)
+      );
+      
+      const lineTotal = new Prisma.Decimal(line.totalCost?.toString() || "0");
+      if (!lineSum.equals(lineTotal)) {
+         if (lineSum.gt(lineTotal)) overallocated++;
+         if (lineSum.lt(lineTotal)) underallocated++;
+      }
+    }
+
+    console.log("=== FINAL FINANCIAL RECONCILIATION ===");
+    console.log(`Unique Priced BOQ Lines: ${boqLines.length}`);
+    console.log(`Unique Allocated BOQ Lines: ${uniqueAllocatedBOQ.size}`);
+    console.log(`Unallocated Lines: ${boqLines.length - uniqueAllocatedBOQ.size}`);
+    console.log(`Overallocated Lines: ${overallocated}`);
+    console.log(`Awarded Amount: ${awardedTotalTx.toString()}`);
+    console.log(`Scheduled Amount: ${scheduledTotal.toString()}`);
+    console.log(`Exact Difference: ${difference.toString()}`);
+
+    if (!difference.equals(new Prisma.Decimal("0.00"))) {
       validationMetrics.FINANCIAL = 'UNBALANCED';
       validationMetrics.OVERALL = 'INVALID';
-      validationErrors.push(`CRITICAL FINANCIAL MISMATCH: Schedule Total (${totalAmount}) != Awarded BOQ Total (${awardedContractAmount}).`);
+      validationErrors.push(`CRITICAL FINANCIAL MISMATCH: Schedule Total (${scheduledTotal.toString()}) != Awarded BOQ Total (${awardedTotalTx.toString()}).`);
+    } else if (overallocated > 0 || underallocated > 0 || uniqueAllocatedBOQ.size !== boqLines.length) {
+      validationMetrics.FINANCIAL = 'UNBALANCED';
+      validationMetrics.OVERALL = 'INVALID';
+      validationErrors.push(`LINE-LEVEL FINANCIAL MISMATCH.`);
     }
 
     const finalPhaseName = aiProposal.phases[aiProposal.phases.length - 1].phaseName;
@@ -583,7 +679,7 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
       where: { id: schedule.id },
       data: {
         status: validationMetrics.OVERALL === 'READY_FOR_REVIEW' ? 'DRAFT' : 'INVALID_GENERATED_DRAFT',
-        awardedContractAmount: awardedContractAmount, scheduledAmount: totalAmount, differenceAmount: difference,
+        awardedContractAmount: awardedTotalTx, scheduledAmount: scheduledTotal, differenceAmount: difference,
         validationMetrics: JSON.stringify(validationMetrics),
         feasibilityFlags: JSON.stringify(feasibilityFlags)
       }
@@ -600,6 +696,16 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
         validationResults: JSON.stringify({ classification, aiProposal, financialDiff: difference.toNumber(), validationMetrics, cpmStats: { duration: cpmResult.projectDuration, criticalActivities: cpmResult.criticalPath.length } })
       }
     });
+
+    if (validationMetrics.OVERALL === 'INFEASIBLE') {
+      return {
+        success: false,
+        errorCode: 'SCHEDULE_INFEASIBLE_REQUIRES_REVIEW',
+        stage: 'FINAL_VALIDATION',
+        message: 'The schedule still exceeds the contract date after justified compression.',
+        scheduleId: schedule.id
+      };
+    }
 
     return { success: true, scheduleId: schedule.id, difference: difference.toNumber(), validationMetrics, feasibilityFlags };
     }, { timeout: 30000 }); // End of interactive transaction

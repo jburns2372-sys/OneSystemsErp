@@ -36,7 +36,7 @@ export default async function JobOrderDashboard() {
 
   // Basic KPI calculations
   const activeCount = jobOrders.length;
-  const totalPayable = jobOrders.reduce((sum, jo) => sum + (jo.contractAmount || 0), 0);
+  const totalPayable = jobOrders.reduce((sum: number, jo: { contractAmount?: number | null }) => sum + (jo.contractAmount || 0), 0);
 
   return (
     <div className={styles.dashboardContainer} style={{ maxWidth: '1400px' }}>
