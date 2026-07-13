@@ -1,0 +1,1312 @@
+{
+  "g": [
+    {
+      "d": "Mobilization and Demobilization",
+      "c": 103229
+    },
+    {
+      "d": "a. Project Management",
+      "c": 678976
+    },
+    {
+      "d": "b. Admin Support\r\n  - Accounting, Procurement, Logistics",
+      "c": 279579.9999999999
+    },
+    {
+      "d": "c.Quality Management",
+      "c": 279579.9999999999
+    },
+    {
+      "d": "d. Engineering Management\r\n - Clarifications & Drawings",
+      "c": 319519
+    },
+    {
+      "d": "b. Warehouse",
+      "c": 51615
+    },
+    {
+      "d": "b. Site Office Materials & Communication",
+      "c": 14747
+    },
+    {
+      "d": "c. Temporary Tools & Cleaning Materials",
+      "c": 7373.999999999999
+    },
+    {
+      "d": "b. Off-site Barracks\r\n   - Construction and-or Rent\r\n   - Electric Consumption\r\n   - Water Consumption",
+      "c": 184338
+    },
+    {
+      "d": "a. Safety Officer",
+      "c": 331806.9999999999
+    },
+    {
+      "d": "b. Personal Protective Equipment (PPE's)",
+      "c": 73735
+    },
+    {
+      "d": "a. Shopdrawings, As-built plans for Occupancy including Sign & Seal",
+      "c": 117976
+    },
+    {
+      "d": "a. Manpower Service",
+      "c": 147470
+    },
+    {
+      "d": "b. Engineer Transportation",
+      "c": 110603
+    },
+    {
+      "d": "MISCELLANEOUS",
+      "c": 5684.06
+    },
+    {
+      "d": "MISCELLANEOUS",
+      "c": 6640.710000000001
+    },
+    {
+      "d": "MISCELLANEOUS",
+      "c": 5010.49
+    },
+    {
+      "d": "MISCELLANEOUS",
+      "c": 7277.91
+    }
+  ],
+  "m": [
+    {
+      "d": "ACCU- 18HP Model: RXQ18BYM",
+      "c": 2223173.13
+    },
+    {
+      "d": "FCU- 2 HP Wall Mounted VRF A (OR No. 2, PNCOU, OR No.3, OR, Pantry, OR Complex Conference Room) Model: FXAQ50BVM",
+      "c": 330524.0399999999
+    },
+    {
+      "d": "FCU- 2.5HP Wall Mounted VRF A (OR No. 2 ENT, OR No. 1 ENT, Chief Nurse, OR Pharmacy) Model: FXAQ63BVM",
+      "c": 168668.58
+    },
+    {
+      "d": "FCU- 6HP ceiling Cassette VRF A (Corridor Near OR No.1, Corridor Near OR No. 2 ENT) Model: FXFQ140AVM",
+      "c": 175061.38
+    },
+    {
+      "d": "Navigation Wired Controller Model: BRC1E63",
+      "c": 129367.92
+    },
+    {
+      "d": "Standard panel(Fresh white) Model: BYCQ125EAF",
+      "c": 44690.74000000001
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A22T",
+      "c": 8702.94
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A33T",
+      "c": 9879.020000000002
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A732T",
+      "c": 24697.53
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A733T",
+      "c": 42338.61
+    },
+    {
+      "d": "Pipe Size Reducer Model: KHRP26M73TP",
+      "c": 17993.91
+    },
+    {
+      "d": "VRV Multi Con piping kit Model: BHFP22R168-7",
+      "c": 39751.22
+    },
+    {
+      "d": "1/4\"",
+      "c": 21203.3
+    },
+    {
+      "d": "3/8\"",
+      "c": 38380.55
+    },
+    {
+      "d": "1/2\"",
+      "c": 65756.88
+    },
+    {
+      "d": "5/8\"",
+      "c": 60983.55
+    },
+    {
+      "d": "3/4\"",
+      "c": 77780.97
+    },
+    {
+      "d": "7/8\"",
+      "c": 21740.02
+    },
+    {
+      "d": "1-1/8\"",
+      "c": 124535.36
+    },
+    {
+      "d": "1-3/8\"",
+      "c": 105076.65
+    },
+    {
+      "d": "1-5/8\"",
+      "c": 84061.32
+    },
+    {
+      "d": "1/4\"",
+      "c": 8237.83
+    },
+    {
+      "d": "3/8\"",
+      "c": 11487.58
+    },
+    {
+      "d": "1/2\"",
+      "c": 13936.05
+    },
+    {
+      "d": "5/8\"",
+      "c": 11334.78
+    },
+    {
+      "d": "3/4\"",
+      "c": 12038.72
+    },
+    {
+      "d": "7/8\"",
+      "c": 3138.2
+    },
+    {
+      "d": "1-1/8\"",
+      "c": 12697.35
+    },
+    {
+      "d": "1-3/8\"",
+      "c": 8960.3
+    },
+    {
+      "d": "1-5/8\"",
+      "c": 7168.24
+    },
+    {
+      "d": "Copper Pipe Fittings",
+      "c": 57975.92
+    },
+    {
+      "d": "Isolation Ball Valves",
+      "c": 70564.56000000001
+    },
+    {
+      "d": "PVC Cladding Works",
+      "c": 22281.85
+    },
+    {
+      "d": "Concrete Pad",
+      "c": 28867.23
+    },
+    {
+      "d": "32mm dia. uPVC blue pipe PNS 65",
+      "c": 15761.85
+    },
+    {
+      "d": "50mm dia. PVC blue uPVC blue pipe PNS 65",
+      "c": 14120.26
+    },
+    {
+      "d": "3/4'' thick for 32mm pvc",
+      "c": 32930.59
+    },
+    {
+      "d": "3/4'' thick for 50mm pvc",
+      "c": 34940.50999999999
+    },
+    {
+      "d": "(5.0m pump Lift) Model: BDU513A450VE",
+      "c": 274258.44
+    },
+    {
+      "d": "Wye Reducer 50 x 32",
+      "c": 2117.059999999999
+    },
+    {
+      "d": "Tee 32mm",
+      "c": 106.94
+    },
+    {
+      "d": "Tee Reducer 50 x 32",
+      "c": 406.3
+    },
+    {
+      "d": "Elbow 32mm",
+      "c": 261.78
+    },
+    {
+      "d": "Cleanout 50mm",
+      "c": 855.36
+    },
+    {
+      "d": "liquid-tight metallic flexible conduits 1-1/2\"",
+      "c": 31523.7
+    },
+    {
+      "d": "Metallic Flexible Conduit 20mm",
+      "c": 38599.82
+    },
+    {
+      "d": "Metallic Flexible Conduit Connector 20mm",
+      "c": 930.6100000000001
+    },
+    {
+      "d": "Communication wire (PD Royal Cord 0.75mm/2C)",
+      "c": 33871.96000000001
+    },
+    {
+      "d": "Vibration Isolator",
+      "c": 27798.2
+    },
+    {
+      "d": "Angle Bar, 2x2x 1/4 (6 meters)",
+      "c": 17662.54
+    },
+    {
+      "d": "Rugby",
+      "c": 5837.790000000001
+    },
+    {
+      "d": "White Tape",
+      "c": 15717.24
+    },
+    {
+      "d": "Threaded rod 3/8 (6 meters)",
+      "c": 16080.58
+    },
+    {
+      "d": "Nuts and washer 3/8",
+      "c": 684.48
+    },
+    {
+      "d": "Grip Anchor 3/8",
+      "c": 342.3999999999999
+    },
+    {
+      "d": "Paint (Red Oxide)",
+      "c": 3432
+    },
+    {
+      "d": "Loop Hangers",
+      "c": 15015.78
+    },
+    {
+      "d": "Freon",
+      "c": 86986.62
+    },
+    {
+      "d": "Nitrogen",
+      "c": 54526.98
+    },
+    {
+      "d": "Mapp Gas",
+      "c": 9408.63
+    },
+    {
+      "d": "Silver Rod",
+      "c": 7539.27
+    },
+    {
+      "d": "Paint Brush",
+      "c": 213.84
+    },
+    {
+      "d": "CHIPPING & RESTORATION (ROUGH-ONLY)",
+      "c": 737348.8400000002
+    },
+    {
+      "d": "TESTING & COMMISSIONING",
+      "c": 41291.54
+    },
+    {
+      "d": "ACCU-  Model: RXQ18BYM",
+      "c": 2223173.13
+    },
+    {
+      "d": "7/8\"",
+      "c": 10870.01
+    },
+    {
+      "d": "FCU- 2 HP Wall Mounted VRF B (OR No. 1 and 3,  OR No. 1 Miyake Eye (2), OR No. 2 NSS(2), OR No. 3 Euro-open (2), OR No. 8 Ortho, NSS/ Pay, Storage Room, OR Complex Conference Room) Model: FXAQ50BVM",
+      "c": 550873.4
+    },
+    {
+      "d": "FCU- 2.5HP Wall Mounted VRF B ( OR no. 4, 6, 13, 14, 15, OR Pharmacy) Model: FXAQ63BVM",
+      "c": 112445.72
+    },
+    {
+      "d": "FCU- 6HP ceiling Cassette VRF B (Corridor near OR No. 2 NSS, Corridor Near Supply Room) Model: FXFQ140AVM",
+      "c": 87530.69
+    },
+    {
+      "d": "Wired Remote Controller Model: BRC1E63",
+      "c": 152889.36
+    },
+    {
+      "d": "Standard panel(Fresh white) Model: BYCQ125EAF",
+      "c": 22345.37
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A22T",
+      "c": 26108.82
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A33T",
+      "c": 4939.510000000001
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A72T",
+      "c": 24697.53
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A73T",
+      "c": 28225.74
+    },
+    {
+      "d": "Pipe Size Reducer Model: KHRP26M73TP",
+      "c": 11995.94
+    },
+    {
+      "d": "VRV Multi Con piping kit Model: BHFP22R168-7",
+      "c": 39751.22
+    },
+    {
+      "d": "1/4\"",
+      "c": 29684.62
+    },
+    {
+      "d": "3/8\"",
+      "c": 32475.85000000001
+    },
+    {
+      "d": "1/2\"",
+      "c": 70453.8
+    },
+    {
+      "d": "5/8\"",
+      "c": 81311.4
+    },
+    {
+      "d": "3/4\"",
+      "c": 112350.29
+    },
+    {
+      "d": "1-1/8\"",
+      "c": 77834.6
+    },
+    {
+      "d": "1-3/8\"",
+      "c": 27039.77
+    },
+    {
+      "d": "1-5/8\"",
+      "c": 324477.24
+    },
+    {
+      "d": "1/4\"",
+      "c": 11706.39
+    },
+    {
+      "d": "3/8\"",
+      "c": 9278.429999999998
+    },
+    {
+      "d": "1/2\"",
+      "c": 15484.5
+    },
+    {
+      "d": "5/8\"",
+      "c": 15113.04
+    },
+    {
+      "d": "3/4\"",
+      "c": 18412.16
+    },
+    {
+      "d": "7/8\"",
+      "c": 1569.1
+    },
+    {
+      "d": "1-1/8\"",
+      "c": 7618.41
+    },
+    {
+      "d": "1-3/8\"",
+      "c": 2023.32
+    },
+    {
+      "d": "1-5/8\"",
+      "c": 24279.84
+    },
+    {
+      "d": "Copper Pipe Fittings",
+      "c": 87733.45999999999
+    },
+    {
+      "d": "Isolation Ball Valves",
+      "c": 83394.48
+    },
+    {
+      "d": "PVC Cladding Works",
+      "c": 8234.77
+    },
+    {
+      "d": "Concrete Pad",
+      "c": 28867.23
+    },
+    {
+      "d": "32mm dia. uPVC blue pipe PNS 65",
+      "c": 14953.55
+    },
+    {
+      "d": "50mm dia. PVC blue uPVC blue pipe PNS 65",
+      "c": 15403.92
+    },
+    {
+      "d": "3/4'' thick for 32mm pvc",
+      "c": 31647.58
+    },
+    {
+      "d": "3/4'' thick for 50mm pvc",
+      "c": 39003.35999999999
+    },
+    {
+      "d": "(5.0m pump Lift) Model: BDU513A450VE",
+      "c": 365677.92
+    },
+    {
+      "d": "Wye 50mm",
+      "c": 641.52
+    },
+    {
+      "d": "Wye Reducer 50 x 32",
+      "c": 2501.98
+    },
+    {
+      "d": "Tee 32mm",
+      "c": 160.41
+    },
+    {
+      "d": "Elbow 32mm",
+      "c": 261.78
+    },
+    {
+      "d": "Cleanout 50mm",
+      "c": 855.36
+    },
+    {
+      "d": "liquid-tight metallic flexible conduits 1-1/2\"",
+      "c": 31523.7
+    },
+    {
+      "d": "Metallic Flexible Conduit",
+      "c": 44330.51
+    },
+    {
+      "d": "Metallic Flexible Conduit Connector 20mm",
+      "c": 1091.06
+    },
+    {
+      "d": "Communication wire (PD Royal Cord 0.75mm/2C)",
+      "c": 38964.88
+    },
+    {
+      "d": "Vibration Isolator",
+      "c": 22238.56
+    },
+    {
+      "d": "Angle Bar, 2x2x 1/4 (6 meters)",
+      "c": 15139.32
+    },
+    {
+      "d": "Rugby",
+      "c": 6949.750000000002
+    },
+    {
+      "d": "White Tape",
+      "c": 18336.78
+    },
+    {
+      "d": "Threaded rod 3/8 (6 meters)",
+      "c": 18304.49
+    },
+    {
+      "d": "Nuts and washer 3/8",
+      "c": 684.48
+    },
+    {
+      "d": "Grip Anchor 3/8",
+      "c": 342.3999999999999
+    },
+    {
+      "d": "Paint (Red Oxide)",
+      "c": 3432
+    },
+    {
+      "d": "Loop Hangers",
+      "c": 17197.56
+    },
+    {
+      "d": "Freon",
+      "c": 101484.39
+    },
+    {
+      "d": "Nitrogen",
+      "c": 72702.64
+    },
+    {
+      "d": "Mapp Gas",
+      "c": 10263.96
+    },
+    {
+      "d": "Silver Rod",
+      "c": 8555.2
+    },
+    {
+      "d": "Paint Brush",
+      "c": 213.84
+    },
+    {
+      "d": "CHIPPING & RESTORATION (ROUGH-ONLY)",
+      "c": 737348.8400000002
+    },
+    {
+      "d": "TESTING & COMMISIONING",
+      "c": 47190.33
+    },
+    {
+      "d": "ACCU- Model: RXQ18BYM",
+      "c": 2223173.13
+    },
+    {
+      "d": "FCU- 2 HP Wall Mounted VRF C (Storage Room, OR No. 8 Ortho, NSS/Pay, OR No. 9 Plastic Surgery (2) ) Model: FXAQ50BVM",
+      "c": 55087.34
+    },
+    {
+      "d": "FCU- 2.5HP Wall Mounted VRF C (OR No. 4,  Euro- Endo (2), OR No. 7 Ortho, OR. 12 Pedia,  OR No. 10 Pay) Model: FXAQ63BVM",
+      "c": 393560.02
+    },
+    {
+      "d": "FCU- 6HP ceiling Cassette VRF C (Corridor near Ortho, Corridor near OR. No. 10, Corridor near NSS/Pay) Model: FXFQ140AVM",
+      "c": 175061.38
+    },
+    {
+      "d": "Wired Remote Controller Model: BRC1E63",
+      "c": 117607.2
+    },
+    {
+      "d": "Standard panel(Fresh white) Model: BYCQ125EAF",
+      "c": 44690.74000000001
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A33T",
+      "c": 9879.020000000002
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A72T",
+      "c": 32930.04
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A73T",
+      "c": 42338.61
+    },
+    {
+      "d": "Pipe Size Reducer Model: KHRP26M73TP",
+      "c": 17993.91
+    },
+    {
+      "d": "VRV Multi Con piping kit Model: BHFP22R168-7",
+      "c": 39751.22
+    },
+    {
+      "d": "1/4\"",
+      "c": 2120.33
+    },
+    {
+      "d": "Nitrogen",
+      "c": 54526.98
+    },
+    {
+      "d": "3/8\"",
+      "c": 32475.85000000001
+    },
+    {
+      "d": "1/2\"",
+      "c": 9393.84
+    },
+    {
+      "d": "5/8\"",
+      "c": 94863.30000000002
+    },
+    {
+      "d": "3/4\"",
+      "c": 77780.97
+    },
+    {
+      "d": "7/8\"",
+      "c": 10870.01
+    },
+    {
+      "d": "1-1/8\"",
+      "c": 77834.6
+    },
+    {
+      "d": "1-3/8\"",
+      "c": 63045.99000000001
+    },
+    {
+      "d": "1-5/8\"",
+      "c": 189278.39
+    },
+    {
+      "d": "1/4\"",
+      "c": 867.1399999999999
+    },
+    {
+      "d": "3/8\"",
+      "c": 9278.429999999998
+    },
+    {
+      "d": "1/2\"",
+      "c": 2064.6
+    },
+    {
+      "d": "5/8\"",
+      "c": 17002.17
+    },
+    {
+      "d": "3/4\"",
+      "c": 12038.72
+    },
+    {
+      "d": "7/8\"",
+      "c": 1569.1
+    },
+    {
+      "d": "1-1/8\"",
+      "c": 8464.9
+    },
+    {
+      "d": "1-3/8\"",
+      "c": 4480.15
+    },
+    {
+      "d": "1-5/8\"",
+      "c": 13151.58
+    },
+    {
+      "d": "Copper Pipe Fittings",
+      "c": 59135.14999999999
+    },
+    {
+      "d": "Isolation Ball Valves",
+      "c": 64149.60000000001
+    },
+    {
+      "d": "PVC Cladding Works",
+      "c": 19711.72
+    },
+    {
+      "d": "Concrete Pad",
+      "c": 28867.23
+    },
+    {
+      "d": "32mm dia. uPVC blue pipe PNS 65",
+      "c": 13336.95
+    },
+    {
+      "d": "50mm dia. PVC blue uPVC blue pipe PNS 65",
+      "c": 7701.959999999999
+    },
+    {
+      "d": "3/4'' thick for 32mm pvc",
+      "c": 28226.21999999999
+    },
+    {
+      "d": "3/4'' thick for 50mm pvc",
+      "c": 18689.11
+    },
+    {
+      "d": "(5.0m pump Lift) Model: BDU513A450VE",
+      "c": 335204.76
+    },
+    {
+      "d": "Wye Reducer 50 x 32",
+      "c": 1347.22
+    },
+    {
+      "d": "Tee 32mm",
+      "c": 320.82
+    },
+    {
+      "d": "Elbow 32mm",
+      "c": 305.41
+    },
+    {
+      "d": "Cleanout 50mm",
+      "c": 427.68
+    },
+    {
+      "d": "liquid-tight metallic flexible conduits 1-1/2\"",
+      "c": 31523.7
+    },
+    {
+      "d": "Metallic Flexible Conduit 20mm",
+      "c": 29246.28
+    },
+    {
+      "d": "Metallic Flexible Conduit Connector 20mm",
+      "c": 834.3400000000001
+    },
+    {
+      "d": "Communication wire (PD Royal Cord 0.75mm/2C)",
+      "c": 23524.44
+    },
+    {
+      "d": "Vibration Isolator",
+      "c": 27798.2
+    },
+    {
+      "d": "Angle Bar, 2x2x 1/4 (6 meters)",
+      "c": 17662.54
+    },
+    {
+      "d": "Rugby",
+      "c": 4169.85
+    },
+    {
+      "d": "White Tape",
+      "c": 11226.6
+    },
+    {
+      "d": "Threaded rod 3/8 (6 meters)",
+      "c": 11119.55
+    },
+    {
+      "d": "Nuts and washer 3/8",
+      "c": 684.48
+    },
+    {
+      "d": "Grip Anchor 3/8",
+      "c": 342.3999999999999
+    },
+    {
+      "d": "Paint (Red Oxide)",
+      "c": 3432
+    },
+    {
+      "d": "Loop Hangers",
+      "c": 10438.32
+    },
+    {
+      "d": "Freon",
+      "c": 72488.84999999999
+    },
+    {
+      "d": "Mapp Gas",
+      "c": 6500.559999999999
+    },
+    {
+      "d": "Silver Rod",
+      "c": 5240.059999999999
+    },
+    {
+      "d": "Paint Brush",
+      "c": 213.84
+    },
+    {
+      "d": "CHIPPING & RESTORATION (ROUGH-ONLY)",
+      "c": 737348.8400000002
+    },
+    {
+      "d": "TESTING & COMMISSIONING",
+      "c": 38342.14
+    },
+    {
+      "d": "ACCU- Model: RXQ20BYM",
+      "c": 2367951.57
+    },
+    {
+      "d": "FCU- 2 HP Wall Mounted VRF C (Storage Room, OR No. 8 Ortho, NSS/Pay, OR No. 9 Plastic Surgery (2) ) Model: FXAQ50BVM",
+      "c": 330524.0399999999
+    },
+    {
+      "d": "FCU- 2.5HP Wall Mounted VRF C (OR No. 4,  Euro- Endo (2), OR No. 7 Ortho, OR. 12 Pedia,  OR No. 10 Pay) Model: FXAQ63BVM",
+      "c": 224891.44
+    },
+    {
+      "d": "FCU- 6HP ceiling Cassette VRF C (Corridor near Ortho, Corridor near OR. No. 10, Corridor near NSS/Pay) Model: FXFQ140AVM",
+      "c": 175061.38
+    },
+    {
+      "d": "Wired Remote Controller Model: BRC1E63",
+      "c": 141128.64
+    },
+    {
+      "d": "Standard panel(Fresh white) Model: BYCQ125EAF",
+      "c": 44690.74000000001
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A22T",
+      "c": 17405.88
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A33T",
+      "c": 4939.510000000001
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A72T",
+      "c": 24697.53
+    },
+    {
+      "d": "Refnet Joints Model: KHRP26A73T",
+      "c": 42338.61
+    },
+    {
+      "d": "Pipe Size Reducer Model: KHRP26M73TP",
+      "c": 17993.91
+    },
+    {
+      "d": "VRV Multi Con piping kit Model: BHFP22R168-7",
+      "c": 39751.22
+    },
+    {
+      "d": "1/4\"",
+      "c": 16962.64
+    },
+    {
+      "d": "3/8\"",
+      "c": 35428.2
+    },
+    {
+      "d": "1/2\"",
+      "c": 46969.2
+    },
+    {
+      "d": "5/8\"",
+      "c": 94863.30000000002
+    },
+    {
+      "d": "3/4\"",
+      "c": 138277.28
+    },
+    {
+      "d": "7/8\"",
+      "c": 21740.02
+    },
+    {
+      "d": "1-1/8\"",
+      "c": 77834.6
+    },
+    {
+      "d": "1-3/8\"",
+      "c": 42030.66
+    },
+    {
+      "d": "1-5/8\"",
+      "c": 378556.78
+    },
+    {
+      "d": "1/4\"",
+      "c": 6937.119999999999
+    },
+    {
+      "d": "3/8\"",
+      "c": 10603.92
+    },
+    {
+      "d": "1/2\"",
+      "c": 9806.85
+    },
+    {
+      "d": "5/8\"",
+      "c": 17002.17
+    },
+    {
+      "d": "3/4\"",
+      "c": 21952.96
+    },
+    {
+      "d": "7/8\"",
+      "c": 3138.2
+    },
+    {
+      "d": "1-1/8\"",
+      "c": 8464.9
+    },
+    {
+      "d": "1-3/8\"",
+      "c": 3584.12
+    },
+    {
+      "d": "1-5/8\"",
+      "c": 27314.82
+    },
+    {
+      "d": "Copper Pipe Fittings",
+      "c": 96659.96999999999
+    },
+    {
+      "d": "Isolation Ball Valves",
+      "c": 76979.52
+    },
+    {
+      "d": "PVC Cladding Works",
+      "c": 32220
+    },
+    {
+      "d": "Concrete Pad",
+      "c": 28867.23
+    },
+    {
+      "d": "32mm dia. uPVC blue pipe PNS 65",
+      "c": 12528.65
+    },
+    {
+      "d": "50mm dia. PVC blue uPVC blue pipe PNS 65",
+      "c": 24389.54
+    },
+    {
+      "d": "3/4'' thick for 32mm pvc",
+      "c": 26087.87
+    },
+    {
+      "d": "3/4'' thick for 50mm pvc",
+      "c": 60942.74999999999
+    },
+    {
+      "d": "(5.0m pump Lift) Model: BDU513A450VE",
+      "c": 304731.6
+    },
+    {
+      "d": "Wye 50mm",
+      "c": 427.68
+    },
+    {
+      "d": "Wye Reducer 50 x 32",
+      "c": 2117.059999999999
+    },
+    {
+      "d": "Tee 32mm",
+      "c": 160.41
+    },
+    {
+      "d": "Tee Reducer 50 x 32",
+      "c": 609.4499999999999
+    },
+    {
+      "d": "Elbow 32mm",
+      "c": 305.41
+    },
+    {
+      "d": "Cleanout 50mm",
+      "c": 1283.04
+    },
+    {
+      "d": "liquid-tight metallic flexible conduits 2\"",
+      "c": 59544.41999999999
+    },
+    {
+      "d": "Metallic Flexible Conduit 20mm",
+      "c": 43078.98
+    },
+    {
+      "d": "Metallic Flexible Conduit Connector 20mm",
+      "c": 1026.88
+    },
+    {
+      "d": "Communication wire (PD Royal Cord 0.75mm/2C)",
+      "c": 38156.48000000001
+    },
+    {
+      "d": "Vibration Isolator",
+      "c": 27798.2
+    },
+    {
+      "d": "Angle Bar, 2x2x 1/4 (6 meters)",
+      "c": 17662.54
+    },
+    {
+      "d": "Rugby",
+      "c": 6671.760000000002
+    },
+    {
+      "d": "White Tape",
+      "c": 17588.34
+    },
+    {
+      "d": "Threaded rod 3/8 (6 meters)",
+      "c": 17791.28
+    },
+    {
+      "d": "Nuts and washer 3/8",
+      "c": 684.48
+    },
+    {
+      "d": "Grip Anchor 3/8",
+      "c": 342.3999999999999
+    },
+    {
+      "d": "Paint (Red Oxide)",
+      "c": 3432
+    },
+    {
+      "d": "Loop Hangers",
+      "c": 16812.54
+    },
+    {
+      "d": "Freon",
+      "c": 115982.16
+    },
+    {
+      "d": "Nitrogen",
+      "c": 72702.64
+    },
+    {
+      "d": "Mapp Gas",
+      "c": 9750.839999999998
+    },
+    {
+      "d": "Silver Rod",
+      "c": 8448.26
+    },
+    {
+      "d": "Paint Brush",
+      "c": 213.84
+    },
+    {
+      "d": "CHIPPING & RESTORATION (ROUGH-ONLY)",
+      "c": 737348.8400000002
+    },
+    {
+      "d": "TESTING & COMMISSIONING",
+      "c": 44240.94
+    },
+    {
+      "d": "Chipping & Restoration Works (Rough only)",
+      "c": 145441.09
+    },
+    {
+      "d": "Hangers & Supports",
+      "c": 174529.31
+    },
+    {
+      "d": "Testing & Commissioning",
+      "c": 884818.61
+    }
+  ],
+  "e": [
+    {
+      "d": "Wire 3.5mm² THHN (5 meters per Unit)",
+      "c": 5572.080000000001
+    },
+    {
+      "d": "Wire 5.5mm² THHN (5 meters per Unit)",
+      "c": 3122.86
+    },
+    {
+      "d": "Wire 30.0mm² THHN (5 meters per Unit)",
+      "c": 46629.47
+    },
+    {
+      "d": "Wire 3.5mm² THHN (G) (5 meters per Unit)",
+      "c": 5650.560000000001
+    },
+    {
+      "d": "Wire 8.0mm² THHN (G) (5 meters per Unit)",
+      "c": 3757.6
+    },
+    {
+      "d": "Wire 3.5mm² THHN (5 meters per Unit)",
+      "c": 7377.120000000001
+    },
+    {
+      "d": "Wire 5.5mm² THHN (5 meters per Unit)",
+      "c": 1505.79
+    },
+    {
+      "d": "Wire 30.0mm² THHN (5 meters per Unit)",
+      "c": 46578.73
+    },
+    {
+      "d": "Wire 3.5mm² THHN (G) (5 meters per Unit)",
+      "c": 6670.8
+    },
+    {
+      "d": "Wire 8.0mm² THHN (G) (5 meters per Unit)",
+      "c": 3757.6
+    },
+    {
+      "d": "Wire 3.5mm² THHN (5 meters per Unit)",
+      "c": 4944.87
+    },
+    {
+      "d": "Wire 5.5mm² THHN (5 meters per Unit)",
+      "c": 3122.86
+    },
+    {
+      "d": "Wire 30.0mm² THHN (5 meters per Unit)",
+      "c": 46578.73
+    },
+    {
+      "d": "Wire 3.5mm² THHN (G) (5 meters per Unit)",
+      "c": 5101.849999999999
+    },
+    {
+      "d": "Wire 8.0mm² THHN (G) (5 meters per Unit)",
+      "c": 3757.6
+    },
+    {
+      "d": "Wire 3.5mm² THHN (5 meters per Unit)",
+      "c": 6009.9
+    },
+    {
+      "d": "Wire 5.5mm² THHN (5 meters per Unit)",
+      "c": 3122.86
+    },
+    {
+      "d": "Wire 38.0mm² THHN (5 meters per Unit)",
+      "c": 55353.8
+    },
+    {
+      "d": "Wire 3.5mm² THHN (G) (5 meters per Unit)",
+      "c": 5878.08
+    },
+    {
+      "d": "Wire 14.0mm² THHN (G) (5 meters per Unit)",
+      "c": 6220.200000000001
+    },
+    {
+      "d": "250mm² THHN",
+      "c": 5149053.360000001
+    },
+    {
+      "d": "200mm² THHN",
+      "c": 644571.72
+    },
+    {
+      "d": "38mm² THHN",
+      "c": 439327.2
+    },
+    {
+      "d": "80mm² THHN",
+      "c": 515401.92
+    },
+    {
+      "d": "30mm² THHN",
+      "c": 32123.91
+    },
+    {
+      "d": "14mm² THHN",
+      "c": 46653.09999999999
+    },
+    {
+      "d": "90mm dia. IMC",
+      "c": 874356.98
+    },
+    {
+      "d": "40mm dia. IMC",
+      "c": 120280.5
+    },
+    {
+      "d": "DP-Main",
+      "c": 772225.4500000001
+    },
+    {
+      "d": "PP-System A",
+      "c": 125827.11
+    },
+    {
+      "d": "PP-System B",
+      "c": 135268.13
+    },
+    {
+      "d": "PP-System C",
+      "c": 120190.82
+    },
+    {
+      "d": "PP-System D",
+      "c": 131472.25
+    },
+    {
+      "d": "PP-Outdoor",
+      "c": 473575.57
+    },
+    {
+      "d": "Transformer",
+      "c": 932598.8200000001
+    },
+    {
+      "d": "ECB 1250AT Nema 12",
+      "c": 302047.59
+    },
+    {
+      "d": "Pullbox (350mm x 350mm x 200mm)",
+      "c": 27691.2
+    },
+    {
+      "d": "Wire Gutter",
+      "c": 32074.68
+    },
+    {
+      "d": "ECB 150AT, 3P, 230V, Nema3R",
+      "c": 116076.44
+    },
+    {
+      "d": "ECB 40AT, 3P, 230V, Nema3R",
+      "c": 77586.88
+    },
+    {
+      "d": "ECB 40AT, 2P, 230V, Nema3R",
+      "c": 150867.52
+    },
+    {
+      "d": "ECB 30AT, 2P, 230V, Nema3R",
+      "c": 216872.06
+    },
+    {
+      "d": "40mm dia. IMC",
+      "c": 130972.1
+    },
+    {
+      "d": "25mm dia. IMC",
+      "c": 1758690.29
+    },
+    {
+      "d": "Junction boxes with cover",
+      "c": 24540.75
+    },
+    {
+      "d": "50mm² THHN",
+      "c": 598841.1000000001
+    },
+    {
+      "d": "5.5mm² THHN",
+      "c": 979795.74
+    },
+    {
+      "d": "14mm² THHN",
+      "c": 51318.40999999999
+    },
+    {
+      "d": "5.5mm² THHN",
+      "c": 459054.05
+    },
+    {
+      "d": "Miscelleneuos",
+      "c": 87264.66
+    }
+  ]
+}
