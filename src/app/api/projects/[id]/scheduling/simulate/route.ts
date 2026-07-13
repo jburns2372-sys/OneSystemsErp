@@ -123,12 +123,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       name: a.name
     }));
 
-    const prompt = `You are an expert construction project manager. 
+const prompt = `You are an expert construction project manager. 
 I have a list of project activities and an existing total project duration of ${totalDays} days.
 The project starts on ${startDate.toDateString()} and ends on ${targetDate.toDateString()}.
 I need to group these activities into highly detailed, logical construction phases and sequence them correctly.
 Please do the following:
-1. Define 8 to 15 highly detailed, granular construction sub-phases based on industry standards for comprehensive project management (e.g. Pre-construction & Mobilization, Earthworks & Excavation, Foundation & Substructure, Superstructure Framing, Roof Framing & Roofing, Exterior Masonry & Finishes, Rough-ins (MEPF), Interior Partitions, Architectural Finishes, Fixtures & Equipment Installation, Testing & Commissioning, Demobilization & Handover). Provide a unique 'code' for each sub-phase (e.g. PH-1).
+1. YOU MUST GENERATE EXACTLY 10 highly detailed construction sub-phases based on industry standards (e.g. Pre-construction & Mobilization, Earthworks, Foundation, Superstructure, Roof Framing, Exterior Finishes, MEPF, Interior Partitions, Architectural Finishes, Testing & Handover).
 2. For each sub-phase, estimate its percentage of the total project duration (pct, must sum to 1.0).
 3. For each sub-phase, provide an ordered array of 'orderedActivityIds' representing the recommended chronological sequence of works within that phase. Every activity provided in the input MUST be assigned to exactly one phase.
 4. Carefully analyze and sequence the project phases according to strict industry standard construction workflows.
@@ -154,7 +154,7 @@ ${JSON.stringify(boqPayload, null, 2)}`;
         pct: z.number().describe("Percentage of total project duration (0.0 to 1.0)"),
         orderedActivityIds: z.array(z.string()).describe("Chronological sequence of activity IDs to be executed in this phase"),
         assignedBOQItemIds: z.array(z.string()).describe("Array of Awarded BOQ item IDs mapped to this phase")
-      })).describe("Logical construction phases")
+      })).length(10).describe("Exactly 10 logical construction phases")
     });
 
     let result;
