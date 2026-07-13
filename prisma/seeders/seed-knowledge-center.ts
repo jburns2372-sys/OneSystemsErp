@@ -123,8 +123,8 @@ If a total hard wipe is needed to erase all processed data (distinct from the fu
       notebookType: 'SOP',
       documentType: 'Markdown',
       status: 'Approved',
-      version: 'v1.0',
-      summary: '# Project Scheduling Rules\n1. AI generated activities must strictly adhere to project start and end dates (Boundary Clamping).\n2. Activities must be wrapped in batch Prisma transactions to prevent timeouts.\n3. The Phase Summary view must aggregate data hierarchically.',
+      version: 'v2.0',
+      summary: '# Project Scheduling Rules\n1. AI generated activities must strictly adhere to project start and end dates (Boundary Clamping).\n2. Activities must be wrapped in batch Prisma transactions to prevent timeouts.\n3. The Phase Summary view must aggregate data hierarchically.\n\n## Advanced AI Simulation Rules\n4. **High Granularity Phasing:** The AI must generate 8 to 15 detailed construction sub-phases based on industry standards (e.g. Substructure, MEPF, Architectural Finishes) instead of simple generic blocks.\n5. **Strict BOQ Material Balancing:** Every single Awarded BOQ material ID must be assigned to exactly one phase. No BOQ item can be left unassigned, ensuring the schedule Grand Total matches the Awarded Contract Amount.\n6. **Manual Override Safety:** During an AI re-simulation, existing activities that have manual overrides (e.g., actualProgressPercent > 0, or status modified by a user) MUST be preserved. The AI will not overwrite real-world progress.\n7. **Auto-Commencement:** If a scheduled activity start date is in the past, the system automatically sets its `actualStartDate` and marks it `IN_PROGRESS` (or `COMPLETED` if time has lapsed).',
       tags: 'scheduling, ai, simulation, mandatory'
     },
     {
