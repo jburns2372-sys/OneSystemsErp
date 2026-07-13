@@ -5,7 +5,12 @@ async function main() {
   const sId = 'cmrjd97x80001vciwqyzsvvnt';
   
   const schedule = await prisma.projectSchedule.findUnique({ where: { id: sId } });
-  if (!schedule) return console.log("Not found");
+  if (!schedule) {
+    throw new Error(`Test schedule not found: ${sId}`);
+  }
+  if (!schedule.validationMetrics) {
+    throw new Error(`Validation metrics not found on schedule: ${sId}`);
+  }
   
   const metrics = JSON.parse(schedule.validationMetrics);
   metrics.OVERALL = 'READY_FOR_REVIEW';
