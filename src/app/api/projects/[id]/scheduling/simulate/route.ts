@@ -76,29 +76,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 const prompt = `You are an expert construction project manager. 
 I have a list of Awarded BOQ Materials and an existing total project duration of ${totalDays} days.
 The project starts on ${startDate.toDateString()} and ends on ${targetDate.toDateString()}.
-I need to group these BOQ materials into highly detailed, logical construction phases.
+I need to group these BOQ materials into logical construction phases.
 Please do the following:
-1. YOU MUST GENERATE EXACTLY 10 highly detailed construction sub-phases based on industry standards (e.g. Pre-construction & Mobilization, Earthworks, Foundation, Superstructure, Roof Framing, Exterior Finishes, MEPF, Interior Partitions, Architectural Finishes, Testing & Handover).
-2. For each sub-phase, estimate its percentage of the total project duration (pct, must sum to 1.0).
-3. For each sub-phase, assign the relevant Awarded BOQ item IDs from the list provided that correspond to the work in that phase.
+1. GENERATE between 3 and 10 highly detailed construction phases. The number of phases and their names MUST BE STRICTLY TAILORED to the actual scope of works inferred from the provided BOQ materials. (For example, do not use generic civil construction phases like 'Earthworks' or 'Superstructure' if the project is purely electrical or mechanical).
+2. For each phase, estimate its percentage of the total project duration (pct, must sum to 1.0).
+3. For each phase, assign the relevant Awarded BOQ item IDs from the list provided that correspond to the work in that phase.
 4. Carefully analyze and sequence the project phases according to strict industry standard construction workflows.
 
 CRITICAL RULES:
 - EVERY SINGLE Awarded BOQ Material ID provided in the input MUST be assigned to exactly one phase. Do not leave any BOQ item unassigned, or the project financials will not balance.
-- The FIRST phase MUST ONLY contain General Requirements and Preliminaries. This includes activities related to: Mobilization, Warehouse, Off Site Barracks, Site Management, Temporary Works, Permits, OCM, Profit, and Tax.
-- DO NOT put physical construction works, demolition, chipping, restoration, or general "Consumables" into the first phase. They belong in subsequent construction phases.
-- The TENTH (last) phase MUST ALWAYS be named "Phase 10: Project Acceptance and Demobilization".
+- EVERY phase you generate MUST have at least one BOQ item ID assigned to it. Do not generate empty phases.
+- The FIRST phase MUST ONLY contain General Requirements and Preliminaries (e.g. Mobilization, Temporary Works, Permits, Insurances, Bonds, Consumables, OCM, Profit, Tax).
+- DO NOT put physical installation or construction works into the first phase. They belong in subsequent phases.
+- The FINAL phase MUST ALWAYS be named "Project Acceptance and Demobilization".
 
 Awarded BOQ Materials:
 ${JSON.stringify(boqPayload, null, 2)}`;
 
     const schema = z.object({
       phases: z.array(z.object({
-        code: z.string().describe("Must strictly follow the format: Phase 1, Phase 2, etc."),
-        name: z.string().describe("Phase name (Phase 10 MUST be 'Project Acceptance and Demobilization')"),
+        name: z.string().describe("Highly relevant Phase name based on the BOQ (Final Phase MUST be 'Project Acceptance and Demobilization')"),
         pct: z.number().describe("Percentage of total project duration (0.0 to 1.0)"),
         assignedBOQItemIds: z.array(z.string()).describe("Array of Awarded BOQ item IDs mapped to this phase")
-      })).length(10).describe("Exactly 10 logical construction phases")
+      })).describe("Between 3 and 10 logical construction phases tailored to the BOQ")
     });
 
     let result;
@@ -114,12 +114,19 @@ ${JSON.stringify(boqPayload, null, 2)}`;
       throw new Error('Failed to simulate schedule: ' + aiError.message);
     }
 
-    const phases: any[] = result.phases || [];
+    let phases: any[] = result.phases || [];
+    
+    // Filter out phases that ended up empty to ensure a clean sequence
+    phases = phases.filter(p => p.assignedBOQItemIds && p.assignedBOQItemIds.length > 0);
+
     console.log("SIMULATION PHASES:", JSON.stringify(phases));
 
     if (phases.length === 0) {
-      throw new Error("AI failed to generate phases.");
+      throw new Error("AI failed to generate any valid phases with BOQ items.");
     }
+
+    // Ensure the final phase name is strict
+    phases[phases.length - 1].name = "Project Acceptance and Demobilization";
 
     // Normalize percentages just in case
     let totalPct = phases.reduce((sum: number, p: any) => sum + (p.pct || 0), 0);
@@ -185,7 +192,7 @@ ${JSON.stringify(boqPayload, null, 2)}`;
         id: p.wbsId,
         scheduleId: schedule.id,
         parentId: constructionWbsId,
-        code: p.code || 'UNKNOWN',
+        code: `Phase ${i + 1}`,
         name: p.name || 'Unnamed Phase',
         level: 2,
         orderIndex: i + 1
