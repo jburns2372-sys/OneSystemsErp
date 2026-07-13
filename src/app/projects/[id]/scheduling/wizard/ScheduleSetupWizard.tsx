@@ -59,17 +59,16 @@ export default function ScheduleSetupWizard({
     }, 1500);
 
     try {
+      const payload: any = {
+        projectId: project.id,
+        consolidateBoq: consolidateBoq,
+        lockedBOQVersionId: project.lockedBOQVersionId || null
+      };
+
       const res = await fetch(`/api/projects/${project.id}/scheduling/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          description: project.description || '',
-          calendarDays: project.originalContractDuration || 0,
-          workDaysConfig: JSON.stringify(workDays),
-          importBoq: true,
-          consolidateBoq: consolidateBoq
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
@@ -156,9 +155,31 @@ export default function ScheduleSetupWizard({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ padding: '20px', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
             <h3 style={{ margin: '0 0 10px 0', color: 'var(--text-primary)' }}>Contract BOQ Synchronization</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '15px' }}>
-              We found <strong>{awardedBoq?.length || 0}</strong> items in the Awarded Bill of Quantities for this project.
-            </p>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+              <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Total Imported BOQ Rows</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{awardedBoq?.length || 0}</div>
+              </div>
+              <div style={{ padding: '10px', background: 'rgba(0,255,100,0.1)', borderRadius: '6px', border: '1px solid rgba(0,255,100,0.3)' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Valid Priced Detail Lines</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#4ade80' }}>
+                  {awardedBoq?.filter(i => i.totalCost > 0 || i.amount > 0).length || 0}
+                </div>
+              </div>
+              <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Zero-Value Detail Lines</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
+                  {awardedBoq?.filter(i => (i.totalCost === 0 || !i.totalCost) && (i.amount === 0 || !i.amount) && i.unit).length || 0}
+                </div>
+              </div>
+              <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Headers & Subtotals</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
+                  {awardedBoq?.filter(i => !i.unit && !i.quantity).length || 0}
+                </div>
+              </div>
+            </div>
 
             <div style={{ padding: '15px', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: '6px', marginBottom: '15px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
               <input 

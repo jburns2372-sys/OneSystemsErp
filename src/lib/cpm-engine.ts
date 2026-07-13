@@ -18,6 +18,7 @@ export interface CPMActivity {
   duration: number; // in working days
   plannedStart?: Date | null;
   plannedFinish?: Date | null;
+  metadata?: any;
 }
 
 export interface CPMDependency {

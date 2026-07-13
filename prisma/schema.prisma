@@ -272,7 +272,7 @@ model AwardedBOQItem {
 }
 
 model ProcurementBenchmarkItem {
-  id          String  @id @default(cuid())
+  id          String       @id @default(cuid())
   itemCode    String
   category    String?
   description String
@@ -3619,21 +3619,23 @@ model ProjectSchedule {
   workingDays        Int       @default(0)
   holidays           String? // JSON string of dates
   workDaysConfig     String? // JSON e.g. ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-  
-  lockedBOQVersionId String?
-  lockedBOQChecksum  String?
-  baselineRevision   Int       @default(0)
-  awardedContractAmount Decimal @default(0)
-  scheduledAmount    Decimal   @default(0)
-  differenceAmount   Decimal   @default(0)
-  generatedBy        String?
-  approvedBy         String?
-  generatedAt        DateTime?
-  approvedAt         DateTime?
-  generationRulesVersion String?
 
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  lockedBOQVersionId     String?
+  lockedBOQChecksum      String?
+  baselineRevision       Int       @default(0)
+  awardedContractAmount  Decimal   @default(0)
+  scheduledAmount        Decimal   @default(0)
+  differenceAmount       Decimal   @default(0)
+  generatedBy            String?
+  approvedBy             String?
+  generatedAt            DateTime?
+  approvedAt             DateTime?
+  generationRulesVersion String?
+  validationMetrics  String?   @db.Text
+  feasibilityFlags   String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   activities      ScheduleActivity[]
   wbsNodes        ScheduleWBS[]
@@ -3643,7 +3645,7 @@ model ProjectSchedule {
   delayRecords    ScheduleDelayRecord[]
   recoveryPlans   ScheduleRecoveryPlan[]
   revisions       ScheduleRevisionRequest[]
-  boqAllocations  ScheduleBOQAllocation[] @relation("ScheduleBOQAllocations")
+  boqAllocations  ScheduleBOQAllocation[]   @relation("ScheduleBOQAllocations")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
@@ -3692,19 +3694,23 @@ model ScheduleActivity {
   criticalPath          Boolean   @default(false)
   totalFloat            Int       @default(0)
   freeFloat             Int       @default(0)
-  
-  activityType          String?
-  systemOrArea          String?
-  predecessorData       String? // JSON representation for complex dependencies
-  allocatedAmount       Decimal   @default(0)
-  classificationConfidence Float?
-  aiRationale           String?
 
-  assignedToId          String?
-  subcontractorId       String?
-  jobOrderId            String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  activityType             String?
+  systemOrArea             String?
+  predecessorData          String? // JSON representation for complex dependencies
+  allocatedAmount          Decimal @default(0)
+  classificationConfidence Float?
+  aiRationale              String?
+  durationMethod           String?
+  productivityAssumption   Float?
+  crewCountAssumption      Int?
+  workFrontAssumption      Int?
+
+  assignedToId    String?
+  subcontractorId String?
+  jobOrderId      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   schedule   ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
   wbs        ScheduleWBS?    @relation(fields: [wbsId], references: [id], onDelete: Cascade)
@@ -3751,7 +3757,7 @@ model ScheduleBOQAllocation {
   awardedBoqItemId String
   mappedQuantity   Float  @default(0)
   mappedWeight     Float  @default(0)
-  
+
   // Upgrade Phase B: New fields for detailed BOQ allocation ledger
   scheduleId          String?
   projectId           String?
@@ -3765,11 +3771,11 @@ model ScheduleBOQAllocation {
   allocatedAmount     Decimal?
   allocationReason    String?
 
-  activity            ScheduleActivity      @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  awardedBoqItem      AwardedBOQItem        @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
-  consolidatedBoqItem ConsolidatedBOQItem?  @relation(fields: [boqLineId], references: [id], onDelete: Cascade)
-  schedule            ProjectSchedule?      @relation("ScheduleBOQAllocations", fields: [scheduleId], references: [id], onDelete: Cascade)
-  project             Project?              @relation("ProjectBOQAllocations", fields: [projectId], references: [id], onDelete: Cascade)
+  activity            ScheduleActivity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  awardedBoqItem      AwardedBOQItem       @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  consolidatedBoqItem ConsolidatedBOQItem? @relation(fields: [boqLineId], references: [id], onDelete: Cascade)
+  schedule            ProjectSchedule?     @relation("ScheduleBOQAllocations", fields: [scheduleId], references: [id], onDelete: Cascade)
+  project             Project?             @relation("ProjectBOQAllocations", fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model SchedulePOWMapping {
@@ -4460,43 +4466,44 @@ model SecuritySimulationArchive {
   exportedExcelUrl             String?
   createdAt                    DateTime  @default(now())
 }
-model UploadedWorkbookFile {
-  id                     String    @id @default(cuid())
-  projectId              String
-  templateCode           String?
-  templateName           String?
-  templateVersion        String?
-  documentType           String?
-  originalFilename       String
-  fileHash               String
-  mimeType               String
-  fileSize               Int
-  storagePath            String
-  preservedOriginalUrl   String?
-  latestPreservedVersionId String?
-  uploadedBy             String
-  uploadedAt             DateTime  @default(now())
-  recognizedTemplate     String?
-  validationStatus       String    @default("PENDING")
-  extractionStatus       String    @default("PENDING")
-  commitStatus           String    @default("PENDING")
-  onlyOfficeDocumentKey  String?
-  metadataJson           String?   @db.Text
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
 
-  project                Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  versions               WorkbookVersion[]
-  sessions               OnlyOfficeSession[]
-  extractedSections      BOQExtractedSection[]
-  extractedItems         BOQExtractedItem[]
-  formulaValidations     WorkbookFormulaValidation[]
-  templateValidations    WorkbookTemplateValidation[]
-  audits                 WorkbookExtractionAudit[]
+model UploadedWorkbookFile {
+  id                       String   @id @default(cuid())
+  projectId                String
+  templateCode             String?
+  templateName             String?
+  templateVersion          String?
+  documentType             String?
+  originalFilename         String
+  fileHash                 String
+  mimeType                 String
+  fileSize                 Int
+  storagePath              String
+  preservedOriginalUrl     String?
+  latestPreservedVersionId String?
+  uploadedBy               String
+  uploadedAt               DateTime @default(now())
+  recognizedTemplate       String?
+  validationStatus         String   @default("PENDING")
+  extractionStatus         String   @default("PENDING")
+  commitStatus             String   @default("PENDING")
+  onlyOfficeDocumentKey    String?
+  metadataJson             String?  @db.Text
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  project             Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions            WorkbookVersion[]
+  sessions            OnlyOfficeSession[]
+  extractedSections   BOQExtractedSection[]
+  extractedItems      BOQExtractedItem[]
+  formulaValidations  WorkbookFormulaValidation[]
+  templateValidations WorkbookTemplateValidation[]
+  audits              WorkbookExtractionAudit[]
 }
 
 model WorkbookVersion {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   versionNumber          Int
@@ -4505,11 +4512,11 @@ model WorkbookVersion {
   filePath               String
   fileHash               String
   createdBy              String
-  createdAt              DateTime  @default(now())
+  createdAt              DateTime @default(now())
   remarks                String?
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  sessions               OnlyOfficeSession[]
+  file     UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  sessions OnlyOfficeSession[]
 }
 
 model OnlyOfficeSession {
@@ -4528,29 +4535,29 @@ model OnlyOfficeSession {
   expiresAt              DateTime?
   lastCallbackAt         DateTime?
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  version                WorkbookVersion?     @relation(fields: [workbookVersionId], references: [id], onDelete: Cascade)
+  file    UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  version WorkbookVersion?     @relation(fields: [workbookVersionId], references: [id], onDelete: Cascade)
 }
 
 model BOQExtractedSection {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   sheetName              String?
   sourceRowNumber        Int?
   sectionCode            String?
   sectionName            String
-  displayOrder           Int       @default(0)
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  displayOrder           Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  items                  BOQExtractedItem[]
+  file    UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items   BOQExtractedItem[]
 }
 
 model BOQExtractedItem {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   sectionId              String?
@@ -4571,19 +4578,19 @@ model BOQExtractedItem {
   unitCost               Float?
   amount                 Float?
   percentage             Float?
-  formulaMapJson         String?   @db.Text
-  validationStatus       String    @default("PENDING")
-  validationErrorsJson   String?   @db.Text
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  formulaMapJson         String?  @db.Text
+  validationStatus       String   @default("PENDING")
+  validationErrorsJson   String?  @db.Text
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  section                BOQExtractedSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  file    UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  section BOQExtractedSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 }
 
 model WorkbookFormulaValidation {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   sheetName              String?
@@ -4593,28 +4600,28 @@ model WorkbookFormulaValidation {
   actualFormula          String?
   expectedValue          Float?
   actualValue            Float?
-  severity               String    @default("INFO")
-  validationStatus       String    @default("PENDING")
+  severity               String   @default("INFO")
+  validationStatus       String   @default("PENDING")
   message                String?
-  createdAt              DateTime  @default(now())
+  createdAt              DateTime @default(now())
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  file UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
 }
 
 model WorkbookTemplateValidation {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   validationType         String
   validationKey          String
   expectedValue          String?
   actualValue            String?
-  severity               String    @default("INFO")
-  status                 String    @default("PENDING")
+  severity               String   @default("INFO")
+  status                 String   @default("PENDING")
   message                String?
-  createdAt              DateTime  @default(now())
+  createdAt              DateTime @default(now())
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  file UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
 }
 
 model ProjectBOQVersion {
@@ -4637,62 +4644,61 @@ model ProjectBOQVersion {
 }
 
 model ScheduleGenerationAudit {
-  id                 String   @id @default(cuid())
-  projectId          String
-  userId             String?
-  action             String
-  previousScheduleId String?
-  newScheduleId      String?
-  lockedBOQVersionId String?
-  lockedBOQChecksum  String?
-  generationRequestId String?
-  modelIdentifier    String?
-  promptVersion      String?
-  schemaVersion      String?
+  id                     String    @id @default(cuid())
+  projectId              String
+  userId                 String?
+  action                 String
+  previousScheduleId     String?
+  newScheduleId          String?
+  lockedBOQVersionId     String?
+  lockedBOQChecksum      String?
+  generationRequestId    String?
+  modelIdentifier        String?
+  promptVersion          String?
+  schemaVersion          String?
   schedulingRulesVersion String?
-  reasoningSetting   String?
-  requestTimestamp   DateTime?
-  responseTimestamp  DateTime?
-  tokenUsage         String?  // JSON { prompt, completion, total }
-  resultStatus       String?
-  validationResults  String?  // JSON
-  correctionAttemptCount Int @default(0)
-  timestamp          DateTime @default(now())
+  reasoningSetting       String?
+  requestTimestamp       DateTime?
+  responseTimestamp      DateTime?
+  tokenUsage             String? // JSON { prompt, completion, total }
+  resultStatus           String?
+  validationResults      String? // JSON
+  correctionAttemptCount Int       @default(0)
+  timestamp              DateTime  @default(now())
 
-  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user               User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model WorkbookExtractionAudit {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   action                 String
-  status                 String    @default("SUCCESS")
+  status                 String   @default("SUCCESS")
   message                String?
-  detailsJson            String?   @db.Text
+  detailsJson            String?  @db.Text
   performedBy            String?
   performedByRole        String?
-  performedAt            DateTime  @default(now())
+  performedAt            DateTime @default(now())
   ipAddress              String?
   userAgent              String?
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  file    UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model AIConfiguration {
-  id                      String   @id @default(cuid())
-  primaryPlanningModel    String   @default("gpt-4o")
-  secondaryClassificationModel String @default("gpt-4o-mini")
-  fallbackModel           String   @default("gpt-3.5-turbo")
-  reasoningEffort         String   @default("high")
-  maxOutputTokens         Int      @default(4096)
-  timeoutMs               Int      @default(60000)
-  retryLimit              Int      @default(2)
-  promptVersion           String   @default("v1.0")
-  jsonSchemaVersion       String   @default("v1.0")
-  schedulingRulesVersion  String   @default("v1.0")
-  updatedAt               DateTime @updatedAt
+  id                           String   @id @default(cuid())
+  primaryPlanningModel         String   @default("gpt-4o")
+  secondaryClassificationModel String   @default("gpt-4o-mini")
+  fallbackModel                String   @default("gpt-3.5-turbo")
+  reasoningEffort              String   @default("high")
+  maxOutputTokens              Int      @default(4096)
+  timeoutMs                    Int      @default(60000)
+  retryLimit                   Int      @default(2)
+  promptVersion                String   @default("v1.0")
+  jsonSchemaVersion            String   @default("v1.0")
+  schedulingRulesVersion       String   @default("v1.0")
+  updatedAt                    DateTime @updatedAt
 }
-

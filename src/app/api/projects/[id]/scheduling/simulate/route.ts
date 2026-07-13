@@ -17,7 +17,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       projectId,
       generationRequestId,
       userId: undefined,
-      consolidateBoq: body.consolidateBoq ?? true
+      consolidateBoq: body.consolidateBoq ?? true,
+      lockedBOQVersionId: body.lockedBOQVersionId
     });
 
     if (!result.success) {
@@ -30,7 +31,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       success: true, 
       message: 'Schedule successfully generated and balanced using Universal AI Orchestrator.',
       scheduleId: (result as any).scheduleId,
-      reconciliation: { diff: (result as any).difference }
+      reconciliation: { diff: (result as any).difference },
+      validationMetrics: (result as any).validationMetrics,
+      feasibilityFlags: (result as any).feasibilityFlags
     });
     
   } catch (error: any) {

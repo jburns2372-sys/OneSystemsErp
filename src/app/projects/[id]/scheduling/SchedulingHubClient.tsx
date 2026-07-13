@@ -155,6 +155,15 @@ export default function SchedulingHubClient({
   const avgProgress = totalActivities > 0 
     ? Math.round(schedule.activities.reduce((sum: number, a: any) => sum + (a.actualProgressPercent || 0), 0) / totalActivities) 
     : 0;
+    
+  let validationMetrics = null;
+  try {
+    if (schedule.validationMetrics) {
+      validationMetrics = typeof schedule.validationMetrics === 'string' ? JSON.parse(schedule.validationMetrics) : schedule.validationMetrics;
+    }
+  } catch (e) {
+    console.warn("Failed to parse validationMetrics");
+  }
 
   return (
     <div style={{ padding: '20px' }}>
@@ -189,6 +198,21 @@ export default function SchedulingHubClient({
                 {isDeleting ? 'Deleting...' : '🗑️ Delete Schedule'}
               </button>
           </div>
+          
+          {validationMetrics && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+               {Object.entries(validationMetrics).map(([key, val]) => (
+                 <span key={key} style={{ 
+                   fontSize: '0.7rem', padding: '3px 6px', borderRadius: '4px',
+                   backgroundColor: val === 'INVALID' || val === 'INFEASIBLE' || val === 'MISSING_TESTING' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                   color: val === 'INVALID' || val === 'INFEASIBLE' || val === 'MISSING_TESTING' ? '#ef4444' : '#10b981',
+                   border: `1px solid ${val === 'INVALID' || val === 'INFEASIBLE' || val === 'MISSING_TESTING' ? '#ef4444' : '#10b981'}`
+                 }}>
+                   {key}: <strong>{String(val)}</strong>
+                 </span>
+               ))}
+            </div>
+          )}
         </div>
 
         {/* Quick Stats */}
