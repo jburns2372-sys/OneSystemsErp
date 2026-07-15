@@ -1,0 +1,441 @@
+ | I GENERAL REQUIREMENTS | 0 | 0
+ | PERMITS, FEES, TAXES AND LICENSES | 0 | 0
+ | a. Barangay Permits by client | 0 | 0
+ | b. Local Government Permits by client | 0 | 0
+ | c. BFD Permits by client | 0 | 0
+ | d. DENR Permits by client | 0 | 0
+ | e. Permits and Fees by client | 0 | 0
+ | INSURANCES AND BONDS | 0 | 0
+ | a. Guarantee / Warranty Bonds Included | 0 | 0
+ | b. Contractor's All Risk Insurance (CARI) Included | 0 | 0
+ | c. Performance Bond Included | 0 | 0
+ | d. Other Insurances and Bonds Excluded | 0 | 0
+1.0 | Mobilization and Demobilization | 1 | 103229
+ | Site Management Work | 0 | 0
+1.0 | a. Project Management | 1 | 678976
+2.0 | b. Admin Support
+  - Accounting, Procurement, Logistics | 1 | 279579.9999999999
+3.0 | c.Quality Management | 1 | 279579.9999999999
+4.0 | d. Engineering Management
+ - Clarifications & Drawings | 1 | 319519
+ | Temporary Works | 0 | 0
+1.0 | a. Site Office | 1 | 0
+2.0 | b. Warehouse | 1 | 51615
+3.0 | b. Site Office Materials & Communication | 1 | 14747
+4.0 | c. Temporary Tools & Cleaning Materials | 1 | 7373.999999999999
+5.0 | b. Off-site Barracks
+   - Construction and-or Rent
+   - Electric Consumption
+   - Water Consumption | 1 | 184338
+ | Temporary Utilities | 0 | 0
+1.0 | a. On-Site Water Consumption | 1 | 0
+2.0 | b. On-Site Electric Consumption | 1 | 0
+ | Security, Safety and Protection | 0 | 0
+1.0 | a. Safety Officer | 1 | 331806.9999999999
+2.0 | b. Personal Protective Equipment (PPE's) | 1 | 73735
+3.0 | b. Security Guards | 1 | 0
+ | Quality Standard and Control | 0 | 0
+1.0 | a. Shopdrawings, As-built plans for Occupancy including Sign & Seal | 1 | 117976
+2.0 | b. Material Testing | 1 | 0
+ | Transportation | 0 | 0
+1.0 | a. Manpower Service | 1 | 147470
+2.0 | b. Engineer Transportation | 1 | 110603
+ | c. Village Delivery/Gate Pass Fees NA | 0 | 0
+ | III MECHANICAL WORKS | 0 | 0
+ | Mechanical Works | 0 | 0
+ | I-A. AIR CONDITIONING- VRV SYSTEM A | 0 | 0
+AIR CONDITIONING- VRV SYSTEM A | ACCU- 18HP Model: RXQ18BYM | 3 | 2223173.13
+AIR CONDITIONING- VRV SYSTEM A | FCU- 2 HP Wall Mounted VRF A (OR No. 2, PNCOU, OR No.3, OR, Pantry, OR Complex Conference Room) Model: FXAQ50BVM | 6 | 330524.0399999999
+AIR CONDITIONING- VRV SYSTEM A | FCU- 2.5HP Wall Mounted VRF A (OR No. 2 ENT, OR No. 1 ENT, Chief Nurse, OR Pharmacy) Model: FXAQ63BVM | 3 | 168668.58
+AIR CONDITIONING- VRV SYSTEM A | FCU- 6HP ceiling Cassette VRF A (Corridor Near OR No.1, Corridor Near OR No. 2 ENT) Model: FXFQ140AVM | 2 | 175061.38
+ | ACU Accessories: | 0 | 0
+ACU Accessories: | Navigation Wired Controller Model: BRC1E63 | 11 | 129367.92
+ACU Accessories: | Standard panel(Fresh white) Model: BYCQ125EAF | 2 | 44690.74000000001
+ACU Accessories: | Refnet Joints Model: KHRP26A22T | 2 | 8702.94
+ACU Accessories: | Refnet Joints Model: KHRP26A33T | 2 | 9879.020000000002
+ACU Accessories: | Refnet Joints Model: KHRP26A732T | 3 | 24697.53
+ACU Accessories: | Refnet Joints Model: KHRP26A733T | 3 | 42338.61
+ACU Accessories: | Pipe Size Reducer Model: KHRP26M73TP | 3 | 17993.91
+ACU Accessories: | VRV Multi Con piping kit Model: BHFP22R168-7 | 1 | 39751.22
+ | Copper Pipes - Type L Hard Drawn Pipes | 0 | 0
+Copper Pipes - Type L Hard Drawn Pipes | 1/4" | 10 | 21203.3
+Copper Pipes - Type L Hard Drawn Pipes | 3/8" | 13 | 38380.55
+Copper Pipes - Type L Hard Drawn Pipes | 1/2" | 14 | 65756.88
+Copper Pipes - Type L Hard Drawn Pipes | 5/8" | 9 | 60983.55
+Copper Pipes - Type L Hard Drawn Pipes | 3/4" | 9 | 77780.97
+Copper Pipes - Type L Hard Drawn Pipes | 7/8" | 2 | 21740.02
+Copper Pipes - Type L Hard Drawn Pipes | 1-1/8" | 8 | 124535.36
+Copper Pipes - Type L Hard Drawn Pipes | 1-3/8" | 5 | 105076.65
+Copper Pipes - Type L Hard Drawn Pipes | 1-5/8" | 4 | 84061.32
+ | Copper Pipes Insulation 25mm Thick | 0 | 0
+Copper Pipes Insulation 25mm Thick | 1/4" | 19 | 8237.83
+Copper Pipes Insulation 25mm Thick | 3/8" | 26 | 11487.58
+Copper Pipes Insulation 25mm Thick | 1/2" | 27 | 13936.05
+Copper Pipes Insulation 25mm Thick | 5/8" | 18 | 11334.78
+Copper Pipes Insulation 25mm Thick | 3/4" | 17 | 12038.72
+Copper Pipes Insulation 25mm Thick | 7/8" | 4 | 3138.2
+Copper Pipes Insulation 25mm Thick | 1-1/8" | 15 | 12697.35
+Copper Pipes Insulation 25mm Thick | 1-3/8" | 10 | 8960.3
+Copper Pipes Insulation 25mm Thick | 1-5/8" | 8 | 7168.24
+Copper Pipe Fittings | Copper Pipe Fittings | 1 | 57975.92
+Isolation Ball Valves | Isolation Ball Valves | 22 | 70564.56000000001
+PVC Cladding Works | PVC Cladding Works | 1 | 22281.85
+Concrete Pad | Concrete Pad | 3 | 28867.23
+ | Condensate Drain Pipes | 0 | 0
+Condensate Drain Pipes | 32mm dia. uPVC blue pipe PNS 65 | 39 | 15761.85
+Condensate Drain Pipes | 50mm dia. PVC blue uPVC blue pipe PNS 65 | 22 | 14120.26
+ | Condensate Drain Pipes Rubber Insulation 1.5 meters | 0 | 0
+Condensate Drain Pipes Rubber Insulation 1.5 meters | 3/4'' thick for 32mm pvc | 77 | 32930.59
+Condensate Drain Pipes Rubber Insulation 1.5 meters | 3/4'' thick for 50mm pvc | 43 | 34940.50999999999
+ | Drain Pump | 0 | 0
+(5.0m pump Lift) Model: BDU513A450VE | (5.0m pump Lift) Model: BDU513A450VE | 9 | 274258.44
+ | Fittings | 0 | 0
+Fittings | Wye Reducer 50 x 32 | 11 | 2117.059999999999
+Fittings | Tee 32mm | 2 | 106.94
+Fittings | Tee Reducer 50 x 32 | 2 | 406.3
+Fittings | Elbow 32mm | 6 | 261.78
+Fittings | Cleanout 50mm | 4 | 855.36
+ | RELATED ELECTRICAL WORKS | 0 | 0
+ | Rough-ins | 0 | 0
+Rough-ins | liquid-tight metallic flexible conduits 1-1/2" | 78 | 31523.7
+Rough-ins | Metallic Flexible Conduit 20mm | 586 | 38599.82
+Rough-ins | Metallic Flexible Conduit Connector 20mm | 29 | 930.6100000000001
+ | Cables / Wires | 0 | 0
+Cables / Wires | Communication wire (PD Royal Cord 0.75mm/2C) | 419 | 33871.96000000001
+Cables / Wires | Wire 3.5mm² THHN (5 meters per Unit) | 71 | 5572.080000000001
+Cables / Wires | Wire 5.5mm² THHN (5 meters per Unit) | 26 | 3122.86
+Cables / Wires | Wire 30.0mm² THHN (5 meters per Unit) | 59 | 46629.47
+ | for ground: | 0 | 0
+Cables / Wires | Wire 3.5mm² THHN (G) (5 meters per Unit) | 72 | 5650.560000000001
+Cables / Wires | Wire 8.0mm² THHN (G) (5 meters per Unit) | 20 | 3757.6
+ | I-B. CONSUMABLES | 0 | 0
+CONSUMABLES | Vibration Isolator | 20 | 27798.2
+CONSUMABLES | Angle Bar, 2x2x 1/4 (6 meters) | 7 | 17662.54
+CONSUMABLES | Rugby | 21 | 5837.790000000001
+CONSUMABLES | White Tape | 42 | 15717.24
+CONSUMABLES | Threaded rod 3/8 (6 meters) | 94 | 16080.58
+CONSUMABLES | Nuts and washer 3/8 | 32 | 684.48
+CONSUMABLES | Grip Anchor 3/8 | 32 | 342.3999999999999
+CONSUMABLES | Paint (Red Oxide) | 1 | 3432
+CONSUMABLES | Loop Hangers | 351 | 15015.78
+CONSUMABLES | Freon | 6 | 86986.62
+CONSUMABLES | Nitrogen | 3 | 54526.98
+CONSUMABLES | Mapp Gas | 11 | 9408.63
+CONSUMABLES | Silver Rod | 141 | 7539.27
+CONSUMABLES | Paint Brush | 1 | 213.84
+CHIPPING & RESTORATION (ROUGH-ONLY) | CHIPPING & RESTORATION (ROUGH-ONLY) | 1 | 737348.8400000002
+MISCELLANEOUS | MISCELLANEOUS | 1 | 5684.06
+TESTING & COMMISSIONING | TESTING & COMMISSIONING | 1 | 41291.54
+ | II.A AIR CONDITIONING- VRV SYSTEM B | 0 | 0
+AIR CONDITIONING- VRV SYSTEM B | ACCU-  Model: RXQ18BYM | 3 | 2223173.13
+AIR CONDITIONING- VRV SYSTEM B | FCU- 2.5HP Wall Mounted VRF B ( OR no. 4, 6, 13, 14, 15, OR Pharmacy) Model: FXAQ63BVM | 2 | 112445.72
+AIR CONDITIONING- VRV SYSTEM B | FCU- 6HP ceiling Cassette VRF B (Corridor near OR No. 2 NSS, Corridor Near Supply Room) Model: FXFQ140AVM | 1 | 87530.69
+ | Accessories: | 0 | 0
+ACU Accessories: | Wired Remote Controller Model: BRC1E63 | 13 | 152889.36
+ACU Accessories: | Standard panel(Fresh white) Model: BYCQ125EAF | 1 | 22345.37
+ACU Accessories: | Refnet Joints Model: KHRP26A22T | 6 | 26108.82
+ACU Accessories: | Refnet Joints Model: KHRP26A33T | 1 | 4939.510000000001
+ACU Accessories: | Refnet Joints Model: KHRP26A72T | 3 | 24697.53
+ACU Accessories: | Refnet Joints Model: KHRP26A73T | 2 | 28225.74
+ACU Accessories: | Pipe Size Reducer Model: KHRP26M73TP | 2 | 11995.94
+ | RELATED ELECTRICAL WORKS | 0 | 0
+ACU Accessories: | VRV Multi Con piping kit Model: BHFP22R168-7 | 1 | 39751.22
+ | Copper Pipes - Type L Hard Drawn Pipes | 0 | 0
+Copper Pipes - Type L Hard Drawn Pipes | 1/4" | 14 | 29684.62
+Copper Pipes - Type L Hard Drawn Pipes | 3/8" | 11 | 32475.85000000001
+Copper Pipes - Type L Hard Drawn Pipes | 1/2" | 15 | 70453.8
+Copper Pipes - Type L Hard Drawn Pipes | 5/8" | 12 | 81311.4
+Copper Pipes - Type L Hard Drawn Pipes | 3/4" | 13 | 112350.29
+Copper Pipes - Type L Hard Drawn Pipes | 7/8" | 1 | 10870.01
+Copper Pipes - Type L Hard Drawn Pipes | 1-1/8" | 5 | 77834.6
+Copper Pipes - Type L Hard Drawn Pipes | 1-3/8" | 1 | 27039.77
+Copper Pipes - Type L Hard Drawn Pipes | 1-5/8" | 12 | 324477.24
+ | Copper Pipes Insulation 25mm Thick | 0 | 0
+Copper Pipes Insulation 25mm Thick | 1/4" | 27 | 11706.39
+Copper Pipes Insulation 25mm Thick | 3/8" | 21 | 9278.429999999998
+Copper Pipes Insulation 25mm Thick | 1/2" | 30 | 15484.5
+Copper Pipes Insulation 25mm Thick | 5/8" | 24 | 15113.04
+Copper Pipes Insulation 25mm Thick | 3/4" | 26 | 18412.16
+Copper Pipes Insulation 25mm Thick | 7/8" | 2 | 1569.1
+Copper Pipes Insulation 25mm Thick | 1-1/8" | 9 | 7618.41
+Copper Pipes Insulation 25mm Thick | 1-3/8" | 2 | 2023.32
+Copper Pipes Insulation 25mm Thick | 1-5/8" | 24 | 24279.84
+Copper Pipe Fittings | Copper Pipe Fittings | 1 | 87733.45999999999
+Isolation Ball Valves | Isolation Ball Valves | 26 | 83394.48
+PVC Cladding Works | PVC Cladding Works | 1 | 8234.77
+Concrete Pad | Concrete Pad | 3 | 28867.23
+ | Condensate Drain Pipes | 0 | 0
+Condensate Drain Pipes | 32mm dia. uPVC blue pipe PNS 65 | 37 | 14953.55
+Condensate Drain Pipes | 50mm dia. PVC blue uPVC blue pipe PNS 65 | 24 | 15403.92
+ | Condensate Drain Pipes Rubber Insulation 1.5 meters | 0 | 0
+Condensate Drain Pipes Rubber Insulation 1.5 meters | 3/4'' thick for 32mm pvc | 74 | 31647.58
+Condensate Drain Pipes Rubber Insulation 1.5 meters | 3/4'' thick for 50mm pvc | 48 | 39003.35999999999
+ | Drain Pump | 0 | 0
+(5.0m pump Lift) Model: BDU513A450VE | (5.0m pump Lift) Model: BDU513A450VE | 12 | 365677.92
+ | Fittings | 0 | 0
+Fittings | Wye 50mm | 3 | 641.52
+Fittings | Wye Reducer 50 x 32 | 13 | 2501.98
+Fittings | Tee 32mm | 3 | 160.41
+Fittings | Elbow 32mm | 6 | 261.78
+Fittings | Cleanout 50mm | 4 | 855.36
+ | Rough-ins | 0 | 0
+Rough-ins | liquid-tight metallic flexible conduits 1-1/2" | 78 | 31523.7
+Rough-ins | Metallic Flexible Conduit | 673 | 44330.51
+Rough-ins | Metallic Flexible Conduit Connector 20mm | 34 | 1091.06
+ | Cables / Wires | 0 | 0
+Cables / Wires | Communication wire (PD Royal Cord 0.75mm/2C) | 482 | 38964.88
+Cables / Wires | Wire 3.5mm² THHN (5 meters per Unit) | 94 | 7377.120000000001
+Cables / Wires | Wire 5.5mm² THHN (5 meters per Unit) | 13 | 1505.79
+Cables / Wires | Wire 30.0mm² THHN (5 meters per Unit) | 59 | 46578.73
+ | for ground: | 0 | 0
+Cables / Wires | Wire 3.5mm² THHN (G) (5 meters per Unit) | 85 | 6670.8
+Cables / Wires | Wire 8.0mm² THHN (G) (5 meters per Unit) | 20 | 3757.6
+ | CONSUMABLES | 0 | 0
+CONSUMABLES | Vibration Isolator | 16 | 22238.56
+CONSUMABLES | Angle Bar, 2x2x 1/4 (6 meters) | 6 | 15139.32
+CONSUMABLES | Rugby | 25 | 6949.750000000002
+CONSUMABLES | White Tape | 49 | 18336.78
+CONSUMABLES | Threaded rod 3/8 (6 meters) | 107 | 18304.49
+CONSUMABLES | Nuts and washer 3/8 | 32 | 684.48
+CONSUMABLES | Grip Anchor 3/8 | 32 | 342.3999999999999
+CONSUMABLES | Paint (Red Oxide) | 1 | 3432
+CONSUMABLES | Loop Hangers | 402 | 17197.56
+CONSUMABLES | Freon | 7 | 101484.39
+CONSUMABLES | Nitrogen | 4 | 72702.64
+CONSUMABLES | Mapp Gas | 12 | 10263.96
+CONSUMABLES | Silver Rod | 160 | 8555.2
+CONSUMABLES | Paint Brush | 1 | 213.84
+CHIPPING & RESTORATION (ROUGH-ONLY) | CHIPPING & RESTORATION (ROUGH-ONLY) | 1 | 737348.8400000002
+MISCELLANEOUS | MISCELLANEOUS | 1 | 6640.710000000001
+TESTING & COMMISIONING | TESTING & COMMISIONING | 1 | 47190.33
+ | III.A AIR CONDITIONING- VRV SYSTEM C | 0 | 0
+AIR CONDITIONING- VRV SYSTEM C | ACCU- Model: RXQ18BYM | 3 | 2223173.13
+AIR CONDITIONING- VRV SYSTEM C | FCU- 6HP ceiling Cassette VRF C (Corridor near Ortho, Corridor near OR. No. 10, Corridor near NSS/Pay) Model: FXFQ140AVM | 2 | 175061.38
+ | Accessories: | 0 | 0
+ACU Accessories: | Wired Remote Controller Model: BRC1E63 | 10 | 117607.2
+ACU Accessories: | Standard panel(Fresh white) Model: BYCQ125EAF | 2 | 44690.74000000001
+ACU Accessories: | Refnet Joints Model: KHRP26A33T | 2 | 9879.020000000002
+ACU Accessories: | Refnet Joints Model: KHRP26A72T | 4 | 32930.04
+ACU Accessories: | Refnet Joints Model: KHRP26A73T | 3 | 42338.61
+ACU Accessories: | Pipe Size Reducer Model: KHRP26M73TP | 3 | 17993.91
+ACU Accessories: | VRV Multi Con piping kit Model: BHFP22R168-7 | 1 | 39751.22
+ | Copper Pipes - Type L Hard Drawn Pipes | 0 | 0
+Copper Pipes - Type L Hard Drawn Pipes | 1/4" | 1 | 2120.33
+Copper Pipes - Type L Hard Drawn Pipes | 3/8" | 11 | 32475.85000000001
+Copper Pipes - Type L Hard Drawn Pipes | 1/2" | 2 | 9393.84
+Copper Pipes - Type L Hard Drawn Pipes | 5/8" | 14 | 94863.30000000002
+Copper Pipes - Type L Hard Drawn Pipes | 3/4" | 9 | 77780.97
+Copper Pipes - Type L Hard Drawn Pipes | 7/8" | 1 | 10870.01
+Copper Pipes - Type L Hard Drawn Pipes | 1-1/8" | 5 | 77834.6
+Copper Pipes - Type L Hard Drawn Pipes | 1-3/8" | 3 | 63045.99000000001
+Copper Pipes - Type L Hard Drawn Pipes | 1-5/8" | 7 | 189278.39
+ | Copper Pipes Insulation 25mm Thick | 0 | 0
+Copper Pipes Insulation 25mm Thick | 1/4" | 2 | 867.1399999999999
+Copper Pipes Insulation 25mm Thick | 3/8" | 21 | 9278.429999999998
+Copper Pipes Insulation 25mm Thick | 1/2" | 4 | 2064.6
+Copper Pipes Insulation 25mm Thick | 5/8" | 27 | 17002.17
+Copper Pipes Insulation 25mm Thick | 3/4" | 17 | 12038.72
+Copper Pipes Insulation 25mm Thick | 7/8" | 2 | 1569.1
+Copper Pipes Insulation 25mm Thick | 1-1/8" | 10 | 8464.9
+Copper Pipes Insulation 25mm Thick | 1-3/8" | 5 | 4480.15
+Copper Pipes Insulation 25mm Thick | 1-5/8" | 13 | 13151.58
+Copper Pipe Fittings | Copper Pipe Fittings | 1 | 59135.14999999999
+Isolation Ball Valves | Isolation Ball Valves | 20 | 64149.60000000001
+PVC Cladding Works | PVC Cladding Works | 1 | 19711.72
+Concrete Pad | Concrete Pad | 3 | 28867.23
+ | Condensate Drain Pipes | 0 | 0
+Condensate Drain Pipes | 32mm dia. uPVC blue pipe PNS 65 | 33 | 13336.95
+Condensate Drain Pipes | 50mm dia. PVC blue uPVC blue pipe PNS 65 | 12 | 7701.959999999999
+ | Condensate Drain Pipes Rubber Insulation 1.5 meters | 0 | 0
+Condensate Drain Pipes Rubber Insulation 1.5 meters | 3/4'' thick for 32mm pvc | 66 | 28226.21999999999
+Condensate Drain Pipes Rubber Insulation 1.5 meters | 3/4'' thick for 50mm pvc | 23 | 18689.11
+ | Drain Pump | 0 | 0
+(5.0m pump Lift) Model: BDU513A450VE | (5.0m pump Lift) Model: BDU513A450VE | 11 | 335204.76
+ | Fittings | 0 | 0
+Fittings | Wye Reducer 50 x 32 | 7 | 1347.22
+Fittings | Tee 32mm | 6 | 320.82
+Fittings | Elbow 32mm | 7 | 305.41
+Fittings | Cleanout 50mm | 2 | 427.68
+ | RELATED ELECTRICAL WORKS | 0 | 0
+ | Rough-ins | 0 | 0
+Rough-ins | liquid-tight metallic flexible conduits 1-1/2" | 78 | 31523.7
+Rough-ins | Metallic Flexible Conduit 20mm | 444 | 29246.28
+Rough-ins | Metallic Flexible Conduit Connector 20mm | 26 | 834.3400000000001
+ | Cables / Wires | 0 | 0
+Cables / Wires | Communication wire (PD Royal Cord 0.75mm/2C) | 291 | 23524.44
+Cables / Wires | Wire 3.5mm² THHN (5 meters per Unit) | 63 | 4944.87
+Cables / Wires | Wire 5.5mm² THHN (5 meters per Unit) | 26 | 3122.86
+Cables / Wires | Wire 30.0mm² THHN (5 meters per Unit) | 59 | 46578.73
+ | for ground: | 0 | 0
+Cables / Wires | Wire 3.5mm² THHN (G) (5 meters per Unit) | 65 | 5101.849999999999
+Cables / Wires | Wire 8.0mm² THHN (G) (5 meters per Unit) | 20 | 3757.6
+ | CONSUMABLES | 0 | 0
+CONSUMABLES | Vibration Isolator | 20 | 27798.2
+CONSUMABLES | Angle Bar, 2x2x 1/4 (6 meters) | 7 | 17662.54
+CONSUMABLES | Rugby | 15 | 4169.85
+CONSUMABLES | White Tape | 30 | 11226.6
+CONSUMABLES | Threaded rod 3/8 (6 meters) | 65 | 11119.55
+CONSUMABLES | Nuts and washer 3/8 | 32 | 684.48
+CONSUMABLES | Grip Anchor 3/8 | 32 | 342.3999999999999
+CONSUMABLES | Paint (Red Oxide) | 1 | 3432
+CONSUMABLES | Loop Hangers | 244 | 10438.32
+CONSUMABLES | Freon | 5 | 72488.84999999999
+CONSUMABLES | Nitrogen | 3 | 54526.98
+CONSUMABLES | Mapp Gas | 8 | 6500.559999999999
+CONSUMABLES | Silver Rod | 98 | 5240.059999999999
+CONSUMABLES | Paint Brush | 1 | 213.84
+CHIPPING & RESTORATION (ROUGH-ONLY) | CHIPPING & RESTORATION (ROUGH-ONLY) | 1 | 737348.8400000002
+MISCELLANEOUS | MISCELLANEOUS | 1 | 5010.49
+TESTING & COMMISIONING | TESTING & COMMISSIONING | 1 | 38342.14
+ | AIR CONDITIONING- VRV SYSTEM D | 0 | 0
+AIR CONDITIONING- VRV SYSTEM D | ACCU- Model: RXQ20BYM | 3 | 2367951.57
+AIR CONDITIONING- VRV SYSTEM D | FCU- 6HP ceiling Cassette VRF C (Corridor near Ortho, Corridor near OR. No. 10, Corridor near NSS/Pay) Model: FXFQ140AVM | 2 | 175061.38
+ | Accessories: | 0 | 0
+ACU Accessories: | Wired Remote Controller Model: BRC1E63 | 12 | 141128.64
+ACU Accessories: | Standard panel(Fresh white) Model: BYCQ125EAF | 2 | 44690.74000000001
+ACU Accessories: | Refnet Joints Model: KHRP26A22T | 4 | 17405.88
+ACU Accessories: | Refnet Joints Model: KHRP26A33T | 1 | 4939.510000000001
+ACU Accessories: | Refnet Joints Model: KHRP26A72T | 3 | 24697.53
+ACU Accessories: | Refnet Joints Model: KHRP26A73T | 3 | 42338.61
+ACU Accessories: | Pipe Size Reducer Model: KHRP26M73TP | 3 | 17993.91
+ACU Accessories: | VRV Multi Con piping kit Model: BHFP22R168-7 | 1 | 39751.22
+ | Copper Pipes - Type L Hard Drawn Pipes | 0 | 0
+Copper Pipes - Type L Hard Drawn Pipes | 1/4" | 8 | 16962.64
+Copper Pipes - Type L Hard Drawn Pipes | 3/8" | 12 | 35428.2
+Copper Pipes - Type L Hard Drawn Pipes | 1/2" | 10 | 46969.2
+Copper Pipes - Type L Hard Drawn Pipes | 5/8" | 14 | 94863.30000000002
+Copper Pipes - Type L Hard Drawn Pipes | 3/4" | 16 | 138277.28
+Copper Pipes - Type L Hard Drawn Pipes | 7/8" | 2 | 21740.02
+Copper Pipes - Type L Hard Drawn Pipes | 1-1/8" | 5 | 77834.6
+Copper Pipes - Type L Hard Drawn Pipes | 1-3/8" | 2 | 42030.66
+Copper Pipes - Type L Hard Drawn Pipes | 1-5/8" | 14 | 378556.78
+ | Copper Pipes Insulation 25mm Thick | 0 | 0
+Copper Pipes Insulation 25mm Thick | 1/4" | 16 | 6937.119999999999
+Copper Pipes Insulation 25mm Thick | 3/8" | 24 | 10603.92
+Copper Pipes Insulation 25mm Thick | 1/2" | 19 | 9806.85
+Copper Pipes Insulation 25mm Thick | 5/8" | 27 | 17002.17
+Copper Pipes Insulation 25mm Thick | 3/4" | 31 | 21952.96
+Copper Pipes Insulation 25mm Thick | 7/8" | 4 | 3138.2
+Copper Pipes Insulation 25mm Thick | 1-1/8" | 10 | 8464.9
+Copper Pipes Insulation 25mm Thick | 1-3/8" | 4 | 3584.12
+Copper Pipes Insulation 25mm Thick | 1-5/8" | 27 | 27314.82
+Copper Pipe Fittings | Copper Pipe Fittings | 1 | 96659.96999999999
+Isolation Ball Valves | Isolation Ball Valves | 24 | 76979.52
+PVC Cladding Works | PVC Cladding Works | 1 | 32220
+Concrete Pad | Concrete Pad | 3 | 28867.23
+ | Condensate Drain Pipes | 0 | 0
+Condensate Drain Pipes | 32mm dia. uPVC blue pipe PNS 65 | 31 | 12528.65
+Condensate Drain Pipes | 50mm dia. PVC blue uPVC blue pipe PNS 65 | 38 | 24389.54
+ | Condensate Drain Pipes Rubber Insulation 1.5 meters | 0 | 0
+Condensate Drain Pipes Rubber Insulation 1.5 meters | 3/4'' thick for 32mm pvc | 61 | 26087.87
+Condensate Drain Pipes Rubber Insulation 1.5 meters | 3/4'' thick for 50mm pvc | 75 | 60942.74999999999
+ | Drain Pump | 0 | 0
+(5.0m pump Lift) Model: BDU513A450VE | (5.0m pump Lift) Model: BDU513A450VE | 10 | 304731.6
+ | Fittings | 0 | 0
+Fittings | Wye 50mm | 2 | 427.68
+Fittings | Wye Reducer 50 x 32 | 11 | 2117.059999999999
+Fittings | Tee 32mm | 3 | 160.41
+Fittings | Tee Reducer 50 x 32 | 3 | 609.4499999999999
+Fittings | Elbow 32mm | 7 | 305.41
+Fittings | Cleanout 50mm | 6 | 1283.04
+ | RELATED ELECTRICAL WORKS | 0 | 0
+ | Rough-ins | 0 | 0
+Rough-ins | liquid-tight metallic flexible conduits 2" | 78 | 59544.41999999999
+Rough-ins | Metallic Flexible Conduit 20mm | 654 | 43078.98
+Rough-ins | Metallic Flexible Conduit Connector 20mm | 32 | 1026.88
+ | Cables / Wires | 0 | 0
+Cables / Wires | Communication wire (PD Royal Cord 0.75mm/2C) | 472 | 38156.48000000001
+Cables / Wires | Wire 3.5mm² THHN (5 meters per Unit) | 78 | 6009.9
+Cables / Wires | Wire 5.5mm² THHN (5 meters per Unit) | 26 | 3122.86
+Cables / Wires | Wire 38.0mm² THHN (5 meters per Unit) | 59 | 55353.8
+ | for ground: | 0 | 0
+Cables / Wires | Wire 3.5mm² THHN (G) (5 meters per Unit) | 78 | 5878.08
+Cables / Wires | Wire 14.0mm² THHN (G) (5 meters per Unit) | 20 | 6220.200000000001
+ | CONSUMABLES | 0 | 0
+CONSUMABLES | Vibration Isolator | 20 | 27798.2
+CONSUMABLES | Angle Bar, 2x2x 1/4 (6 meters) | 7 | 17662.54
+CONSUMABLES | Rugby | 24 | 6671.760000000002
+CONSUMABLES | White Tape | 47 | 17588.34
+CONSUMABLES | Threaded rod 3/8 (6 meters) | 104 | 17791.28
+CONSUMABLES | Nuts and washer 3/8 | 32 | 684.48
+CONSUMABLES | Grip Anchor 3/8 | 32 | 342.3999999999999
+CONSUMABLES | Paint (Red Oxide) | 1 | 3432
+CONSUMABLES | Loop Hangers | 393 | 16812.54
+CONSUMABLES | Freon | 8 | 115982.16
+CONSUMABLES | Nitrogen | 4 | 72702.64
+CONSUMABLES | Mapp Gas | 12 | 9750.839999999998
+CONSUMABLES | Silver Rod | 158 | 8448.26
+CONSUMABLES | Paint Brush | 1 | 213.84
+CHIPPING & RESTORATION (ROUGH-ONLY) | CHIPPING & RESTORATION (ROUGH-ONLY) | 1 | 737348.8400000002
+MISCELLANEOUS | MISCELLANEOUS | 1 | 7277.91
+TESTING & COMMISIONING | TESTING & COMMISSIONING | 1 | 44240.94
+ | IV ELECTRICAL WORKS | 0 | 0
+ | Electrical Works | 0 | 0
+ | I. Service Entrance Existing. Tap only | 0 | 0
+ | II. Feeder | 0 | 0
+ | Feeder Wire | 0 | 0
+Cables / Wires | 250mm² THHN | 726 | 5149053.360000001
+Cables / Wires | 200mm² THHN | 117 | 644571.72
+Cables / Wires | 38mm² THHN | 390 | 439327.2
+ | for ground: | 0 | 0
+Cables / Wires | 80mm² THHN | 242 | 515401.92
+Cables / Wires | 30mm² THHN | 39 | 32123.91
+Cables / Wires | 14mm² THHN | 130 | 46653.09999999999
+ | Roughing-ins | 0 | 0
+Roughing-ins | 90mm dia. IMC | 94 | 874356.98
+Roughing-ins | 40mm dia. IMC | 45 | 120280.5
+ | III. Panel Board & Pullbox | 0 | 0
+Panel Board & Pullbox | DP-Main | 1 | 772225.4500000001
+ | Main CB: 1200AT, 3P, 230V, 60Hz, Bolt-on Nema12 | 0 | 0
+ | Branches: 1 - 700AT, 3P | 0 | 0
+ | 4 - 125AT, 3P | 0 | 0
+Panel Board & Pullbox | PP-System A | 1 | 125827.11
+ | Main CB: 125AT, 3P, 230V, 60Hz, Bolt-on Nema12 | 0 | 0
+ | Branches: 2 - 40AT, 3P | 0 | 0
+ | 3 - 40AT, 2P | 0 | 0
+ | 9 - 30AT, 2P | 0 | 0
+Panel Board & Pullbox | PP-System B | 1 | 135268.13
+ | Main CB: 125AT, 3P, 230V, 60Hz, Bolt-on Nema12 | 0 | 0
+ | Branches: 1 - 40AT, 3P | 0 | 0
+ | 2 - 40AT, 2P | 0 | 0
+ | 11 - 30AT, 2P | 0 | 0
+Panel Board & Pullbox | PP-System C | 1 | 120190.82
+ | Main CB: 125AT, 3P, 230V, 60Hz, Bolt-on Nema12 | 0 | 0
+ | Branches: 2 - 40AT, 3P | 0 | 0
+ | 7 - 40AT, 2P | 0 | 0
+ | 5 - 30AT, 2P | 0 | 0
+Panel Board & Pullbox | PP-System D | 1 | 131472.25
+ | Main CB: 125AT, 3P, 230V, 60Hz, Bolt-on Nema12 | 0 | 0
+ | Branches: 3 - 40AT, 3P | 0 | 0
+ | 4 - 40AT, 2P | 0 | 0
+ | 8 - 30AT, 2P | 0 | 0
+Panel Board & Pullbox | PP-Outdoor | 1 | 473575.57
+ | Main CB: 700AT, 3P, 230V, 60Hz, Bolt-on Nema12 | 0 | 0
+ | Branches: 4 - 150AT, 3P | 0 | 0
+1.0 | Transformer | 1 | 932598.8200000001
+ | Transformer 500KVA Step Down Dry Type Transformer, 480V to 230V, 3P
+Floor mounted, Indoor Type, 60Hz, Nema1 "TRANSPHIL" | 0 | 0
+ECB | ECB 1250AT Nema 12 | 1 | 302047.59
+Pullbox | Pullbox (350mm x 350mm x 200mm) | 5 | 27691.2
+Wire Gutter | Wire Gutter | 1 | 32074.68
+ | IV. Mechanical System Power Supply | 0 | 0
+ | ECB's | 0 | 0
+ECB | ECB 150AT, 3P, 230V, Nema3R | 4 | 116076.44
+ECB | ECB 40AT, 3P, 230V, Nema3R | 7 | 77586.88
+ECB | ECB 40AT, 2P, 230V, Nema3R | 16 | 150867.52
+ECB | ECB 30AT, 2P, 230V, Nema3R | 23 | 216872.06
+ | Roughing-ins | 0 | 0
+Roughing-ins | 40mm dia. IMC | 49 | 130972.1
+Roughing-ins | 25mm dia. IMC | 1003 | 1758690.29
+ | Roughing-ins Boxes | 0 | 0
+Roughing-ins | Junction boxes with cover | 195 | 24540.75
+ | Wires | 0 | 0
+Cables / Wires | 50mm² THHN | 429 | 598841.1000000001
+Cables / Wires | 5.5mm² THHN | 6798 | 979795.74
+ | for ground: | 0 | 0
+Cables / Wires | 14mm² THHN | 143 | 51318.40999999999
+Cables / Wires | 5.5mm² THHN | 3185 | 459054.05
+Chipping & Restoration Works (Rough only) | Chipping & Restoration Works (Rough only) | 1 | 145441.09
+Hangers & Supports | Hangers & Supports | 1 | 174529.31
+Miscelleneuos | Miscelleneuos | 1 | 87264.66
+Testing & Commissioning | Testing & Commissioning | 1 | 884818.61

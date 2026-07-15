@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { assertScheduleEditable } from '@/lib/scheduling/scheduleWorkflow';
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -11,6 +12,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
     if (!schedules || schedules.length === 0) {
       return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
+    }
+
+    for (const schedule of schedules) {
+      assertScheduleEditable(schedule);
     }
 
     const txOperations: any[] = [];

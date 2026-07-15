@@ -1,7 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
+import bcrypt from 'bcryptjs';
+import { requirePermission } from '@/lib/permissions';
 
 // Internal helper to avoid code duplication
 async function _internalCreateSystemRole(roleName: string) {
@@ -235,5 +238,88 @@ export async function deleteUser(id: string) {
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'An unexpected database error occurred.' };
+  }
+}
+
+export async function resetUserPassword(targetUserId: string, newPasswordRaw: string) {
+  try {
+    const cookieStore = await cookies();
+    const session = cookieStore.get('session')?.value;
+    if (!session) {
+      return { success: false, error: 'Unauthorized: No session found.' };
+    }
+    
+    const actorUserId = session.split(':')[0]; // Handle sessionVersion split if any
+    
+    // Server-side PBAC verification (require USERS:canManageUsers or similar)
+    // Based on Phase 5 requirement: USER_MANAGEMENT.canResetPassword or USERS.canManageUsers
+    // For this app, SYSTEM_SETTINGS or USERS could be the module.
+    // Assuming 'USERS' module exists or IS_ADMIN check.
+    const actor = await prisma.user.findUnique({ where: { id: actorUserId } });
+    if (!actor || (actor.role !== 'SUPER_ADMIN' && actor.role !== 'SYSTEM_ADMIN' && actor.role !== 'PROJECT_DIRECTOR')) {
+       return { success: false, error: 'Unauthorized: You do not have permission to reset passwords.' };
+    }
+
+    if (!targetUserId || !newPasswordRaw) {
+      return { success: false, error: 'Target user ID and new password are required.' };
+    }
+
+    // Password Policy Enforcement
+    if (newPasswordRaw.length < 12) {
+      return { success: false, error: 'Password must be at least 12 characters long.' };
+    }
+    if (['password123', 'admin123', 'jejors2026', 'onesystemserp'].includes(newPasswordRaw.toLowerCase())) {
+      return { success: false, error: 'Password cannot be a known default, placeholder, or bypass value.' };
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!targetUser) {
+      return { success: false, error: 'Target user not found.' };
+    }
+    if (newPasswordRaw.toLowerCase() === targetUser.email?.toLowerCase()) {
+      return { success: false, error: 'Password cannot be equal to the email address.' };
+    }
+
+    // Hash with bcrypt
+    const passwordHash = await bcrypt.hash(newPasswordRaw, 10);
+
+    // Update user: mustChangePassword = true, increment sessionVersion to revoke existing sessions
+    const updatedUser = await prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        passwordHash,
+        password: null, // Clear plaintext password if any
+        mustChangePassword: true,
+        sessionVersion: { increment: 1 }
+      }
+    });
+
+    // Audit Log: PASSWORD_RESET_COMPLETED
+    await prisma.auditLog.create({
+      data: {
+        userId: actorUserId,
+        userRole: actor.role,
+        moduleName: 'USER_MANAGEMENT',
+        actionType: 'PASSWORD_RESET_COMPLETED',
+        remarks: `Password reset initiated and completed for user ${targetUser.email}`,
+      }
+    });
+
+    // Audit Log: USER_SESSIONS_REVOKED
+    await prisma.auditLog.create({
+      data: {
+        userId: actorUserId,
+        userRole: actor.role,
+        moduleName: 'USER_MANAGEMENT',
+        actionType: 'USER_SESSIONS_REVOKED',
+        remarks: `Sessions revoked for user ${targetUser.email} via sessionVersion increment`,
+      }
+    });
+
+    revalidatePath('/users');
+    return { success: true };
+  } catch (err: any) {
+    console.error('Password reset error:', err);
+    return { success: false, error: 'An error occurred during password reset.' };
   }
 }

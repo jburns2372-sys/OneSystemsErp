@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateCPM, resolveWorkingDayDates, type CPMActivity, type CPMDependency } from '@/lib/cpm-engine';
+import { assertScheduleEditable } from '@/lib/scheduling/scheduleWorkflow';
 
 // POST: Run CPM calculation and update all activities with computed dates
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +20,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!schedule) {
       return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
     }
+
+    assertScheduleEditable(schedule);
 
     // Build CPM inputs
     const cpmActivities: CPMActivity[] = schedule.activities.map(a => ({

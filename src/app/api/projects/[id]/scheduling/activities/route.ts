@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { assertScheduleEditable } from '@/lib/scheduling/scheduleWorkflow';
 
 // GET: List all activities for a schedule
 // POST: Create a new activity
@@ -49,6 +50,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!schedule) {
       return NextResponse.json({ error: 'Schedule not found for this project' }, { status: 404 });
     }
+
+    assertScheduleEditable(schedule);
 
     const activity = await prisma.scheduleActivity.create({
       data: {

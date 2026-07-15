@@ -1,0 +1,52 @@
+{
+  "stageA": {
+    "status": "LOST_B3_DATABASE_NOT_RECOVERABLE",
+    "evidence": {
+      "endpoint": "ep-blue-wave-ap23fyj1.c-7.us-east-1.aws.neon.tech",
+      "deleted": true,
+      "projectFound": false,
+      "boqFound": false,
+      "scheduleFound": false
+    }
+  },
+  "stageB": {
+    "schemaComplete": true,
+    "requiredMigrations": [
+      "20260714_reconcile_pre_phase3_schema_drift",
+      "20260714114200_harden_schedule_baseline_activation",
+      "20260714190000_phase3_baseline_workflow"
+    ]
+  },
+  "stageC": {
+    "sourceRecoverable": true,
+    "missingSource": "None",
+    "checksumVerificationPossible": true,
+    "exactReconstructionPossible": true,
+    "originalAwardedAmountVerified": true,
+    "sourceDocument": "pgh_files/Progress_Accomplishment_Template_Based_on_Awarded_BOQ.xlsx",
+    "checksum": "040d59da1b76e0721c26645a74207c40b33f27c2a3df4a1c216b6340bf9f2fb7"
+  },
+  "stageD": {
+    "reconstructionPlan": [
+      "1. Back up the current main database.",
+      "2. Confirm main is the designated authoritative environment.",
+      "3. Apply only reviewed, ordered Prisma migrations (20260714_reconcile_pre_phase3_schema_drift, 20260714114200_harden_schedule_baseline_activation, 20260714190000_phase3_baseline_workflow).",
+      "4. Verify all required scheduling tables, columns and indexes.",
+      "5. Restore or recreate the Project record from authoritative source documents (Start: 2026-06-12, End: 2026-12-09).",
+      "6. Import and lock the awarded BOQ from 'pgh_files/Progress_Accomplishment_Template_Based_on_Awarded_BOQ.xlsx'.",
+      "7. Recalculate the BOQ checksum.",
+      "8. Require exact agreement with the historical checksum (040d59da1b76e0721c26645a74207c40b33f27c2a3df4a1c216b6340bf9f2fb7).",
+      "9. Run schedule generation through the real application service.",
+      "10. Validate output: 1 root WBS, 12 phases, 14 activities, 11 dependencies, 326 allocations, 43,106,674.89 amounts, no cycles, final phase Project Acceptance and Demobilization.",
+      "11. Perform the human-review workflow once.",
+      "12. Activate one authoritative BL-001.",
+      "13. Perform one idempotent retry.",
+      "14. Create one controlled draft revision.",
+      "15. Run the full final read-only acceptance audit.",
+      "16. Save durable JSON, Markdown, screenshot and Playwright evidence."
+    ]
+  },
+  "stageE": {
+    "classification": "LOST_B3_DATABASE_NOT_RECOVERABLE_RECONSTRUCTION_READY"
+  }
+}

@@ -11,6 +11,7 @@ import DelayAndRecoveryTab from './delays/DelayAndRecoveryTab';
 import PERTNetworkDiagram from './pert/PERTNetworkDiagram';
 import AIScheduleIntelligence from './ai/AIScheduleIntelligence';
 import PhaseSummaryView from './PhaseSummaryView';
+import ScheduleReviewPanel from './review/ScheduleReviewPanel';
 
 export default function SchedulingHubClient({ 
   project, 
@@ -264,6 +265,9 @@ export default function SchedulingHubClient({
           Diff: ₱{Number(schedule.differenceAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
         </div>
       </div>
+
+      {/* Schedule Review Panel */}
+      <ScheduleReviewPanel schedule={schedule} projectId={project.id} />
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '15px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px', overflowX: 'auto' }}>

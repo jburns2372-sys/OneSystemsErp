@@ -1,0 +1,28 @@
+{
+  "rootCause": "Migration 20260714114200_harden_schedule_baseline_activation executed before the BaselineActivation table was created by 20260714190000_phase3_baseline_workflow.",
+  "deploymentHistory": "MIGRATION_NEVER_SUCCESSFULLY_DEPLOYED",
+  "correctedMigrationOrder": [
+    "20260714_reconcile_pre_phase3_schema_drift",
+    "20260714190000_phase3_baseline_workflow",
+    "20260714200000_harden_schedule_baseline_activation"
+  ],
+  "sqlCompatibilityGuards": "Replaced original raw DDL with PL/pgSQL DO blocks checking information_schema for existing objects. Uses temporary helper functions to check the data_type, is_nullable, and column_default for EVERY column in the 13 tables, along with foreign keys and unique indexes. Raises an explicit exception if any schema attribute deviates.",
+  "dependencyMatrix": {
+    "20260714200000_harden_schedule_baseline_activation": "Depends on BaselineActivation table created by 20260714190000_phase3_baseline_workflow"
+  },
+  "sourceControlDiff": {
+    "renamedFolders": ["20260714114200_harden_schedule_baseline_activation -> 20260714200000_harden_schedule_baseline_activation"],
+    "editedFiles": ["prisma/migrations/20260714_reconcile_pre_phase3_schema_drift/migration.sql"]
+  },
+  "checksumImplications": "Checksum of 20260714_reconcile_pre_phase3_schema_drift altered; clean deploy required on fresh branch.",
+  "uatV2CreationInstructions": "Branch from main -> 'scheduling-reconstruction-uat-v2', apply to .env, run 'npx prisma migrate deploy'.",
+  "expectedCleanDeploymentSequence": "Deploy will apply drift reconcile, phase3 workflow, and finally harden schedule baseline cleanly.",
+  "stopConditions": "MIGRATION_SOURCE_CHANGE_READY_FOR_FORMAL_REREVIEW returned. Wait for user authorization before acting on clean UAT v2.",
+  "staticValidationResults": {
+    "validateExitCode": 0,
+    "generateExitCode": 0,
+    "schemaResult": "valid",
+    "generatedClientResult": "Generated Prisma Client (v6.19.3) to .\\\\node_modules\\\\@prisma\\\\client in 8.04s"
+  },
+  "finalSourceReviewReadiness": "COMPLETE_AND_SAFE for every object."
+}

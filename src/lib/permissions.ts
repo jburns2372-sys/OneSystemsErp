@@ -12,8 +12,13 @@ const MASTER_ADMIN_MODULES = [
 ];
 
 export async function getUserPermissions(userId: string) {
-  const cookieStore = await cookies();
-  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+  let simulatedRole;
+  try {
+    const cookieStore = await cookies();
+    simulatedRole = cookieStore.get('simulatedRole')?.value;
+  } catch (err) {
+    // Expected when running in background CLI scripts outside Next.js request scope
+  }
 
   let user = null;
   let userRoles = [];

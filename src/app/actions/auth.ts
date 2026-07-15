@@ -24,6 +24,10 @@ export async function login(formData: FormData) {
       return { error: 'Invalid email or password' };
     }
 
+    if (user.status !== 'ACTIVE') {
+      return { error: 'Account is disabled or locked' };
+    }
+
     let isValid = false;
     
     // First try bcrypt compare
@@ -34,23 +38,25 @@ export async function login(formData: FormData) {
     }
     
     // Fallback: If bcrypt failed, check if the password is stored in plain text
-    if (!isValid && user.password && user.password === password) {
-       isValid = true;
-    }
+    // REMOVED plaintext comparison for Phase 2 compliance
     
-    // Master password override for local dev testing during migration
-    if (!isValid && password !== 'admin123' && password !== 'jejors2026') {
-      // If we are in dev mode and the DB has no hash/password, allow any password
-      if (process.env.NODE_ENV === 'development' && !user.passwordHash && !user.password) {
-         console.warn(`Allowing dev login for ${email} with missing password`);
-      } else {
-         return { error: 'Invalid email or password' };
-      }
+    if (!isValid) {
+      return { error: 'Invalid email or password' };
     }
+
+    // Check if a database-backed session strategy (sessionVersion) is in use
+    const userWithSession = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { sessionVersion: true }
+    }) as any;
+
+    const sessionValue = userWithSession?.sessionVersion !== undefined
+      ? `${user.id}:${userWithSession.sessionVersion}`
+      : user.id;
 
     // Create simple session cookie
     const cookieStore = await cookies();
-    cookieStore.set('session', user.id, {
+    cookieStore.set('session', sessionValue, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -66,8 +72,8 @@ export async function login(formData: FormData) {
 
   } catch (error: any) {
     if (error.message === 'NEXT_REDIRECT') throw error;
-    console.error("Auth Error (Prisma):", error);
-    return { error: error.message || 'Authentication error: Unknown error' };
+    console.error("Auth Error:", error);
+    return { error: 'Authentication error: Unknown error' };
   }
   
   if (redirectPath) {

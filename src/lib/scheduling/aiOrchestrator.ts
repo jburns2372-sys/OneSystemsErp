@@ -68,7 +68,7 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
       }
       
       classificationCounts[classification as keyof typeof classificationCounts]++;
-      return classification === 'DETAIL_PRICED';
+      return classification === 'DETAIL_PRICED' || classification === 'DETAIL_ZERO_VALUE';
     });
 
     console.log("=== BOQ ROW CLASSIFICATION REPORT ===");
@@ -215,9 +215,11 @@ CRITICAL RULES:
    PH-11: Testing and Commissioning, Documentation, Training and Rectification
    PH-12: Project Acceptance and Demobilization
 2. The final phase MUST be exactly "Project Acceptance and Demobilization".
-3. Do not arbitrarily merge unrelated disciplines, work areas, or incompatible units into single activities. SPLIT activities where necessary. Granularity should be very high. Do NOT create one single activity for an entire discipline. 
-4. Mixed Unit Protection: Do not total incompatible quantities. Create separate child work packages or separate activities.
-5. Every BOQ ID must be assigned EXACTLY once.
+3. The phase before the final phase MUST be exactly "Testing and Commissioning" (you may optionally include other words like Documentation, Training, Rectification but MUST contain exact phrase "Testing and Commissioning").
+4. Do not arbitrarily merge unrelated disciplines, work areas, or incompatible units into single activities. SPLIT activities where necessary. Granularity should be very high. Do NOT create one single activity for an entire discipline. 
+5. Mixed Unit Protection: Do not total incompatible quantities. Create separate child work packages or separate activities.
+6. Every BOQ ID must be assigned EXACTLY once.
+7. DEPENDENCIES: Every activity MUST be connected. No orphaned activities are allowed. The critical path MUST reach the final Acceptance phase.
 
 BOQ Items:
 ${JSON.stringify(boqPayload, null, 2)}
@@ -487,18 +489,24 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
             }
           }
           const oldDuration = act.duration;
-          act.duration = maxProdDuration;
           
-          feasibilityFlags.push({
-            activityId: act.id,
-            action: 'CREW_AUGMENTATION',
-            originalCrewCount: act.metadata.originalCrewCount || 1,
-            proposedCrewCount: act.metadata.crewCount,
-            originalDuration: oldDuration,
-            proposedDuration: maxProdDuration,
-            rationale: 'Schedule exceeded contractual duration.'
-          });
-          updatedAny = true;
+          if (maxProdDuration < oldDuration) {
+            act.duration = maxProdDuration;
+            feasibilityFlags.push({
+              activityId: act.id,
+              action: 'CREW_AUGMENTATION',
+              originalCrewCount: act.metadata.originalCrewCount || 1,
+              proposedCrewCount: act.metadata.crewCount,
+              originalDuration: oldDuration,
+              proposedDuration: maxProdDuration,
+              rationale: 'Schedule exceeded contractual duration.'
+            });
+            updatedAny = true;
+          } else {
+            // Revert augmentation if ineffective
+            act.metadata.crewCount /= 2;
+            act.metadata.workFronts -= 1;
+          }
         }
       }
       if (!updatedAny) break;
@@ -506,7 +514,19 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
     }
     
     // Determine overall validation metrics
+    // Determine completion dates
+    const naturalCompletionDate = new Date(projectStartDate);
+    naturalCompletionDate.setDate(naturalCompletionDate.getDate() + cpmResult.projectDuration);
+    
     const exceedContract = cpmResult.projectDuration > targetDuration;
+    
+    // final calculated date
+    const finalCalculatedCompletionDate = new Date(projectStartDate);
+    finalCalculatedCompletionDate.setDate(finalCalculatedCompletionDate.getDate() + cpmResult.projectDuration);
+
+    const diffTime = (project.endDate ? project.endDate.getTime() : projectStartDate.getTime()) - finalCalculatedCompletionDate.getTime();
+    const completionVarianceDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
     const validationMetrics = {
       FINANCIAL: "BALANCED", // will verify below
       BOQ: "FULLY_ALLOCATED",
@@ -514,7 +534,13 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
       SEQUENCE: "VALID",
       CPM: cpmResult.results.size > 0 ? "CALCULATED" : "NOT_CALCULATED",
       PHASES: aiProposal!.phases[aiProposal!.phases.length - 1].phaseName === "Project Acceptance and Demobilization" ? "VALID" : "INVALID_FINAL_PHASE",
-      OVERALL: exceedContract ? "INFEASIBLE" : "READY_FOR_REVIEW"
+      OVERALL: exceedContract ? "INFEASIBLE" : "READY_FOR_REVIEW",
+      naturalCalculatedCompletionDate: naturalCompletionDate.toISOString(),
+      finalCalculatedCompletionDate: finalCalculatedCompletionDate.toISOString(),
+      contractStartDate: project.startDate ? project.startDate.toISOString() : projectStartDate.toISOString(),
+      contractCompletionDate: project.endDate ? project.endDate.toISOString() : naturalCompletionDate.toISOString(),
+      completionVarianceDays,
+      feasibilityStatus: exceedContract ? 'SCHEDULE_INFEASIBLE' : 'SCHEDULE_FEASIBLE'
     };
 
     // Pass 3: Exact Financial Reconciliation, Date Assignment, and Final Validation
@@ -663,7 +689,7 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
       validationErrors.push("Final phase must include Demobilization");
     }
 
-    const hasTestingPhase = aiProposal.phases.some((p: any) => p.phaseName.toLowerCase().includes("testing"));
+    const hasTestingPhase = aiProposal.phases.some((p: any) => p.phaseName.includes("Testing and Commissioning"));
     if (!hasTestingPhase) {
       validationMetrics.PHASES = 'MISSING_TESTING';
       validationMetrics.OVERALL = 'INVALID';
@@ -681,7 +707,11 @@ ${validationErrors.length > 0 ? `PREVIOUS VALIDATION ERRORS TO CORRECT:\n${valid
         status: validationMetrics.OVERALL === 'READY_FOR_REVIEW' ? 'DRAFT' : 'INVALID_GENERATED_DRAFT',
         awardedContractAmount: awardedTotalTx, scheduledAmount: scheduledTotal, differenceAmount: difference,
         validationMetrics: JSON.stringify(validationMetrics),
-        feasibilityFlags: JSON.stringify(feasibilityFlags)
+        feasibilityFlags: JSON.stringify(feasibilityFlags),
+        projectStartDate: project.startDate || projectStartDate,
+        projectCompletionDate: project.endDate || finalCalculatedCompletionDate,
+        baselineStartDate: null,
+        baselineFinishDate: null
       }
     });
 

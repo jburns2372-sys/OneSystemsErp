@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { wouldCreateCycle } from '@/lib/cpm-engine';
+import { assertScheduleEditable } from '@/lib/scheduling/scheduleWorkflow';
 
 // POST: Create a dependency
 // DELETE: Delete a dependency (pass id in body)
@@ -29,6 +30,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!schedule) {
       return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
     }
+
+    assertScheduleEditable(schedule);
 
     // Check for circular dependency
     const allActivityIds = schedule.activities.map(a => a.id);
@@ -83,6 +86,17 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     if (!dependencyId) {
       return NextResponse.json({ error: 'dependencyId is required' }, { status: 400 });
     }
+
+    const dependency = await prisma.scheduleDependency.findUnique({
+      where: { id: dependencyId },
+      include: { schedule: true }
+    });
+
+    if (!dependency) {
+      return NextResponse.json({ error: 'Dependency not found' }, { status: 404 });
+    }
+
+    assertScheduleEditable(dependency.schedule);
 
     await prisma.scheduleDependency.delete({
       where: { id: dependencyId }

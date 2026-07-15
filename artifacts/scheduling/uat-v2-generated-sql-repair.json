@@ -1,0 +1,40 @@
+{
+  "rootCause": "The Node-based SQL generator used the escape sequence \\\\n when building the SQL string, causing literal backslash-n characters to be written to migration.sql instead of actual newlines.",
+  "generatorFile": "scripts/build_migration_v2.js",
+  "defectLine": "fsOut.writeFileSync('prisma/migrations/20260714_reconcile_pre_phase3_schema_drift/migration.sql', lines.join('\\\\n'));",
+  "correctedEscapingBehavior": "Used the actual newline character \\n in the join delimiter to emit structural newlines.",
+  "escapeCounts": {
+    "beforeLiteralN": ">200",
+    "afterLiteralN": 0
+  },
+  "semanticDiffResult": "No semantic changes. Same intent, same tables, columns, indexes, asserts. Formatted correctly.",
+  "failedMigrationHistoryRow": {
+    "id": "0d48f112-2e7a-4f0c-8529-73ef05a07627",
+    "migration_name": "20260714_reconcile_pre_phase3_schema_drift",
+    "finished_at": null,
+    "applied_steps_count": 0,
+    "error_code": "42601"
+  },
+  "resolveRolledBackResult": "Success, rolled_back_at updated to 2026-07-15T07:26:07.106Z",
+  "successfulMigrationOrder": [
+    "20260714_reconcile_pre_phase3_schema_drift",
+    "20260714190000_phase3_baseline_workflow",
+    "20260714200000_harden_schedule_baseline_activation"
+  ],
+  "finalSchemaVerification": {
+    "status": "Database schema is up to date!",
+    "validate": "The schema at prisma/schema.prisma is valid \ud83d\ude80"
+  },
+  "finalRowCounts": {
+    "ProjectSchedule": 0,
+    "BaselineActivation": 0,
+    "ScheduleReviewComment": 0,
+    "ScheduleApproval": 0,
+    "ScheduleWBS": 0,
+    "ScheduleActivity": 0,
+    "ScheduleDependency": 0,
+    "ScheduleBOQAllocation": 0
+  },
+  "backupSha256": "7926F66D6C9BB5A3E8D83053965897058E0B9485A50B44AF5D24C0AACF5C7257",
+  "acceptanceState": "No acceptance data was created. The scheduling tables remain empty."
+}

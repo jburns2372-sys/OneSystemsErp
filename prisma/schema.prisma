@@ -23,6 +23,11 @@ model User {
   defaultRole                  String?
   department                   String?
   lastLoginAt                  DateTime?
+  mustChangePassword           Boolean                       @default(false)
+  sessionVersion               Int                           @default(0)
+  passwordChangedAt            DateTime?
+  failedLoginAttempts          Int                           @default(0)
+  lockedUntil                  DateTime?
   aiExecutiveQueries           AIExecutiveQuery[]            @relation("AIExecutiveQueries")
   aiApprovedReports            AIGeneratedReport[]           @relation("AIApprovedReports")
   aiReviewedReports            AIGeneratedReport[]           @relation("AIReviewedReports")
@@ -3679,6 +3684,7 @@ model ProjectSchedule {
   generatedById String?
   activatedById String?
   activatedAt   DateTime?
+  baselineCode  String?
 
   activationSnapshotHash String?
   rowVersion             Int     @default(1)
@@ -4696,6 +4702,15 @@ model ProjectBOQVersion {
   totalIndirectCost            Float?
   totalAmount                  Float?
   remarks                      String?
+  
+  // Phase 3D-C1: Structured Checksum fields
+  checksum                     String?
+  checksumAlgorithm            String?
+  checksumVersion              String?
+  sourceProvenance             String?
+  lockedAt                     DateTime?
+  lockedById                   String?
+
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
 }
@@ -4870,6 +4885,8 @@ model ScheduleApproval {
   lockedBOQChecksum    String?
   decidedAt            DateTime                 @default(now())
   createdAt            DateTime                 @default(now())
+  idempotencyKey       String?                  @unique
+  requestId            String?
 
   schedule ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
   reviewer User            @relation("ScheduleApprovalActor", fields: [reviewerId], references: [id], onDelete: Restrict)
@@ -4919,6 +4936,11 @@ model BaselineActivation {
   activatedByRoleSnapshot String
   activatedAt             DateTime @default(now())
   createdAt               DateTime @default(now())
+  idempotencyKey          String?  @unique
+  requestId               String?
+  isAuthoritative         Boolean  @default(false)
+  invalidatedAt           DateTime?
+  invalidationReason      String?
 
   schedule    ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
   activatedBy User            @relation("BaselineActivationActor", fields: [activatedById], references: [id], onDelete: Restrict)

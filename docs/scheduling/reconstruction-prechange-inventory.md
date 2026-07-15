@@ -1,0 +1,28 @@
+# Pre-change Inventory and Backup Evidence
+
+- **Audit Timestamp**: 2026-07-15T06:04:17.922Z
+- **Application Name**: OneSystemsERP.com
+- **UAT Branch Name**: scheduling-reconstruction-uat
+- **UAT Branch ID**: br-shiny-cherry-apbpcqb3
+- **Parent Branch**: main
+- **Sanitized Endpoint Prefix**: ep-billowing-dawn-ap2swfv9
+- **Database Name**: neondb
+- **PostgreSQL Server Version**: PostgreSQL 17.10
+- **pg_dump Executable Path**: `C:\Program Files\PostgreSQL\18\bin\pg_dump.exe`
+- **pg_dump Version**: 18.4
+- **pg_restore Executable Path**: `C:\Program Files\PostgreSQL\18\bin\pg_restore.exe`
+- **pg_restore Version**: 18.4
+- **Previous Table Count**: 211
+- **Migration Count**: 1
+- **Backup Path**: `backups/scheduling-reconstruction-uat-prechange.dump`
+- **Backup File Size**: 649821 bytes
+- **Backup SHA-256**: `918469aa531705b5509c690f1cbac7ede400f84eebfa7dcfa7f243f7a811b51c`
+- **pg_dump Exit Code**: 0
+- **pg_restore Listing Exit Code**: 0
+- **Archive Object Count**: 1069
+- **Schema Object Verification**: SUCCESS
+- **Table Data Verification**: SUCCESS
+- **Index Verification**: SUCCESS
+- **Constraint Verification**: SUCCESS
+- **Migration History Verification**: SUCCESS
+- **Database Records Modified**: None (CONFIRMED)

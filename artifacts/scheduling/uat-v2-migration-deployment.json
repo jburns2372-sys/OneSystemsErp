@@ -1,0 +1,38 @@
+{
+  "branchIdentity": {
+    "name": "scheduling-reconstruction-uat-v2",
+    "parent": "main",
+    "database": "neondb",
+    "role": "neondb_owner",
+    "endpointPrefix": "ep-rapid-base-apec3cyh-pooler"
+  },
+  "preChangeBackup": {
+    "size": 649821,
+    "archiveObjects": 1084,
+    "sha256": "7926F66D6C9BB5A3E8D83053965897058E0B9485A50B44AF5D24C0AACF5C7257"
+  },
+  "firstDeploymentAttempt": {
+    "start": "07/15/2026 15:11:25",
+    "finish": "07/15/2026 15:11:41",
+    "exitCode": 1,
+    "failedAt": "20260714_reconcile_pre_phase3_schema_drift",
+    "errorCode": "42601",
+    "errorMessage": "ERROR: syntax error at or near \"\\\"",
+    "resolution": "rolled_back_at updated to 2026-07-15T07:26:07.106Z"
+  },
+  "secondDeploymentAttempt": {
+    "start": "07/15/2026 15:26:25",
+    "finish": "07/15/2026 15:26:44",
+    "exitCode": 0,
+    "order": [
+      "20260714_reconcile_pre_phase3_schema_drift",
+      "20260714190000_phase3_baseline_workflow",
+      "20260714200000_harden_schedule_baseline_activation"
+    ]
+  },
+  "finalValidation": {
+    "status": "Database schema is up to date!",
+    "validate": "Valid"
+  },
+  "finalDecision": "UAT_V2_SCHEDULING_MIGRATION_REPAIR_COMPLETE"
+}
