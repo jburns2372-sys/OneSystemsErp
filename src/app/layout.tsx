@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -42,7 +43,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   let user: any = null;
   let permissions: any = null;
 
@@ -54,13 +56,7 @@ export default async function RootLayout({
       }));
     }
 
-    if (!user) {
-      // Fallback for demo
-      user = await import('@/lib/prisma').then(m => m.prisma.user.findFirst({
-        where: { email: 'J.BURNS2372@GMAIL.COM' },
-        select: { id: true, name: true, email: true, role: true }
-      }));
-    }
+    
   } catch (error) {
     console.error("Database connection failed in RootLayout:", error);
     user = null;

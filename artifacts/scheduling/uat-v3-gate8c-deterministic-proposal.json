@@ -1,0 +1,659 @@
+{
+  "phases": [
+    {
+      "phaseName": "Mobilization and Site Prep",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "2ae81fcfc7d64549a3fe4ff39",
+          "activityName": "Mobilization and Site Prep",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [
+            "cmrmc3ldr00advc3koe1nd0mb",
+            "cmrmc3ldr00aevc3ksv765f9d",
+            "cmrmc3ldr00afvc3kaoyrv57a",
+            "cmrmc3ldr00agvc3kqpe0lkj8",
+            "cmrmc3ldr00ahvc3k80z6w2t9",
+            "cmrmc3ldr00aivc3kiw6p0y9s",
+            "cmrmc3ldr00ajvc3kwyhwv488",
+            "cmrmc3lds00akvc3kg1ahrt6h",
+            "cmrmc3lds00alvc3kxwzck8x0",
+            "cmrmc3lds00amvc3kijri03l5",
+            "cmrmc3lds00anvc3kzsw5xcom",
+            "cmrmc3lds00aovc3kpo2zdjtr",
+            "cmrmc3lds00aqvc3k1qnijce5",
+            "cmrmc3ldt00atvc3kdd0hi155",
+            "cmrmc3ldt00auvc3kk6vbak0k",
+            "cmrmc3len00i2vc3kd7zupj5o",
+            "cmrmc3len00i3vc3krw41fcr5",
+            "cmrmc3leo00i9vc3kmoervelt",
+            "cmrmc3leo00iavc3kw52tv4mg",
+            "cmrmc3leo00ibvc3keesjokv6",
+            "cmrmc3leo00icvc3kxkvu3nw1",
+            "cmrmc3len00i2vc3kd7zupj5o",
+            "cmrmc3len00i3vc3krw41fcr5",
+            "cmrmc3leo00i9vc3kmoervelt",
+            "cmrmc3leo00iavc3kw52tv4mg",
+            "cmrmc3leo00ibvc3keesjokv6",
+            "cmrmc3leo00icvc3kxkvu3nw1",
+            "cmrmc3len00i2vc3kd7zupj5o",
+            "cmrmc3len00i3vc3krw41fcr5",
+            "cmrmc3leo00i9vc3kmoervelt",
+            "cmrmc3leo00iavc3kw52tv4mg",
+            "cmrmc3leo00ibvc3keesjokv6",
+            "cmrmc3leo00icvc3kxkvu3nw1",
+            "cmrmc3len00i2vc3kd7zupj5o",
+            "cmrmc3len00i3vc3krw41fcr5",
+            "cmrmc3leo00i9vc3kmoervelt",
+            "cmrmc3leo00iavc3kw52tv4mg",
+            "cmrmc3leo00ibvc3keesjokv6",
+            "cmrmc3leo00icvc3kxkvu3nw1"
+          ],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [],
+          "confidence": 1
+        },
+        {
+          "temporaryActivityKey": "95e312fc6de34474869a5a8f3",
+          "activityName": "Project Management & Supervision",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Finishes and Trims",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "73db67b09b194fa28a1ebc7f8",
+          "activityName": "Finishes and Trims",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [
+            "cmrmc3leo00i7vc3k571m2xdf",
+            "cmrmc3lep00idvc3kaptkpw7v",
+            "cmrmc3lep00ifvc3k7jvwtzzl",
+            "cmrmc3leo00i7vc3k571m2xdf",
+            "cmrmc3lep00idvc3kaptkpw7v",
+            "cmrmc3lep00ifvc3k7jvwtzzl",
+            "cmrmc3leo00i7vc3k571m2xdf",
+            "cmrmc3lep00idvc3kaptkpw7v",
+            "cmrmc3lep00ifvc3k7jvwtzzl",
+            "cmrmc3leo00i7vc3k571m2xdf",
+            "cmrmc3lep00idvc3kaptkpw7v",
+            "cmrmc3lep00ifvc3k7jvwtzzl",
+            "cmrmc3let00jcvc3kitdohjrl"
+          ],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Testing and Commissioning",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "5cabc31dc7b74afe86a3aeff6",
+          "activityName": "Testing and Commissioning",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [
+            "cmrmc3ldt00asvc3kfupkrxiu",
+            "cmrmc3let00jdvc3kmym5kgf6",
+            "cmrmc3le900epvc3k55ytwltw",
+            "cmrmc3let00jdvc3kmym5kgf6",
+            "cmrmc3let00jdvc3kmym5kgf6",
+            "cmrmc3let00jdvc3kmym5kgf6"
+          ],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [
+            {
+              "key": "ebca0e9ce5a94a6086a2f7866",
+              "type": "FS",
+              "lag": null
+            },
+            {
+              "key": "9c00287a8dab4ffc9b40dfb4f",
+              "type": "FS",
+              "lag": null
+            }
+          ],
+          "confidence": 1
+        },
+        {
+          "temporaryActivityKey": "d34ec0d0fbb24c628e75cfbe2",
+          "activityName": "Punchlisting",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Project Acceptance and Demobilization",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "ae15ee9eef574713ade36461f",
+          "activityName": "Project Acceptance and Demobilization",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [
+            "cmrmc3ldr00acvc3ksytcdojl",
+            "cmrmc3lds00arvc3k6o6wj4mc"
+          ],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [
+            {
+              "key": "5cabc31dc7b74afe86a3aeff6",
+              "type": "FS",
+              "lag": null
+            }
+          ],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Roughing-ins (Mechanical)",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "5aa08368994046d4b947a1679",
+          "activityName": "Roughing-ins (Mechanical)",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [
+            "cmrmc3lep00ievc3kxv8su9s6",
+            "cmrmc3lep00ievc3kxv8su9s6",
+            "cmrmc3lep00ievc3kxv8su9s6",
+            "cmrmc3lep00ievc3kxv8su9s6",
+            "cmrmc3leq00invc3khkafbap9",
+            "cmrmc3les00j3vc3k6oj8r5k7",
+            "cmrmc3les00j3vc3k6oj8r5k7",
+            "cmrmc3les00j4vc3kmx0ggryu",
+            "cmrmc3les00j5vc3kzb5gv3cg",
+            "cmrmc3let00javc3kc6cl353d"
+          ],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [
+            {
+              "key": "2ae81fcfc7d64549a3fe4ff39",
+              "type": "FS",
+              "lag": null
+            }
+          ],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Roughing-ins (Electrical)",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "506881ab880041a283c968db7",
+          "activityName": "Roughing-ins (Electrical)",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [
+            "cmrmc3lee00fuvc3ko9g6hwwf",
+            "cmrmc3lem00hsvc3k7mpt0wwg",
+            "cmrmc3lem00htvc3kdq93eje0",
+            "cmrmc3lee00fuvc3ko9g6hwwf",
+            "cmrmc3le600e1vc3kh7ofanm1",
+            "cmrmc3lem00htvc3kdq93eje0",
+            "cmrmc3lee00fuvc3ko9g6hwwf",
+            "cmrmc3lem00hsvc3k7mpt0wwg",
+            "cmrmc3lem00htvc3kdq93eje0",
+            "cmrmc3lem00hrvc3kn7on4c2m",
+            "cmrmc3lem00hsvc3k7mpt0wwg",
+            "cmrmc3lem00htvc3kdq93eje0"
+          ],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [
+            {
+              "key": "2ae81fcfc7d64549a3fe4ff39",
+              "type": "FS",
+              "lag": null
+            }
+          ],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Equipment Installation (Mechanical)",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "bcc1df1a177245df96f394136",
+          "activityName": "Equipment Installation (Mechanical)",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [
+            "cmrmc3lds00apvc3kb00ys7jh",
+            "cmrmc3ldt00avvc3k0odzgej4",
+            "cmrmc3ldt00awvc3kaebz0xhc",
+            "cmrmc3ldt00axvc3kbuod4eba",
+            "cmrmc3ldt00ayvc3kq8sy1mxi",
+            "cmrmc3lek00hfvc3kbiysfsyh",
+            "cmrmc3lel00hkvc3ktlvdcqf0",
+            "cmrmc3le900eqvc3kdz1h0x9l",
+            "cmrmc3le100cuvc3kx9s1i8rw",
+            "cmrmc3le100cvvc3kg295fzgv",
+            "cmrmc3lek00hfvc3kbiysfsyh",
+            "cmrmc3lel00hkvc3ktlvdcqf0",
+            "cmrmc3le900eqvc3kdz1h0x9l",
+            "cmrmc3leh00glvc3k14u2fghc",
+            "cmrmc3lek00hfvc3kbiysfsyh",
+            "cmrmc3lel00hkvc3ktlvdcqf0",
+            "cmrmc3leh00gkvc3kc0f1m8pr",
+            "cmrmc3leh00glvc3k14u2fghc",
+            "cmrmc3lek00hfvc3kbiysfsyh",
+            "cmrmc3lel00hkvc3ktlvdcqf0"
+          ],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [
+            {
+              "key": "5aa08368994046d4b947a1679",
+              "type": "FS",
+              "lag": null
+            }
+          ],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Equipment Installation (Electrical)",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "e95ab38551684730b75df693f",
+          "activityName": "Equipment Installation (Electrical)",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [
+            "cmrmc3leh00gnvc3kpqjwez55",
+            "cmrmc3leh00gnvc3kpqjwez55",
+            "cmrmc3leh00gnvc3kpqjwez55",
+            "cmrmc3leh00gnvc3kpqjwez55",
+            "cmrmc3leq00ipvc3k89tn312q",
+            "cmrmc3leq00iqvc3ks73g45zq",
+            "cmrmc3leq00irvc3k89y3067v",
+            "cmrmc3leq00isvc3knsrj1xp1",
+            "cmrmc3leq00itvc3klywpa4aq",
+            "cmrmc3ler00iuvc3k499vuyto",
+            "cmrmc3ler00ivvc3kney3l64y",
+            "cmrmc3ler00iwvc3ky6sqyrhg",
+            "cmrmc3ler00izvc3kn58f52l1",
+            "cmrmc3ler00j0vc3kin9f5rtr",
+            "cmrmc3ler00j1vc3kruoqidox",
+            "cmrmc3les00j2vc3kq72nykvd"
+          ],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [
+            {
+              "key": "506881ab880041a283c968db7",
+              "type": "FS",
+              "lag": null
+            }
+          ],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Piping and Ducting Works",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "8041255bcb054590b9469155d",
+          "activityName": "Piping and Ducting Works",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [
+            "cmrmc3leh00govc3kwuhp9xcu",
+            "cmrmc3leh00gpvc3kyxqjg7bq",
+            "cmrmc3ldu00b3vc3kcw91ypic",
+            "cmrmc3ldu00b4vc3kjgjqs60k",
+            "cmrmc3lei00gsvc3knjjbjzzp",
+            "cmrmc3lei00gtvc3k5msigi11",
+            "cmrmc3lej00h3vc3k747opsiu",
+            "cmrmc3lej00h4vc3kn6k5v068",
+            "cmrmc3lej00h5vc3kd0vordfk",
+            "cmrmc3lej00h6vc3k4679ve33",
+            "cmrmc3lej00h7vc3krb4xo6zo",
+            "cmrmc3lek00h8vc3kxjqbe5wi",
+            "cmrmc3lek00h9vc3kfuzevspb",
+            "cmrmc3lek00havc3k6l9x68dm",
+            "cmrmc3lek00hbvc3k0of7pcog",
+            "cmrmc3lej00h3vc3k747opsiu",
+            "cmrmc3lej00h4vc3kn6k5v068",
+            "cmrmc3lej00h5vc3kd0vordfk",
+            "cmrmc3lej00h6vc3k4679ve33",
+            "cmrmc3lej00h7vc3krb4xo6zo",
+            "cmrmc3lek00h8vc3kxjqbe5wi",
+            "cmrmc3lek00h9vc3kfuzevspb",
+            "cmrmc3lek00havc3k6l9x68dm",
+            "cmrmc3lek00hbvc3k0of7pcog",
+            "cmrmc3lek00hcvc3k3rr1k14o",
+            "cmrmc3lek00hdvc3kvwgd0j1f",
+            "cmrmc3lek00hevc3kdvh63mgx",
+            "cmrmc3lel00hgvc3kw6nlszm5",
+            "cmrmc3lel00hhvc3kbam63chd",
+            "cmrmc3lel00hivc3k5awirxu2",
+            "cmrmc3lel00hjvc3kd6dvaveq",
+            "cmrmc3lel00hmvc3kkpxjg58f",
+            "cmrmc3lel00hnvc3kh07sc7v5",
+            "cmrmc3lem00hovc3k86fpk4nv",
+            "cmrmc3lem00hpvc3kujtoevj6",
+            "cmrmc3lem00hqvc3kpfbs2q4x",
+            "cmrmc3len00i0vc3k0ybiqq7w",
+            "cmrmc3len00i1vc3kzfl0v91v",
+            "cmrmc3len00i4vc3k61gw4jbs",
+            "cmrmc3leo00i5vc3k3t3pfymc",
+            "cmrmc3leo00i6vc3kektz3vkb",
+            "cmrmc3leo00i8vc3kdcdwcai3",
+            "cmrmc3leh00govc3kwuhp9xcu",
+            "cmrmc3leh00gpvc3kyxqjg7bq",
+            "cmrmc3leh00gqvc3kbakv2c3e",
+            "cmrmc3lei00grvc3k8uvoniu4",
+            "cmrmc3lei00gsvc3knjjbjzzp",
+            "cmrmc3lei00gtvc3k5msigi11",
+            "cmrmc3lej00h3vc3k747opsiu",
+            "cmrmc3lej00h4vc3kn6k5v068",
+            "cmrmc3lej00h5vc3kd0vordfk",
+            "cmrmc3lej00h6vc3k4679ve33",
+            "cmrmc3lej00h7vc3krb4xo6zo",
+            "cmrmc3lek00h8vc3kxjqbe5wi",
+            "cmrmc3lek00h9vc3kfuzevspb",
+            "cmrmc3lek00havc3k6l9x68dm",
+            "cmrmc3lek00hbvc3k0of7pcog",
+            "cmrmc3lej00h3vc3k747opsiu",
+            "cmrmc3lej00h4vc3kn6k5v068",
+            "cmrmc3lej00h5vc3kd0vordfk",
+            "cmrmc3lej00h6vc3k4679ve33",
+            "cmrmc3lej00h7vc3krb4xo6zo",
+            "cmrmc3lek00h8vc3kxjqbe5wi",
+            "cmrmc3lek00h9vc3kfuzevspb",
+            "cmrmc3lek00havc3k6l9x68dm",
+            "cmrmc3lek00hbvc3k0of7pcog",
+            "cmrmc3lek00hcvc3k3rr1k14o",
+            "cmrmc3lek00hdvc3kvwgd0j1f",
+            "cmrmc3lek00hevc3kdvh63mgx",
+            "cmrmc3lel00hgvc3kw6nlszm5",
+            "cmrmc3lel00hhvc3kbam63chd",
+            "cmrmc3lel00hivc3k5awirxu2",
+            "cmrmc3lel00hjvc3kd6dvaveq",
+            "cmrmc3lel00hlvc3krq5fe6y9",
+            "cmrmc3lel00hmvc3kkpxjg58f",
+            "cmrmc3lel00hnvc3kh07sc7v5",
+            "cmrmc3lem00hpvc3kujtoevj6",
+            "cmrmc3lem00hqvc3kpfbs2q4x",
+            "cmrmc3len00i0vc3k0ybiqq7w",
+            "cmrmc3len00i1vc3kzfl0v91v",
+            "cmrmc3len00i4vc3k61gw4jbs",
+            "cmrmc3leo00i5vc3k3t3pfymc",
+            "cmrmc3leo00i6vc3kektz3vkb",
+            "cmrmc3leo00i8vc3kdcdwcai3",
+            "cmrmc3leh00gpvc3kyxqjg7bq",
+            "cmrmc3leh00gqvc3kbakv2c3e",
+            "cmrmc3lei00grvc3k8uvoniu4",
+            "cmrmc3lei00gsvc3knjjbjzzp",
+            "cmrmc3lei00gtvc3k5msigi11",
+            "cmrmc3lej00h3vc3k747opsiu",
+            "cmrmc3lej00h4vc3kn6k5v068",
+            "cmrmc3lej00h5vc3kd0vordfk",
+            "cmrmc3lej00h6vc3k4679ve33",
+            "cmrmc3lej00h7vc3krb4xo6zo",
+            "cmrmc3lek00h8vc3kxjqbe5wi",
+            "cmrmc3lek00h9vc3kfuzevspb",
+            "cmrmc3lek00havc3k6l9x68dm",
+            "cmrmc3lek00hbvc3k0of7pcog",
+            "cmrmc3lej00h3vc3k747opsiu",
+            "cmrmc3lej00h4vc3kn6k5v068",
+            "cmrmc3lej00h5vc3kd0vordfk",
+            "cmrmc3lej00h6vc3k4679ve33",
+            "cmrmc3lej00h7vc3krb4xo6zo",
+            "cmrmc3lek00h8vc3kxjqbe5wi",
+            "cmrmc3lek00h9vc3kfuzevspb",
+            "cmrmc3lek00havc3k6l9x68dm",
+            "cmrmc3lek00hbvc3k0of7pcog",
+            "cmrmc3lek00hcvc3k3rr1k14o",
+            "cmrmc3lek00hdvc3kvwgd0j1f",
+            "cmrmc3lek00hevc3kdvh63mgx",
+            "cmrmc3lel00hgvc3kw6nlszm5",
+            "cmrmc3lel00hhvc3kbam63chd",
+            "cmrmc3lel00hivc3k5awirxu2",
+            "cmrmc3lel00hjvc3kd6dvaveq",
+            "cmrmc3lel00hmvc3kkpxjg58f",
+            "cmrmc3lel00hnvc3kh07sc7v5",
+            "cmrmc3lem00hpvc3kujtoevj6",
+            "cmrmc3lem00hqvc3kpfbs2q4x",
+            "cmrmc3len00i0vc3k0ybiqq7w",
+            "cmrmc3len00i1vc3kzfl0v91v",
+            "cmrmc3len00i4vc3k61gw4jbs",
+            "cmrmc3leo00i5vc3k3t3pfymc",
+            "cmrmc3leo00i6vc3kektz3vkb",
+            "cmrmc3leo00i8vc3kdcdwcai3",
+            "cmrmc3leh00govc3kwuhp9xcu",
+            "cmrmc3leh00gpvc3kyxqjg7bq",
+            "cmrmc3leh00gqvc3kbakv2c3e",
+            "cmrmc3lei00grvc3k8uvoniu4",
+            "cmrmc3lei00gsvc3knjjbjzzp",
+            "cmrmc3lei00gtvc3k5msigi11",
+            "cmrmc3lej00h3vc3k747opsiu",
+            "cmrmc3lej00h4vc3kn6k5v068",
+            "cmrmc3lej00h5vc3kd0vordfk",
+            "cmrmc3lej00h6vc3k4679ve33",
+            "cmrmc3lej00h7vc3krb4xo6zo",
+            "cmrmc3lek00h8vc3kxjqbe5wi",
+            "cmrmc3lek00h9vc3kfuzevspb",
+            "cmrmc3lek00havc3k6l9x68dm",
+            "cmrmc3lek00hbvc3k0of7pcog",
+            "cmrmc3lej00h3vc3k747opsiu",
+            "cmrmc3lej00h4vc3kn6k5v068",
+            "cmrmc3lej00h5vc3kd0vordfk",
+            "cmrmc3lej00h6vc3k4679ve33",
+            "cmrmc3lej00h7vc3krb4xo6zo",
+            "cmrmc3lek00h8vc3kxjqbe5wi",
+            "cmrmc3lek00h9vc3kfuzevspb",
+            "cmrmc3lek00havc3k6l9x68dm",
+            "cmrmc3lek00hbvc3k0of7pcog",
+            "cmrmc3lek00hcvc3k3rr1k14o",
+            "cmrmc3lek00hdvc3kvwgd0j1f",
+            "cmrmc3lek00hevc3kdvh63mgx",
+            "cmrmc3lel00hgvc3kw6nlszm5",
+            "cmrmc3lel00hhvc3kbam63chd",
+            "cmrmc3lel00hivc3k5awirxu2",
+            "cmrmc3lel00hjvc3kd6dvaveq",
+            "cmrmc3lel00hlvc3krq5fe6y9",
+            "cmrmc3lel00hmvc3kkpxjg58f",
+            "cmrmc3lel00hnvc3kh07sc7v5",
+            "cmrmc3lem00hovc3k86fpk4nv",
+            "cmrmc3lem00hpvc3kujtoevj6",
+            "cmrmc3lem00hqvc3kpfbs2q4x",
+            "cmrmc3len00i0vc3k0ybiqq7w",
+            "cmrmc3len00i1vc3kzfl0v91v",
+            "cmrmc3len00i4vc3k61gw4jbs",
+            "cmrmc3leo00i5vc3k3t3pfymc",
+            "cmrmc3leo00i6vc3kektz3vkb",
+            "cmrmc3leo00i8vc3kdcdwcai3",
+            "cmrmc3let00jbvc3kmb8jwo5q"
+          ],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [
+            {
+              "key": "bcc1df1a177245df96f394136",
+              "type": "FS",
+              "lag": null
+            }
+          ],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Wiring and Cabling Works",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "7153381e65794046b0daa5091",
+          "activityName": "Wiring and Cabling Works",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [
+            "cmrmc3ldt00azvc3k2crdckre",
+            "cmrmc3lem00huvc3kth7f7g62",
+            "cmrmc3lem00hvvc3ka441y6s3",
+            "cmrmc3lem00hwvc3k5wmp6xvz",
+            "cmrmc3lee00g0vc3keiun65a1",
+            "cmrmc3len00hyvc3k8kuir33z",
+            "cmrmc3lef00g2vc3k5vpp07tu",
+            "cmrmc3leh00gmvc3kbndhlj4z",
+            "cmrmc3lem00huvc3kth7f7g62",
+            "cmrmc3lem00hvvc3ka441y6s3",
+            "cmrmc3lem00hwvc3k5wmp6xvz",
+            "cmrmc3lee00g0vc3keiun65a1",
+            "cmrmc3len00hyvc3k8kuir33z",
+            "cmrmc3lef00g2vc3k5vpp07tu",
+            "cmrmc3leh00gmvc3kbndhlj4z",
+            "cmrmc3lem00huvc3kth7f7g62",
+            "cmrmc3lem00hvvc3ka441y6s3",
+            "cmrmc3lem00hwvc3k5wmp6xvz",
+            "cmrmc3lee00g0vc3keiun65a1",
+            "cmrmc3len00hyvc3k8kuir33z",
+            "cmrmc3lef00g2vc3k5vpp07tu",
+            "cmrmc3leh00gmvc3kbndhlj4z",
+            "cmrmc3lem00huvc3kth7f7g62",
+            "cmrmc3lem00hvvc3ka441y6s3",
+            "cmrmc3lem00hwvc3k5wmp6xvz",
+            "cmrmc3len00hxvc3ktyoofisd",
+            "cmrmc3len00hyvc3k8kuir33z",
+            "cmrmc3len00hzvc3kpyd6i5jy",
+            "cmrmc3lep00ihvc3k6b42lkbj",
+            "cmrmc3lep00iivc3kcgw2wqnx",
+            "cmrmc3lep00ijvc3k0lrb6ss9",
+            "cmrmc3lep00ikvc3kxrhzuj0s",
+            "cmrmc3lep00ilvc3k98c5pmbd",
+            "cmrmc3les00j8vc3ks3fapubt",
+            "cmrmc3ler00ixvc3k3dbwbczo",
+            "cmrmc3ler00iyvc3k0nzafr4s",
+            "cmrmc3les00j6vc3k79sj2xxi",
+            "cmrmc3les00j9vc3kqzd9iwsm",
+            "cmrmc3les00j8vc3ks3fapubt",
+            "cmrmc3les00j9vc3kqzd9iwsm"
+          ],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [
+            {
+              "key": "e95ab38551684730b75df693f",
+              "type": "FS",
+              "lag": null
+            }
+          ],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Fixtures and Devices (Mechanical)",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "ebca0e9ce5a94a6086a2f7866",
+          "activityName": "Fixtures and Devices (Mechanical)",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [
+            {
+              "key": "8041255bcb054590b9469155d",
+              "type": "FS",
+              "lag": null
+            }
+          ],
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "phaseName": "Fixtures and Devices (Electrical)",
+      "rationale": "Reconstructed from historical artifacts",
+      "activities": [
+        {
+          "temporaryActivityKey": "9c00287a8dab4ffc9b40dfb4f",
+          "activityName": "Fixtures and Devices (Electrical)",
+          "durationMethod": "PRODUCTIVITY_BASED",
+          "discipline": "GENERAL",
+          "assignedBOQItemIds": [],
+          "productivityAssumption": null,
+          "crewCountAssumption": null,
+          "workFrontAssumption": null,
+          "fixedTechnicalDuration": null,
+          "predecessors": [
+            {
+              "key": "7153381e65794046b0daa5091",
+              "type": "FS",
+              "lag": null
+            }
+          ],
+          "confidence": 1
+        }
+      ]
+    }
+  ]
+}

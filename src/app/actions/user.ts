@@ -1,10 +1,12 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { validatePasswordPolicy } from '@/lib/passwordPolicy';
 import { requirePermission } from '@/lib/permissions';
+import { verifySession } from '@/lib/dal/auth';
+import { signOut } from '@/auth';
 
 // Internal helper to avoid code duplication
 async function _internalCreateSystemRole(roleName: string) {
@@ -243,20 +245,15 @@ export async function deleteUser(id: string) {
 
 export async function resetUserPassword(targetUserId: string, newPasswordRaw: string) {
   try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get('session')?.value;
-    if (!session) {
+    const actorSession = await verifySession();
+    if (!actorSession) {
       return { success: false, error: 'Unauthorized: No session found.' };
     }
     
-    const actorUserId = session.split(':')[0]; // Handle sessionVersion split if any
+    const actorUserId = actorSession.id;
+    const actorRole = actorSession.role;
     
-    // Server-side PBAC verification (require USERS:canManageUsers or similar)
-    // Based on Phase 5 requirement: USER_MANAGEMENT.canResetPassword or USERS.canManageUsers
-    // For this app, SYSTEM_SETTINGS or USERS could be the module.
-    // Assuming 'USERS' module exists or IS_ADMIN check.
-    const actor = await prisma.user.findUnique({ where: { id: actorUserId } });
-    if (!actor || (actor.role !== 'SUPER_ADMIN' && actor.role !== 'SYSTEM_ADMIN' && actor.role !== 'PROJECT_DIRECTOR')) {
+    if (actorRole !== 'SUPER_ADMIN' && actorRole !== 'SYSTEM_ADMIN' && actorRole !== 'PROJECT_DIRECTOR') {
        return { success: false, error: 'Unauthorized: You do not have permission to reset passwords.' };
     }
 
@@ -264,52 +261,42 @@ export async function resetUserPassword(targetUserId: string, newPasswordRaw: st
       return { success: false, error: 'Target user ID and new password are required.' };
     }
 
-    // Password Policy Enforcement
-    if (newPasswordRaw.length < 12) {
-      return { success: false, error: 'Password must be at least 12 characters long.' };
-    }
-    if (['password123', 'admin123', 'jejors2026', 'onesystemserp'].includes(newPasswordRaw.toLowerCase())) {
-      return { success: false, error: 'Password cannot be a known default, placeholder, or bypass value.' };
-    }
-
     const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!targetUser) {
       return { success: false, error: 'Target user not found.' };
     }
-    if (newPasswordRaw.toLowerCase() === targetUser.email?.toLowerCase()) {
-      return { success: false, error: 'Password cannot be equal to the email address.' };
+
+    const policyResult = validatePasswordPolicy(newPasswordRaw, targetUser.email || '');
+    if (!policyResult.valid) {
+      return { success: false, error: policyResult.error };
     }
 
-    // Hash with bcrypt
     const passwordHash = await bcrypt.hash(newPasswordRaw, 10);
 
-    // Update user: mustChangePassword = true, increment sessionVersion to revoke existing sessions
-    const updatedUser = await prisma.user.update({
+    await prisma.user.update({
       where: { id: targetUserId },
       data: {
         passwordHash,
-        password: null, // Clear plaintext password if any
+        password: null,
         mustChangePassword: true,
         sessionVersion: { increment: 1 }
       }
     });
 
-    // Audit Log: PASSWORD_RESET_COMPLETED
     await prisma.auditLog.create({
       data: {
         userId: actorUserId,
-        userRole: actor.role,
+        userRole: actorRole,
         moduleName: 'USER_MANAGEMENT',
         actionType: 'PASSWORD_RESET_COMPLETED',
         remarks: `Password reset initiated and completed for user ${targetUser.email}`,
       }
     });
 
-    // Audit Log: USER_SESSIONS_REVOKED
     await prisma.auditLog.create({
       data: {
         userId: actorUserId,
-        userRole: actor.role,
+        userRole: actorRole,
         moduleName: 'USER_MANAGEMENT',
         actionType: 'USER_SESSIONS_REVOKED',
         remarks: `Sessions revoked for user ${targetUser.email} via sessionVersion increment`,
@@ -322,4 +309,83 @@ export async function resetUserPassword(targetUserId: string, newPasswordRaw: st
     console.error('Password reset error:', err);
     return { success: false, error: 'An error occurred during password reset.' };
   }
+}
+
+export async function changePersonalPassword(oldPasswordRaw: string, newPasswordRaw: string, confirmationRaw: string) {
+  try {
+    const actorSession = await verifySession();
+    if (!actorSession) {
+      return { success: false, error: 'Unauthorized: No session found.' };
+    }
+    
+    if (newPasswordRaw !== confirmationRaw) {
+      return { success: false, error: 'New password and confirmation do not match.' };
+    }
+
+    const dbUser = await prisma.user.findUnique({ where: { id: actorSession.id } });
+    if (!dbUser) {
+      return { success: false, error: 'User not found.' };
+    }
+
+    const policyResult = validatePasswordPolicy(newPasswordRaw, dbUser.email || '');
+    if (!policyResult.valid) {
+      return { success: false, error: policyResult.error };
+    }
+
+    const isOldValid = await bcrypt.compare(oldPasswordRaw, dbUser.passwordHash || '');
+    if (!isOldValid) {
+      return { success: false, error: 'Current password is incorrect.' };
+    }
+
+    if (newPasswordRaw.toLowerCase() === dbUser.email?.toLowerCase()) {
+      return { success: false, error: 'Password cannot be equal to the email address.' };
+    }
+
+    const isSameAsOld = await bcrypt.compare(newPasswordRaw, dbUser.passwordHash || '');
+    if (isSameAsOld) {
+      return { success: false, error: 'New password cannot be the same as the old password.' };
+    }
+
+    const passwordHash = await bcrypt.hash(newPasswordRaw, 10);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: dbUser.id },
+        data: {
+          passwordHash,
+          password: null,
+          mustChangePassword: false,
+          passwordChangedAt: new Date(),
+          sessionVersion: { increment: 1 }
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: dbUser.id,
+          userRole: dbUser.role,
+          moduleName: 'SECURITY',
+          actionType: 'PASSWORD_CHANGED',
+          remarks: `User changed their personal password successfully.`,
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: dbUser.id,
+          userRole: dbUser.role,
+          moduleName: 'SECURITY',
+          actionType: 'USER_SESSIONS_REVOKED',
+          remarks: `All existing sessions for this user have been revoked via sessionVersion increment.`,
+        }
+      });
+    });
+
+  } catch (err: any) {
+    console.error('Password change error:', err);
+    return { success: false, error: 'An error occurred during password change.' };
+  }
+  
+  // Call signOut OUTSIDE of the try-catch because it throws NEXT_REDIRECT
+  await signOut({ redirectTo: '/login' });
 }

@@ -1,0 +1,12 @@
+{
+  "command": "pg_restore.exe -d [SANITIZED_URL] --data-only --no-owner --no-privileges --exit-on-error --single-transaction --use-list=artifacts/scheduling/uat-v4-r6-gate7-restore-list.txt backups/scheduling-reconstruction-uat-v4-clean-r3-final.dump",
+  "exit_code": 0,
+  "transaction_result": "COMMITTED",
+  "missing_table_errors": 0,
+  "constraint_errors": 0,
+  "ownership_errors": 0,
+  "neon_internal_schema_errors": 0,
+  "schedule_boq_mapping_errors": 0,
+  "warnings": [],
+  "errors": []
+}

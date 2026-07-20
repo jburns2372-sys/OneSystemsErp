@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { logout } from '@/app/actions/auth';
@@ -7,7 +8,8 @@ import PageTitle from './PageTitle';
 
 export default async function Topbar() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
   const simulatedRole = cookieStore.get('simulatedRole')?.value || null;
   

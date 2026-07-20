@@ -1,0 +1,15 @@
+{
+  "lines": 326,
+  "missing": 0,
+  "unexpected": 0,
+  "reordered": 0,
+  "totals": {
+    "GeneralRequirements": 2700549,
+    "MechanicalWorks": 23674716.57,
+    "ElectricalWorks": 16731409.32,
+    "GrandTotal": 43106674.89,
+    "ProjectAmount": 43106674.89,
+    "Difference": 0
+  },
+  "checksum": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17"
+}

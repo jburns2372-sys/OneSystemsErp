@@ -1,0 +1,21 @@
+{
+  "counts": {
+    "ProjectSchedule": 0,
+    "ScheduleWBS": 0,
+    "ScheduleActivity": 0,
+    "ScheduleDependency": 0,
+    "ScheduleBOQAllocation": 0,
+    "ScheduleApproval": 0,
+    "ScheduleReviewComment": 0,
+    "BaselineActivation": 0,
+    "ActiveBaseline": 0
+  },
+  "verification": {
+    "gate8d_generation_audit": false,
+    "partial_p2028_transaction": false,
+    "persisted_blueprint": false,
+    "schedule_creator": false,
+    "persisted_cpm_result": false,
+    "completed_gate8d_idempotency_operation": false
+  }
+}

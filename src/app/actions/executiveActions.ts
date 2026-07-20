@@ -1,11 +1,13 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 
 async function _getAccessDetails() {
   const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionToken = __session?.id || '';
   const simulatedRoleFromRequest = cookieStore.get('simulatedRole')?.value;
 
   const userId = sessionToken || ''; 

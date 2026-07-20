@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
@@ -12,7 +13,8 @@ const BACKEND_API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL || 'ht
  */
 async function fetchWithAuth(url: string, options?: RequestInit) {
   const cookieStore = await cookies();
-  const session = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const session = __session?.id || '';
   
   if (!session) {
     // If not authenticated, redirect to login or throw an error

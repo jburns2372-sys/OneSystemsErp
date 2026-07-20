@@ -1,0 +1,21 @@
+{
+  "status": "V4_R3_AUTHJS_LOGIN_CHECKS_PASSED",
+  "manager": {
+    "email": "manager@onesystemserp.com",
+    "exists": true,
+    "status": "ACTIVE",
+    "assignments": 0
+  },
+  "director": {
+    "email": "director@onesystemserp.com",
+    "exists": true,
+    "status": "ACTIVE",
+    "assignments": 0
+  },
+  "engineer": {
+    "email": "engineer@onesystemserp.com",
+    "exists": true,
+    "status": "ACTIVE",
+    "assignments": 0
+  }
+}

@@ -4,6 +4,8 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 
+const PUBLIC_AUTH_ROUTES = ['/login', '/forgot-password', '/reset-password'];
+
 export default function MainContentWrapper({ 
   children, 
   permissions, 
@@ -16,6 +18,15 @@ export default function MainContentWrapper({
   topbar?: React.ReactNode
 }) {
   const pathname = usePathname();
+
+  // Render public auth routes without any protected shell
+  const isPublicAuth = PUBLIC_AUTH_ROUTES.some(
+    (route) => pathname === route || pathname?.startsWith(route + '?')
+  );
+  if (isPublicAuth) {
+    return <>{children}</>;
+  }
+
   const isExecutive = pathname?.startsWith('/executive');
   const isSecurity = pathname?.startsWith('/admin/security');
   

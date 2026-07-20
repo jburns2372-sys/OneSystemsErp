@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
@@ -21,7 +22,8 @@ export async function getGlobalProjectsAndContext() {
   const cookieStore = await cookies();
   const currentProjectId = cookieStore.get('executive_projectId')?.value || 'ALL';
   
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   const { prisma } = await import('@/lib/prisma');
   
   const user = await prisma.user.findUnique({ where: { id: userId } });

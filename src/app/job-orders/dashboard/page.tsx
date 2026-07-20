@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import React from 'react';
 import Link from 'next/link';
 import styles from '../../page.module.css';
@@ -17,7 +18,8 @@ import { cookies } from 'next/headers';
 export default async function JobOrderDashboard() {
   const cookieStore = await cookies();
   const activeProjectId = cookieStore.get('activeProjectId')?.value || undefined;
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
 
   const { prisma } = await import('@/lib/prisma');
   const user = await prisma.user.findUnique({ where: { id: sessionId } });

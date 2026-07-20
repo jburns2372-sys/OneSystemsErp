@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { activateScheduleBaseline } from '@/lib/scheduling/scheduleWorkflow';
-import { getSessionActor, checkSchedulingAccess } from '@/lib/scheduling/authUtils';
-import crypto from 'crypto';
+import { activateScheduleBaseline, AuthorizationError } from '@/lib/services/schedule-workflow.service';
+import { getSessionActor } from '@/lib/scheduling/authUtils';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string, scheduleId: string }> }) {
   try {
@@ -14,40 +13,38 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const actor = await getSessionActor();
-    const access = await checkSchedulingAccess(actor.id, actor.role, projectId, 'canLock');
 
-    if (!access.allowed) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const opSession = {
+      userId: actor.id,
+      email: actor.email || '',
+      sessionVersion: 1, // Future integration with real session version
+      accountActive: true,
+      accountLocked: false,
+      mustChangePassword: false,
+    };
 
-    const requestFingerprint = crypto.createHash('sha256').update(JSON.stringify({ 
-      operation: 'activateScheduleBaseline', 
-      projectId, 
-      scheduleId, 
-      actorId: actor.id, 
-      expectedRowVersion 
-    })).digest('hex');
-
-    const result = await activateScheduleBaseline({
+    const result = await activateScheduleBaseline(
       projectId,
       scheduleId,
-      actorId: actor.id,
       expectedRowVersion,
       idempotencyKey,
-      requestFingerprint
-    });
+      opSession
+    );
 
-    return NextResponse.json({ success: true, schedule: result });
+    return NextResponse.json({ success: true, schedule: result.schedule });
 
   } catch (error: any) {
     const msg = error.message;
-    if (msg === 'SCHEDULE_VERSION_CONFLICT') {
+    if (error.name === 'AuthorizationError' || msg.includes('Unauthorized')) {
+      return NextResponse.json({ error: msg }, { status: 403 });
+    }
+    if (msg.includes('SCHEDULE_VERSION_CONFLICT') || msg.includes('Concurrency error')) {
       return NextResponse.json({ error: 'SCHEDULE_VERSION_CONFLICT' }, { status: 409 });
     }
-    if (msg === 'IDEMPOTENCY_KEY_CONFLICT') {
+    if (msg.includes('IDEMPOTENCY_KEY_CONFLICT')) {
       return NextResponse.json({ error: 'IDEMPOTENCY_KEY_CONFLICT' }, { status: 409 });
     }
-    if (msg === 'SCHEDULE_ALREADY_ACTIVE') {
+    if (msg.includes('SCHEDULE_ALREADY_ACTIVE')) {
       return NextResponse.json({ error: 'SCHEDULE_ALREADY_ACTIVE' }, { status: 409 });
     }
     if (error.code === 'P2002') { // Prisma unique constraint

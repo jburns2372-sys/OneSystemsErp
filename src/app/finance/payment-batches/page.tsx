@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
@@ -8,7 +9,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function PaymentBatchesPage() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   let currentUser = null;
   let permissions: Record<string, any> = {};
 

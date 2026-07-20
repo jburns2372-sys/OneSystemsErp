@@ -1,0 +1,37 @@
+{
+  "projectID": "cmrirhhw30000ic0406v47smb",
+  "AwardedBOQItem": 326,
+  "ProjectBOQVersion": 1,
+  "LockedBOQVersion": 1,
+  "totals": {
+    "General Requirements": 2700549.00,
+    "Mechanical Works": 23674716.57,
+    "Electrical Works": 16731409.32,
+    "Grand total": 43106674.89,
+    "Project difference": 0.00
+  },
+  "checksum": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17",
+  "verification": {
+    "TechnicalApprovalRecords": 1,
+    "TechnicalActor": "manager@onesystemserp.com",
+    "FinalApprovalRecords": 1,
+    "FinalActor": "director@onesystemserp.com",
+    "DifferentActorIDs": true,
+    "SameBOQVersion": true,
+    "ChecksumMatches": true,
+    "BOQ_CANONICAL_V1": true,
+    "WorkbookHashPopulated": true,
+    "CommentsPopulated": true,
+    "TimestampsPopulated": true,
+    "OperationalRecordsIndependent": true,
+    "LockedAtPopulated": true,
+    "LockedByIdBelongsToProjectDirector": true,
+    "IdempotentRetryCreatedNoDuplicate": true,
+    "RetryDidNotAlterLockedAt": true,
+    "NoBOQLineChangedAfterLocking": true,
+    "ApplicationMutationAttemptsDenied": true,
+    "Result1": "GATE7C_VARIANCE_APPROVAL_RECORDS_VERIFIED",
+    "Result2": "BOQ_LOCK_IDEMPOTENCY_PASSED",
+    "Result3": "LOCKED_BOQ_IMMUTABILITY_PASSED"
+  }
+}

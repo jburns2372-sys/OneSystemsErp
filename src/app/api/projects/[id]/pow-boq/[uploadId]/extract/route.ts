@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractPowBoqData } from '@/lib/excel/extract-pow-boq-data';
 import { prisma } from '@/lib/prisma';
@@ -6,7 +7,8 @@ import { cookies } from 'next/headers';
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string, uploadId: string }>}) {
   try {
     const cookieStore = await cookies();
-    const userId = cookieStore.get('session')?.value;
+    const __session = await verifySession();
+  const userId = __session?.id || '';
     const user = userId ? await prisma.user.findUnique({ where: { id: userId } }) : await prisma.user.findFirst();
 
     if (!user) {

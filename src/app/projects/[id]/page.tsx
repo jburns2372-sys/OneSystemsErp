@@ -83,7 +83,7 @@ export default async function ProjectDetailsPage({
   }
 
   const cookieStore = await cookies();
-  const email = cookieStore.get('demo_user_email')?.value || 'J.BURNS2372@GMAIL.COM';
+  const email = cookieStore.get('demo_user_email')?.value; if(!email) throw new Error('No session');
   const currentUser = await prisma.user.findFirst({
     where: { email },
     include: { userRoles: { include: { role: true } } }

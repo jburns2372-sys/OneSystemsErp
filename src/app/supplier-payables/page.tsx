@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import styles from '../projects/page.module.css';
@@ -8,7 +9,8 @@ export const dynamic = 'force-dynamic';
 export default async function UnifiedPayablesPage() {
   const { cookies } = await import('next/headers');
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
   if (!activeProjectId) {

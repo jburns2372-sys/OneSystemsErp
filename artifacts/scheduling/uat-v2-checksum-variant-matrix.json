@@ -1,0 +1,38 @@
+[
+  {
+    "id": "base_gate6_parse",
+    "checksum": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17"
+  },
+  {
+    "id": "v1_numbers_instead_of_strings",
+    "checksum": "075ca48634ef318a68b40f55f9df4e3b63b151797bb7c99a54334202e9e4296b"
+  },
+  {
+    "id": "v2_amount_number_others_string",
+    "checksum": "6fe8d00ff2395f88b2731af732e38492a30fdc61809c0d6a503df2b953411f3f"
+  },
+  {
+    "id": "v3_no_seq_no_sourceRow_original_order",
+    "checksum": "c2e3f9996cd06a0982c5f63ab0ff4104698a5cdf0fc063de79893996ef752fe1"
+  },
+  {
+    "id": "v4_no_seq_no_sourceRow_sorted",
+    "checksum": "bbfc6d3fc65be5d5abd52a86128afe25d3809b1d1df40bc887cd763088beb14d"
+  },
+  {
+    "id": "v5_reduced_fields",
+    "checksum": "ddf16888b68e5f2cf9b41aa5134392852a20ce0a8b1a9985989064a9f49852c1"
+  },
+  {
+    "id": "v6_amount_toFixed2",
+    "checksum": "5882192e521e4f05ef882b1b7319144dc3f2e7ec6f60a5f35319499e2bee3be8"
+  },
+  {
+    "id": "v7_recover_pgh_boq_undefined_unitCost",
+    "checksum": "73a5629bbabba63459e8ebb1e529dbd0f4daf55e80ab2effd11139f5ddfc60f0"
+  },
+  {
+    "id": "v8_recover_pgh_boq_seq_empty",
+    "checksum": "dd2efac2825fb8bdf62fc444f6ca95759deadb1fcb309b85401662c4aa843f67"
+  }
+]

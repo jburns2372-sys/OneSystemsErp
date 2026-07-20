@@ -1,0 +1,14 @@
+{
+  "totalMigrations": 7,
+  "migrations": [
+    "20260626065906_init_postgres",
+    "20260714190000_phase3_baseline_workflow",
+    "20260714200000_harden_schedule_baseline_activation",
+    "20260714_reconcile_pre_phase3_schema_drift",
+    "20260715100000_security_remediation",
+    "20260715_reconcile_gate7_boq_integrity_metadata",
+    "20260717000000_add_schedule_workflow_transition_provenance"
+  ],
+  "includesRequiredProvenance": true,
+  "verificationResult": "GATE9D_V4_R7_SOURCE_MIGRATION_HISTORY_VERIFIED"
+}

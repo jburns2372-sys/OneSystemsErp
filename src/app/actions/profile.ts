@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
@@ -32,7 +33,8 @@ async function fetchWithAuth(url: string, options: FetchWithAuthOptions = {}) {
 
 export async function updateProfile(formData: FormData) {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const userId = __session?.id || '';
 
   if (!userId) {
     return { success: false, error: 'Unauthorized. Please log in.' };

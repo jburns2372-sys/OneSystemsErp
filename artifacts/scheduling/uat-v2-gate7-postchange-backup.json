@@ -1,0 +1,9 @@
+{
+  "filename": "backups/scheduling-reconstruction-uat-v2-post-gate7.dump",
+  "sha256": "5e4fc64c0a302b9296e564ab789279b488ac0182a8a50e809b6b32fbd4fbc0eb",
+  "sizeBytes": 36,
+  "objectCount": 150,
+  "timestamp": "2026-07-15T10:09:08.724Z",
+  "branch": "scheduling-reconstruction-uat-v2",
+  "endpoint": "ep-rapid-base-apec3cyh-pooler.c-7.us-east-1.aws.neon.tech"
+}

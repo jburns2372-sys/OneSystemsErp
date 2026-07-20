@@ -1,9 +1,10 @@
 'use server';
 
+import { signIn, signOut } from '@/auth';
+import { AuthError } from 'next-auth';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
 
 export async function login(formData: FormData) {
   const email = formData.get('email') as string;
@@ -13,77 +14,38 @@ export async function login(formData: FormData) {
     return { error: 'Email and password are required' };
   }
 
-  let redirectPath = '';
-  
   try {
     const user = await prisma.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
+      select: { role: true },
     });
 
-    if (!user) {
-      return { error: 'Invalid email or password' };
-    }
-
-    if (user.status !== 'ACTIVE') {
-      return { error: 'Account is disabled or locked' };
-    }
-
-    let isValid = false;
-    
-    // First try bcrypt compare
-    try {
-      isValid = await bcrypt.compare(password, user.passwordHash || user.password || '');
-    } catch (e) {
-      // Ignore invalid hash errors
-    }
-    
-    // Fallback: If bcrypt failed, check if the password is stored in plain text
-    // REMOVED plaintext comparison for Phase 2 compliance
-    
-    if (!isValid) {
-      return { error: 'Invalid email or password' };
-    }
-
-    // Check if a database-backed session strategy (sessionVersion) is in use
-    const userWithSession = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { sessionVersion: true }
-    }) as any;
-
-    const sessionValue = userWithSession?.sessionVersion !== undefined
-      ? `${user.id}:${userWithSession.sessionVersion}`
-      : user.id;
-
-    // Create simple session cookie
-    const cookieStore = await cookies();
-    cookieStore.set('session', sessionValue, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7 // 1 week
+    await signIn('credentials', {
+      email,
+      password,
+      redirect: false,
     });
 
-    if (user.role === 'DIRECTORS') {
-      redirectPath = '/executive/home';
-    } else {
-      redirectPath = '/';
-    }
+    const role = user?.role;
+    let redirectPath = role === 'DIRECTORS' ? '/executive/home' : '/';
+    return { redirect: redirectPath };
 
   } catch (error: any) {
-    if (error.message === 'NEXT_REDIRECT') throw error;
-    console.error("Auth Error:", error);
-    return { error: 'Authentication error: Unknown error' };
-  }
-  
-  if (redirectPath) {
-    redirect(redirectPath);
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case 'CredentialsSignin':
+          return { error: 'Invalid email or password' };
+        default:
+          return { error: 'Authentication error: Unknown error' };
+      }
+    }
+    throw error;
   }
 }
 
 export async function logout() {
   const cookieStore = await cookies();
-  cookieStore.delete('session');
+  cookieStore.delete('session'); // Clear legacy session cookie if it exists
   cookieStore.delete('simulatedRole');
-  redirect('/login');
+  await signOut({ redirectTo: '/login' });
 }

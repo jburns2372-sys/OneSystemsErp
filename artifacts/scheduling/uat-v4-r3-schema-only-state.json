@@ -1,0 +1,30 @@
+{
+  "environment": {
+    "databaseUrlHost": "ep-autumn-smoke-ap351s91-pooler.c-7.us-east-1.aws.neon.tech",
+    "directUrlHost": "ep-autumn-smoke-ap351s91.c-7.us-east-1.aws.neon.tech",
+    "endpointPrefix": "ep-autumn-smoke-ap351s91-pooler",
+    "database": "neondb",
+    "role": "neondb_owner",
+    "environmentSource": ".env",
+    "shellOverrideStatus": "ABSENT",
+    "selectOneSucceeded": true,
+    "databaseHasPooler": true,
+    "directHasPooler": false
+  },
+  "counts": {
+    "Project": 0,
+    "User": 0,
+    "ProjectUserAssignment": 0,
+    "ProjectBOQVersion": 0,
+    "AwardedBOQItem": 0,
+    "ProjectSchedule": 0,
+    "ScheduleWBS": 0,
+    "ScheduleActivity": 0,
+    "ScheduleDependency": 0,
+    "ScheduleBOQAllocation": 0,
+    "ScheduleApproval": 0,
+    "ScheduleReviewComment": 0,
+    "BaselineActivation": 0
+  },
+  "status": "V4_R3_SCHEMA_ONLY_STARTING_STATE_VERIFIED"
+}

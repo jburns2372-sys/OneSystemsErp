@@ -1,0 +1,76 @@
+{
+  "requiredRecords": [
+    {
+      "name": "schedule status",
+      "existingModel": "ProjectSchedule",
+      "existingField": "workflowStatus",
+      "relation": null,
+      "sourceOfTruthClassification": "Operational Record",
+      "operationalOrAuditLog": "Operational",
+      "schemaGapExists": false
+    },
+    {
+      "name": "rowVersion",
+      "existingModel": "ProjectSchedule",
+      "existingField": "rowVersion",
+      "relation": null,
+      "sourceOfTruthClassification": "Operational Record",
+      "operationalOrAuditLog": "Operational",
+      "schemaGapExists": false
+    },
+    {
+      "name": "submission actor",
+      "existingModel": "AuditLog",
+      "existingField": "userId",
+      "relation": "ProjectSchedule",
+      "sourceOfTruthClassification": "Audit Event",
+      "operationalOrAuditLog": "AuditLog",
+      "schemaGapExists": true
+    },
+    {
+      "name": "submission timestamp",
+      "existingModel": "AuditLog",
+      "existingField": "createdAt",
+      "relation": "ProjectSchedule",
+      "sourceOfTruthClassification": "Audit Event",
+      "operationalOrAuditLog": "AuditLog",
+      "schemaGapExists": true
+    },
+    {
+      "name": "technical-review-start actor",
+      "existingModel": "AuditLog",
+      "existingField": "userId",
+      "relation": "ProjectSchedule",
+      "sourceOfTruthClassification": "Audit Event",
+      "operationalOrAuditLog": "AuditLog",
+      "schemaGapExists": true
+    },
+    {
+      "name": "technical-review-start timestamp",
+      "existingModel": "AuditLog",
+      "existingField": "createdAt",
+      "relation": "ProjectSchedule",
+      "sourceOfTruthClassification": "Audit Event",
+      "operationalOrAuditLog": "AuditLog",
+      "schemaGapExists": true
+    },
+    {
+      "name": "review comments",
+      "existingModel": "ScheduleReviewComment",
+      "existingField": "comment",
+      "relation": "ProjectSchedule",
+      "sourceOfTruthClassification": "Operational Record",
+      "operationalOrAuditLog": "Operational",
+      "schemaGapExists": false
+    },
+    {
+      "name": "transition audit evidence",
+      "existingModel": "AuditLog",
+      "existingField": "actionType",
+      "relation": null,
+      "sourceOfTruthClassification": "Audit Event",
+      "operationalOrAuditLog": "AuditLog",
+      "schemaGapExists": false
+    }
+  ]
+}

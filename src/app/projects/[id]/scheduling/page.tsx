@@ -1,6 +1,7 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
 import SchedulingHubClient from "./SchedulingHubClient";
+import { getSessionActor } from "@/lib/scheduling/authUtils";
 
 function serializePrisma(obj: any): any {
   if (obj === null || obj === undefined) return obj;
@@ -19,6 +20,7 @@ function serializePrisma(obj: any): any {
 
 export default async function ProjectSchedulingHub({ params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  const actor = await getSessionActor().catch(() => null);
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -47,7 +49,8 @@ export default async function ProjectSchedulingHub({ params }: { params: Promise
             },
             orderBy: { createdAt: 'asc' }
           },
-          dependencies: true
+          dependencies: true,
+          approvals: true
         }
       }
     }
@@ -73,17 +76,25 @@ export default async function ProjectSchedulingHub({ params }: { params: Promise
   let selectedSchedule = null;
   
   // 1. ACTIVE_BASELINE
-  selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'ACTIVE_BASELINE');
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.workflowStatus === 'ACTIVE_BASELINE');
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.workflowStatus === 'SUPERSEDED_BASELINE');
+  
+  // 2. PENDING_BASELINE_APPROVAL
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.workflowStatus === 'PENDING_BASELINE_APPROVAL');
+
+  // 3. UNDER_TECHNICAL_REVIEW / TECHNICALLY_APPROVED
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.workflowStatus === 'TECHNICALLY_APPROVED');
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.workflowStatus === 'UNDER_TECHNICAL_REVIEW');
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.workflowStatus === 'READY_FOR_REVIEW');
+  
+  // 4. DRAFT / REVISIONS REQUIRED
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.workflowStatus === 'TECHNICAL_REVISIONS_REQUIRED');
+  selectedSchedule = selectedSchedule || validSchedules.find(s => s.workflowStatus === 'AI_GENERATED_DRAFT');
+
+  // Fallback to old status if workflowStatus didn't match (for legacy)
   selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'BASELINE');
-  
-  // 2. READY_FOR_REVIEW
-  selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'READY_FOR_REVIEW');
-  
-  // 3. DRAFT_BASELINE
   selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'DRAFT_BASELINE');
   selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'DRAFT');
-  
-  // 4. LEGACY_BASELINE
   selectedSchedule = selectedSchedule || validSchedules.find(s => s.status === 'LEGACY_BASELINE');
   
   // Fallback to the newest if any remain and no priority match
@@ -114,6 +125,7 @@ export default async function ProjectSchedulingHub({ params }: { params: Promise
       project={serializedProject} 
       initialSchedule={selectedSchedule ? serializePrisma(selectedSchedule) : null} 
       awardedBoq={serializedBoq}
+      actor={actor}
     />
   );
 }

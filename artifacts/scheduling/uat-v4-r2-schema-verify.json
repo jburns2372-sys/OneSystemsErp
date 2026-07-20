@@ -1,0 +1,25 @@
+{
+  "DATABASE_URL_hostname": "ep-small-butterfly-apf7myjv-pooler.c-7.us-east-1.aws.neon.tech",
+  "DIRECT_URL_hostname": "ep-small-butterfly-apf7myjv.c-7.us-east-1.aws.neon.tech",
+  "endpoint_prefix": "ep-small-butterfly-apf7myjv",
+  "database": "neondb",
+  "role": "neondb_owner",
+  "environment_source": ".env",
+  "shell_override_status": "ABSENT",
+  "counts": {
+    "Project": 1,
+    "User": 10,
+    "ProjectUserAssignment": 1,
+    "ProjectBOQVersion": 0,
+    "AwardedBOQItem": 0,
+    "ProjectSchedule": 0,
+    "ScheduleWBS": 0,
+    "ScheduleActivity": 0,
+    "ScheduleDependency": 0,
+    "ScheduleBOQAllocation": 0,
+    "ScheduleApproval": 0,
+    "ScheduleReviewComment": 0,
+    "BaselineActivation": 0
+  },
+  "conclusion": "GATE_7D_R_V4_R2_SCHEMA_ONLY_BRANCH_INVALID"
+}

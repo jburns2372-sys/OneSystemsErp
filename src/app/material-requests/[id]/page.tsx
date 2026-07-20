@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import styles from '../../projects/page.module.css';
 import React from 'react';
@@ -29,7 +30,8 @@ export default async function MaterialRequestDetailsPage({ params }: { params: P
   });
 
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   let currentUser = null;
   if (sessionId) {
     currentUser = await prisma.user.findUnique({ where: { id: sessionId }, select: { id: true, name: true, role: true } });

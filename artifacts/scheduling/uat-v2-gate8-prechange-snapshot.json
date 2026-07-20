@@ -1,0 +1,25 @@
+{
+  "projectId": "cmrlx3xcg00swvceoxntp02vz",
+  "boqVersionId": "cmrlx3yh500t1vceomq83o215",
+  "boqLineCount": 326,
+  "checksum": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17",
+  "canonicalizationVersion": "BOQ_CANONICAL_V1",
+  "categoryTotals": {
+    "genReq": "2700549.00",
+    "mechWorks": "23674716.57",
+    "elecWorks": "16731409.32"
+  },
+  "projectAmount": "43106674.89",
+  "scheduleTableCounts": {
+    "ProjectSchedule": 0,
+    "ScheduleWBS": 0,
+    "ScheduleActivity": 0,
+    "ScheduleDependency": 0,
+    "ScheduleBOQAllocation": 0,
+    "ScheduleApproval": 0,
+    "ScheduleReviewComment": 0,
+    "BaselineActivation": 0
+  },
+  "timestamp": "2026-07-15T15:06:54.658Z",
+  "gitCommit": "UNKNOWN"
+}

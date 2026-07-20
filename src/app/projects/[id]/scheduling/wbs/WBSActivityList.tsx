@@ -217,6 +217,8 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
     DELAYED: '#ef4444'
   };
 
+  const isImmutable = schedule?.workflowStatus === 'ACTIVE_BASELINE';
+
   return (
     <div style={{ padding: '20px' }}>
       {/* Messages */}
@@ -226,26 +228,28 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
       {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', gap: '10px', flexWrap: 'wrap' }}>
         <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>WBS & Activity List ({activities.length} activities)</h3>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={handleSimulate}
-            style={{ padding: '8px 14px', backgroundColor: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.5)', color: '#f59e0b', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-          >
-            ⚡ Auto-Simulate Schedule
-          </button>
-          <button
-            onClick={() => setShowDepModal(true)}
-            style={{ padding: '8px 14px', backgroundColor: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.5)', color: '#8b5cf6', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-          >
-            🔗 Add Dependency
-          </button>
-          <button
-            onClick={() => setIsAdding(true)}
-            style={{ padding: '8px 14px', backgroundColor: 'rgba(0, 240, 255, 0.15)', border: '1px solid var(--accent-color)', color: 'var(--accent-color)', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-          >
-            + Add Activity
-          </button>
-        </div>
+        {!isImmutable && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={handleSimulate}
+              style={{ padding: '8px 14px', backgroundColor: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.5)', color: '#f59e0b', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+            >
+              ⚡ Auto-Simulate Schedule
+            </button>
+            <button
+              onClick={() => setShowDepModal(true)}
+              style={{ padding: '8px 14px', backgroundColor: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.5)', color: '#8b5cf6', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+            >
+              🔗 Add Dependency
+            </button>
+            <button
+              onClick={() => setIsAdding(true)}
+              style={{ padding: '8px 14px', backgroundColor: 'rgba(0, 240, 255, 0.15)', border: '1px solid var(--accent-color)', color: 'var(--accent-color)', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+            >
+              + Add Activity
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Data Grid */}
@@ -536,8 +540,12 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                   <td style={{ padding: '8px', textAlign: 'right', color: 'var(--text-primary)', fontWeight: 'bold' }}>{formattedActivityCost}</td>
                   <td style={{ padding: '8px', textAlign: 'center' }}>{act.criticalPath ? '🔴' : '—'}</td>
                   <td style={{ padding: '8px', textAlign: 'center' }}>
-                    <button onClick={() => startEdit(act)} style={{ padding: '3px 6px', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', borderRadius: '4px', cursor: 'pointer', marginRight: '4px', fontSize: '0.75rem' }}>✏️</button>
-                    <button onClick={() => handleDelete(act.id)} style={{ padding: '3px 6px', background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}>🗑</button>
+                    {!isImmutable && (
+                      <>
+                        <button onClick={() => startEdit(act)} style={{ padding: '3px 6px', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', borderRadius: '4px', cursor: 'pointer', marginRight: '4px', fontSize: '0.75rem' }}>✏️</button>
+                        <button onClick={() => handleDelete(act.id)} style={{ padding: '3px 6px', background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}>🗑</button>
+                      </>
+                    )}
                   </td>
               </tr>
               );

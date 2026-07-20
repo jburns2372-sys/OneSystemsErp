@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
@@ -8,7 +9,8 @@ const API_ROUTE_PREFIX = '/api/jobOrderActions'; // New common prefix for all ac
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const cookieStore = await cookies(); // `cookies()` is not awaitable
-  const session = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const session = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value;
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
 

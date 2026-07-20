@@ -1,0 +1,12 @@
+{
+  "ProjectSchedule": 0,
+  "ScheduleWBS": 13,
+  "RootWBS": 1,
+  "PhaseWBS": 12,
+  "ScheduleActivity": 14,
+  "ScheduleDependency": 11,
+  "ScheduleBOQAllocation": 326,
+  "ScheduleApproval": 0,
+  "ScheduleReviewComment": 0,
+  "BaselineActivation": 0
+}

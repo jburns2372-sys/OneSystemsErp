@@ -1,58 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-
-// fetchWithAuth wrapper definition
-const fetchWithAuth = async (url: string, options?: RequestInit) => {
-  // In a real application, this would typically involve an API_BASE_URL prefix
-  // and potentially token handling (e.g., from cookies or session).
-  // For Next.js Server Actions, direct relative paths to /api routes usually work
-  // if you have a rewrite configured in next.config.js to your AWS backend.
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown API error' }));
-    // The backend's 500 error will have { success: false, error: message }
-    throw new Error(errorData.error || `API request failed with status ${response.status}`);
-  }
-
-  return response.json();
-};
-
-export async function getUserProjectAssignments(userId: string) {
-  try {
-    const result = await fetchWithAuth('/api/projectUserAssignment/getUserProjectAssignments', {
-      method: 'POST',
-      body: JSON.stringify({ userId }),
-    });
-    // The backend returns { success: true, data: assignments }
-    return result.data;
-  } catch (error: any) {
-    console.error('Error fetching user project assignments:', error.message);
-    // Re-throw the error as original method didn't return a specific error object
-    throw error;
-  }
-}
-
-export async function getProjectTeamMembers(projectId: string) {
-  try {
-    const result = await fetchWithAuth('/api/projectUserAssignment/getProjectTeamMembers', {
-      method: 'POST',
-      body: JSON.stringify({ projectId }),
-    });
-    // The backend returns { success: true, data: members }
-    return result.data;
-  } catch (error: any) {
-    console.error('Error fetching project team members:', error.message);
-    throw error;
-  }
-}
+import { verifyOperationalSession } from '@/lib/dal/auth';
+import { assignExistingUserToProject, updateProjectUserAssignmentRole } from '@/lib/services/ProjectUserAssignmentService';
+import { prisma } from '@/lib/prisma';
 
 export async function addProjectAssignment(data: {
   userId: string;
@@ -62,16 +13,26 @@ export async function addProjectAssignment(data: {
   remarks?: string;
 }) {
   try {
-    const result = await fetchWithAuth('/api/projectUserAssignment/addProjectAssignment', {
-      method: 'POST',
-      body: JSON.stringify({ data }),
-    });
-    // Backend returns { success: boolean, error?: string }
-    if (result.success) {
-      revalidatePath('/users/[id]', 'page');
-      revalidatePath('/projects/[id]', 'page');
+    const actor = await verifyOperationalSession();
+    if (!actor) {
+      return { success: false, error: 'UNAUTHORIZED: No valid session' };
     }
-    return result;
+
+    const assignment = await assignExistingUserToProject({
+      projectId: data.projectId,
+      userId: data.userId,
+      assignmentRoleOrPermission: data.projectRole,
+      accessLevel: data.accessLevel,
+      actorContext: {
+        userId: actor.userId,
+        role: actor.role,
+      }
+    });
+
+    revalidatePath('/users/[id]', 'page');
+    revalidatePath('/projects/[id]', 'page');
+
+    return { success: true, data: assignment };
   } catch (error: any) {
     console.error('Error adding project assignment:', error.message);
     return { success: false, error: error.message };
@@ -84,16 +45,19 @@ export async function updateProjectAssignment(assignmentId: string, data: {
   assignmentStatus?: string;
 }) {
   try {
-    const result = await fetchWithAuth('/api/projectUserAssignment/updateProjectAssignment', {
-      method: 'POST',
-      body: JSON.stringify({ assignmentId, data }),
-    });
-    // Backend returns { success: boolean, error?: string }
-    if (result.success) {
-      revalidatePath('/users/[id]', 'page');
-      revalidatePath('/projects/[id]', 'page');
+    const actor = await verifyOperationalSession();
+    if (!actor || actor.role !== 'SUPER_ADMIN') {
+      return { success: false, error: 'UNAUTHORIZED' };
     }
-    return result;
+
+    const result = await prisma.projectUserAssignment.update({
+      where: { id: assignmentId },
+      data
+    });
+
+    revalidatePath('/users/[id]', 'page');
+    revalidatePath('/projects/[id]', 'page');
+    return { success: true, data: result };
   } catch (error: any) {
     console.error('Error updating project assignment:', error.message);
     return { success: false, error: error.message };
@@ -102,18 +66,51 @@ export async function updateProjectAssignment(assignmentId: string, data: {
 
 export async function deleteProjectAssignment(assignmentId: string) {
   try {
-    const result = await fetchWithAuth('/api/projectUserAssignment/deleteProjectAssignment', {
-      method: 'POST',
-      body: JSON.stringify({ assignmentId }),
-    });
-    // Backend returns { success: boolean, error?: string }
-    if (result.success) {
-      revalidatePath('/users/[id]', 'page');
-      revalidatePath('/projects/[id]', 'page');
+    const actor = await verifyOperationalSession();
+    if (!actor || actor.role !== 'SUPER_ADMIN') {
+      return { success: false, error: 'UNAUTHORIZED' };
     }
-    return result;
+
+    const result = await prisma.projectUserAssignment.delete({
+      where: { id: assignmentId }
+    });
+
+    revalidatePath('/users/[id]', 'page');
+    revalidatePath('/projects/[id]', 'page');
+    return { success: true, data: result };
   } catch (error: any) {
     console.error('Error deleting project assignment:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+
+export async function updateProjectUserRoleAction(data: {
+  assignmentId: string;
+  expectedCurrentProjectRole: string;
+  newProjectRole: string;
+  reason: string;
+}) {
+  try {
+    const actor = await verifyOperationalSession();
+    if (!actor) {
+      return { success: false, error: 'UNAUTHORIZED: No valid session' };
+    }
+
+    const assignment = await updateProjectUserAssignmentRole({
+      ...data,
+      actorContext: {
+        userId: actor.userId,
+        role: actor.role,
+      }
+    });
+
+    revalidatePath('/users/[id]', 'page');
+    revalidatePath('/projects/[id]', 'page');
+
+    return { success: true, data: assignment };
+  } catch (error: any) {
+    console.error('Error updating project role:', error.message);
     return { success: false, error: error.message };
   }
 }

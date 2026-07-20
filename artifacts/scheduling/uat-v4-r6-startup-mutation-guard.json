@@ -1,0 +1,12 @@
+{
+  "running_terminal_processes": ["npm run dev"],
+  "npm_lifecycle_scripts_checked": true,
+  "startup_scripts_checked": true,
+  "nextjs_instrumentation_checked": true,
+  "test_global_setup_checked": true,
+  "playwright_global_setup_checked": true,
+  "database_bootstrap_scripts_checked": true,
+  "restore_scripts_checked": true,
+  "environment_controlled_recovery_hooks_checked": true,
+  "AUTOMATIC_DATABASE_MUTATION_ON_STARTUP": "DISABLED"
+}

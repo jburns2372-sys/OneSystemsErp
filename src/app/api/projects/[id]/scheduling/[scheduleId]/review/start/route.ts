@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { startScheduleReview } from '@/lib/scheduling/scheduleWorkflow';
+import { startTechnicalReview } from '@/lib/services/schedule-workflow.service';
 import { getSessionActor, checkSchedulingAccess } from '@/lib/scheduling/authUtils';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string, scheduleId: string }> }) {
@@ -15,14 +15,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const result = await startScheduleReview({
+    const user = await import('@/lib/prisma').then(m => m.prisma.user.findUnique({ where: { id: actor.id } }));
+    const opSession = {
+      userId: user!.id,
+      email: user!.email || '',
+      sessionVersion: user!.sessionVersion || 1,
+      accountActive: user!.status === 'ACTIVE',
+      accountLocked: false,
+      mustChangePassword: user!.mustChangePassword || false
+    };
+    const idempotencyKey = `START_TECHNICAL_REVIEW:${scheduleId}:${expectedRowVersion}:${actor.id}`;
+
+    const result = await startTechnicalReview(
       projectId,
       scheduleId,
-      actorId: actor.id,
-      expectedRowVersion
-    });
+      expectedRowVersion,
+      idempotencyKey,
+      opSession
+    );
 
-    return NextResponse.json({ success: true, schedule: result });
+    return NextResponse.json({ success: true, schedule: result.transition });
 
   } catch (error: any) {
     if (error.message === 'SCHEDULE_VERSION_CONFLICT') {

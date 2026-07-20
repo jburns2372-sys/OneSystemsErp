@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import ModuleKnowledgeTab from '@/app/knowledge-center/ModuleKnowledgeTab';
@@ -10,7 +11,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function WorkerProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   const permissions = await getUserPermissions(userId);
 
   const { id } = await params;

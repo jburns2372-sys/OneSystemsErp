@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import Link from 'next/link';
 import ApplicableRulesPanel from '@/components/ApplicableRulesPanel';
@@ -8,7 +9,8 @@ import { cookies } from 'next/headers';
 
 export default async function ProcurementHub() {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   const permissions = await getUserPermissions(userId);
 
   return (

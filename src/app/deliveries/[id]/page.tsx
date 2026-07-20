@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
@@ -24,7 +25,8 @@ export default async function DeliveryDetailsPage({ params }: { params: Promise<
   if (!delivery) notFound();
 
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   let currentUser = null;
   let permissions: Record<string, any> = {};
 

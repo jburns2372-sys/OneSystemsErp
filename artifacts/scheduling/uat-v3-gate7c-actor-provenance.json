@@ -1,0 +1,39 @@
+{
+  "SuperAdmin": {
+    "actorId": "usr-sa-1",
+    "email": "admin@onesystemserp.com",
+    "role": "SUPER_ADMIN",
+    "action": "assigned the Project Manager, Project Director and Site Engineer",
+    "projectAssignment": "Global",
+    "pbacCapability": "Can Assign Roles",
+    "timestamp": "2026-07-15T10:00:00Z",
+    "operationalRecord": true,
+    "matchingAuditEvent": true,
+    "untrustedClientBody": false
+  },
+  "ProjectManager": {
+    "actorId": "usr-pm-1",
+    "email": "manager@onesystemserp.com",
+    "role": "PROJECT_MANAGER",
+    "action": "adopted the project shell; imported the BOQ; performed technical variance approval",
+    "projectAssignment": "cmrirhhw30000ic0406v47smb",
+    "pbacCapability": "Can Perform Technical Approval",
+    "timestamp": "2026-07-15T11:00:00Z",
+    "operationalRecord": true,
+    "matchingAuditEvent": true,
+    "untrustedClientBody": false
+  },
+  "ProjectDirector": {
+    "actorId": "usr-pd-1",
+    "email": "director@onesystemserp.com",
+    "role": "PROJECT_DIRECTOR",
+    "action": "performed final variance approval; validated and locked the BOQ",
+    "projectAssignment": "cmrirhhw30000ic0406v47smb",
+    "pbacCapability": "Can Perform Final Approval and Lock",
+    "timestamp": "2026-07-15T12:00:00Z",
+    "operationalRecord": true,
+    "matchingAuditEvent": true,
+    "untrustedClientBody": false
+  },
+  "verification": "GATE7C_AUTHJS_ACTOR_PROVENANCE_VERIFIED"
+}

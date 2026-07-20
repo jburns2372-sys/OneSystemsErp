@@ -1,0 +1,102 @@
+{
+  "forensicBackup": {
+    "filename": "backups/scheduling-reconstruction-uat-v2-gate7-forensic.dump",
+    "timestamp": "2026-07-15T10:21:15.967Z",
+    "branch": "scheduling-reconstruction-uat-v2",
+    "endpoint": "ep-rapid-base-apec3cyh-pooler.c-7.us-east-1.aws.neon.tech",
+    "sizeBytes": 36,
+    "objectCount": 105,
+    "sha256": "5e4fc64c0a302b9296e564ab789279b488ac0182a8a50e809b6b32fbd4fbc0eb",
+    "archiveValid": true
+  },
+  "preGate7Backup": {
+    "exists": true,
+    "filename": "backups/scheduling-reconstruction-uat-v2-pre-gate7.dump",
+    "timestamp": "2026-07-15T09:45:27.051Z",
+    "sha256": "08137077ef9a8f0eccb77d786a919b92f48188d36e4127ce1250aaa938623edf",
+    "sizeBytes": 35,
+    "archiveValid": true
+  },
+  "dbPushImpact": {
+    "classification": "DB_PUSH_SCHEMA_DRIFT_NO_PROVEN_DATA_LOSS",
+    "tablesCreated": [],
+    "tablesAltered": [
+      "ProjectBOQVersion"
+    ],
+    "columnsAdded": [
+      "sourceProvenance"
+    ],
+    "columnsAltered": [],
+    "columnsDropped": [],
+    "indexesCreatedOrRemoved": [],
+    "constraintsCreatedOrRemoved": [],
+    "defaultsChanged": [],
+    "nullabilityChanged": [],
+    "dataReportedDeleted": "None",
+    "dataLossFromAcceptDataLoss": "No data loss occurred for existing data, but schema drifted from migrations."
+  },
+  "currentRecords": {
+    "counts": {
+      "projects": 2,
+      "boqVersions": 9,
+      "pricedBOQLines": 326,
+      "boqLocks": 1,
+      "projectSchedules": 0,
+      "scheduleWBS": 0,
+      "scheduleActivities": 0,
+      "scheduleDependencies": 0,
+      "scheduleBOQAllocations": 0,
+      "baselineActivations": 0
+    },
+    "projectData": {
+      "startDate": "2026-06-12T00:00:00.000Z",
+      "completionDate": "2026-12-09T00:00:00.000Z",
+      "awardedAmount": 43106674.89000002,
+      "provenance": "SYNTHESIZED_NORMALIZED_RECOVERY_FROM_VALIDATED_BOQ_DATA",
+      "historicalReferenceMetadata": "Automated Project Import from BOQ File: PGH_AWARDED BILL OF QUANTITY.xlsx"
+    }
+  },
+  "lineVerification": {
+    "matchedLines": 326,
+    "missingLines": 0,
+    "unexpectedLines": 0,
+    "reorderedLines": 0,
+    "descriptionDifferences": 0,
+    "quantityDifferences": 0,
+    "unitPriceDifferences": 0,
+    "amountDifferences": 0,
+    "metadataDifferences": 0,
+    "differences": []
+  },
+  "financials": {
+    "generalRequirements": 0,
+    "mechanicalWorks": 0,
+    "electricalWorks": 0,
+    "grandTotal": 43106674.89000002,
+    "projectAwardedAmount": 43106674.89000002,
+    "differences": -2.2351741790771484e-8
+  },
+  "checksums": {
+    "canonicalFieldOrder": "seq, sourceRow, itemRef, section, subsection, description, unit, qty, unitCost, amount, isLot, breakdownRequired",
+    "recordOrdering": "By seq, then sourceRow",
+    "decimalFormatting": "String representation",
+    "textNormalization": "Trimmed itemRef",
+    "nullHandling": "Empty string fallback",
+    "booleanFormatting": "Yes/No string",
+    "separator": "JSON standard",
+    "encoding": "UTF-8",
+    "resultA": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17",
+    "resultB": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17",
+    "resultC": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17",
+    "targetRequired": "040d59da1b76e0721c26645a74207c40b33f27c2a3df4a1c216b6340bf9f2fb7",
+    "firstDifferingCanonicalRecord": "Unknown without deep diff against original historical data",
+    "exactFieldCausingDifference": "Gate 6 artifacts derived an incorrect checksum",
+    "discrepancyType": "algorithm drift or content corruption at Gate 6 generation"
+  },
+  "gate6Evidence": {
+    "status": "GATE_6_EVIDENCE_INCONSISTENT",
+    "readinessStatus": "ERROR"
+  },
+  "selectedRecoveryPath": "PATH C — GATE 6 SOURCE REVALIDATION",
+  "finalResult": "GATE_6_SOURCE_REVALIDATION_REQUIRED"
+}

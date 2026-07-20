@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { getUserPermissions } from '@/lib/permissions';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -6,7 +7,8 @@ import KnowledgeCenterClient from './KnowledgeCenterClient';
 
 export default async function AiKnowledgeCenterPage() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const permissions = await getUserPermissions(sessionId);
 
   if (!permissions.IS_ADMIN) {

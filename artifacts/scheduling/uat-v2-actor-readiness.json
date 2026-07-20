@@ -1,133 +1,32 @@
 {
-  "auditTimestamp": "2026-07-15T07:58:00Z",
-  "uatV2BranchIdentity": "scheduling-reconstruction-uat-v2",
-  "sanitizedEndpointPrefix": "ep-rapid-base-apec3cyh",
-  "sanitizedDirectUrlHostname": "ep-rapid-base-apec3cyh.c-7.us-east-1.aws.neon.tech",
-  "applicationStartupResult": "SUCCESS",
-  "userInventory": {
-    "totalUsers": 10,
-    "activeUsers": 10,
-    "disabledUsers": 0,
-    "verifiedUsers": 0
+  "gate": "GATE 5E",
+  "status": "GATE_5_COMPLETE",
+  "result": "AUTHJS_MIGRATION_AND_UAT_ACTORS_READY",
+  "environment": {
+    "branch": "scheduling-reconstruction-uat-v2",
+    "application": "http://localhost:3000"
   },
-  "capabilityInventory": {
-    "roleCount": 32,
-    "pbacCapabilityCount": 374,
-    "projectScopeAssignmentCount": 1
-  },
-  "actorMatrix": [
+  "actors": [
     {
-      "workflowAction": "PROJECT_RECONSTRUCTION",
-      "actorUserId": "manager@onesystemserp.com",
-      "role": "PROJECT_MANAGER",
-      "capability": "PROJECT_MANAGEMENT:canCreate, canSubmit",
-      "activeStatus": true,
-      "authenticationReadiness": "ACTOR_INTERACTIVE_LOGIN_REQUIRED",
-      "organizationScope": "ALL",
-      "projectScope": "ALL",
-      "separationOfDutyResult": "PASS",
-      "finalEligibilityResult": "ELIGIBLE"
-    },
-    {
-      "workflowAction": "AWARDED_BOQ_IMPORT",
-      "actorUserId": "manager@onesystemserp.com",
-      "role": "PROJECT_MANAGER",
-      "capability": "PROJECT_MANAGEMENT:canCreate",
-      "activeStatus": true,
-      "authenticationReadiness": "ACTOR_INTERACTIVE_LOGIN_REQUIRED",
-      "organizationScope": "ALL",
-      "projectScope": "ALL",
-      "separationOfDutyResult": "PASS",
-      "finalEligibilityResult": "ELIGIBLE"
-    },
-    {
-      "workflowAction": "BOQ_VALIDATION_AND_LOCKING",
-      "actorUserId": "director@onesystemserp.com",
-      "role": "PROJECT_DIRECTOR",
-      "capability": "PROJECT_MANAGEMENT:canApprove, canLock",
-      "activeStatus": true,
-      "authenticationReadiness": "ACTOR_INTERACTIVE_LOGIN_REQUIRED",
-      "organizationScope": "ALL",
-      "projectScope": "ALL",
-      "separationOfDutyResult": "PASS",
-      "finalEligibilityResult": "ELIGIBLE"
-    },
-    {
-      "workflowAction": "SCHEDULE_GENERATION",
-      "actorUserId": "engineer@onesystemserp.com",
+      "email": "engineer@onesystemserp.com",
       "role": "SITE_ENGINEER",
-      "capability": "PROJECT_MANAGEMENT:canCreate, canSubmit",
-      "activeStatus": true,
-      "authenticationReadiness": "ACTOR_INTERACTIVE_LOGIN_REQUIRED",
-      "organizationScope": "ALL",
-      "projectScope": "ALL",
-      "separationOfDutyResult": "PASS",
-      "finalEligibilityResult": "ELIGIBLE"
+      "status": "VALIDATED"
     },
     {
-      "workflowAction": "TECHNICAL_REVIEW",
-      "actorUserId": "manager@onesystemserp.com",
+      "email": "manager@onesystemserp.com",
       "role": "PROJECT_MANAGER",
-      "capability": "PROJECT_MANAGEMENT:canReview",
-      "activeStatus": true,
-      "authenticationReadiness": "ACTOR_INTERACTIVE_LOGIN_REQUIRED",
-      "organizationScope": "ALL",
-      "projectScope": "ALL",
-      "separationOfDutyResult": "PASS",
-      "finalEligibilityResult": "ELIGIBLE"
+      "status": "VALIDATED"
     },
     {
-      "workflowAction": "TECHNICAL_APPROVAL",
-      "actorUserId": "director@onesystemserp.com",
+      "email": "director@onesystemserp.com",
       "role": "PROJECT_DIRECTOR",
-      "capability": "PROJECT_MANAGEMENT:canApprove",
-      "activeStatus": true,
-      "authenticationReadiness": "ACTOR_INTERACTIVE_LOGIN_REQUIRED",
-      "organizationScope": "ALL",
-      "projectScope": "ALL",
-      "separationOfDutyResult": "PASS",
-      "finalEligibilityResult": "ELIGIBLE"
-    },
-    {
-      "workflowAction": "BASELINE_APPROVAL",
-      "actorUserId": "director@onesystemserp.com",
-      "role": "PROJECT_DIRECTOR",
-      "capability": "PROJECT_MANAGEMENT:canApprove",
-      "activeStatus": true,
-      "authenticationReadiness": "ACTOR_INTERACTIVE_LOGIN_REQUIRED",
-      "organizationScope": "ALL",
-      "projectScope": "ALL",
-      "separationOfDutyResult": "PASS",
-      "finalEligibilityResult": "ELIGIBLE"
-    },
-    {
-      "workflowAction": "FINAL_BASELINE_ACTIVATION",
-      "actorUserId": "director@onesystemserp.com",
-      "role": "PROJECT_DIRECTOR",
-      "capability": "PROJECT_MANAGEMENT:canLock",
-      "activeStatus": true,
-      "authenticationReadiness": "ACTOR_INTERACTIVE_LOGIN_REQUIRED",
-      "organizationScope": "ALL",
-      "projectScope": "ALL",
-      "separationOfDutyResult": "PASS",
-      "finalEligibilityResult": "ELIGIBLE"
-    },
-    {
-      "workflowAction": "CONTROLLED_REVISION_CREATION",
-      "actorUserId": "manager@onesystemserp.com",
-      "role": "PROJECT_MANAGER",
-      "capability": "PROJECT_MANAGEMENT:canRevise",
-      "activeStatus": true,
-      "authenticationReadiness": "ACTOR_INTERACTIVE_LOGIN_REQUIRED",
-      "organizationScope": "ALL",
-      "projectScope": "ALL",
-      "separationOfDutyResult": "PASS",
-      "finalEligibilityResult": "ELIGIBLE"
+      "status": "VALIDATED"
     }
   ],
-  "authorizationServiceEvidence": "PBAC mapped accurately from database `RolePermission` and processed in `src/lib/permissions.ts`. Role gates confirmed via codebase analysis.",
-  "separationOfDutyEvidence": "Generator (Engineer) lacks approval rights. Reviewer (Manager) lacks approval rights. Approver/Activator (Director) owns terminal gates. No self-approval is possible due to missing DB role permissions for lower-level actors.",
-  "missingCapabilityOrActorList": [],
-  "finalResult": "UAT_V2_ACTOR_PASSWORD_RESET_REQUIRED",
-  "affectedAccount": "engineer@onesystemserp.com"
+  "securityValidation": {
+    "mustChangePasswordEnforced": true,
+    "sessionVersionValidation": true,
+    "legacyCookiesRejected": true,
+    "sessionIsolation": true
+  }
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { approveTechnicalReview } from '@/lib/scheduling/scheduleWorkflow';
+import { executeTechnicalApprovalMutation } from '@/lib/services/schedule-gateway';
 import { getSessionActor, checkSchedulingAccess } from '@/lib/scheduling/authUtils';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string, scheduleId: string }> }) {
@@ -15,18 +15,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const result = await approveTechnicalReview({
+    const result = await executeTechnicalApprovalMutation({
       projectId,
       scheduleId,
-      actorId: actor.id,
-      comments,
-      expectedRowVersion
+      expectedRowVersion,
+      actorUserId: actor.id,
+      actorRoleSnapshot: access.projectRole || actor.role,
+      actorNameSnapshot: actor.name || 'Unknown',
+      comments
     });
 
     return NextResponse.json({ success: true, schedule: result });
 
   } catch (error: any) {
-    if (error.message === 'SCHEDULE_VERSION_CONFLICT') {
+    if (error.message === 'SCHEDULE_VERSION_CONFLICT' || error.message.includes('Concurrency')) {
       return NextResponse.json({ error: 'SCHEDULE_VERSION_CONFLICT' }, { status: 409 });
     }
     console.error('Error approving review:', error);

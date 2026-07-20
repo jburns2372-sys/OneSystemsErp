@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
@@ -9,7 +10,8 @@ import { getUserPermissions } from '@/lib/permissions';
 export default async function PayableDetailsPage({ params, searchParams }: { params: { id: string }, searchParams: { origin?: string } }) {
   const { origin } = await searchParams;
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   let userRole = 'GUEST';
   
   if (sessionId) {

@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import styles from '../page.module.css';
 import { prisma } from '@/lib/prisma';
 import PayrollClient from './PayrollClient';
@@ -8,7 +9,8 @@ import PayrollSubNav from '@/components/PayrollSubNav';
 
 export default async function PayrollPage() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const currentUserId = sessionId || 'demo-user-id';
 
   const permissions = await getUserPermissions(currentUserId);

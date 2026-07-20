@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { submitForBaselineApproval } from '@/lib/scheduling/scheduleWorkflow';
+import { executeFinalBaselineRecommendationMutation } from '@/lib/services/schedule-gateway';
 import { getSessionActor, checkSchedulingAccess } from '@/lib/scheduling/authUtils';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string, scheduleId: string }> }) {
@@ -9,25 +9,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { expectedRowVersion } = body;
 
     const actor = await getSessionActor();
-    const access = await checkSchedulingAccess(actor.id, actor.role, projectId, 'canSubmit');
+    const access = await checkSchedulingAccess(actor.id, actor.role, projectId, 'canApprove');
 
     if (!access.allowed) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-
-
-    const result = await submitForBaselineApproval({
+    const result = await executeFinalBaselineRecommendationMutation({
       projectId,
       scheduleId,
-      actorId: actor.id,
-      expectedRowVersion
+      expectedRowVersion,
+      actorUserId: actor.id,
+      actorRoleSnapshot: access.projectRole || actor.role,
+      actorNameSnapshot: actor.name || 'Unknown'
     });
 
     return NextResponse.json({ success: true, schedule: result });
 
   } catch (error: any) {
-    if (error.message === 'SCHEDULE_VERSION_CONFLICT') {
+    if (error.message === 'SCHEDULE_VERSION_CONFLICT' || error.message.includes('Concurrency')) {
       return NextResponse.json({ error: 'SCHEDULE_VERSION_CONFLICT' }, { status: 409 });
     }
     console.error('Error submitting for baseline approval:', error);

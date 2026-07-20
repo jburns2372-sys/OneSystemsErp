@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
@@ -10,7 +11,8 @@ import { revalidatePath } from 'next/cache';
  */
 async function fetchWithAuth(url: string, options?: RequestInit) {
   const cookieStore = await cookies();
-  const authToken = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const authToken = __session?.id || '';
 
   const headers = new Headers(options?.headers);
   headers.set('Content-Type', 'application/json');
@@ -40,7 +42,8 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
 // Helper function to get userId from Next.js cookies, used internally by the actions.
 async function getUserId() {
   const cookieStore = await cookies();
-  return cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  return __session?.id || '';
 }
 
 // Define the API route prefix for this service

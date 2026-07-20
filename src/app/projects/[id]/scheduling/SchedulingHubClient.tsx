@@ -16,11 +16,13 @@ import ScheduleReviewPanel from './review/ScheduleReviewPanel';
 export default function SchedulingHubClient({ 
   project, 
   initialSchedule, 
-  awardedBoq 
+  awardedBoq,
+  actor
 }: { 
   project: any; 
   initialSchedule: any; 
   awardedBoq: any;
+  actor?: any;
 }) {
   const router = useRouter();
   const [schedule, setSchedule] = useState(initialSchedule);
@@ -175,29 +177,46 @@ export default function SchedulingHubClient({
           <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', fontSize: '0.85rem' }}>
             <span style={{ color: 'var(--text-secondary)' }}>Schedule: <span style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>{schedule.name}</span></span>
             <span style={{ color: 'var(--text-secondary)' }}>Status: <span style={{ 
-              color: schedule.status === 'BASELINE' ? '#10b981' : schedule.status === 'DRAFT' ? '#f59e0b' : 'var(--accent-color)', 
+              color: schedule.workflowStatus === 'ACTIVE_BASELINE' ? '#10b981' : schedule.workflowStatus === 'DRAFT' ? '#f59e0b' : 'var(--accent-color)', 
               fontWeight: 'bold' 
-            }}>{schedule.status}</span></span>
+            }}>{schedule.workflowStatus || schedule.status}</span></span>
             
-            <button
-              onClick={handleDeleteSchedule}
-              disabled={isDeleting}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid #ef4444',
-                  color: '#ef4444',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                  cursor: isDeleting ? 'not-allowed' : 'pointer',
-                  opacity: isDeleting ? 0.5 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                {isDeleting ? 'Deleting...' : '🗑️ Delete Schedule'}
+            {schedule.workflowStatus === 'ACTIVE_BASELINE' && (
+              <span style={{ 
+                color: '#10b981', 
+                backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                padding: '2px 8px', 
+                borderRadius: '12px', 
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                🔒 Authoritative Active Baseline | Row Version {schedule.rowVersion}
+              </span>
+            )}
+            
+            {schedule.workflowStatus !== 'ACTIVE_BASELINE' && (
+              <button
+                onClick={handleDeleteSchedule}
+                disabled={isDeleting}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #ef4444',
+                    color: '#ef4444',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    cursor: isDeleting ? 'not-allowed' : 'pointer',
+                    opacity: isDeleting ? 0.5 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                {isDeleting ? '⏳ Deleting...' : '🗑️ Delete Schedule'}
               </button>
+            )}
           </div>
           
           {validationMetrics && (
@@ -267,7 +286,7 @@ export default function SchedulingHubClient({
       </div>
 
       {/* Schedule Review Panel */}
-      <ScheduleReviewPanel schedule={schedule} projectId={project.id} />
+      <ScheduleReviewPanel schedule={schedule} projectId={project.id} actor={actor} />
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '15px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px', overflowX: 'auto' }}>

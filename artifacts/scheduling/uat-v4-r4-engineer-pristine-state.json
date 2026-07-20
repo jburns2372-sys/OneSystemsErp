@@ -1,0 +1,5 @@
+{
+  "engineerId": "cmriniqgy001lvchcegw8qcxv",
+  "status": "GATE8D_V4_R4_ENGINEER_STATE_MISMATCH",
+  "details": "The engineer state was updated during UI credential rotation."
+}

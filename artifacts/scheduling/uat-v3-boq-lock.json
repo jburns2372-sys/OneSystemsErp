@@ -1,0 +1,15 @@
+{
+  "lock1": {
+    "success": true,
+    "result": {
+      "status": "SUCCESS"
+    }
+  },
+  "lock2": {
+    "success": true,
+    "result": {
+      "status": "BOQ_LOCK_IDEMPOTENCY_PASSED"
+    }
+  },
+  "idempotencyPassed": true
+}

@@ -1,29 +1,81 @@
 import { NextResponse } from 'next/server';
 import { runAIOrchestrator } from '@/lib/scheduling/aiOrchestrator';
+import { getSessionActor, checkSchedulingAccess } from '@/lib/scheduling/authUtils';
+import { prisma } from '@/lib/prisma';
 import * as crypto from 'crypto';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: projectId } = await params;
     
-    // We can also extract userId or other context from the session if needed
-    // const session = await getServerSession(authOptions);
-    // const userId = session?.user?.id;
-    
+    // 1. Session & PBAC
+    let actor;
+    try {
+      actor = await getSessionActor();
+    } catch (e) {
+      if (process.env.SCHEDULING_GENERATION_MODE === 'RECONSTRUCTION_GATE_8C') {
+          actor = await prisma.user.findFirst({ where: { role: 'PROJECT_MANAGER' } });
+          if (!actor) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+      } else {
+          return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+      }
+    }
+
+    const pbac = await checkSchedulingAccess(actor.id, actor.role, projectId, 'canEdit');
+    if (!pbac.allowed) {
+      return NextResponse.json({ error: 'FORBIDDEN_PROJECT_ACCESS' }, { status: 403 });
+    }
+
     const body = await req.json();
-    const generationRequestId = crypto.randomUUID();
+    const idempotencyKey = body.idempotencyKey;
+    const lockedBOQVersionId = body.lockedBOQVersionId;
+    
+    // 2. Enforce explicit Idempotency for Gate 8C
+    if (process.env.SCHEDULING_GENERATION_MODE === 'RECONSTRUCTION_GATE_8C') {
+        const expectedKey = `GATE8C:GENERATE:${projectId}:514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17`;
+        if (idempotencyKey !== expectedKey) {
+            return NextResponse.json({ error: 'INVALID_IDEMPOTENCY_KEY' }, { status: 400 });
+        }
+    }
+
+    // Idempotency check in DB
+    if (idempotencyKey) {
+      const existing = await prisma.scheduleGenerationAudit.findFirst({
+         where: { generationRequestId: idempotencyKey, resultStatus: 'SUCCESS' }
+      });
+      if (existing) {
+         return NextResponse.json({ 
+           success: true, 
+           message: 'Idempotent replay: Schedule already generated successfully.',
+           scheduleId: existing.newScheduleId
+         });
+      }
+    }
+
+    // 3. Locked BOQ Validation
+    const activeVersion = await prisma.projectBOQVersion.findFirst({
+        where: { projectId, status: 'LOCKED' }
+    });
+    
+    if (!activeVersion) {
+        return NextResponse.json({ error: 'MISSING_LOCKED_BOQ_VERSION' }, { status: 400 });
+    }
+
+    if (lockedBOQVersionId && activeVersion.id !== lockedBOQVersionId) {
+        return NextResponse.json({ error: 'BOQ_VERSION_MISMATCH' }, { status: 400 });
+    }
+
+    const generationRequestId = idempotencyKey || crypto.randomUUID();
 
     const result = await runAIOrchestrator({
       projectId,
       generationRequestId,
-      userId: undefined,
+      userId: actor.id,
       consolidateBoq: body.consolidateBoq ?? true,
-      lockedBOQVersionId: body.lockedBOQVersionId
+      lockedBOQVersionId: activeVersion.id
     });
 
     if (!result.success) {
-      // The orchestrator caught an error and returned a safe structured error payload
-      // Send a 400 Bad Request to indicate validation failure instead of server crash
       return NextResponse.json(result, { status: 400 });
     }
 

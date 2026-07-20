@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import React from 'react';
 import ExecutiveAICenterClient from './ExecutiveAICenterClient';
 import { requirePermission } from '@/lib/permissions';
@@ -10,7 +11,8 @@ export const metadata = {
 
 export default async function ExecutiveAICenterPage() {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   await requirePermission(userId, 'PROJECT_MANAGEMENT', 'canView');
   
   return <ExecutiveAICenterClient />;

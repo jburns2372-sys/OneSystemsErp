@@ -1,0 +1,53 @@
+{
+  "environment": {
+    "databaseUrlHostname": "ep-holy-darkness-apqs7kn7-pooler.c-7.us-east-1.aws.neon.tech",
+    "directUrlHostname": "ep-holy-darkness-apqs7kn7.c-7.us-east-1.aws.neon.tech",
+    "database": "neondb",
+    "role": "neondb_owner",
+    "endpointPrefix": "ep-holy-darkness-apqs7kn7",
+    "environmentSource": ".env file",
+    "shellOverrideStatus": "ABSENT"
+  },
+  "businessIdentity": {
+    "title": "PGH_AWARDED BILL OF QUANTITY",
+    "contractNumber": null,
+    "location": "Unknown Location",
+    "startDate": "2026-06-12",
+    "completionDate": "2026-12-09",
+    "contractDuration": null,
+    "awardedAmount": 43106674.89,
+    "createdAt": "2026-07-13T05:08:10.304Z",
+    "status": "ACTIVE"
+  },
+  "dependencies": {
+    "ProjectBOQVersion": 0,
+    "ProjectSchedule": 0,
+    "ScheduleWBS": 0,
+    "ScheduleActivity": 0,
+    "ScheduleDependency": 0,
+    "ScheduleBOQAllocation": 0,
+    "ScheduleApproval": 0,
+    "ScheduleReviewComment": 0,
+    "BaselineActivation": 0,
+    "ChecksumVarianceApprovals": 0
+  },
+  "assignments": [
+    {
+      "id": "cmrirhi1400caic04pp8v1odg",
+      "userId": "cmqiy15bq0000vc1cq1f3zg6j",
+      "projectRole": "SUPER_ADMIN",
+      "accessLevel": "READ_WRITE",
+      "assignmentStatus": "active"
+    }
+  ],
+  "managerReview": {
+    "role": "PROJECT_MANAGER",
+    "mustChangePassword": false,
+    "sessionVersion": "current",
+    "projectScope": "valid",
+    "canCreate": true,
+    "canSubmit": true
+  },
+  "selectedPath": "PATH A — ADOPT EXISTING CLEAN PROJECT SHELL",
+  "finalResult": "UAT_V3_EXISTING_PROJECT_SHELL_APPROVED_FOR_ADOPTION"
+}

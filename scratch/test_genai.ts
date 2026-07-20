@@ -1,17 +1,17 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as dotenv from 'dotenv';
-dotenv.config();
+import { GoogleGenAI } from '@google/genai';
+import { config } from 'dotenv';
+config();
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function main() {
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    
-    // Test 2.5 flash
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent("Hello!");
-    console.log("2.5-flash result:", result.response.text());
-  } catch (e: any) {
-    console.error("2.5-flash error:", e.message);
+    const models = await ai.models.list();
+    for await (const model of models) {
+      console.log(model.name);
+    }
+  } catch (error) {
+    console.error(error);
   }
 }
 

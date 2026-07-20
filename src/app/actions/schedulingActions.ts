@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
@@ -7,7 +8,8 @@ const BACKEND_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PU
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const cookieStore = await cookies();
-  const session = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const session = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value;
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
 

@@ -1,0 +1,32 @@
+{
+  "sourceHashes": {
+    "Progress_Accomplishment_Template_Based_on_Awarded_BOQ.xlsx": "dd4f54c61c54c13e0d5735ed8f6ce66842c15cf167d9fc65baa6410dd267f5b0",
+    "matrix": "artifacts/scheduling/uat-v2-checksum-variant-matrix.json"
+  },
+  "gitHistoryFindings": "The first occurrence of 040d59da1b76e0721c26645a74207c40b33f27c2a3df4a1c216b6340bf9f2fb7 appears as a hardcoded assertion in early Phase 3 and Phase 4 acceptance scripts. It does not exist as an output of any committed parsing algorithm.",
+  "checksumImplementationInventory": [
+    {
+      "file": "scripts/recover-pgh-boq.ts",
+      "function": "hash",
+      "result": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17"
+    },
+    {
+      "file": "scripts/gate6_parse.ts",
+      "function": "hash",
+      "result": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17"
+    }
+  ],
+  "historicalChecksumProvenance": "HISTORICAL_CHECKSUM_UNSUPPORTED",
+  "sourceIdentityComparison": "HISTORICAL_AND_CURRENT_SOURCE_IDENTICAL",
+  "firstCanonicalDifference": "Unknown - historical canonical serialization array is missing from history.",
+  "financialVerification": {
+    "pricedLines": 326,
+    "generalRequirements": 2700549,
+    "mechanicalWorks": 23674716.57,
+    "electricalWorks": 16731409.32,
+    "grandTotal": 43106674.89,
+    "difference": 0
+  },
+  "selectedConclusion": "CONCLUSION C — HISTORICAL CHECKSUM UNSUPPORTED",
+  "requiredRecoveryAction": "FORMAL_VARIANCE_PATH"
+}

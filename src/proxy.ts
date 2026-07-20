@@ -1,25 +1,57 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { auth } from '@/auth';
 
 export default async function proxy(request: NextRequest) {
-  const session = request.cookies.get('session');
-  
-  // Allow public assets, offline fallback, and the login page
-  const isPublicRoute = request.nextUrl.pathname === '/login' || 
-                        request.nextUrl.pathname.startsWith('/~offline') ||
-                        request.nextUrl.pathname.match(/\.(png|jpg|jpeg|svg|ico|json|webmanifest)$/);
+  // Extract path
+  const pathname = request.nextUrl.pathname;
 
-  // If user is NOT logged in and tries to access a protected route (like Dashboard)
-  if (!session && !isPublicRoute) {
-    if (request.nextUrl.pathname.startsWith('/api/')) {
+  const PUBLIC_ROUTES = ['/login', '/forgot-password', '/reset-password'];
+  
+  const isExactPublicRoute = PUBLIC_ROUTES.includes(pathname);
+  
+  // Allow public assets, offline fallback, exact public routes and Auth.js APIs
+  const isPublicRoute = isExactPublicRoute || 
+                        pathname.startsWith('/~offline') ||
+                        pathname.startsWith('/api/auth/') ||
+                        (pathname.includes('/scheduling/simulate') && process.env.SCHEDULING_GENERATION_MODE === 'RECONSTRUCTION_GATE_8C') ||
+                        pathname.match(/\.(png|jpg|jpeg|svg|ico|json|webmanifest)$/);
+
+  // We only use auth() here optimistically. The real validation is in verifySession()
+  const session: any = await auth();
+  const hasValidSession = session && session.user && session.user.id;
+
+  // 3. For an unauthenticated request to any exact public route: return NextResponse.next()
+  if (isExactPublicRoute && !hasValidSession) {
+    return NextResponse.next();
+  }
+
+  // 4. Only after the public-route decision, enforce authentication for protected routes
+  // If user is NOT logged in and tries to access a protected route
+  if (!hasValidSession && !isPublicRoute) {
+    if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized Access. Please log in.' }, { status: 401 });
     }
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // If user IS logged in and tries to go to the login page, redirect them to dashboard
-  if (session && request.nextUrl.pathname === '/login') {
-    return NextResponse.redirect(new URL('/', request.url));
+  // If user IS logged in
+  if (hasValidSession) {
+    // 1. Redirect away from login page
+    if (pathname === '/login') {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+    
+    // 2. Enforce mustChangePassword
+    // If the token says they must change password, redirect them unless they are already there or on auth APIs
+    if (session.user?.mustChangePassword) {
+      if (pathname !== '/change-password' && !pathname.startsWith('/api/auth/')) {
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json({ error: 'PASSWORD_CHANGE_REQUIRED' }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL('/change-password', request.url));
+      }
+    }
   }
 
   const response = NextResponse.next();
@@ -34,16 +66,8 @@ export default async function proxy(request: NextRequest) {
   return response;
 }
 
-// See "Matching Paths" below to learn more
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

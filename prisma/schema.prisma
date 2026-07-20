@@ -96,15 +96,17 @@ model User {
   chatMessages                 AiChatMessage[]               @relation("UserAiChatMessages")
   scheduleGenerationAudits     ScheduleGenerationAudit[]
 
-  generatedSchedules             ProjectSchedule[]        @relation("ScheduleGeneratedBy")
-  activatedSchedules             ProjectSchedule[]        @relation("ScheduleActivatedBy")
-  scheduleApprovalActions        ScheduleApproval[]       @relation("ScheduleApprovalActor")
-  reviewCommentsCreated          ScheduleReviewComment[]  @relation("ScheduleCommentCreatedBy")
-  reviewCommentsResolved         ScheduleReviewComment[]  @relation("ScheduleCommentResolvedBy")
-  baselineActivationActions      BaselineActivation[]     @relation("BaselineActivationActor")
-  financialWaiversRequested      FinancialDataWaiver[]    @relation("FinancialWaiverRequestedBy")
-  financialWaiversApproved       FinancialDataWaiver[]    @relation("FinancialWaiverApprovedBy")
-  scheduleRevisionReasonsCreated ScheduleRevisionReason[] @relation("ScheduleRevisionReasonCreatedBy")
+  generatedSchedules             ProjectSchedule[]            @relation("ScheduleGeneratedBy")
+  activatedSchedules             ProjectSchedule[]            @relation("ScheduleActivatedBy")
+  scheduleApprovalActions        ScheduleApproval[]           @relation("ScheduleApprovalActor")
+  reviewCommentsCreated          ScheduleReviewComment[]      @relation("ScheduleCommentCreatedBy")
+  reviewCommentsResolved         ScheduleReviewComment[]      @relation("ScheduleCommentResolvedBy")
+  baselineActivationActions      BaselineActivation[]         @relation("BaselineActivationActor")
+  financialWaiversRequested      FinancialDataWaiver[]        @relation("FinancialWaiverRequestedBy")
+  financialWaiversApproved       FinancialDataWaiver[]        @relation("FinancialWaiverApprovedBy")
+  scheduleRevisionReasonsCreated ScheduleRevisionReason[]     @relation("ScheduleRevisionReasonCreatedBy")
+  scheduleWorkflowTransitions    ScheduleWorkflowTransition[]
+  passwordRecoveryTokens         PasswordRecoveryToken[]
 }
 
 model SystemRole {
@@ -200,6 +202,7 @@ model Project {
   valueEngineeringRecords         ValueEngineeringRecord[]         @relation("ProjectVERecords")
   projectSchedule                 ProjectSchedule[]
   userAssignments                 ProjectUserAssignment[]
+  scheduleWorkflowTransitions     ScheduleWorkflowTransition[]
 }
 
 model ProjectUserAssignment {
@@ -3703,6 +3706,7 @@ model ProjectSchedule {
   baselineActivations  BaselineActivation[]
   financialDataWaivers FinancialDataWaiver[]
   revisionReasons      ScheduleRevisionReason[]
+  workflowTransitions  ScheduleWorkflowTransition[]
 
   @@unique([id, projectId])
   @@unique([projectId, revisionNumber])
@@ -4702,17 +4706,17 @@ model ProjectBOQVersion {
   totalIndirectCost            Float?
   totalAmount                  Float?
   remarks                      String?
-  
-  // Phase 3D-C1: Structured Checksum fields
-  checksum                     String?
-  checksumAlgorithm            String?
-  checksumVersion              String?
-  sourceProvenance             String?
-  lockedAt                     DateTime?
-  lockedById                   String?
 
-  createdAt                    DateTime  @default(now())
-  updatedAt                    DateTime  @updatedAt
+  // Phase 3D-C1: Structured Checksum fields
+  checksum          String?
+  checksumAlgorithm String?
+  checksumVersion   String?
+  sourceProvenance  String?
+  lockedAt          DateTime?
+  lockedById        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ScheduleGenerationAudit {
@@ -4921,7 +4925,7 @@ model ScheduleReviewComment {
 }
 
 model BaselineActivation {
-  id                      String   @id @default(cuid())
+  id                      String    @id @default(cuid())
   projectId               String
   scheduleId              String
   reviewRound             Int
@@ -4934,11 +4938,11 @@ model BaselineActivation {
   activatedById           String
   activatedByNameSnapshot String
   activatedByRoleSnapshot String
-  activatedAt             DateTime @default(now())
-  createdAt               DateTime @default(now())
-  idempotencyKey          String?  @unique
+  activatedAt             DateTime  @default(now())
+  createdAt               DateTime  @default(now())
+  idempotencyKey          String?   @unique
   requestId               String?
-  isAuthoritative         Boolean  @default(false)
+  isAuthoritative         Boolean   @default(false)
   invalidatedAt           DateTime?
   invalidationReason      String?
 
@@ -4987,4 +4991,63 @@ model ScheduleRevisionReason {
 
   schedule  ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
   createdBy User            @relation("ScheduleRevisionReasonCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+}
+
+enum ScheduleWorkflowAction {
+  SUBMIT_DRAFT_FOR_REVIEW
+  START_TECHNICAL_REVIEW
+}
+
+model ScheduleWorkflowTransition {
+  id                  String                        @id @default(cuid())
+  projectId           String
+  scheduleId          String
+  action              ScheduleWorkflowAction
+  fromStatus          ProjectScheduleWorkflowStatus
+  toStatus            ProjectScheduleWorkflowStatus
+  actorUserId         String
+  actorSessionVersion Int
+  expectedRowVersion  Int
+  resultingRowVersion Int
+  idempotencyKeyHash  String
+  correlationId       String?
+  occurredAt          DateTime                      @default(now())
+  metadata            String?                       @db.Text
+
+  project  Project         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  schedule ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
+  actor    User            @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([scheduleId, action, idempotencyKeyHash])
+  @@index([scheduleId, occurredAt])
+  @@index([projectId, action, occurredAt])
+  @@index([actorUserId, occurredAt])
+}
+
+model PasswordRecoveryToken {
+  id                     String    @id @default(uuid())
+  userId                 String
+  tokenHash              String    @unique
+  purpose                String    @default("PASSWORD_RESET")
+  createdAt              DateTime  @default(now())
+  expiresAt              DateTime
+  consumedAt             DateTime?
+  revokedAt              DateTime?
+  requestedIpHash        String?
+  requestedUserAgentHash String?
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([purpose, expiresAt])
+  @@index([tokenHash, consumedAt, revokedAt])
+}
+
+model PasswordRecoveryRateLimit {
+  id             String    @id @default(uuid())
+  identifierHash String
+  attempts       Int       @default(1)
+  lastAttemptAt  DateTime  @default(now())
+  blockedUntil   DateTime?
+
+  @@index([identifierHash])
 }

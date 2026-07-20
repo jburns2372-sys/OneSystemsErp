@@ -1,0 +1,108 @@
+{
+  "archiveEntries": 242,
+  "includedEntries": 217,
+  "excludedEntries": 25,
+  "excluded": [
+    {
+      "line": ";",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": "; Archive created at 2026-07-17 14:31:19",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";     dbname: neondb",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";     TOC Entries: 231",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";     Compression: gzip",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";     Dump Version: 1.16-0",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";     Format: CUSTOM",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";     Integer: 4 bytes",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";     Offset: 8 bytes",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";     Dumped from database version: 17.10 (986efc8)",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";     Dumped by pg_dump version: 18.4",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": "; Selected TOC Entries:",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": ";",
+      "reason": "Not TABLE DATA or SEQUENCE SET"
+    },
+    {
+      "line": "4508; 0 16885 TABLE DATA neon_auth account neondb_owner",
+      "reason": "Neon internal"
+    },
+    {
+      "line": "4509; 0 16892 TABLE DATA neon_auth invitation neondb_owner",
+      "reason": "Neon internal"
+    },
+    {
+      "line": "4510; 0 16899 TABLE DATA neon_auth jwks neondb_owner",
+      "reason": "Neon internal"
+    },
+    {
+      "line": "4511; 0 16905 TABLE DATA neon_auth member neondb_owner",
+      "reason": "Neon internal"
+    },
+    {
+      "line": "4512; 0 16911 TABLE DATA neon_auth organization neondb_owner",
+      "reason": "Neon internal"
+    },
+    {
+      "line": "4513; 0 16917 TABLE DATA neon_auth project_config neondb_owner",
+      "reason": "Neon internal"
+    },
+    {
+      "line": "4514; 0 16925 TABLE DATA neon_auth session neondb_owner",
+      "reason": "Neon internal"
+    },
+    {
+      "line": "4515; 0 16932 TABLE DATA neon_auth user neondb_owner",
+      "reason": "Neon internal"
+    },
+    {
+      "line": "4516; 0 16940 TABLE DATA neon_auth verification neondb_owner",
+      "reason": "Neon internal"
+    },
+    {
+      "line": "4734; 0 18855 TABLE DATA public _prisma_migrations neondb_owner",
+      "reason": "Exclude _prisma_migrations"
+    }
+  ],
+  "targetRelationVerification": "PASSED"
+}

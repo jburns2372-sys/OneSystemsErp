@@ -1,0 +1,5 @@
+{
+  "scheduleAuditEvents": 0,
+  "provenance": "GATE8_ACTOR_PROVENANCE_NOT_VERIFIED",
+  "reason": "Script executed outside of normal Next.js API route"
+}

@@ -1,0 +1,9 @@
+{
+  "exactCommand": "docker exec pg-v4-schema pg_restore -U postgres -d postgres --data-only --no-owner --no-privileges --exit-on-error --single-transaction /tmp/archive.dump",
+  "exitCode": 0,
+  "transactionCommitted": true,
+  "warningsClassifiedAsDataLoss": [],
+  "missingTableOrColumnErrors": 0,
+  "secondRestoreRequired": false,
+  "partialData": false
+}

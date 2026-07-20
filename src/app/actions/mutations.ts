@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
@@ -484,7 +485,8 @@ export async function createProject(formData: FormData) {
   });
 
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || cookieStore.get('userId')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
 
   if (sessionId) {

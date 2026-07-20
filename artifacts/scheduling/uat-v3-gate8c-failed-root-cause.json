@@ -1,0 +1,10 @@
+{
+  "projectBOQVersionCount": 1,
+  "boqStatus": "LOCKED",
+  "lineCount": 326,
+  "storedBOQTotal": 9030391.72999999,
+  "quantityTimesDirectCost": 9030391.72999999,
+  "quantityTimesCombinedUnitCost": 9030391.72999999,
+  "explanation": "The authoritative source AwardedBOQItem totalCost fields sum exactly to PHP 9,030,391.73 in the current database endpoint, meaning the locked BOQ does not contain the required 43,106,674.89.",
+  "conclusion": "GATE8C_LOCKED_BOQ_SOURCE_MISMATCH"
+}

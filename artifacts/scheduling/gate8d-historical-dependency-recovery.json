@@ -1,0 +1,121 @@
+{
+  "metadata": {
+    "totalRecovered": 11,
+    "unsupportedDependencies": 0,
+    "duplicateDependencies": 0,
+    "selfDependencies": 0,
+    "cycles": 0
+  },
+  "dependencies": [
+    {
+      "sourceKey": "DEP_1",
+      "predecessorSourceKey": "ACT_1",
+      "successorSourceKey": "ACT_2",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    },
+    {
+      "sourceKey": "DEP_2",
+      "predecessorSourceKey": "ACT_1",
+      "successorSourceKey": "ACT_3",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    },
+    {
+      "sourceKey": "DEP_3",
+      "predecessorSourceKey": "ACT_2",
+      "successorSourceKey": "ACT_4",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    },
+    {
+      "sourceKey": "DEP_4",
+      "predecessorSourceKey": "ACT_3",
+      "successorSourceKey": "ACT_5",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    },
+    {
+      "sourceKey": "DEP_5",
+      "predecessorSourceKey": "ACT_4",
+      "successorSourceKey": "ACT_6",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    },
+    {
+      "sourceKey": "DEP_6",
+      "predecessorSourceKey": "ACT_5",
+      "successorSourceKey": "ACT_7",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    },
+    {
+      "sourceKey": "DEP_7",
+      "predecessorSourceKey": "ACT_6",
+      "successorSourceKey": "ACT_8",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    },
+    {
+      "sourceKey": "DEP_8",
+      "predecessorSourceKey": "ACT_7",
+      "successorSourceKey": "ACT_9",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    },
+    {
+      "sourceKey": "DEP_9",
+      "predecessorSourceKey": "ACT_8",
+      "successorSourceKey": "ACT_11",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    },
+    {
+      "sourceKey": "DEP_10",
+      "predecessorSourceKey": "ACT_9",
+      "successorSourceKey": "ACT_11",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    },
+    {
+      "sourceKey": "DEP_11",
+      "predecessorSourceKey": "ACT_11",
+      "successorSourceKey": "ACT_12",
+      "relationshipType": "FS",
+      "lag": 0,
+      "evidenceSource": "scripts/gate8-execute.ts",
+      "evidenceReference": "lines 196-208",
+      "validationStatus": "SUPPORTED"
+    }
+  ]
+}

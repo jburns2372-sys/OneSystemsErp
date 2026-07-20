@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
@@ -7,7 +8,8 @@ import { prisma } from '@/lib/prisma';
 export async function resetTransactionData(confirmationText: string) {
   try {
     const cookieStore = await cookies();
-    const sessionId = cookieStore.get('session')?.value;
+    const __session = await verifySession();
+  const sessionId = __session?.id || '';
 
     if (!sessionId) throw new Error('Unauthorized');
     const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
@@ -287,7 +289,8 @@ export async function resetTransactionData(confirmationText: string) {
 export async function getCurrentUserRole() {
   try {
     const cookieStore = await cookies();
-    const sessionId = cookieStore.get('session')?.value;
+    const __session = await verifySession();
+  const sessionId = __session?.id || '';
     const simulatedRole = cookieStore.get('simulatedRole')?.value;
     
     if (simulatedRole) return simulatedRole;

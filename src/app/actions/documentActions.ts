@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
@@ -13,7 +14,8 @@ const AWS_BACKEND_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || process.en
 async function fetchWithAuth(url: string, options?: RequestInit) {
   const headers = new Headers(options?.headers);
   // Example: Attach a session token or API key if needed by your backend
-  // const sessionToken = cookies().get('session')?.value;
+  const __session = await verifySession();
+  const sessionToken = __session?.id || '';
   // if (sessionToken) {
   //   headers.set('Authorization', `Bearer ${sessionToken}`);
   // }
@@ -40,7 +42,8 @@ export async function uploadDocument(formData: FormData) {
 
   // Retrieve uploaderId here before sending to backend
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   let uploaderId = null;
 
   if (sessionId) {

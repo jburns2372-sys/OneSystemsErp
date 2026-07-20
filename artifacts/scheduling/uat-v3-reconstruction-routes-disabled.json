@@ -1,0 +1,10 @@
+{
+  "routes": [
+    { "endpoint": "assign-actors", "method": "POST", "status": 410 },
+    { "endpoint": "adopt-project", "method": "POST", "status": 410 },
+    { "endpoint": "import-boq", "method": "POST", "status": 410 },
+    { "endpoint": "approve-variance", "method": "POST", "status": 410 },
+    { "endpoint": "lock-boq", "method": "POST", "status": 410 }
+  ],
+  "result": "RECONSTRUCTION_MUTATION_SURFACE_DISABLED"
+}

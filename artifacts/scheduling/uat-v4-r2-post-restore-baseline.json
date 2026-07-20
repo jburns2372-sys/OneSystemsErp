@@ -1,0 +1,112 @@
+{
+  "projects": [
+    {
+      "id": "cmrirhhw30000ic0406v47smb",
+      "name": "PGH_AWARDED BILL OF QUANTITY",
+      "description": "Automated Project Import from BOQ File: PGH_AWARDED BILL OF QUANTITY.xlsx",
+      "location": "Unknown Location",
+      "startDate": "2026-06-12T00:00:00.000Z",
+      "endDate": "2026-12-09T00:00:00.000Z",
+      "status": "ACTIVE",
+      "contractAmountVATInclusive": true,
+      "vatRate": 12,
+      "retentionPercentage": 10,
+      "withholdingTaxPercentage": 2,
+      "mobilizationAdvanceAmount": 0,
+      "advanceRecoupmentMethod": "PRO_RATA",
+      "liquidatedDamagesRate": 0.1,
+      "otherDeductions": 0,
+      "paymentTerms": null,
+      "boqLocked": true,
+      "consolidatedBOQLocked": true,
+      "procurementBenchmarkLocked": true,
+      "contractNumber": null,
+      "client": null,
+      "contractor": null,
+      "gpsLatitude": null,
+      "gpsLongitude": null,
+      "acceptableGeotagRadius": 100,
+      "projectCategory": null,
+      "fundingSource": null,
+      "contractAmount": 43106674.89000002,
+      "originalContractDuration": 180,
+      "noticeToProceedDate": null,
+      "originalCompletionDate": "2026-12-09T00:00:00.000Z",
+      "revisedCompletionDate": null,
+      "implementingOffice": null,
+      "managerId": "cmrinimix001avchckwzmfxsu",
+      "createdAt": "2026-07-13T05:08:10.304Z",
+      "updatedAt": "2026-07-13T05:14:36.752Z"
+    }
+  ],
+  "users": [
+    {
+      "email": "J.BURNS2372@GMAIL.COM",
+      "role": "SUPER_ADMIN",
+      "status": "ACTIVE"
+    },
+    {
+      "email": "admin01@demo.com",
+      "role": "SUPER_ADMIN",
+      "status": "ACTIVE"
+    },
+    {
+      "email": "director@onesystemserp.com",
+      "role": "PROJECT_DIRECTOR",
+      "status": "ACTIVE"
+    },
+    {
+      "email": "manager@onesystemserp.com",
+      "role": "PROJECT_MANAGER",
+      "status": "ACTIVE"
+    },
+    {
+      "email": "purchasing@onesystemserp.com",
+      "role": "PURCHASING_OFFICER",
+      "status": "ACTIVE"
+    },
+    {
+      "email": "finance@onesystemserp.com",
+      "role": "FINANCE_OFFICER",
+      "status": "ACTIVE"
+    },
+    {
+      "email": "accounting@onesystemserp.com",
+      "role": "ACCOUNTANT",
+      "status": "ACTIVE"
+    },
+    {
+      "email": "billing@onesystemserp.com",
+      "role": "BILLING_ENGINEER",
+      "status": "ACTIVE"
+    },
+    {
+      "email": "engineer@onesystemserp.com",
+      "role": "SITE_ENGINEER",
+      "status": "ACTIVE"
+    },
+    {
+      "email": "admin@onesystemserp.com",
+      "role": "SITE_ADMIN",
+      "status": "ACTIVE"
+    }
+  ],
+  "assignments": {
+    "superAdmin": 0,
+    "manager": 0,
+    "director": 0,
+    "engineer": 0
+  },
+  "counts": {
+    "ProjectBOQVersion": 0,
+    "AwardedBOQItem": 0,
+    "ProjectSchedule": 0,
+    "ScheduleWBS": 0,
+    "ScheduleActivity": 0,
+    "ScheduleDependency": 0,
+    "ScheduleBOQAllocation": 0,
+    "ScheduleApproval": 0,
+    "ScheduleReviewComment": 0,
+    "BaselineActivation": 0
+  }
+}

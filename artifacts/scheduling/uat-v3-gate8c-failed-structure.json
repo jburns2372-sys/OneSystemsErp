@@ -1,0 +1,147 @@
+{
+  "dependencyCount": 13,
+  "dependencies": [
+    {
+      "id": "8f361eb7-8f46-453f-85f6-9a8d2e3b666c",
+      "predecessor": "Activity 1",
+      "successor": "Activity 2",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "624a7cae-b3b8-4a76-9e06-3b593f7c70d8",
+      "predecessor": "Activity 2",
+      "successor": "Activity 3",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "8104a8e4-f030-4070-ba16-bbc7c9d3bc7d",
+      "predecessor": "Activity 3",
+      "successor": "Activity 4",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "aa8d6e43-985d-4069-8e42-b0af8240c803",
+      "predecessor": "Activity 4",
+      "successor": "Activity 5",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "40c787e4-2b64-424f-a92f-530d5ac2d1fe",
+      "predecessor": "Activity 5",
+      "successor": "Activity 6",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "4dbce709-2b3d-4b22-a01a-b4ee04293f8f",
+      "predecessor": "Activity 6",
+      "successor": "Activity 7",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "25606b99-cd55-4499-ad74-52f9dd897a75",
+      "predecessor": "Activity 7",
+      "successor": "Activity 8",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "27c5a28a-92bc-4e4e-99f6-954a2ad8e9be",
+      "predecessor": "Activity 8",
+      "successor": "Activity 9",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "b92169af-ca48-4c6b-bed1-a16b19bbff21",
+      "predecessor": "Activity 9",
+      "successor": "Activity 10",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "cd3b03e0-207f-4445-afc8-29a9db097838",
+      "predecessor": "Activity 10",
+      "successor": "Activity 11",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "1d0a3a22-8f5a-4dec-8422-d4b0191c6973",
+      "predecessor": "Activity 11",
+      "successor": "Activity 12",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "8f52c40f-eb14-41a9-971d-143b1706e045",
+      "predecessor": "Activity 12",
+      "successor": "Activity 13",
+      "type": "FS",
+      "lagDays": 0
+    },
+    {
+      "id": "61b5f926-375a-46df-be71-deabe7ae28a9",
+      "predecessor": "Activity 13",
+      "successor": "Activity 14",
+      "type": "FS",
+      "lagDays": 0
+    }
+  ],
+  "phaseCount": 12,
+  "phases": [
+    {
+      "code": "PH-1",
+      "name": "Phase 1"
+    },
+    {
+      "code": "PH-2",
+      "name": "Phase 2"
+    },
+    {
+      "code": "PH-3",
+      "name": "Phase 3"
+    },
+    {
+      "code": "PH-4",
+      "name": "Phase 4"
+    },
+    {
+      "code": "PH-5",
+      "name": "Phase 5"
+    },
+    {
+      "code": "PH-6",
+      "name": "Phase 6"
+    },
+    {
+      "code": "PH-7",
+      "name": "Phase 7"
+    },
+    {
+      "code": "PH-8",
+      "name": "Phase 8"
+    },
+    {
+      "code": "PH-9",
+      "name": "Phase 9"
+    },
+    {
+      "code": "PH-10",
+      "name": "Phase 10"
+    },
+    {
+      "code": "PH-11",
+      "name": "Testing and Commissioning"
+    },
+    {
+      "code": "PH-12",
+      "name": "Project Acceptance and Demobilization"
+    }
+  ]
+}

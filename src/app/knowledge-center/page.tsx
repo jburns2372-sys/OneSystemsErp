@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
@@ -7,7 +8,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function KnowledgeCenterPage() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const permissions = await getUserPermissions(sessionId);
   const totalRecords = await prisma.knowledgeRecord.count();
   const approvedRecords = await prisma.knowledgeRecord.count({ where: { status: 'Approved' } });

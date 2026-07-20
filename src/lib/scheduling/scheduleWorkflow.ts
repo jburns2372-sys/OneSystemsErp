@@ -138,7 +138,12 @@ export async function validateScheduleForReview({
   tx?: any;
 }) {
   const schedule = await tx.projectSchedule.findUnique({
-    where: { id: scheduleId, projectId, rowVersion: expectedRowVersion },
+    where: {
+      id_projectId: {
+        id: scheduleId,
+        projectId
+      }
+    },
     include: {
       activities: {
         include: { boqAllocations: true }
@@ -148,21 +153,26 @@ export async function validateScheduleForReview({
     }
   });
 
-  if (!schedule) throw new Error('SCHEDULE_VERSION_CONFLICT');
+  if (!schedule || schedule.rowVersion !== expectedRowVersion) throw new Error('SCHEDULE_VERSION_CONFLICT');
 
   // We are evaluating all components to see if they pass.
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // Financial
-  const awarded = toMoney(schedule.awardedContractAmount || 0);
-  const scheduled = toMoney(schedule.scheduledAmount || 0);
-  const difference = toMoney(schedule.differenceAmount || 0);
+  let awarded = new Prisma.Decimal(0);
+  let scheduled = new Prisma.Decimal(0);
+  let difference = new Prisma.Decimal(0);
 
-  if (awarded.isZero()) errors.push('FINANCIAL: Contract amount is zero.');
-  if (scheduled.isZero()) errors.push('FINANCIAL: Scheduled amount is zero.');
-  if (!difference.isZero()) errors.push('FINANCIAL: Difference amount is not 0.00.');
-  if (!awarded.equals(scheduled)) errors.push('FINANCIAL: Awarded contract amount does not equal scheduled amount.');
+  try { awarded = toMoney(schedule.awardedContractAmount || 0); } catch(e: any) { errors.push(`FINANCIAL: Schedule awardedContractAmount ${schedule.id}: ${e.message}`); }
+  try { scheduled = toMoney(schedule.scheduledAmount || 0); } catch(e: any) { errors.push(`FINANCIAL: Schedule scheduledAmount ${schedule.id}: ${e.message}`); }
+  try { difference = toMoney(schedule.differenceAmount || 0); } catch(e: any) { errors.push(`FINANCIAL: Schedule differenceAmount ${schedule.id}: ${e.message}`); }
+
+  if (errors.length === 0) {
+    if (awarded.isZero()) errors.push('FINANCIAL: Contract amount is zero.');
+    if (scheduled.isZero()) errors.push('FINANCIAL: Scheduled amount is zero.');
+    if (!difference.isZero()) errors.push('FINANCIAL: Difference amount is not 0.00.');
+    if (!awarded.equals(scheduled)) errors.push('FINANCIAL: Awarded contract amount does not equal scheduled amount.');
+  }
 
   // BOQ
   const pricedLines = await tx.awardedBOQItem.count({
@@ -172,7 +182,13 @@ export async function validateScheduleForReview({
 
   // Fetch all allocations to check coverage
   const allocations = await tx.scheduleBOQAllocation.findMany({
-    where: { scheduleId }
+    where: { scheduleId },
+    select: {
+      id: true,
+      awardedBoqItemId: true,
+      allocatedQuantity: true,
+      mappedQuantity: true
+    }
   });
   
   if (allocations.length === 0) errors.push('BOQ: No BOQ allocations found.');
@@ -181,20 +197,34 @@ export async function validateScheduleForReview({
   const allocatedQuantities = new Map<string, Prisma.Decimal>();
   for (const alloc of allocations) {
     const prev = allocatedQuantities.get(alloc.awardedBoqItemId) || new Prisma.Decimal(0);
-    allocatedQuantities.set(alloc.awardedBoqItemId, prev.add(toMoney(alloc.allocatedQuantity)));
+    try {
+      const allocQty = toMoney(alloc.allocatedQuantity ?? alloc.mappedQuantity);
+      allocatedQuantities.set(alloc.awardedBoqItemId, prev.add(allocQty));
+    } catch(e: any) {
+      errors.push(`BOQ: ScheduleBOQAllocation allocatedQuantity ${alloc.id}: ${e.message}`);
+    }
   }
 
   const boqItems = await tx.awardedBOQItem.findMany({
-    where: { projectId, totalCost: { gt: 0 } }
+    where: { projectId, totalCost: { gt: 0 } },
+    select: {
+      id: true,
+      itemCode: true,
+      quantity: true
+    }
   });
 
   for (const item of boqItems) {
     const allocated = allocatedQuantities.get(item.id) || new Prisma.Decimal(0);
-    const itemQty = toMoney(item.quantity);
-    if (allocated.isZero()) {
-      errors.push(`BOQ: Item ${item.itemCode} is unallocated.`);
-    } else if (!allocated.equals(itemQty)) {
-      errors.push(`BOQ: Item ${item.itemCode} allocation (${allocated.toString()}) does not match BOQ quantity (${itemQty.toString()}).`);
+    try {
+      const itemQty = toMoney(item.quantity);
+      if (allocated.isZero()) {
+        errors.push(`BOQ: Item ${item.itemCode} is unallocated.`);
+      } else if (!allocated.equals(itemQty)) {
+        errors.push(`BOQ: Item ${item.itemCode} allocation (${allocated.toString()}) does not match BOQ quantity (${itemQty.toString()}).`);
+      }
+    } catch(e: any) {
+      errors.push(`BOQ: AwardedBOQItem quantity ${item.id}: ${e.message}`);
     }
   }
 
@@ -242,18 +272,7 @@ export async function validateScheduleForReview({
   const snapshot = createCanonicalScheduleSnapshot(schedule, schedule.wbsNodes, [], schedule.activities, schedule.dependencies, allocations);
   const hash = calculateScheduleSnapshotHash(snapshot);
 
-  // When updating here, we must increment rowVersion, which changes the baseline rowVersion.
-  const updatedSchedule = await tx.projectSchedule.update({
-    where: { id: scheduleId, rowVersion: expectedRowVersion },
-    data: {
-      workflowStatus: resultStatus,
-      rowVersion: { increment: 1 },
-      activationSnapshotHash: isValid ? hash : null, // Storing hash temporarily to compare during review
-      validationMetrics: JSON.stringify({ ...(JSON.parse(schedule.validationMetrics || '{}')), errors, warnings })
-    }
-  });
-
-  return { isValid, errors, warnings, schedule: updatedSchedule, hash };
+  return { isValid, errors, warnings, schedule, hash };
 }
 
 // ---------------------------------------------------------

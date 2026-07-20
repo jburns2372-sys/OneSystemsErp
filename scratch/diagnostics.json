@@ -1,0 +1,12 @@
+{
+  "networkLogs": [
+    "200 POST http://localhost:3000/login",
+    "CLICKED VALIDATE BUTTON"
+  ],
+  "consoleLogs": [
+    "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+    "[HMR] connected",
+    "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+    "[HMR] connected"
+  ]
+}

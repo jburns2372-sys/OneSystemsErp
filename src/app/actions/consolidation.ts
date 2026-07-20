@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
@@ -11,7 +12,8 @@ const API_ROUTE_PREFIX = '/api/consolidation'; // The base route name for the AW
 // fetchWithAuth wrapper to handle session/project headers and backend response structure
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const cookieStore = await cookies(); // `cookies()` is not async
-  const session = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const session = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value;
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
 

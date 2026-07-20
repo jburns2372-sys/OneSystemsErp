@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import BOQTemplateClient from "./BOQTemplateClient";
@@ -6,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 export default async function BOQTemplatePage() {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   
   const user = await prisma.user.findUnique({ where: { id: userId } });
   const simulatedRole = cookieStore.get('simulatedRole')?.value;

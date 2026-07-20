@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import React from 'react';
 import { prisma } from '@/lib/prisma';
 import ValidationDetailClient from './ValidationDetailClient';
@@ -13,7 +14,8 @@ export const metadata = {
 export default async function ProjectValidationDetailPage(props: { params: Promise<{ projectId: string }> }) {
   const params = await props.params;
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   await requirePermission(userId, 'PROJECT_MANAGEMENT', 'canView');
 
   // Fetch project details

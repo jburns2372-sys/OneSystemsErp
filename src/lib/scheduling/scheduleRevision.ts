@@ -124,7 +124,7 @@ export async function createNewScheduleRevision({
           code: wbs.code,
           name: wbs.name,
           level: wbs.level,
-          sequence: wbs.sequence,
+          orderIndex: wbs.orderIndex,
           parentId: wbs.parentId ? wbsIdMap.get(wbs.parentId) : null
         }))
       });
@@ -151,10 +151,7 @@ export async function createNewScheduleRevision({
 
           criticalPath: act.criticalPath,
           totalFloat: act.totalFloat,
-          freeFloat: act.freeFloat,
-          
-          isMilestone: act.isMilestone,
-          type: act.type
+          freeFloat: act.freeFloat
         }))
       });
 
@@ -169,7 +166,7 @@ export async function createNewScheduleRevision({
             boqLineId: alloc.boqLineId,
             awardedBoqItemId: alloc.awardedBoqItemId,
             allocatedQuantity: alloc.allocatedQuantity,
-            amount: alloc.amount
+            allocatedAmount: alloc.allocatedAmount
           });
         });
       });
@@ -189,7 +186,7 @@ export async function createNewScheduleRevision({
           scheduleId: newSchedule.id,
           predecessorId: activityIdMap.get(dep.predecessorId)!,
           successorId: activityIdMap.get(dep.successorId)!,
-          dependencyType: dep.dependencyType,
+          type: dep.type,
           lagDays: dep.lagDays
         }))
       });

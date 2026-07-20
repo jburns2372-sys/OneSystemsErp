@@ -44,27 +44,7 @@ export async function getUserPermissions(userId: string) {
 
   // Fallback to demo user if session is invalid or missing
   if (!user) {
-    try {
-      const demoUser = await prisma.user.findFirst({
-        where: { email: 'J.BURNS2372@GMAIL.COM' },
-        select: { id: true, role: true }
-      });
-      if (demoUser) {
-        user = demoUser;
-        userRoles = await prisma.userRole.findMany({
-          where: { userId: demoUser.id },
-          include: {
-            role: {
-              include: {
-                rolePermissions: true
-              }
-            }
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Database connection failed for demo user fallback in getUserPermissions:", error);
-    }
+    return { IS_GUEST_USER: true };
   }
 
   const isActualAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR' || user?.role === 'DIRECTORS';

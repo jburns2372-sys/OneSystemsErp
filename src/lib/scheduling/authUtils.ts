@@ -1,10 +1,12 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { hasPermission } from '@/lib/permissions';
 
 export async function getSessionActor() {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   
   if (!userId) {
     throw new Error('UNAUTHORIZED: No active session');
@@ -33,9 +35,16 @@ export async function checkSchedulingAccess(actorId: string, actorRole: string, 
     return { allowed: false };
   }
 
-  // Fallback to project assignment if PBAC doesn't explicitly allow, though PBAC should be primary
-  return { 
-    allowed: true, 
-    projectRole: assignment?.projectRole || actorRole 
-  };
+  // Check PBAC for the project-level role
+  const { getPermissionsForRole } = require('@/lib/permissions');
+  const projectRolePerms = await getPermissionsForRole(assignment.projectRole);
+  
+  if (projectRolePerms['PROJECT_MANAGEMENT'] && projectRolePerms['PROJECT_MANAGEMENT'][action]) {
+    return { 
+      allowed: true, 
+      projectRole: assignment.projectRole 
+    };
+  }
+
+  return { allowed: false, projectRole: assignment.projectRole };
 }

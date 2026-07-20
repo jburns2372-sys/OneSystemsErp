@@ -1,0 +1,7 @@
+{
+  "sessionReplicationRole": "origin",
+  "disabledTriggersCount": 0,
+  "invalidConstraintsCount": 0,
+  "orphanRecords": 0,
+  "orphansDetails": []
+}

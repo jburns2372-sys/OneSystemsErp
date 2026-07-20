@@ -1,0 +1,11 @@
+{
+  "databaseUrlHost": "ep-holy-darkness-apqs7kn7-pooler.c-7.us-east-1.aws.neon.tech",
+  "directUrlHost": "ep-holy-darkness-apqs7kn7.c-7.us-east-1.aws.neon.tech",
+  "endpointPrefix": "ep-holy-darkness-apqs7kn7",
+  "database": "neondb",
+  "role": "neondb_owner",
+  "environmentFileSource": ".env",
+  "shellOverrideStatus": "active",
+  "selectOneResult": 1,
+  "conclusion": "GATE8C_FAILED_RUN_ENVIRONMENT_CONFIRMED"
+}

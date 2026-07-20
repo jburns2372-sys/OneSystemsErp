@@ -1,0 +1,54 @@
+{
+  "gate": "GATE9D",
+  "version": "V4-R7",
+  "status": "V4_R7_CLEAN_BASELINE_ESTABLISHED",
+  "repository": {
+    "branch": "security-migration-authjs",
+    "headCommit": "f05ccf3",
+    "stashReference": "stash@{0}",
+    "stashLabel": "Gate9D quota checkpoint 20260717-200320",
+    "stashPolicy": "DO_NOT_POP_OR_DROP"
+  },
+  "database": {
+    "endpointPrefix": "ep-solitary-surf-aps3rmax",
+    "databaseName": "v4_r7_clean",
+    "classification": "EMPTY_TARGET",
+    "applicationTables": 0,
+    "prismaMigrationsExists": false
+  },
+  "trustedArchive": {
+    "path": "backups/scheduling-reconstruction-uat-v4-r6-post-gate8d.dump"
+  },
+  "targetProjectId": "cmrirhhw30000ic0406v47smb",
+  "approvedPendingMigration": "20260717000000_add_schedule_workflow_transition_provenance",
+  "externalCheckpointFolder": "C:\\Users\\user\\Documents\\JD SOFTWARE PROJECTS\\OneSystemsErp\\OneSystemsERP_Checkpoints\\Gate9D-20260717-200320",
+  "completedStages": [
+    "STAGE_1_CHECKPOINT_CREATED",
+    "STAGE_2_LOAD_V4_R7_ENVIRONMENT",
+    "STAGE_3_EMPTY_TARGET_VERIFIED",
+    "STAGE_4_TRUSTED_ARCHIVE_VERIFIED",
+    "STAGE_5_SCHEMA_DEPLOYED",
+    "STAGE_6_GATE8_DATA_RESTORED",
+    "STAGE_7_TOPOLOGICAL_RESTORE_EXECUTED",
+    "STAGE_8_GATE8_STATE_VERIFIED",
+    "STAGE_9_DIRECT_MUTATION_DISABLED",
+    "STAGE_10_CLEAN_BASELINE_VERIFIED",
+    "STAGE_6_GATE9D_V4_R7_CLEAN_BASELINE_ESTABLISHED"
+  ],
+  "currentStage": "STAGE_7_REAL_AUTH_AND_GUARD_VERIFICATION",
+  "pendingStage": "STAGE_8_FINANCE_ASSIGNMENT_VERIFICATION",
+  "timestamps": {
+    "checkpointCreated": "2026-07-17T23:16:00+08:00",
+    "baselineEstablished": "2026-07-17T16:57:28.507Z",
+    "stage7Started": "2026-07-17T17:01:59.440Z"
+  },
+  "exitCodes": {},
+  "stage5": {
+    "exitCode": 1,
+    "firstMissingRelation": "public.AIAuditFinding",
+    "archiveType": "DATA_ONLY",
+    "targetApplicationTablesBeforeRestore": 0,
+    "businessRecordsInserted": 0,
+    "remediation": "DEPLOY_SCHEMA_THEN_RESTORE_FILTERED_DATA"
+  }
+}

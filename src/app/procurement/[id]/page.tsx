@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import styles from '../../projects/page.module.css';
 import Link from 'next/link';
@@ -26,7 +27,8 @@ export default async function PurchaseOrderDetailsPage({ params }: { params: Pro
   });
 
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   let currentUser = null;
   let permissions: Record<string, any> = {};
 

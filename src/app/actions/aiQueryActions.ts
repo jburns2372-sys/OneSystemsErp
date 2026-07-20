@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
 
@@ -31,7 +32,8 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
 export async function processExecutiveQuery(query: string): Promise<string> {
   const cookieStore = await cookies();
   // Extract cookie values needed by the backend logic
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
   const executive_projectId = cookieStore.get('executive_projectId')?.value;
 

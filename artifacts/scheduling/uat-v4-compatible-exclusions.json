@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-07-16T05:47:00Z",
+  "excludedObjects": [
+    {
+      "name": "ScheduleBOQMapping",
+      "type": "TABLE DATA",
+      "classification": "LEGACY_SCHEDULE_BOQ_MAPPING_SAFE_TO_EXCLUDE",
+      "reason": "Retired in migration 20260714190000_phase3_baseline_workflow (DROP TABLE). Replaced by ScheduleBOQAllocation. Row count in sanitized backup = 0. No inbound foreign key references. No project, actor, PBAC, or baseline record depends on it.",
+      "rowCount": 0,
+      "replacement": "ScheduleBOQAllocation",
+      "retirementMigration": "20260714190000_phase3_baseline_workflow"
+    },
+    {
+      "name": "_prisma_migrations",
+      "type": "TABLE DATA",
+      "classification": "STALE_MIGRATION_HISTORY_SAFE_TO_EXCLUDE",
+      "reason": "Archive contains only 1 migration (20260626065906_init_postgres). V4 schema-only branch has its own 6-migration history matching the source-controlled migrations. Restoring stale migration data would corrupt Prisma migration tracking on V4.",
+      "archiveMigrationCount": 1,
+      "v4MigrationCount": 6
+    }
+  ],
+  "retainedCriticalTables": [
+    "Project", "User", "ProjectUserAssignment",
+    "Role", "UserRole", "RolePermission", "RoleConflictRule", "Module",
+    "SystemRole", "UserLoginLog", "UserSessionSecurityLog",
+    "GovernmentSettings", "SSSTable", "PayrollCutoffSetting",
+    "KnowledgeRecord", "KnowledgeReference", "KnowledgeAuditTrail",
+    "KnowledgeRuleReference", "KnowledgeRuleAuditLog",
+    "DocumentTemplate", "WorkflowTemplate", "WorkflowStep",
+    "ValidationSettings", "SecurityRule", "SecurityEvent"
+  ],
+  "conclusion": "ALL_ARCHIVE_SCHEMA_MISMATCHES_RESOLVED"
+}

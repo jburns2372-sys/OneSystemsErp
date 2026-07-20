@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 // @ts-nocheck
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
@@ -17,7 +18,8 @@ export async function POST(req: Request) {
   const lastUserMessage = messages[messages.length - 1]?.content || '';
 
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   const permissions = await getUserPermissions(userId);
 
   // 0. Prompt Injection Detection
