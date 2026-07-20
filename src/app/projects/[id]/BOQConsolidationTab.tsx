@@ -1,6 +1,7 @@
 import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import AutoConsolidateButton from './AutoConsolidateButton';
 import ConsolidatedBOQViewer from './ConsolidatedBOQViewer';
 
@@ -46,7 +47,10 @@ export default async function BOQConsolidationTab({
   }
   
   if (!currentUser) {
-    const email = cookieStore.get('demo_user_email')?.value; if(!email) throw new Error('No session');
+    const email = cookieStore.get('demo_user_email')?.value; 
+    if(!email) {
+      redirect('/');
+    }
     currentUser = await prisma.user.findFirst({
       where: { email: { equals: email } },
       include: { userRoles: { include: { role: true } } }

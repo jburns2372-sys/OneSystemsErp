@@ -5,6 +5,7 @@ import * as xlsx from 'xlsx';
 import * as fs from 'fs';
 import * as path from 'path';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 import BOQActions from './BOQActions';
 import AwardedBOQViewer from './AwardedBOQViewer';
@@ -83,7 +84,10 @@ export default async function ProjectDetailsPage({
   }
 
   const cookieStore = await cookies();
-  const email = cookieStore.get('demo_user_email')?.value; if(!email) throw new Error('No session');
+  const email = cookieStore.get('demo_user_email')?.value; 
+  if(!email) {
+    redirect('/');
+  }
   const currentUser = await prisma.user.findFirst({
     where: { email },
     include: { userRoles: { include: { role: true } } }
