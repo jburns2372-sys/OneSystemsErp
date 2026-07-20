@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import styles from '../projects/page.module.css';
 import { prisma } from '@/lib/prisma';
 import MaterialIssuanceClient from './MaterialIssuanceClient';
@@ -6,7 +7,8 @@ import { cookies } from 'next/headers';
 
 export default async function MaterialIssuancePage() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   let permissions: Record<string, any> = {};
   
   if (sessionId) {

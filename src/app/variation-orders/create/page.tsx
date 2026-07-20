@@ -16,8 +16,8 @@ import styles from '../variation.module.css';
 export default function CreateVariationOrderPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialProjectId = searchParams.get('projectId') || '';
-  const categoryParam = searchParams.get('category') || '';
+  const initialProjectId = searchParams?.get('projectId') || '';
+  const categoryParam = searchParams?.get('category') || '';
   
   const [loading, setLoading] = useState(false);
   const [packagesLoading, setPackagesLoading] = useState(false);

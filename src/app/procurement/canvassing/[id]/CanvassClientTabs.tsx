@@ -309,6 +309,42 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
         </button>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
+          {canvass.status === 'DRAFT' && canvass.recommendedSupplierId && (
+            <button 
+              onClick={handleEndorse}
+              disabled={isEndorsing}
+              style={{
+                background: '#3b82f6', border: 'none', color: '#fff', fontWeight: 'bold',
+                padding: '8px 16px', borderRadius: '4px', cursor: isEndorsing ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
+              }}>
+              {isEndorsing ? 'Endorsing...' : '✍️ Endorse'}
+            </button>
+          )}
+          {canvass.status === 'ENDORSED' && (
+            <button 
+              onClick={handleApprove}
+              disabled={isApproving}
+              style={{
+                background: '#10b981', border: 'none', color: '#fff', fontWeight: 'bold',
+                padding: '8px 16px', borderRadius: '4px', cursor: isApproving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
+              }}>
+              {isApproving ? 'Approving...' : '✅ Approve'}
+            </button>
+          )}
+          {(canvass.status === 'APPROVED' || canvass.status === 'COMPLETED') && (
+            <button 
+              onClick={handleGeneratePO}
+              disabled={isGeneratingPO || canvass.status === 'COMPLETED'}
+              style={{
+                background: canvass.status === 'COMPLETED' ? 'transparent' : 'var(--accent-color)',
+                border: canvass.status === 'COMPLETED' ? '1px solid var(--accent-color)' : 'none',
+                color: canvass.status === 'COMPLETED' ? 'var(--text-secondary)' : '#000',
+                fontWeight: 'bold',
+                padding: '8px 16px', borderRadius: '4px', cursor: (isGeneratingPO || canvass.status === 'COMPLETED') ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
+              }}>
+              {isGeneratingPO ? 'Generating...' : (canvass.status === 'COMPLETED' ? 'PO Generated' : '📄 Generate PO')}
+            </button>
+          )}
           <button 
             onClick={() => setShowEmailModal(true)}
             style={{
@@ -490,72 +526,16 @@ export default function CanvassClientTabs({ canvass, suppliers }: { canvass: any
           </div>
 
           {canvass.aiSummary && (
-            <div>
-              <div style={{ 
-                background: 'rgba(168, 85, 247, 0.1)', 
-                border: '1px solid rgba(168, 85, 247, 0.3)', 
-                padding: '20px', 
-                borderRadius: '8px',
-                whiteSpace: 'pre-wrap',
-                lineHeight: '1.6',
-                color: '#e9d5ff'
-              }}>
-                {canvass.aiSummary}
-              </div>
-
-              <div style={{ marginTop: '30px', borderTop: '1px solid var(--glass-border)', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '15px' }}>
-                {canvass.status === 'DRAFT' && canvass.recommendedSupplierId && (
-                  <button 
-                    onClick={handleEndorse}
-                    disabled={isEndorsing}
-                    style={{
-                      background: '#3b82f6',
-                      color: '#fff',
-                      padding: '12px 24px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      cursor: isEndorsing ? 'not-allowed' : 'pointer',
-                      fontWeight: 'bold',
-                      fontSize: '1rem'
-                    }}>
-                    {isEndorsing ? 'Endorsing...' : '✍️ Endorse Recommendation'}
-                  </button>
-                )}
-                {canvass.status === 'ENDORSED' && (
-                  <button 
-                    onClick={handleApprove}
-                    disabled={isApproving}
-                    style={{
-                      background: '#10b981',
-                      color: '#fff',
-                      padding: '12px 24px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      cursor: isApproving ? 'not-allowed' : 'pointer',
-                      fontWeight: 'bold',
-                      fontSize: '1rem'
-                    }}>
-                    {isApproving ? 'Approving...' : '✅ Approve Recommendation'}
-                  </button>
-                )}
-                {(canvass.status === 'APPROVED' || canvass.status === 'COMPLETED') && (
-                  <button 
-                    onClick={handleGeneratePO}
-                    disabled={isGeneratingPO || canvass.status === 'COMPLETED'}
-                    style={{
-                      background: canvass.status === 'COMPLETED' ? 'transparent' : 'var(--accent-color)',
-                      border: canvass.status === 'COMPLETED' ? '1px solid var(--accent-color)' : 'none',
-                      color: canvass.status === 'COMPLETED' ? 'var(--text-secondary)' : '#000',
-                      padding: '12px 24px',
-                      borderRadius: '8px',
-                      cursor: canvass.status === 'COMPLETED' ? 'not-allowed' : 'pointer',
-                      fontWeight: 'bold',
-                      fontSize: '1rem'
-                    }}>
-                    {canvass.status === 'COMPLETED' ? 'PO Generated ✓' : (isGeneratingPO ? 'Generating PO...' : '⚡ Auto-Generate Purchase Order Draft')}
-                  </button>
-                )}
-              </div>
+            <div style={{ 
+              background: 'rgba(168, 85, 247, 0.1)', 
+              border: '1px solid rgba(168, 85, 247, 0.3)', 
+              padding: '20px', 
+              borderRadius: '8px',
+              whiteSpace: 'pre-wrap',
+              lineHeight: '1.6',
+              color: '#e9d5ff'
+            }}>
+              {canvass.aiSummary}
             </div>
           )}
         </div>

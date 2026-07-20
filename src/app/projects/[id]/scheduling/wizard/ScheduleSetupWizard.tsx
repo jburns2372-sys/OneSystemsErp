@@ -29,31 +29,64 @@ export default function ScheduleSetupWizard({
     }
   };
 
+  const [loadingStep, setLoadingStep] = useState(0);
+  const loadingMessages = [
+    'Initializing Schedule Engine...',
+    '1/14: Loading Project Context...',
+    '2/14: Analyzing Locked Awarded BOQ...',
+    '3/14: Classifying Project Type...',
+    '4/14: Determining Discipline Constraints...',
+    '5/14: Selecting Phase Templates...',
+    '6/14: Generating Dynamic WBS...',
+    '7/14: Grouping BOQ Items into Activities...',
+    '8/14: Estimating Durations via Productivity Rates...',
+    '9/14: Generating Logic & Dependencies...',
+    '10/14: Running CPM (Forward & Backward Pass)...',
+    '11/14: Clamping to Project Boundaries...',
+    '12/14: Executing Financial Reconciliation...',
+    '13/14: Validating Differences (= 0.00)...',
+    '14/14: Finalizing Baseline Draft...'
+  ];
+
   const handleCreateSchedule = async () => {
     setLoading(true);
+    setLoadingStep(0);
     setError('');
     
+    // Simulate progression for the UI since it happens in one backend call
+    const timer = setInterval(() => {
+      setLoadingStep(prev => (prev < loadingMessages.length - 1 ? prev + 1 : prev));
+    }, 1500);
+
     try {
-      const res = await fetch(`/api/projects/${project.id}/scheduling/init`, {
+      const payload: any = {
+        projectId: project.id,
+        consolidateBoq: consolidateBoq,
+        lockedBOQVersionId: project.lockedBOQVersionId || null
+      };
+
+      const res = await fetch(`/api/projects/${project.id}/scheduling/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          description: project.description || '',
-          calendarDays: project.originalContractDuration || 0,
-          workDaysConfig: JSON.stringify(workDays),
-          importBoq: true,
-          consolidateBoq: consolidateBoq
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create schedule');
+      clearInterval(timer);
+      
+      if (!res.ok || !data.success) {
+        if (data.stage && data.message) {
+          throw new Error(`Failed Stage: [${data.stage}]\nReason: ${data.message} ${data.errorCode ? `(${data.errorCode})` : ''}`);
+        }
+        throw new Error(data.error || data.message || 'Failed to create schedule');
+      }
 
-      onScheduleCreated(data.schedule);
+      onScheduleCreated(data.schedule || data); // pass refresh trigger
     } catch (err: any) {
+      clearInterval(timer);
       setError(err.message);
     } finally {
+      clearInterval(timer);
       setLoading(false);
     }
   };
@@ -66,7 +99,9 @@ export default function ScheduleSetupWizard({
       </p>
 
       {error && (
-        <div style={{ padding: '15px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '6px', marginBottom: '20px' }}>
+        <div style={{ padding: '15px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '6px', marginBottom: '20px', whiteSpace: 'pre-wrap' }}>
+          <strong>Generation Error</strong>
+          <br/><br/>
           {error}
         </div>
       )}
@@ -120,9 +155,31 @@ export default function ScheduleSetupWizard({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ padding: '20px', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
             <h3 style={{ margin: '0 0 10px 0', color: 'var(--text-primary)' }}>Contract BOQ Synchronization</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '15px' }}>
-              We found <strong>{awardedBoq?.length || 0}</strong> items in the Awarded Bill of Quantities for this project.
-            </p>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+              <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Total Imported BOQ Rows</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{awardedBoq?.length || 0}</div>
+              </div>
+              <div style={{ padding: '10px', background: 'rgba(0,255,100,0.1)', borderRadius: '6px', border: '1px solid rgba(0,255,100,0.3)' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Valid Priced Detail Lines</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#4ade80' }}>
+                  {awardedBoq?.filter(i => i.totalCost > 0 || i.amount > 0).length || 0}
+                </div>
+              </div>
+              <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Zero-Value Detail Lines</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
+                  {awardedBoq?.filter(i => (i.totalCost === 0 || !i.totalCost) && (i.amount === 0 || !i.amount) && i.unit).length || 0}
+                </div>
+              </div>
+              <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Headers & Subtotals</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
+                  {awardedBoq?.filter(i => !i.unit && !i.quantity).length || 0}
+                </div>
+              </div>
+            </div>
 
             <div style={{ padding: '15px', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: '6px', marginBottom: '15px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
               <input 
@@ -157,11 +214,11 @@ export default function ScheduleSetupWizard({
             <button 
               onClick={handleCreateSchedule}
               disabled={loading}
-              style={{ padding: '10px 24px', backgroundColor: 'var(--accent-color)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+              style={{ padding: '10px 24px', backgroundColor: 'var(--accent-color)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', minWidth: '250px', justifyContent: 'center' }}
             >
               {loading && <span className="spinner" style={{ width: '16px', height: '16px', border: '2px solid #000', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 1s linear infinite' }}></span>}
               {loading 
-                ? (consolidateBoq ? '🧠 AI Simulating Schedule (approx. 20-30s)...' : 'Initializing Schedule...') 
+                ? loadingMessages[loadingStep]
                 : 'Create Project Schedule'}
             </button>
           </div>

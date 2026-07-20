@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import React from "react";
 import { prisma } from "@/lib/prisma";
 import SchedulingDashboardClient from "./SchedulingDashboardClient";
@@ -6,7 +7,8 @@ import { cookies } from 'next/headers';
 
 export default async function SchedulingDashboard() {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   
   const user = await prisma.user.findUnique({ where: { id: userId } });
   const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';

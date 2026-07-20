@@ -7,13 +7,13 @@ export default function PageTitle() {
 
   let title = 'Overview';
 
-  if (pathname.includes('/material-issuance')) {
+  if ((pathname || '').includes('/material-issuance')) {
     title = 'Manage and track materials issued from inventory against the Consolidated BOQ.';
-  } else if (pathname.includes('/projects')) {
+  } else if ((pathname || '').includes('/projects')) {
     title = 'Projects';
-  } else if (pathname.includes('/inventory')) {
+  } else if ((pathname || '').includes('/inventory')) {
     title = 'Inventory Management';
-  } else if (pathname.includes('/material-requests')) {
+  } else if ((pathname || '').includes('/material-requests')) {
     title = 'Material Requests';
   }
 

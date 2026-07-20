@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import React from 'react';
 import { getSubcontractPackageById } from '@/app/actions/subcontractingActions';
 import Link from 'next/link';
@@ -16,7 +17,8 @@ export default async function ViewSubcontractPackagePage({ params }: { params: P
 
   // Check auth and role for unlocking packages
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   let canDelete = false;
   if (sessionId) {
     const user = await prisma.user.findUnique({

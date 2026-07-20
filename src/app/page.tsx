@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 // @ts-nocheck
 import styles from './page.module.css';
 import { cookies } from 'next/headers';
@@ -11,7 +12,8 @@ export default async function Home() {
   const stats = await getDashboardStats();
 
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   
   let currentUser = null;
   if (sessionId) {
@@ -21,13 +23,7 @@ export default async function Home() {
     });
   } 
   
-  if (!currentUser) {
-    // Fallback for demo
-    currentUser = await prisma.user.findFirst({
-      where: { email: 'jburns@demo.com' },
-      include: { userRoles: { include: { role: true } } }
-    });
-  }
+  
 
   let isSystemAdmin = false;
   let primaryRole = 'PROJECT_DIRECTOR';

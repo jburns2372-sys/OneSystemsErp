@@ -152,8 +152,8 @@ export default function Sidebar({ permissions = {}, user }: { permissions?: Reco
 
       <nav style={{ flex: 1, padding: '10px', display: 'flex', flexDirection: 'column', gap: '4px', overflowY: 'auto', overflowX: 'hidden' }}>
         {visibleLinks.map((link) => {
-          const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href) && (!link.subItems || link.subItems.every(sub => !pathname.startsWith(sub.href))));
-          const hasActiveSub = link.subItems?.some(sub => pathname.startsWith(sub.href));
+          const isActive = pathname === link.href || (link.href !== '/' && (pathname || '').startsWith(link.href) && (!link.subItems || link.subItems.every(sub => !(pathname || '').startsWith(sub.href))));
+          const hasActiveSub = link.subItems?.some(sub => (pathname || '').startsWith(sub.href));
 
           return (
             <div key={link.name}>
@@ -185,7 +185,7 @@ export default function Sidebar({ permissions = {}, user }: { permissions?: Reco
               {!isCollapsed && link.subItems && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px', paddingLeft: '45px' }}>
                   {link.subItems.map(sub => {
-                    const isSubActive = pathname.startsWith(sub.href);
+                    const isSubActive = (pathname || '').startsWith(sub.href);
                     return (
                       <Link 
                         key={sub.name}

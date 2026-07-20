@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import CleanupClient from './CleanupClient';
 import { getUserPermissions } from '@/lib/permissions';
@@ -6,7 +7,8 @@ import { redirect } from 'next/navigation';
 
 export default async function RegistryCleanupPage() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const permissions = await getUserPermissions(sessionId);
 
   if (!permissions.IS_ADMIN) {

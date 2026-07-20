@@ -60,7 +60,7 @@ export default function ProcurementBenchmarkTab({
     }
   };
 
-  if (!isLocked && items.length === 0) {
+  if (items.length === 0) {
     return (
       <div style={{ padding: '40px', border: '1px solid var(--glass-border)', borderRadius: '12px', background: 'rgba(0, 0, 0, 0.2)', maxWidth: '600px', margin: '0 auto' }}>
         <h3 style={{ marginBottom: '15px' }}>Upload Procurement Benchmark (Forecast BOQ)</h3>

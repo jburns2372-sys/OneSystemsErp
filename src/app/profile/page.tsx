@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -5,7 +6,8 @@ import ProfileForm from './ProfileForm';
 
 export default async function ProfilePage() {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const userId = __session?.id || '';
 
   if (!userId) {
     redirect('/login');

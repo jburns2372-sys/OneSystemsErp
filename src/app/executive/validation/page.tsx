@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import React from 'react';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
@@ -11,7 +12,8 @@ export const metadata = {
 
 async function getValidationDashboardData() {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   await requirePermission(userId, 'PROJECT_MANAGEMENT', 'canView');
 
   const scores = await prisma.projectValidationScore.findMany({

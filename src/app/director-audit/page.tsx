@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import styles from '../page.module.css';
 import { prisma } from '@/lib/prisma';
 import DirectorAuditClient from './DirectorAuditClient';
@@ -6,7 +7,8 @@ import { redirect } from 'next/navigation';
 
 export default async function DirectorAuditPage() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const currentUserId = sessionId || 'demo-user-id';
 
   // Basic check - would normally use real RBAC matrix, but for now we assume anyone here is acting as Director

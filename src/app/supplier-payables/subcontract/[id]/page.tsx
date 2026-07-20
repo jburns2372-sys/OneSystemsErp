@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
@@ -15,7 +16,8 @@ export default async function SubcontractPayableDetailsPage({
 }) {
   const { origin } = await searchParams;
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   let userRole = 'GUEST';
 
   if (sessionId) {

@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { cookies } from 'next/headers';
 import { checkSocAccess, getSocDashboardStats, getLiveThreatFeed, getThreatMapData, getCountermeasuresData } from '@/app/actions/socActions';
 import SocDashboardClient from './components/SocDashboardClient';
@@ -10,7 +11,8 @@ export const metadata = {
 
 export default async function SecurityDashboardPage() {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const userId = __session?.id || '';
 
   if (!userId) {
     redirect('/login');

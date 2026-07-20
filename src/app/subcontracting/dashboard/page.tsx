@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import React from 'react';
 import Link from 'next/link';
 import styles from '../../page.module.css';
@@ -34,7 +35,8 @@ import { getUserPermissions } from '@/lib/permissions';
 export default async function SubcontractingDashboard() {
   const cookieStore = await cookies();
   const activeProjectId = cookieStore.get('activeProjectId')?.value || undefined;
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const permissions = await getUserPermissions(sessionId);
 
   if (!activeProjectId && !permissions.IS_ADMIN) {

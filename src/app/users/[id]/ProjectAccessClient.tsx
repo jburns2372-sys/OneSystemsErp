@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { addProjectAssignment, updateProjectAssignment, deleteProjectAssignment } from '@/app/actions/projectUserAssignment';
+import { addProjectAssignment, updateProjectAssignment, deleteProjectAssignment, updateProjectUserRoleAction } from '@/app/actions/projectUserAssignment';
 
 export default function ProjectAccessClient({ 
   userId, 
@@ -19,8 +19,40 @@ export default function ProjectAccessClient({
     accessLevel: 'standard_project_access',
     remarks: ''
   });
+  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
+  const [editData, setEditData] = useState({ newProjectRole: '', reason: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleEditRole = async (assignment: any) => {
+    if (!editData.reason) {
+      alert('Please provide a correction reason.');
+      return;
+    }
+    if (editData.newProjectRole === assignment.projectRole) {
+      alert('Please select a different valid role.');
+      return;
+    }
+    if (!confirm('Are you sure you want to change this project role?')) return;
+    
+    setLoading(true);
+    setError(null);
+    const res = await updateProjectUserRoleAction({
+      assignmentId: assignment.id,
+      expectedCurrentProjectRole: assignment.projectRole,
+      newProjectRole: editData.newProjectRole,
+      reason: editData.reason
+    });
+    
+    if (!res.success) {
+      setError(res.error || 'Failed to update project role.');
+    } else {
+      setEditingAssignmentId(null);
+      setEditData({ newProjectRole: '', reason: '' });
+      setError('Success: Project role updated.');
+    }
+    setLoading(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,7 +127,13 @@ export default function ProjectAccessClient({
             </div>
             <div style={{ flex: '1 1 150px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
               <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Project Role *</label>
-              <input required type="text" value={formData.projectRole} onChange={e => setFormData({ ...formData, projectRole: e.target.value })} placeholder="e.g. PROJECT_MANAGER" style={{ padding: '8px', borderRadius: '4px', backgroundColor: 'rgba(0,0,0,0.5)', color: 'white', border: '1px solid var(--glass-border)' }} />
+              <select required value={formData.projectRole} onChange={e => setFormData({ ...formData, projectRole: e.target.value })} style={{ padding: '8px', borderRadius: '4px', backgroundColor: 'rgba(0,0,0,0.5)', color: 'white', border: '1px solid var(--glass-border)' }}>
+                <option value="PROJECT_MANAGER">Project Manager</option>
+                <option value="PROJECT_ENGINEER">Project Engineer</option>
+                <option value="FINANCE_OFFICER">Finance Officer</option>
+                <option value="PROJECT_DIRECTOR">Project Director</option>
+                <option value="PURCHASING_OFFICER">Purchasing Officer</option>
+              </select>
             </div>
             <div style={{ flex: '1 1 150px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
               <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Access Level *</label>
@@ -146,12 +184,43 @@ export default function ProjectAccessClient({
                   </span>
                 </td>
                 <td style={{ padding: '12px 5px', textAlign: 'right' }}>
-                  {a.assignmentStatus === 'active' ? (
-                    <button onClick={() => handleStatusChange(a.id, 'suspended')} style={{ background: 'transparent', border: '1px solid #f59e0b', color: '#f59e0b', padding: '4px 8px', borderRadius: '4px', marginRight: '5px', cursor: 'pointer', fontSize: '0.8rem' }}>Suspend</button>
+                  {editingAssignmentId === a.id ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end' }}>
+                      <select 
+                        value={editData.newProjectRole} 
+                        onChange={e => setEditData({ ...editData, newProjectRole: e.target.value })}
+                        style={{ padding: '4px', borderRadius: '4px', fontSize: '0.8rem', backgroundColor: 'rgba(0,0,0,0.5)', color: 'white', border: '1px solid var(--glass-border)' }}
+                      >
+                        <option value="">-- Select New Role --</option>
+                        <option value="PROJECT_MANAGER">Project Manager</option>
+                        <option value="PROJECT_ENGINEER">Project Engineer</option>
+                        <option value="FINANCE_OFFICER">Finance Officer</option>
+                        <option value="PROJECT_DIRECTOR">Project Director</option>
+                        <option value="PURCHASING_OFFICER">Purchasing Officer</option>
+                      </select>
+                      <input 
+                        type="text" 
+                        placeholder="Correction reason..." 
+                        value={editData.reason}
+                        onChange={e => setEditData({ ...editData, reason: e.target.value })}
+                        style={{ padding: '4px', borderRadius: '4px', fontSize: '0.8rem', backgroundColor: 'rgba(0,0,0,0.5)', color: 'white', border: '1px solid var(--glass-border)' }}
+                      />
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        <button disabled={loading} onClick={() => handleEditRole(a)} style={{ fontSize: '0.8rem', padding: '2px 8px', background: 'var(--accent-color)', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Save</button>
+                        <button disabled={loading} onClick={() => setEditingAssignmentId(null)} style={{ fontSize: '0.8rem', padding: '2px 8px', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
+                      </div>
+                    </div>
                   ) : (
-                    <button onClick={() => handleStatusChange(a.id, 'active')} style={{ background: 'transparent', border: '1px solid #4ade80', color: '#4ade80', padding: '4px 8px', borderRadius: '4px', marginRight: '5px', cursor: 'pointer', fontSize: '0.8rem' }}>Activate</button>
+                    <>
+                      {a.assignmentStatus === 'active' ? (
+                        <button onClick={() => handleStatusChange(a.id, 'suspended')} style={{ background: 'transparent', border: '1px solid #f59e0b', color: '#f59e0b', padding: '4px 8px', borderRadius: '4px', marginRight: '5px', cursor: 'pointer', fontSize: '0.8rem' }}>Suspend</button>
+                      ) : (
+                        <button onClick={() => handleStatusChange(a.id, 'active')} style={{ background: 'transparent', border: '1px solid #4ade80', color: '#4ade80', padding: '4px 8px', borderRadius: '4px', marginRight: '5px', cursor: 'pointer', fontSize: '0.8rem' }}>Activate</button>
+                      )}
+                      <button onClick={() => { setEditingAssignmentId(a.id); setEditData({ newProjectRole: a.projectRole, reason: '' }); }} style={{ background: 'transparent', border: '1px solid #3b82f6', color: '#3b82f6', padding: '4px 8px', borderRadius: '4px', marginRight: '5px', cursor: 'pointer', fontSize: '0.8rem' }}>Edit Role</button>
+                      <button onClick={() => handleDelete(a.id)} style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>Remove</button>
+                    </>
                   )}
-                  <button onClick={() => handleDelete(a.id)} style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>Remove</button>
                 </td>
               </tr>
             ))}

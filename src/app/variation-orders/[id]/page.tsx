@@ -28,7 +28,7 @@ import styles from '../../projects/page.module.css';
 export default function VariationOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const voId = params.id as string;
+  const voId = params?.id as string;
 
   const [vo, setVo] = useState<any>(null);
   const [loading, setLoading] = useState(true);

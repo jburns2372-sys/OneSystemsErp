@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import styles from '../../projects/page.module.css';
@@ -10,7 +11,8 @@ export default async function StocksPage({ searchParams }: { searchParams: Promi
   const inStockOnly = resolvedParams?.inStock === 'true';
 
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
   const user = sessionId ? await prisma.user.findUnique({ where: { id: sessionId } }) : null;

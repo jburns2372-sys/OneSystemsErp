@@ -338,39 +338,42 @@ export default function GanttChartView({
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={runCPM}
-            disabled={isRunningCPM}
-            style={{
-              padding: '8px 18px',
-              borderRadius: '6px',
-              border: '1px solid rgba(16, 185, 129, 0.5)',
-              backgroundColor: 'rgba(16, 185, 129, 0.15)',
-              color: '#10b981',
-              cursor: isRunningCPM ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              fontSize: '0.85rem',
-              transition: 'all 0.2s'
-            }}
-          >
-            {isRunningCPM ? '⏳ Computing...' : '🧮 Run CPM'}
-          </button>
+          {scheduleStatus !== 'ACTIVE_BASELINE' && (
+            <button
+              onClick={runCPM}
+              disabled={isRunningCPM}
+              style={{
+                padding: '8px 18px',
+                borderRadius: '6px',
+                border: '1px solid rgba(16, 185, 129, 0.5)',
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                color: '#10b981',
+                cursor: isRunningCPM ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                transition: 'all 0.2s'
+              }}
+            >
+              {isRunningCPM ? '⏳ Computing...' : '🧮 Run CPM'}
+            </button>
+          )}
+          
           <button
             onClick={lockBaseline}
-            disabled={isLockingBaseline || scheduleStatus === 'BASELINE'}
+            disabled={isLockingBaseline || scheduleStatus === 'BASELINE' || scheduleStatus === 'ACTIVE_BASELINE'}
             style={{
               padding: '8px 18px',
               borderRadius: '6px',
               border: '1px solid rgba(245, 158, 11, 0.5)',
-              backgroundColor: scheduleStatus === 'BASELINE' ? 'rgba(245, 158, 11, 0.05)' : 'rgba(245, 158, 11, 0.15)',
-              color: scheduleStatus === 'BASELINE' ? 'var(--text-secondary)' : '#f59e0b',
-              cursor: (isLockingBaseline || scheduleStatus === 'BASELINE') ? 'not-allowed' : 'pointer',
+              backgroundColor: (scheduleStatus === 'BASELINE' || scheduleStatus === 'ACTIVE_BASELINE') ? 'rgba(245, 158, 11, 0.05)' : 'rgba(245, 158, 11, 0.15)',
+              color: (scheduleStatus === 'BASELINE' || scheduleStatus === 'ACTIVE_BASELINE') ? 'var(--text-secondary)' : '#f59e0b',
+              cursor: (isLockingBaseline || scheduleStatus === 'BASELINE' || scheduleStatus === 'ACTIVE_BASELINE') ? 'not-allowed' : 'pointer',
               fontWeight: 'bold',
               fontSize: '0.85rem',
               transition: 'all 0.2s'
             }}
           >
-            {scheduleStatus === 'BASELINE' ? '✅ Baselined' : (isLockingBaseline ? '⏳ Locking...' : '🔒 Lock Baseline')}
+            {scheduleStatus === 'BASELINE' || scheduleStatus === 'ACTIVE_BASELINE' ? '✅ Baselined' : (isLockingBaseline ? '⏳ Locking...' : '🔒 Lock Baseline')}
           </button>
         </div>
       </div>

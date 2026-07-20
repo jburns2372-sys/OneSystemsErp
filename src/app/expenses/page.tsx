@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import styles from '../projects/page.module.css';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
@@ -8,7 +9,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function ExpensesPage() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
   const user = await prisma.user.findUnique({ where: { id: sessionId } });

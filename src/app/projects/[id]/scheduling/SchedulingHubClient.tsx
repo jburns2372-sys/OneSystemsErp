@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { deleteProjectSchedule } from '@/app/actions/schedulingActions';
+
 import ScheduleSetupWizard from './wizard/ScheduleSetupWizard';
 import WBSActivityList from './wbs/WBSActivityList';
 import GanttChartView from './gantt/GanttChartView';
@@ -11,15 +11,18 @@ import DelayAndRecoveryTab from './delays/DelayAndRecoveryTab';
 import PERTNetworkDiagram from './pert/PERTNetworkDiagram';
 import AIScheduleIntelligence from './ai/AIScheduleIntelligence';
 import PhaseSummaryView from './PhaseSummaryView';
+import ScheduleReviewPanel from './review/ScheduleReviewPanel';
 
 export default function SchedulingHubClient({ 
   project, 
   initialSchedule, 
-  awardedBoq 
+  awardedBoq,
+  actor
 }: { 
   project: any; 
   initialSchedule: any; 
   awardedBoq: any;
+  actor?: any;
 }) {
   const router = useRouter();
   const [schedule, setSchedule] = useState(initialSchedule);
@@ -27,10 +30,12 @@ export default function SchedulingHubClient({
   const [isDeleting, startTransition] = useTransition();
 
   const handleDeleteSchedule = () => {
-    if (confirm('Are you sure you want to delete this schedule? This will permanently remove all WBS nodes, activities, dependencies, and BOQ mappings.')) {
+    if (confirm('Are you sure you want to delete this schedule? This will permanently remove all WBS nodes, activities, dependencies, and BOQ allocations.')) {
       startTransition(async () => {
         try {
-          await deleteProjectSchedule(project.id);
+          const res = await fetch(`/api/projects/${project.id}/scheduling/delete`, { method: 'DELETE' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to delete schedule');
           setSchedule(null);
           router.refresh();
         } catch (err: any) {
@@ -48,6 +53,19 @@ export default function SchedulingHubClient({
     setSchedule(initialSchedule);
   }, [initialSchedule]);
 
+  const hasValidSchedule = 
+    schedule !== null &&
+    schedule !== undefined &&
+    schedule.id !== null &&
+    schedule.id !== undefined &&
+    schedule.name?.trim().length > 0 &&
+    schedule.status !== null &&
+    schedule.status !== undefined &&
+    (schedule.phases?.length || schedule.wbsNodes?.length || 0) > 0 &&
+    (schedule.activities?.length || 0) > 0 &&
+    Number(schedule.awardedContractAmount || 0) > 0 &&
+    Number(schedule.scheduledAmount || 0) > 0;
+
   if (!schedule) {
     return (
       <ScheduleSetupWizard 
@@ -58,6 +76,31 @@ export default function SchedulingHubClient({
           router.refresh();
         }} 
       />
+    );
+  }
+
+  if (!hasValidSchedule) {
+    return (
+      <div style={{ maxWidth: '800px', margin: '40px auto', padding: '30px', textAlign: 'center' }} className="glass-panel">
+        <h2 style={{ color: 'var(--accent-color)' }}>NO VALID PROJECT SCHEDULE</h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+          No complete project schedule is currently available for this project.
+        </p>
+        <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', padding: '15px', borderRadius: '6px', textAlign: 'left', marginBottom: '20px' }}>
+          <h4 style={{ color: '#ef4444', margin: '0 0 10px 0' }}>Generation Failed or Incomplete</h4>
+          <p style={{ margin: '0 0 5px 0' }}>The schedule data structure is incomplete or generation failed.</p>
+        </div>
+        <button 
+          onClick={() => {
+            setSchedule(null);
+            router.refresh();
+          }}
+          className="btn btn-primary"
+          style={{ padding: '10px 20px', cursor: 'pointer' }}
+        >
+          Retry Generation
+        </button>
+      </div>
     );
   }
 
@@ -115,6 +158,15 @@ export default function SchedulingHubClient({
   const avgProgress = totalActivities > 0 
     ? Math.round(schedule.activities.reduce((sum: number, a: any) => sum + (a.actualProgressPercent || 0), 0) / totalActivities) 
     : 0;
+    
+  let validationMetrics = null;
+  try {
+    if (schedule.validationMetrics) {
+      validationMetrics = typeof schedule.validationMetrics === 'string' ? JSON.parse(schedule.validationMetrics) : schedule.validationMetrics;
+    }
+  } catch (e) {
+    console.warn("Failed to parse validationMetrics");
+  }
 
   return (
     <div style={{ padding: '20px' }}>
@@ -125,32 +177,62 @@ export default function SchedulingHubClient({
           <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', fontSize: '0.85rem' }}>
             <span style={{ color: 'var(--text-secondary)' }}>Schedule: <span style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>{schedule.name}</span></span>
             <span style={{ color: 'var(--text-secondary)' }}>Status: <span style={{ 
-              color: schedule.status === 'BASELINE' ? '#10b981' : schedule.status === 'DRAFT' ? '#f59e0b' : 'var(--accent-color)', 
+              color: schedule.workflowStatus === 'ACTIVE_BASELINE' ? '#10b981' : schedule.workflowStatus === 'DRAFT' ? '#f59e0b' : 'var(--accent-color)', 
               fontWeight: 'bold' 
-            }}>{schedule.status}</span></span>
+            }}>{schedule.workflowStatus || schedule.status}</span></span>
             
-            {schedule.status !== 'BASELINE' && (
+            {schedule.workflowStatus === 'ACTIVE_BASELINE' && (
+              <span style={{ 
+                color: '#10b981', 
+                backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                padding: '2px 8px', 
+                borderRadius: '12px', 
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                🔒 Authoritative Active Baseline | Row Version {schedule.rowVersion}
+              </span>
+            )}
+            
+            {schedule.workflowStatus !== 'ACTIVE_BASELINE' && (
               <button
                 onClick={handleDeleteSchedule}
                 disabled={isDeleting}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid #ef4444',
-                  color: '#ef4444',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                  cursor: isDeleting ? 'not-allowed' : 'pointer',
-                  opacity: isDeleting ? 0.5 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                {isDeleting ? 'Deleting...' : '🗑️ Delete Schedule'}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #ef4444',
+                    color: '#ef4444',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    cursor: isDeleting ? 'not-allowed' : 'pointer',
+                    opacity: isDeleting ? 0.5 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                {isDeleting ? '⏳ Deleting...' : '🗑️ Delete Schedule'}
               </button>
             )}
           </div>
+          
+          {validationMetrics && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+               {Object.entries(validationMetrics).map(([key, val]) => (
+                 <span key={key} style={{ 
+                   fontSize: '0.7rem', padding: '3px 6px', borderRadius: '4px',
+                   backgroundColor: val === 'INVALID' || val === 'INFEASIBLE' || val === 'MISSING_TESTING' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                   color: val === 'INVALID' || val === 'INFEASIBLE' || val === 'MISSING_TESTING' ? '#ef4444' : '#10b981',
+                   border: `1px solid ${val === 'INVALID' || val === 'INFEASIBLE' || val === 'MISSING_TESTING' ? '#ef4444' : '#10b981'}`
+                 }}>
+                   {key}: <strong>{String(val)}</strong>
+                 </span>
+               ))}
+            </div>
+          )}
         </div>
 
         {/* Quick Stats */}
@@ -175,6 +257,36 @@ export default function SchedulingHubClient({
           ))}
         </div>
       </div>
+
+      {/* Financial Reconciliation Banner */}
+      <div style={{
+        padding: '12px 20px',
+        borderRadius: '8px',
+        marginBottom: '15px',
+        border: `1px solid ${!hasValidSchedule ? '#f59e0b' : Number(schedule.differenceAmount || 0) === 0 ? '#10b981' : '#ef4444'}`,
+        backgroundColor: !hasValidSchedule ? 'rgba(245, 158, 11, 0.1)' : Number(schedule.differenceAmount || 0) === 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '1.5rem' }}>{!hasValidSchedule ? '⚠️' : Number(schedule.differenceAmount || 0) === 0 ? '✅' : '❌'}</span>
+          <div>
+            <div style={{ fontWeight: 'bold', color: !hasValidSchedule ? '#f59e0b' : Number(schedule.differenceAmount || 0) === 0 ? '#10b981' : '#ef4444' }}>
+              {!hasValidSchedule ? 'INCOMPLETE SCHEDULE (NOT CALCULATED)' : Number(schedule.differenceAmount || 0) === 0 ? 'Financially Reconciled' : 'Financial Mismatch Detected'}
+            </div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              Awarded Contract: ₱{Number(schedule.awardedContractAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})} | Scheduled Amount: ₱{Number(schedule.scheduledAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: !hasValidSchedule ? '#f59e0b' : Number(schedule.differenceAmount || 0) === 0 ? '#10b981' : '#ef4444' }}>
+          Diff: ₱{Number(schedule.differenceAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+        </div>
+      </div>
+
+      {/* Schedule Review Panel */}
+      <ScheduleReviewPanel schedule={schedule} projectId={project.id} actor={actor} />
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '15px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px', overflowX: 'auto' }}>

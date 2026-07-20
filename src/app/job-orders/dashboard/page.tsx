@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import React from 'react';
 import Link from 'next/link';
 import styles from '../../page.module.css';
@@ -17,7 +18,8 @@ import { cookies } from 'next/headers';
 export default async function JobOrderDashboard() {
   const cookieStore = await cookies();
   const activeProjectId = cookieStore.get('activeProjectId')?.value || undefined;
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
 
   const { prisma } = await import('@/lib/prisma');
   const user = await prisma.user.findUnique({ where: { id: sessionId } });
@@ -36,7 +38,7 @@ export default async function JobOrderDashboard() {
 
   // Basic KPI calculations
   const activeCount = jobOrders.length;
-  const totalPayable = jobOrders.reduce((sum, jo) => sum + (jo.contractAmount || 0), 0);
+  const totalPayable = jobOrders.reduce((sum: number, jo: { contractAmount?: number | null }) => sum + (jo.contractAmount || 0), 0);
 
   return (
     <div className={styles.dashboardContainer} style={{ maxWidth: '1400px' }}>

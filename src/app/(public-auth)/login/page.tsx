@@ -19,8 +19,11 @@ export default function LoginPage() {
       if (result?.error) {
         setError(result.error);
         setLoading(false);
+      } else if (result?.redirect) {
+        window.location.href = result.redirect;
       }
     } catch (err: any) {
+      if (err.message === 'NEXT_REDIRECT') throw err;
       setError(err.message || 'An unexpected error occurred during authentication.');
       setLoading(false);
     }

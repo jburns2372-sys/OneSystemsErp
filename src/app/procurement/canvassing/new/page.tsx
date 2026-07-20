@@ -7,7 +7,7 @@ import { createCanvassForm } from '@/app/actions/canvass';
 export default function StartCanvassPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const mrId = searchParams.get('mrId');
+  const mrId = searchParams?.get('mrId');
 
   useEffect(() => {
     async function start() {

@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
@@ -5,7 +6,8 @@ import DeleteCanvassButton from './DeleteCanvassButton';
 
 export default async function CanvassingDashboard() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || cookieStore.get('userId')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
   
   let isSuperAdmin = false;
