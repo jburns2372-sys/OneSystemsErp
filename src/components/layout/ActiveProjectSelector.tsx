@@ -20,6 +20,13 @@ export default function ActiveProjectSelector({
     // We can show a warning here if there is unsaved work, but for now we proceed
     startTransition(async () => {
       await setActiveProjectCookie(newProjectId || null);
+      
+      if (newProjectId) {
+        router.push(`/projects/${newProjectId}`);
+      } else {
+        router.push('/');
+      }
+      
       // Refresh the route to trigger server components to read the new cookie
       router.refresh();
     });
