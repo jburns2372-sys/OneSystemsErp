@@ -1,12 +1,24 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { assertScheduleEditable } from '@/lib/scheduling/scheduleWorkflow';
+import { verifyApiSession } from '@/lib/dal/auth';
+import { checkUserAccess } from '@/lib/accessControl';
 
 // GET: List all activities for a schedule
 // POST: Create a new activity
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await verifyApiSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id: projectId } = await params;
+    const access = await checkUserAccess(session.id, projectId, 'Scheduling', 'READ');
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.denialReason || 'Access Denied' }, { status: 403 });
+    }
+
     const schedule = await prisma.projectSchedule.findFirst({
       where: { projectId },
       include: {
@@ -38,7 +50,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await verifyApiSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id: projectId } = await params;
+    const access = await checkUserAccess(session.id, projectId, 'Scheduling', 'CREATE');
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.denialReason || 'Access Denied' }, { status: 403 });
+    }
+
     const body = await req.json();
     const { name, activityCode, description, wbsId, plannedDuration, plannedStartDate, plannedFinishDate, unit, plannedQuantity } = body;
 

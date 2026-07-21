@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
   },
   turbopack: {},
   serverExternalPackages: ['pdf-parse', 'pdfjs-dist'],
+  // Allow Playwright to connect from 127.0.0.1
+  ...({ allowedDevOrigins: ['127.0.0.1'] } as any),
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',

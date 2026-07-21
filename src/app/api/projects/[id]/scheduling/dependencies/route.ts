@@ -2,10 +2,22 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { wouldCreateCycle } from '@/lib/cpm-engine';
 import { assertScheduleEditable } from '@/lib/scheduling/scheduleWorkflow';
+import { verifyApiSession } from '@/lib/dal/auth';
+import { checkUserAccess } from '@/lib/accessControl';
 
 // POST: Create a dependency
 // DELETE: Delete a dependency (pass id in body)
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await verifyApiSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const _authParams = await params;
+  const access = await checkUserAccess(session.id, _authParams.id, 'Scheduling', 'EDIT');
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.denialReason || 'Access Denied' }, { status: 403 });
+  }
+
   try {
     const { id: projectId } = await params;
     const body = await req.json();
@@ -79,6 +91,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await verifyApiSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const _authParams = await params;
+  const access = await checkUserAccess(session.id, _authParams.id, 'Scheduling', 'DELETE');
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.denialReason || 'Access Denied' }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { dependencyId } = body;
