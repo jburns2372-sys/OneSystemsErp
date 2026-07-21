@@ -14,19 +14,23 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    const client = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
-    
-    // Authenticate with Amazon Cognito
-    const command = new InitiateAuthCommand({
-      AuthFlow: "USER_PASSWORD_AUTH",
-      ClientId: process.env.COGNITO_CLIENT_ID || "",
-      AuthParameters: {
-        USERNAME: email,
-        PASSWORD: password,
-      },
-    });
+    if (process.env.COGNITO_CLIENT_ID) {
+      const client = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
+      
+      // Authenticate with Amazon Cognito
+      const command = new InitiateAuthCommand({
+        AuthFlow: "USER_PASSWORD_AUTH",
+        ClientId: process.env.COGNITO_CLIENT_ID,
+        AuthParameters: {
+          USERNAME: email,
+          PASSWORD: password,
+        },
+      });
 
-    await client.send(command);
+      await client.send(command);
+    } else {
+      console.log('Bypassing Cognito authentication for local development (no COGNITO_CLIENT_ID set)');
+    }
 
     // Authentication successful in Cognito, now get internal user mapping
     const user = await prisma.user.findUnique({

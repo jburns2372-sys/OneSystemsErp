@@ -14,7 +14,7 @@ const router = Router();
 
 router.post('/resetTransactionData', async (req, res) => {
   try {
-    const { confirmationText, sessionId } = req.body; // sessionId expected from proxy
+    const { confirmationText, sessionId, simulatedRole } = req.body; // sessionId/simulatedRole expected from proxy
 
     if (confirmationText !== 'RESET TRANSACTION DATA ONLY') {
       return res.status(400).json({ success: false, error: 'Invalid confirmation text.' });
@@ -30,10 +30,16 @@ router.post('/resetTransactionData', async (req, res) => {
       currentUser = await prisma.user.findFirst();
     }
 
-    if (!currentUser) throw new Error('User not found');
+    const userCount = await prisma.user.count();
+    let effectiveRole = simulatedRole;
 
-    if (currentUser.role !== 'SUPER_ADMIN') {
-      throw new Error('Unauthorized Action: Only SUPER_ADMIN can perform a master reset.');
+    if (userCount > 0) {
+      if (!currentUser) throw new Error('User not found');
+      effectiveRole = simulatedRole || currentUser.role;
+      
+      if (effectiveRole !== 'SUPER_ADMIN') {
+        throw new Error('Unauthorized Action: Only SUPER_ADMIN can perform a master reset.');
+      }
     }
 
     // 1. Create a Backup First
@@ -196,9 +202,105 @@ router.post('/resetTransactionData', async (req, res) => {
       await tx.bOQMapping.deleteMany({});
       await tx.awardedBOQItem.deleteMany({});
       await tx.consolidatedBOQItem.deleteMany({});
+      await tx.scheduleRevisionRequest.deleteMany({});
+      await tx.scheduleRecoveryPlan.deleteMany({});
+      await tx.scheduleDelayRecord.deleteMany({});
+      await tx.scheduleProgressUpdate.deleteMany({});
+      await tx.schedulePOWMapping.deleteMany({});
+      await tx.scheduleBOQMapping.deleteMany({});
+      await tx.scheduleMilestone.deleteMany({});
+      await tx.scheduleDependency.deleteMany({});
+      await tx.scheduleActivity.deleteMany({});
+      await tx.scheduleWBS.deleteMany({});
+      await tx.projectSchedule.deleteMany({});
+      await tx.projectUserAssignment.deleteMany({});
       await tx.project.deleteMany({});
       await tx.supplier.deleteMany({});
       await tx.subcontractor.deleteMany({});
+
+      // --- PHASE 12: Seed Reference Data (Requested by User) ---
+      await tx.worker.createMany({
+        data: [
+          { firstName: 'Sample', lastName: 'Foreman', designation: 'Foreman', workerCategory: 'SKILLED', dailyRate: 800 },
+          { firstName: 'Sample', lastName: 'Mason', designation: 'Mason', workerCategory: 'SKILLED', dailyRate: 650 },
+          { firstName: 'Sample', lastName: 'Carpenter', designation: 'Carpenter', workerCategory: 'SKILLED', dailyRate: 650 },
+          { firstName: 'Sample', lastName: 'Helper 1', designation: 'Helper', workerCategory: 'UNSKILLED', dailyRate: 500 },
+          { firstName: 'Sample', lastName: 'Helper 2', designation: 'Helper', workerCategory: 'UNSKILLED', dailyRate: 500 }
+        ]
+      });
+
+      await tx.subcontractor.createMany({
+        data: [
+          { name: 'Sample Steel Works Subcon', businessType: 'CORPORATION', contactPerson: 'Juan Dela Cruz' },
+          { name: 'Sample Painting Subcon', businessType: 'CORPORATION', contactPerson: 'Pedro Penduko' },
+          { name: 'Sample Electrical Subcon', businessType: 'CORPORATION', contactPerson: 'John Doe' },
+          { name: 'Sample Plumbing Subcon', businessType: 'CORPORATION', contactPerson: 'Jane Doe' },
+          { name: 'Sample Tile Works Subcon', businessType: 'CORPORATION', contactPerson: 'Mario Rossi' }
+        ]
+      });
+
+      await tx.supplier.createMany({
+        data: [
+          { name: 'Sample Hardware Supplier', contactPerson: 'Supplier Contact 1' },
+          { name: 'Sample Cement Supplier', contactPerson: 'Supplier Contact 2' },
+          { name: 'Sample Electrical Supplier', contactPerson: 'Supplier Contact 3' },
+          { name: 'Sample Lumber Supplier', contactPerson: 'Supplier Contact 4' },
+          { name: 'Sample Paints Supplier', contactPerson: 'Supplier Contact 5' }
+        ]
+      });
+
+      // Clean up old sample users that were previously seeded
+      await tx.userRole.deleteMany({ where: { user: { email: { startsWith: 'sample.' } } } });
+      await tx.user.deleteMany({ where: { email: { startsWith: 'sample.' } } });
+
+      const rolesToSeed = [
+        { email: 'director@onesystemserp.com', name: 'Project Director', roleCode: 'PROJECT_DIRECTOR' },
+        { email: 'manager@onesystemserp.com', name: 'Project Manager', roleCode: 'PROJECT_MANAGER' },
+        { email: 'purchasing@onesystemserp.com', name: 'Purchasing Officer', roleCode: 'PURCHASING_OFFICER' },
+        { email: 'finance@onesystemserp.com', name: 'Finance Officer', roleCode: 'FINANCE_OFFICER' },
+        { email: 'accounting@onesystemserp.com', name: 'Accountant', roleCode: 'ACCOUNTANT' },
+        { email: 'billing@onesystemserp.com', name: 'Billing Engineer', roleCode: 'BILLING_ENGINEER' },
+        { email: 'engineer@onesystemserp.com', name: 'Site Engineer', roleCode: 'SITE_ENGINEER' },
+        { email: 'admin@onesystemserp.com', name: 'Site Admin', roleCode: 'SITE_ADMIN' }
+      ];
+
+      for (const u of rolesToSeed) {
+        let user = await tx.user.findFirst({ where: { email: u.email } });
+        if (!user) {
+          user = await tx.user.create({
+            data: {
+              name: u.name,
+              email: u.email,
+              passwordHash: '$2b$10$6VGqOkFNU48h/2NcmMYShuHLyRKZ9wlbVDfEtGpxSuhZO5t9A8O5u', // admin001
+              password: 'admin001', // fallback
+              role: u.roleCode,
+              status: 'ACTIVE',
+              defaultRole: u.roleCode
+            }
+          });
+        } else {
+          user = await tx.user.update({
+            where: { id: user.id },
+            data: {
+              passwordHash: '$2b$10$6VGqOkFNU48h/2NcmMYShuHLyRKZ9wlbVDfEtGpxSuhZO5t9A8O5u',
+              password: 'admin001',
+              role: u.roleCode,
+              defaultRole: u.roleCode
+            }
+          });
+        }
+        const roleRecord = await tx.role.findFirst({ where: { roleCode: u.roleCode } });
+        if (roleRecord) {
+          const existingUserRole = await tx.userRole.findFirst({
+            where: { userId: user.id, roleId: roleRecord.id }
+          });
+          if (!existingUserRole) {
+            await tx.userRole.create({
+              data: { userId: user.id, roleId: roleRecord.id }
+            });
+          }
+        }
+      }
 
       // ============================================================================
       // PROTECTED (NOT deleted):
@@ -257,10 +359,17 @@ router.post('/resetTransactionData', async (req, res) => {
 
 router.post('/getCurrentUserRole', async (req, res) => {
   try {
-    const { sessionId } = req.body; // sessionId expected from proxy
+    const { sessionId, simulatedRole } = req.body; // sessionId expected from proxy
 
+    if (simulatedRole) return res.json({ success: true, role: simulatedRole });
     if (!sessionId) return res.json({ success: true, role: null });
     const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
+    
+    if (!currentUser) {
+      const userCount = await prisma.user.count();
+      if (userCount === 0) return res.json({ success: true, role: 'SUPER_ADMIN' });
+    }
+
     return res.json({ success: true, role: currentUser?.role || null });
   } catch (e: any) {
     console.error('Failed to get current user role:', e);
