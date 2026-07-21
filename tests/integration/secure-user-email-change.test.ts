@@ -186,7 +186,9 @@ describe('Secure User Email Change', () => {
   const consumed = tokens.find(t => t.id === consumedToken.id);
 
   assert(unused?.revokedAt !== null);
-  assert(expired?.revokedAt === null); // preserved
+  console.log('expired token:', expired);
+  assert(expired !== undefined);
+  assert(expired.revokedAt === null); // preserved
   assert(consumed?.revokedAt === null); // preserved
 
   const audits = await prisma.auditLog.findMany({ where: { userId: user.id, actionType: 'UAT_USER_EMAIL_CORRECTION' } });
