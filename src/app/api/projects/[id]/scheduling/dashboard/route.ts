@@ -125,6 +125,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     return NextResponse.json({
+      schedule,
       kpis: {
         totalActivities,
         completedActivities,
