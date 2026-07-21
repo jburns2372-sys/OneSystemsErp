@@ -225,7 +225,5 @@ describe('Secure User Email Change', () => {
   console.log('All tests passed!');
   await cleanup();
   await prisma.$disconnect();
-}
-
   }, 60000);
 });
