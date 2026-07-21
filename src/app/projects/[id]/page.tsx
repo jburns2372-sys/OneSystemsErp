@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { auth } from '@/auth';
 
 import BOQActions from './BOQActions';
 import AwardedBOQViewer from './AwardedBOQViewer';
@@ -83,13 +84,14 @@ export default async function ProjectDetailsPage({
     return <div style={{ padding: '20px', color: 'red' }}>Project not found.</div>;
   }
 
-  const cookieStore = await cookies();
-  const email = cookieStore.get('demo_user_email')?.value; 
-  if(!email) {
-    redirect('/');
+  const session = await auth();
+  if(!session || !session.user) {
+    redirect('/login');
   }
+  
+  const userId = session.user.id;
   const currentUser = await prisma.user.findFirst({
-    where: { email },
+    where: { id: userId },
     include: { userRoles: { include: { role: true } } }
   });
   const isPurchasingOfficer = currentUser?.userRoles.some(ur => ur.role.roleCode === 'PURCHASING_OFFICER');

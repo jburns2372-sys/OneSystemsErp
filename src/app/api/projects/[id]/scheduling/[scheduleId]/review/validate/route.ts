@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const access = await checkSchedulingAccess(projectId, 'WRITE');
+    const access = await checkSchedulingAccess(actor.id, actor.role, projectId, 'canEdit');
     if (!access.allowed) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
