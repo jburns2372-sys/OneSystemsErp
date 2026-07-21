@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
@@ -10,7 +11,8 @@ import { cookies } from 'next/headers';
 // for backend validation.
 async function fetchWithAuth(url: string, options: RequestInit) {
   const cookieStore = await cookies();
-  const session = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const session = __session?.id || '';
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
 
   const headers = {
@@ -29,7 +31,7 @@ async function fetchWithAuth(url: string, options: RequestInit) {
     body = JSON.stringify({ userId: session, simulatedRole }); // Case for empty original body
   }
 
-  const response = await fetch(`${process.env.AWS_BACKEND_URL}${url}`, {
+  const response = await fetch(`${(process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL)}${url}`, {
     ...options,
     headers,
     body,

@@ -30,7 +30,7 @@ export async function generateBOQTemplate(projectId?: string) {
   try {
     // Extract user email from cookies to pass to the backend for audit logging
     const cookieStore = await cookies();
-    const email = cookieStore.get('demo_user_email')?.value || 'jburns@demo.com';
+    const email = cookieStore.get('demo_user_email')?.value; if(!email) throw new Error('No session');
 
     const response = await fetchWithAuth('/api/boqTemplateService/generateBOQTemplate', {
       method: 'POST',

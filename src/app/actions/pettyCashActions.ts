@@ -9,7 +9,7 @@ const fetchWithAuth = async (
 ) => {
   // In a real application, this would fetch an auth token (e.g., from session/cookies)
   // and add it to the headers. It might also prepend a base URL for the backend.
-  const baseUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || 'http://localhost:3001/api'; // Adjust as needed
+  const baseUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:3001/api'; // Adjust as needed
   const res = await fetch(`${baseUrl}${url}`, {
     ...options,
     headers: {

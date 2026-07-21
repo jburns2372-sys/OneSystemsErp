@@ -2,8 +2,8 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient(); // Adjust path as necessary
-import { requirePermission } from './permissions'; // Adjust path as necessary
-import { submitTransaction } from './workflow'; // Adjust path as necessary
+import { requirePermission } from '../lib/permissions'; // Adjust path as necessary
+import { submitTransaction } from '../lib/workflow'; // Adjust path as necessary
 
 const router = Router();
 

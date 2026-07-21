@@ -1,13 +1,43 @@
-import { PrismaClient } from '@prisma/client';
+import { AsyncLocalStorage } from 'async_hooks';
+import { prismaBase } from './prisma-base';
+
+export const transactionContext = new AsyncLocalStorage<{ sourceProvenance?: string }>();
+
+function createPrismaClient() {
+  return prismaBase.$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ model, operation, args, query }) {
+          const targetModels = [
+            'ProjectSchedule',
+            'ScheduleWBS',
+            'ScheduleActivity',
+            'ScheduleDependency',
+            'ScheduleBOQAllocation',
+            'ScheduleReviewComment',
+            'ScheduleApproval',
+            'BaselineActivation',
+            'ScheduleWorkflowTransition'
+          ];
+          const writeOps = ['create', 'createMany', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert'];
+
+          if (model && targetModels.includes(model as string) && writeOps.includes(operation)) {
+            const ctx = transactionContext.getStore();
+            if (ctx?.sourceProvenance !== 'GATE9_WORKFLOW_ENGINE') {
+              throw new Error('GATE9D_DIRECT_MUTATION_REJECTED');
+            }
+          }
+          return query(args);
+        },
+      },
+    },
+  });
+}
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+  prisma: ReturnType<typeof createPrismaClient> | undefined;
 };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  });
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;

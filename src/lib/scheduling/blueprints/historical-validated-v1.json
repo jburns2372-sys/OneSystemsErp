@@ -1,0 +1,1891 @@
+{
+  "version": "HISTORICAL_VALIDATED_V1",
+  "provenance": "SYNTHESIZED_NORMALIZED_RECOVERY_FROM_VALIDATED_BOQ_DATA",
+  "expectations": {
+    "scheduleWBSCount": 13,
+    "scheduleActivityCount": 14,
+    "scheduleDependencyCount": 11,
+    "scheduleBOQAllocationCount": 326,
+    "cpmFinishDate": "2026-10-18",
+    "allocationTotal": 43106674.89,
+    "boqChecksum": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17"
+  },
+  "wbs": [
+    {
+      "sourceKey": "ROOT",
+      "level": 1,
+      "name": "Construction Phase"
+    },
+    {
+      "sourceKey": "PH_1",
+      "level": 2,
+      "name": "Mobilization and Site Prep"
+    },
+    {
+      "sourceKey": "PH_2",
+      "level": 2,
+      "name": "Roughing-ins (Mechanical)"
+    },
+    {
+      "sourceKey": "PH_3",
+      "level": 2,
+      "name": "Roughing-ins (Electrical)"
+    },
+    {
+      "sourceKey": "PH_4",
+      "level": 2,
+      "name": "Equipment Installation (Mechanical)"
+    },
+    {
+      "sourceKey": "PH_5",
+      "level": 2,
+      "name": "Equipment Installation (Electrical)"
+    },
+    {
+      "sourceKey": "PH_6",
+      "level": 2,
+      "name": "Piping and Ducting Works"
+    },
+    {
+      "sourceKey": "PH_7",
+      "level": 2,
+      "name": "Wiring and Cabling Works"
+    },
+    {
+      "sourceKey": "PH_8",
+      "level": 2,
+      "name": "Fixtures and Devices (Mechanical)"
+    },
+    {
+      "sourceKey": "PH_9",
+      "level": 2,
+      "name": "Fixtures and Devices (Electrical)"
+    },
+    {
+      "sourceKey": "PH_10",
+      "level": 2,
+      "name": "Finishes and Trims"
+    },
+    {
+      "sourceKey": "PH_11",
+      "level": 2,
+      "name": "Testing and Commissioning"
+    },
+    {
+      "sourceKey": "PH_12",
+      "level": 2,
+      "name": "Project Acceptance and Demobilization"
+    }
+  ],
+  "activities": [
+    {
+      "sourceKey": "ACT_1",
+      "phaseKey": "PH_1",
+      "name": "Mobilization and Site Prep",
+      "duration": 14,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_2",
+      "phaseKey": "PH_2",
+      "name": "Roughing-ins (Mechanical)",
+      "duration": 21,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_3",
+      "phaseKey": "PH_3",
+      "name": "Roughing-ins (Electrical)",
+      "duration": 21,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_4",
+      "phaseKey": "PH_4",
+      "name": "Equipment Installation (Mechanical)",
+      "duration": 14,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_5",
+      "phaseKey": "PH_5",
+      "name": "Equipment Installation (Electrical)",
+      "duration": 14,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_6",
+      "phaseKey": "PH_6",
+      "name": "Piping and Ducting Works",
+      "duration": 30,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_7",
+      "phaseKey": "PH_7",
+      "name": "Wiring and Cabling Works",
+      "duration": 30,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_8",
+      "phaseKey": "PH_8",
+      "name": "Fixtures and Devices (Mechanical)",
+      "duration": 14,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_9",
+      "phaseKey": "PH_9",
+      "name": "Fixtures and Devices (Electrical)",
+      "duration": 14,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_10",
+      "phaseKey": "PH_10",
+      "name": "Finishes and Trims",
+      "duration": 30,
+      "type": "LOE"
+    },
+    {
+      "sourceKey": "ACT_11",
+      "phaseKey": "PH_11",
+      "name": "Testing and Commissioning",
+      "duration": 21,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_12",
+      "phaseKey": "PH_12",
+      "name": "Project Acceptance and Demobilization",
+      "duration": 14,
+      "type": "DRIVING"
+    },
+    {
+      "sourceKey": "ACT_13",
+      "phaseKey": "PH_1",
+      "name": "Project Management & Supervision",
+      "duration": 128,
+      "type": "LOE"
+    },
+    {
+      "sourceKey": "ACT_14",
+      "phaseKey": "PH_11",
+      "name": "Punchlisting",
+      "duration": 21,
+      "type": "DRIVING"
+    }
+  ],
+  "dependencies": [
+    {
+      "sourceKey": "DEP_1",
+      "predecessorKey": "ACT_1",
+      "successorKey": "ACT_2",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "sourceKey": "DEP_2",
+      "predecessorKey": "ACT_1",
+      "successorKey": "ACT_3",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "sourceKey": "DEP_3",
+      "predecessorKey": "ACT_2",
+      "successorKey": "ACT_4",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "sourceKey": "DEP_4",
+      "predecessorKey": "ACT_3",
+      "successorKey": "ACT_5",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "sourceKey": "DEP_5",
+      "predecessorKey": "ACT_4",
+      "successorKey": "ACT_6",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "sourceKey": "DEP_6",
+      "predecessorKey": "ACT_5",
+      "successorKey": "ACT_7",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "sourceKey": "DEP_7",
+      "predecessorKey": "ACT_6",
+      "successorKey": "ACT_8",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "sourceKey": "DEP_8",
+      "predecessorKey": "ACT_7",
+      "successorKey": "ACT_9",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "sourceKey": "DEP_9",
+      "predecessorKey": "ACT_8",
+      "successorKey": "ACT_11",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "sourceKey": "DEP_10",
+      "predecessorKey": "ACT_9",
+      "successorKey": "ACT_11",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "sourceKey": "DEP_11",
+      "predecessorKey": "ACT_11",
+      "successorKey": "ACT_12",
+      "type": "FS",
+      "lag": 0
+    }
+  ],
+  "allocations": [
+    {
+      "boqItemId": "cmrn7l1nh000pvc6c3ndi4j41",
+      "activitySourceKey": "ACT_12",
+      "amount": 103229
+    },
+    {
+      "boqItemId": "cmrn7l1nh000qvc6cn66c9cvn",
+      "activitySourceKey": "ACT_1",
+      "amount": 678976
+    },
+    {
+      "boqItemId": "cmrn7l1ni000rvc6ce1vh80g0",
+      "activitySourceKey": "ACT_1",
+      "amount": 279580
+    },
+    {
+      "boqItemId": "cmrn7l1ni000svc6cxp1a8iyb",
+      "activitySourceKey": "ACT_1",
+      "amount": 279580
+    },
+    {
+      "boqItemId": "cmrn7l1ni000tvc6cvez6zlmy",
+      "activitySourceKey": "ACT_1",
+      "amount": 319519
+    },
+    {
+      "boqItemId": "cmrn7l1ni000uvc6caexw6ij3",
+      "activitySourceKey": "ACT_1",
+      "amount": 0
+    },
+    {
+      "boqItemId": "cmrn7l1ni000vvc6c0dxtd08x",
+      "activitySourceKey": "ACT_1",
+      "amount": 51615
+    },
+    {
+      "boqItemId": "cmrn7l1ni000wvc6cuqanf0dq",
+      "activitySourceKey": "ACT_1",
+      "amount": 14747
+    },
+    {
+      "boqItemId": "cmrn7l1ni000xvc6cij9du1gf",
+      "activitySourceKey": "ACT_1",
+      "amount": 7374
+    },
+    {
+      "boqItemId": "cmrn7l1nj000yvc6c6kracpap",
+      "activitySourceKey": "ACT_1",
+      "amount": 184338
+    },
+    {
+      "boqItemId": "cmrn7l1nj000zvc6ctifx86ce",
+      "activitySourceKey": "ACT_1",
+      "amount": 0
+    },
+    {
+      "boqItemId": "cmrn7l1nj0010vc6cgbu91wgl",
+      "activitySourceKey": "ACT_1",
+      "amount": 0
+    },
+    {
+      "boqItemId": "cmrn7l1nj0011vc6c7h81scwt",
+      "activitySourceKey": "ACT_1",
+      "amount": 331807
+    },
+    {
+      "boqItemId": "cmrn7l1nj0012vc6c0j8mo8lc",
+      "activitySourceKey": "ACT_4",
+      "amount": 73735
+    },
+    {
+      "boqItemId": "cmrn7l1nj0013vc6cpbxzvlvv",
+      "activitySourceKey": "ACT_1",
+      "amount": 0
+    },
+    {
+      "boqItemId": "cmrn7l1nj0014vc6cp14gbwpx",
+      "activitySourceKey": "ACT_12",
+      "amount": 117976
+    },
+    {
+      "boqItemId": "cmrn7l1nj0015vc6cky3o9fer",
+      "activitySourceKey": "ACT_11",
+      "amount": 0
+    },
+    {
+      "boqItemId": "cmrn7l1nj0016vc6cthr1zz4k",
+      "activitySourceKey": "ACT_1",
+      "amount": 147470
+    },
+    {
+      "boqItemId": "cmrn7l1nk0017vc6cbfjw5g5i",
+      "activitySourceKey": "ACT_1",
+      "amount": 110603
+    },
+    {
+      "boqItemId": "cmrn7l1nk0018vc6cnpn3z5vz",
+      "activitySourceKey": "ACT_4",
+      "amount": 3778109.37
+    },
+    {
+      "boqItemId": "cmrn7l1nk0019vc6cagohoa3u",
+      "activitySourceKey": "ACT_4",
+      "amount": 330524.04
+    },
+    {
+      "boqItemId": "cmrn7l1nk001avc6cf55htofo",
+      "activitySourceKey": "ACT_4",
+      "amount": 168668.58
+    },
+    {
+      "boqItemId": "cmrn7l1nk001bvc6c8d0pj2ey",
+      "activitySourceKey": "ACT_4",
+      "amount": 175061.38
+    },
+    {
+      "boqItemId": "cmrn7l1nk001cvc6czpi9u8ax",
+      "activitySourceKey": "ACT_7",
+      "amount": 129367.92
+    },
+    {
+      "boqItemId": "cmrn7l1nk001dvc6cyyb9wcgw",
+      "activitySourceKey": "ACT_5",
+      "amount": 44690.74
+    },
+    {
+      "boqItemId": "cmrn7l1nk001evc6cp7j5gjba",
+      "activitySourceKey": "ACT_6",
+      "amount": 8702.94
+    },
+    {
+      "boqItemId": "cmrn7l1nl001fvc6c5zx372k4",
+      "activitySourceKey": "ACT_6",
+      "amount": 9879.02
+    },
+    {
+      "boqItemId": "cmrn7l1nl001gvc6cxrjnjkax",
+      "activitySourceKey": "ACT_6",
+      "amount": 24697.53
+    },
+    {
+      "boqItemId": "cmrn7l1nl001hvc6csi19u85q",
+      "activitySourceKey": "ACT_6",
+      "amount": 42338.61
+    },
+    {
+      "boqItemId": "cmrn7l1nl001ivc6cqltir1iz",
+      "activitySourceKey": "ACT_6",
+      "amount": 17993.91
+    },
+    {
+      "boqItemId": "cmrn7l1nl001jvc6cerfmt2p8",
+      "activitySourceKey": "ACT_6",
+      "amount": 39751.22
+    },
+    {
+      "boqItemId": "cmrn7l1nl001kvc6c67x8wm6k",
+      "activitySourceKey": "ACT_6",
+      "amount": 21203.3
+    },
+    {
+      "boqItemId": "cmrn7l1nl001lvc6c950vt5nu",
+      "activitySourceKey": "ACT_6",
+      "amount": 38380.55
+    },
+    {
+      "boqItemId": "cmrn7l1nl001mvc6cxu6fkmmz",
+      "activitySourceKey": "ACT_6",
+      "amount": 65756.88
+    },
+    {
+      "boqItemId": "cmrn7l1nl001nvc6c018fcuhz",
+      "activitySourceKey": "ACT_6",
+      "amount": 60983.55
+    },
+    {
+      "boqItemId": "cmrn7l1nm001ovc6cayesx0oy",
+      "activitySourceKey": "ACT_6",
+      "amount": 77780.97
+    },
+    {
+      "boqItemId": "cmrn7l1nm001pvc6cmmqw8zjp",
+      "activitySourceKey": "ACT_6",
+      "amount": 21740.02
+    },
+    {
+      "boqItemId": "cmrn7l1nm001qvc6ch7wiykpe",
+      "activitySourceKey": "ACT_6",
+      "amount": 124535.36
+    },
+    {
+      "boqItemId": "cmrn7l1nm001rvc6ct71erhgm",
+      "activitySourceKey": "ACT_6",
+      "amount": 105076.65
+    },
+    {
+      "boqItemId": "cmrn7l1nm001svc6c8eyu4kfp",
+      "activitySourceKey": "ACT_6",
+      "amount": 84061.32
+    },
+    {
+      "boqItemId": "cmrn7l1nm001tvc6cn10aw46r",
+      "activitySourceKey": "ACT_6",
+      "amount": 8237.83
+    },
+    {
+      "boqItemId": "cmrn7l1nm001uvc6cnm32th8u",
+      "activitySourceKey": "ACT_6",
+      "amount": 11487.58
+    },
+    {
+      "boqItemId": "cmrn7l1nm001vvc6cvja9uvcp",
+      "activitySourceKey": "ACT_6",
+      "amount": 13936.05
+    },
+    {
+      "boqItemId": "cmrn7l1nn001wvc6c5l5r83x7",
+      "activitySourceKey": "ACT_6",
+      "amount": 11334.78
+    },
+    {
+      "boqItemId": "cmrn7l1nn001xvc6cm5mih1tr",
+      "activitySourceKey": "ACT_6",
+      "amount": 12038.72
+    },
+    {
+      "boqItemId": "cmrn7l1nn001yvc6cj6jxqh5e",
+      "activitySourceKey": "ACT_6",
+      "amount": 3138.2
+    },
+    {
+      "boqItemId": "cmrn7l1nn001zvc6cv9lcu2uo",
+      "activitySourceKey": "ACT_6",
+      "amount": 12697.35
+    },
+    {
+      "boqItemId": "cmrn7l1nn0020vc6cw0eo1wbv",
+      "activitySourceKey": "ACT_6",
+      "amount": 8960.3
+    },
+    {
+      "boqItemId": "cmrn7l1nn0021vc6czt3ctedi",
+      "activitySourceKey": "ACT_6",
+      "amount": 7168.24
+    },
+    {
+      "boqItemId": "cmrn7l1nn0022vc6czrc1kmf8",
+      "activitySourceKey": "ACT_6",
+      "amount": 57975.92
+    },
+    {
+      "boqItemId": "cmrn7l1nn0023vc6c9su257s0",
+      "activitySourceKey": "ACT_6",
+      "amount": 70564.56
+    },
+    {
+      "boqItemId": "cmrn7l1nn0024vc6c6vuznlr1",
+      "activitySourceKey": "ACT_6",
+      "amount": 22281.85
+    },
+    {
+      "boqItemId": "cmrn7l1no0025vc6cddyi28nd",
+      "activitySourceKey": "ACT_4",
+      "amount": 28867.23
+    },
+    {
+      "boqItemId": "cmrn7l1no0026vc6c40mi1qye",
+      "activitySourceKey": "ACT_6",
+      "amount": 15761.85
+    },
+    {
+      "boqItemId": "cmrn7l1no0027vc6ctp3lqo7t",
+      "activitySourceKey": "ACT_6",
+      "amount": 14120.26
+    },
+    {
+      "boqItemId": "cmrn7l1no0028vc6c8aygbw4z",
+      "activitySourceKey": "ACT_6",
+      "amount": 32930.59
+    },
+    {
+      "boqItemId": "cmrn7l1no0029vc6cfhnwcdqo",
+      "activitySourceKey": "ACT_6",
+      "amount": 34940.51
+    },
+    {
+      "boqItemId": "cmrn7l1no002avc6ci11idtgy",
+      "activitySourceKey": "ACT_4",
+      "amount": 274258.44
+    },
+    {
+      "boqItemId": "cmrn7l1no002bvc6cdgqghbg9",
+      "activitySourceKey": "ACT_6",
+      "amount": 2117.06
+    },
+    {
+      "boqItemId": "cmrn7l1no002cvc6cgcmnlou5",
+      "activitySourceKey": "ACT_6",
+      "amount": 106.94
+    },
+    {
+      "boqItemId": "cmrn7l1np002dvc6ckwi1df09",
+      "activitySourceKey": "ACT_6",
+      "amount": 406.3
+    },
+    {
+      "boqItemId": "cmrn7l1np002evc6ccpu5aj1t",
+      "activitySourceKey": "ACT_6",
+      "amount": 261.78
+    },
+    {
+      "boqItemId": "cmrn7l1np002fvc6c7l3ora1r",
+      "activitySourceKey": "ACT_6",
+      "amount": 855.36
+    },
+    {
+      "boqItemId": "cmrn7l1np002gvc6cdyjfhpwv",
+      "activitySourceKey": "ACT_3",
+      "amount": 31523.7
+    },
+    {
+      "boqItemId": "cmrn7l1np002hvc6c1z5p6p94",
+      "activitySourceKey": "ACT_3",
+      "amount": 38599.82
+    },
+    {
+      "boqItemId": "cmrn7l1np002ivc6c5522ik1n",
+      "activitySourceKey": "ACT_3",
+      "amount": 930.61
+    },
+    {
+      "boqItemId": "cmrn7l1np002jvc6cthgsxrn3",
+      "activitySourceKey": "ACT_7",
+      "amount": 33871.96
+    },
+    {
+      "boqItemId": "cmrn7l1np002kvc6c0eo7vqg6",
+      "activitySourceKey": "ACT_7",
+      "amount": 5572.08
+    },
+    {
+      "boqItemId": "cmrn7l1np002lvc6cw2yqx29f",
+      "activitySourceKey": "ACT_7",
+      "amount": 3122.86
+    },
+    {
+      "boqItemId": "cmrn7l1nq002mvc6ci2dcubb2",
+      "activitySourceKey": "ACT_7",
+      "amount": 46629.47
+    },
+    {
+      "boqItemId": "cmrn7l1nq002nvc6cb7ghjczb",
+      "activitySourceKey": "ACT_7",
+      "amount": 5650.56
+    },
+    {
+      "boqItemId": "cmrn7l1nq002ovc6c7zd4jk5n",
+      "activitySourceKey": "ACT_7",
+      "amount": 3757.6
+    },
+    {
+      "boqItemId": "cmrn7l1nq002pvc6c2tabl1dx",
+      "activitySourceKey": "ACT_6",
+      "amount": 27798.2
+    },
+    {
+      "boqItemId": "cmrn7l1nq002qvc6ce970i5j2",
+      "activitySourceKey": "ACT_6",
+      "amount": 17662.54
+    },
+    {
+      "boqItemId": "cmrn7l1nq002rvc6co74k2vns",
+      "activitySourceKey": "ACT_1",
+      "amount": 5837.79
+    },
+    {
+      "boqItemId": "cmrn7l1nq002svc6cnriwyu3b",
+      "activitySourceKey": "ACT_1",
+      "amount": 15717.24
+    },
+    {
+      "boqItemId": "cmrn7l1nq002tvc6c8rzqjjgy",
+      "activitySourceKey": "ACT_6",
+      "amount": 16080.58
+    },
+    {
+      "boqItemId": "cmrn7l1nq002uvc6c6kpdw0am",
+      "activitySourceKey": "ACT_6",
+      "amount": 684.48
+    },
+    {
+      "boqItemId": "cmrn7l1nr002vvc6cw9tdk7rm",
+      "activitySourceKey": "ACT_6",
+      "amount": 342.4
+    },
+    {
+      "boqItemId": "cmrn7l1nr002wvc6c6jzq9m14",
+      "activitySourceKey": "ACT_10",
+      "amount": 3432
+    },
+    {
+      "boqItemId": "cmrn7l1nr002xvc6ch4gq94d5",
+      "activitySourceKey": "ACT_6",
+      "amount": 15015.78
+    },
+    {
+      "boqItemId": "cmrn7l1nr002yvc6ch4mrg1op",
+      "activitySourceKey": "ACT_1",
+      "amount": 86986.62
+    },
+    {
+      "boqItemId": "cmrn7l1nr002zvc6cz2ibrl6o",
+      "activitySourceKey": "ACT_1",
+      "amount": 54526.98
+    },
+    {
+      "boqItemId": "cmrn7l1nr0030vc6c3ab9tblh",
+      "activitySourceKey": "ACT_1",
+      "amount": 9408.63
+    },
+    {
+      "boqItemId": "cmrn7l1nr0031vc6cak750lcn",
+      "activitySourceKey": "ACT_1",
+      "amount": 7539.27
+    },
+    {
+      "boqItemId": "cmrn7l1nr0032vc6cisx6o3p1",
+      "activitySourceKey": "ACT_10",
+      "amount": 213.84
+    },
+    {
+      "boqItemId": "cmrn7l1ns0033vc6c8emnl55c",
+      "activitySourceKey": "ACT_2",
+      "amount": 737348.84
+    },
+    {
+      "boqItemId": "cmrn7l1ns0034vc6cg58xjpf2",
+      "activitySourceKey": "ACT_10",
+      "amount": 5684.06
+    },
+    {
+      "boqItemId": "cmrn7l1ns0035vc6cye2u8qst",
+      "activitySourceKey": "ACT_11",
+      "amount": 41291.54
+    },
+    {
+      "boqItemId": "cmrn7l1ns0036vc6cygwubfbg",
+      "activitySourceKey": "ACT_4",
+      "amount": 2223173.13
+    },
+    {
+      "boqItemId": "cmrn7l1ns0037vc6cz4seapwh",
+      "activitySourceKey": "ACT_4",
+      "amount": 112445.72
+    },
+    {
+      "boqItemId": "cmrn7l1ns0038vc6c3r4ht9h5",
+      "activitySourceKey": "ACT_4",
+      "amount": 87530.69
+    },
+    {
+      "boqItemId": "cmrn7l1ns0039vc6c4x9kk80t",
+      "activitySourceKey": "ACT_7",
+      "amount": 152889.36
+    },
+    {
+      "boqItemId": "cmrn7l1ns003avc6cn3dfobs8",
+      "activitySourceKey": "ACT_5",
+      "amount": 22345.37
+    },
+    {
+      "boqItemId": "cmrn7l1nt003bvc6c58gtxzbx",
+      "activitySourceKey": "ACT_6",
+      "amount": 26108.82
+    },
+    {
+      "boqItemId": "cmrn7l1nt003cvc6c0urlet3e",
+      "activitySourceKey": "ACT_6",
+      "amount": 4939.51
+    },
+    {
+      "boqItemId": "cmrn7l1nt003dvc6cifvs09bu",
+      "activitySourceKey": "ACT_6",
+      "amount": 24697.53
+    },
+    {
+      "boqItemId": "cmrn7l1nt003evc6cd1hwy7x6",
+      "activitySourceKey": "ACT_6",
+      "amount": 28225.74
+    },
+    {
+      "boqItemId": "cmrn7l1nt003fvc6cjznglzuk",
+      "activitySourceKey": "ACT_6",
+      "amount": 11995.94
+    },
+    {
+      "boqItemId": "cmrn7l1nt003gvc6cc86zvkct",
+      "activitySourceKey": "ACT_6",
+      "amount": 39751.22
+    },
+    {
+      "boqItemId": "cmrn7l1nt003hvc6cjtlg7l4o",
+      "activitySourceKey": "ACT_6",
+      "amount": 29684.62
+    },
+    {
+      "boqItemId": "cmrn7l1nt003ivc6c189ekb1y",
+      "activitySourceKey": "ACT_6",
+      "amount": 32475.85
+    },
+    {
+      "boqItemId": "cmrn7l1nt003jvc6c77ei7ptu",
+      "activitySourceKey": "ACT_6",
+      "amount": 70453.8
+    },
+    {
+      "boqItemId": "cmrn7l1nu003kvc6cyhdpafca",
+      "activitySourceKey": "ACT_6",
+      "amount": 81311.4
+    },
+    {
+      "boqItemId": "cmrn7l1nu003lvc6ctbjx2ofe",
+      "activitySourceKey": "ACT_6",
+      "amount": 112350.29
+    },
+    {
+      "boqItemId": "cmrn7l1nu003mvc6c289zgvn6",
+      "activitySourceKey": "ACT_6",
+      "amount": 10870.01
+    },
+    {
+      "boqItemId": "cmrn7l1nu003nvc6chij3ot48",
+      "activitySourceKey": "ACT_6",
+      "amount": 77834.6
+    },
+    {
+      "boqItemId": "cmrn7l1nu003ovc6cyojmzyyk",
+      "activitySourceKey": "ACT_6",
+      "amount": 27039.77
+    },
+    {
+      "boqItemId": "cmrn7l1nu003pvc6cvs53dtss",
+      "activitySourceKey": "ACT_6",
+      "amount": 324477.24
+    },
+    {
+      "boqItemId": "cmrn7l1nu003qvc6c2zrjfawy",
+      "activitySourceKey": "ACT_6",
+      "amount": 11706.39
+    },
+    {
+      "boqItemId": "cmrn7l1nv003rvc6c77faqekq",
+      "activitySourceKey": "ACT_6",
+      "amount": 9278.43
+    },
+    {
+      "boqItemId": "cmrn7l1nv003svc6c2kki3wrr",
+      "activitySourceKey": "ACT_6",
+      "amount": 15484.5
+    },
+    {
+      "boqItemId": "cmrn7l1nv003tvc6cappctmkl",
+      "activitySourceKey": "ACT_6",
+      "amount": 15113.04
+    },
+    {
+      "boqItemId": "cmrn7l1nv003uvc6cmyohlrip",
+      "activitySourceKey": "ACT_6",
+      "amount": 18412.16
+    },
+    {
+      "boqItemId": "cmrn7l1nv003vvc6cx8fzo5sp",
+      "activitySourceKey": "ACT_6",
+      "amount": 1569.1
+    },
+    {
+      "boqItemId": "cmrn7l1nv003wvc6cv3o08j03",
+      "activitySourceKey": "ACT_6",
+      "amount": 7618.41
+    },
+    {
+      "boqItemId": "cmrn7l1nv003xvc6c4ejrqpch",
+      "activitySourceKey": "ACT_6",
+      "amount": 2023.32
+    },
+    {
+      "boqItemId": "cmrn7l1nv003yvc6cuw742rmi",
+      "activitySourceKey": "ACT_6",
+      "amount": 24279.84
+    },
+    {
+      "boqItemId": "cmrn7l1nv003zvc6cxb2gbcgr",
+      "activitySourceKey": "ACT_6",
+      "amount": 87733.46
+    },
+    {
+      "boqItemId": "cmrn7l1nw0040vc6cfnx2otgo",
+      "activitySourceKey": "ACT_6",
+      "amount": 83394.48
+    },
+    {
+      "boqItemId": "cmrn7l1nw0041vc6cqiqfoedo",
+      "activitySourceKey": "ACT_6",
+      "amount": 8234.77
+    },
+    {
+      "boqItemId": "cmrn7l1nw0042vc6cwcz3qqnr",
+      "activitySourceKey": "ACT_4",
+      "amount": 28867.23
+    },
+    {
+      "boqItemId": "cmrn7l1nw0043vc6c5opjdoya",
+      "activitySourceKey": "ACT_6",
+      "amount": 14953.55
+    },
+    {
+      "boqItemId": "cmrn7l1nw0044vc6ckm0dazjv",
+      "activitySourceKey": "ACT_6",
+      "amount": 15403.92
+    },
+    {
+      "boqItemId": "cmrn7l1nw0045vc6c2xjq9oo3",
+      "activitySourceKey": "ACT_6",
+      "amount": 31647.58
+    },
+    {
+      "boqItemId": "cmrn7l1nw0046vc6c2vqvr9az",
+      "activitySourceKey": "ACT_6",
+      "amount": 39003.36
+    },
+    {
+      "boqItemId": "cmrn7l1nw0047vc6csp0vt5f9",
+      "activitySourceKey": "ACT_4",
+      "amount": 365677.92
+    },
+    {
+      "boqItemId": "cmrn7l1nx0048vc6ccr9n0uwy",
+      "activitySourceKey": "ACT_6",
+      "amount": 641.52
+    },
+    {
+      "boqItemId": "cmrn7l1nx0049vc6cuol30xxl",
+      "activitySourceKey": "ACT_6",
+      "amount": 2501.98
+    },
+    {
+      "boqItemId": "cmrn7l1nx004avc6cvz37inst",
+      "activitySourceKey": "ACT_6",
+      "amount": 160.41
+    },
+    {
+      "boqItemId": "cmrn7l1nx004bvc6cgmedtw7r",
+      "activitySourceKey": "ACT_6",
+      "amount": 261.78
+    },
+    {
+      "boqItemId": "cmrn7l1nx004cvc6cd4xa22p8",
+      "activitySourceKey": "ACT_6",
+      "amount": 855.36
+    },
+    {
+      "boqItemId": "cmrn7l1nx004dvc6cb9z66ndx",
+      "activitySourceKey": "ACT_3",
+      "amount": 31523.7
+    },
+    {
+      "boqItemId": "cmrn7l1nx004evc6c3bh5dmg7",
+      "activitySourceKey": "ACT_3",
+      "amount": 44330.51
+    },
+    {
+      "boqItemId": "cmrn7l1nx004fvc6cds3e17dd",
+      "activitySourceKey": "ACT_3",
+      "amount": 1091.06
+    },
+    {
+      "boqItemId": "cmrn7l1ny004gvc6c554i1p94",
+      "activitySourceKey": "ACT_7",
+      "amount": 38964.88
+    },
+    {
+      "boqItemId": "cmrn7l1ny004hvc6cdjo8zy1n",
+      "activitySourceKey": "ACT_7",
+      "amount": 7377.12
+    },
+    {
+      "boqItemId": "cmrn7l1ny004ivc6c1mi2qcfk",
+      "activitySourceKey": "ACT_7",
+      "amount": 1505.79
+    },
+    {
+      "boqItemId": "cmrn7l1ny004jvc6cer8vnytg",
+      "activitySourceKey": "ACT_7",
+      "amount": 46578.73
+    },
+    {
+      "boqItemId": "cmrn7l1ny004kvc6c52ofat6p",
+      "activitySourceKey": "ACT_7",
+      "amount": 6670.8
+    },
+    {
+      "boqItemId": "cmrn7l1ny004lvc6c79abuuj2",
+      "activitySourceKey": "ACT_7",
+      "amount": 3757.6
+    },
+    {
+      "boqItemId": "cmrn7l1ny004mvc6cdutpddh9",
+      "activitySourceKey": "ACT_6",
+      "amount": 22238.56
+    },
+    {
+      "boqItemId": "cmrn7l1ny004nvc6c4r1zr62b",
+      "activitySourceKey": "ACT_6",
+      "amount": 15139.32
+    },
+    {
+      "boqItemId": "cmrn7l1nz004ovc6cv0csmuod",
+      "activitySourceKey": "ACT_1",
+      "amount": 6949.75
+    },
+    {
+      "boqItemId": "cmrn7l1nz004pvc6cordvsydx",
+      "activitySourceKey": "ACT_1",
+      "amount": 18336.78
+    },
+    {
+      "boqItemId": "cmrn7l1nz004qvc6cxtckyjb2",
+      "activitySourceKey": "ACT_6",
+      "amount": 18304.49
+    },
+    {
+      "boqItemId": "cmrn7l1nz004rvc6c751jpbfy",
+      "activitySourceKey": "ACT_6",
+      "amount": 684.48
+    },
+    {
+      "boqItemId": "cmrn7l1nz004svc6c8h4z9tna",
+      "activitySourceKey": "ACT_6",
+      "amount": 342.4
+    },
+    {
+      "boqItemId": "cmrn7l1nz004tvc6cx3sjeych",
+      "activitySourceKey": "ACT_10",
+      "amount": 3432
+    },
+    {
+      "boqItemId": "cmrn7l1nz004uvc6cwfe9zv9c",
+      "activitySourceKey": "ACT_6",
+      "amount": 17197.56
+    },
+    {
+      "boqItemId": "cmrn7l1nz004vvc6c25pv091x",
+      "activitySourceKey": "ACT_1",
+      "amount": 101484.39
+    },
+    {
+      "boqItemId": "cmrn7l1o0004wvc6cbjws3voo",
+      "activitySourceKey": "ACT_1",
+      "amount": 72702.64
+    },
+    {
+      "boqItemId": "cmrn7l1o0004xvc6cbj24x7e8",
+      "activitySourceKey": "ACT_1",
+      "amount": 10263.96
+    },
+    {
+      "boqItemId": "cmrn7l1o0004yvc6c6c6vf49s",
+      "activitySourceKey": "ACT_1",
+      "amount": 8555.2
+    },
+    {
+      "boqItemId": "cmrn7l1o0004zvc6cy4oa9iie",
+      "activitySourceKey": "ACT_10",
+      "amount": 213.84
+    },
+    {
+      "boqItemId": "cmrn7l1o00050vc6c3awjofy0",
+      "activitySourceKey": "ACT_2",
+      "amount": 737348.84
+    },
+    {
+      "boqItemId": "cmrn7l1o00051vc6cemtm0ofk",
+      "activitySourceKey": "ACT_10",
+      "amount": 6640.71
+    },
+    {
+      "boqItemId": "cmrn7l1o00052vc6cusfvgg5l",
+      "activitySourceKey": "ACT_11",
+      "amount": 47190.33
+    },
+    {
+      "boqItemId": "cmrn7l1o00053vc6cwyfm8byq",
+      "activitySourceKey": "ACT_4",
+      "amount": 2223173.13
+    },
+    {
+      "boqItemId": "cmrn7l1o00054vc6c7246wws3",
+      "activitySourceKey": "ACT_4",
+      "amount": 175061.38
+    },
+    {
+      "boqItemId": "cmrn7l1o10055vc6c16zdd3qd",
+      "activitySourceKey": "ACT_7",
+      "amount": 117607.2
+    },
+    {
+      "boqItemId": "cmrn7l1o10056vc6ch565vnja",
+      "activitySourceKey": "ACT_5",
+      "amount": 44690.74
+    },
+    {
+      "boqItemId": "cmrn7l1o10057vc6cvy41qyay",
+      "activitySourceKey": "ACT_6",
+      "amount": 9879.02
+    },
+    {
+      "boqItemId": "cmrn7l1o10058vc6cusi3jcix",
+      "activitySourceKey": "ACT_6",
+      "amount": 32930.04
+    },
+    {
+      "boqItemId": "cmrn7l1o10059vc6cmv3ya69n",
+      "activitySourceKey": "ACT_6",
+      "amount": 42338.61
+    },
+    {
+      "boqItemId": "cmrn7l1o1005avc6cjl046jpn",
+      "activitySourceKey": "ACT_6",
+      "amount": 17993.91
+    },
+    {
+      "boqItemId": "cmrn7l1o1005bvc6cod3gcnnf",
+      "activitySourceKey": "ACT_6",
+      "amount": 39751.22
+    },
+    {
+      "boqItemId": "cmrn7l1o2005cvc6cary7mkh8",
+      "activitySourceKey": "ACT_6",
+      "amount": 2120.33
+    },
+    {
+      "boqItemId": "cmrn7l1o2005dvc6c21yi7e08",
+      "activitySourceKey": "ACT_6",
+      "amount": 32475.85
+    },
+    {
+      "boqItemId": "cmrn7l1o2005evc6c3skgkxug",
+      "activitySourceKey": "ACT_6",
+      "amount": 9393.84
+    },
+    {
+      "boqItemId": "cmrn7l1o2005fvc6c22y17x1v",
+      "activitySourceKey": "ACT_6",
+      "amount": 94863.3
+    },
+    {
+      "boqItemId": "cmrn7l1o2005gvc6cvq8p5dip",
+      "activitySourceKey": "ACT_6",
+      "amount": 77780.97
+    },
+    {
+      "boqItemId": "cmrn7l1o2005hvc6cu0y9rs0v",
+      "activitySourceKey": "ACT_6",
+      "amount": 10870.01
+    },
+    {
+      "boqItemId": "cmrn7l1o2005ivc6cj79lyy2v",
+      "activitySourceKey": "ACT_6",
+      "amount": 77834.6
+    },
+    {
+      "boqItemId": "cmrn7l1o2005jvc6cstwlhl84",
+      "activitySourceKey": "ACT_6",
+      "amount": 63045.99
+    },
+    {
+      "boqItemId": "cmrn7l1o2005kvc6cjc3c3yb9",
+      "activitySourceKey": "ACT_6",
+      "amount": 189278.39
+    },
+    {
+      "boqItemId": "cmrn7l1o3005lvc6cd4nzor52",
+      "activitySourceKey": "ACT_6",
+      "amount": 867.14
+    },
+    {
+      "boqItemId": "cmrn7l1o3005mvc6cvgzm8byd",
+      "activitySourceKey": "ACT_6",
+      "amount": 9278.43
+    },
+    {
+      "boqItemId": "cmrn7l1o3005nvc6cgnrd0tat",
+      "activitySourceKey": "ACT_6",
+      "amount": 2064.6
+    },
+    {
+      "boqItemId": "cmrn7l1o3005ovc6cd1g4ojje",
+      "activitySourceKey": "ACT_6",
+      "amount": 17002.17
+    },
+    {
+      "boqItemId": "cmrn7l1o3005pvc6cml8u1spz",
+      "activitySourceKey": "ACT_6",
+      "amount": 12038.72
+    },
+    {
+      "boqItemId": "cmrn7l1o3005qvc6cg3k1g5vy",
+      "activitySourceKey": "ACT_6",
+      "amount": 1569.1
+    },
+    {
+      "boqItemId": "cmrn7l1o3005rvc6cxzqkot2i",
+      "activitySourceKey": "ACT_6",
+      "amount": 8464.9
+    },
+    {
+      "boqItemId": "cmrn7l1o3005svc6cysyatzyl",
+      "activitySourceKey": "ACT_6",
+      "amount": 4480.15
+    },
+    {
+      "boqItemId": "cmrn7l1o4005tvc6cf5wcwn0l",
+      "activitySourceKey": "ACT_6",
+      "amount": 13151.58
+    },
+    {
+      "boqItemId": "cmrn7l1o4005uvc6cwqmgv6vu",
+      "activitySourceKey": "ACT_6",
+      "amount": 59135.15
+    },
+    {
+      "boqItemId": "cmrn7l1o4005vvc6c2kcmrtua",
+      "activitySourceKey": "ACT_6",
+      "amount": 64149.6
+    },
+    {
+      "boqItemId": "cmrn7l1o4005wvc6cybr0z4ir",
+      "activitySourceKey": "ACT_6",
+      "amount": 19711.72
+    },
+    {
+      "boqItemId": "cmrn7l1o4005xvc6cx0hnozwt",
+      "activitySourceKey": "ACT_4",
+      "amount": 28867.23
+    },
+    {
+      "boqItemId": "cmrn7l1o4005yvc6ctwj03gjm",
+      "activitySourceKey": "ACT_6",
+      "amount": 13336.95
+    },
+    {
+      "boqItemId": "cmrn7l1o4005zvc6ceijhrp4u",
+      "activitySourceKey": "ACT_6",
+      "amount": 7701.96
+    },
+    {
+      "boqItemId": "cmrn7l1o40060vc6c67yl9pcj",
+      "activitySourceKey": "ACT_6",
+      "amount": 28226.22
+    },
+    {
+      "boqItemId": "cmrn7l1o40061vc6czyf9c2hx",
+      "activitySourceKey": "ACT_6",
+      "amount": 18689.11
+    },
+    {
+      "boqItemId": "cmrn7l1o50062vc6c6hu03riw",
+      "activitySourceKey": "ACT_4",
+      "amount": 335204.76
+    },
+    {
+      "boqItemId": "cmrn7l1o50063vc6ckdq5dedz",
+      "activitySourceKey": "ACT_6",
+      "amount": 1347.22
+    },
+    {
+      "boqItemId": "cmrn7l1o50064vc6cvlw17znp",
+      "activitySourceKey": "ACT_6",
+      "amount": 320.82
+    },
+    {
+      "boqItemId": "cmrn7l1o50065vc6c50rl03c6",
+      "activitySourceKey": "ACT_6",
+      "amount": 305.41
+    },
+    {
+      "boqItemId": "cmrn7l1o50066vc6c3gfv1pwq",
+      "activitySourceKey": "ACT_6",
+      "amount": 427.68
+    },
+    {
+      "boqItemId": "cmrn7l1o50067vc6ci8flxmlj",
+      "activitySourceKey": "ACT_3",
+      "amount": 31523.7
+    },
+    {
+      "boqItemId": "cmrn7l1o50068vc6co71tosqe",
+      "activitySourceKey": "ACT_3",
+      "amount": 29246.28
+    },
+    {
+      "boqItemId": "cmrn7l1o60069vc6cd541p9yp",
+      "activitySourceKey": "ACT_3",
+      "amount": 834.34
+    },
+    {
+      "boqItemId": "cmrn7l1o6006avc6czei2fkt9",
+      "activitySourceKey": "ACT_7",
+      "amount": 23524.44
+    },
+    {
+      "boqItemId": "cmrn7l1o6006bvc6cyutz5yfs",
+      "activitySourceKey": "ACT_7",
+      "amount": 4944.87
+    },
+    {
+      "boqItemId": "cmrn7l1o6006cvc6cftl1qfbt",
+      "activitySourceKey": "ACT_7",
+      "amount": 3122.86
+    },
+    {
+      "boqItemId": "cmrn7l1o6006dvc6cfaokp7vu",
+      "activitySourceKey": "ACT_7",
+      "amount": 46578.73
+    },
+    {
+      "boqItemId": "cmrn7l1o6006evc6cagb3twn3",
+      "activitySourceKey": "ACT_7",
+      "amount": 5101.85
+    },
+    {
+      "boqItemId": "cmrn7l1o6006fvc6cn8wf0usi",
+      "activitySourceKey": "ACT_7",
+      "amount": 3757.6
+    },
+    {
+      "boqItemId": "cmrn7l1o6006gvc6cpouhf4p8",
+      "activitySourceKey": "ACT_6",
+      "amount": 27798.2
+    },
+    {
+      "boqItemId": "cmrn7l1o6006hvc6cul411dnf",
+      "activitySourceKey": "ACT_6",
+      "amount": 17662.54
+    },
+    {
+      "boqItemId": "cmrn7l1o7006ivc6c0r8uit9z",
+      "activitySourceKey": "ACT_1",
+      "amount": 4169.85
+    },
+    {
+      "boqItemId": "cmrn7l1o7006jvc6cvs9imms0",
+      "activitySourceKey": "ACT_1",
+      "amount": 11226.6
+    },
+    {
+      "boqItemId": "cmrn7l1o7006kvc6ctgak78os",
+      "activitySourceKey": "ACT_6",
+      "amount": 11119.55
+    },
+    {
+      "boqItemId": "cmrn7l1o7006lvc6chq49qv43",
+      "activitySourceKey": "ACT_6",
+      "amount": 684.48
+    },
+    {
+      "boqItemId": "cmrn7l1o7006mvc6c1ztbugwg",
+      "activitySourceKey": "ACT_6",
+      "amount": 342.4
+    },
+    {
+      "boqItemId": "cmrn7l1o7006nvc6ctka0higs",
+      "activitySourceKey": "ACT_10",
+      "amount": 3432
+    },
+    {
+      "boqItemId": "cmrn7l1o7006ovc6ca097hu1v",
+      "activitySourceKey": "ACT_6",
+      "amount": 10438.32
+    },
+    {
+      "boqItemId": "cmrn7l1o7006pvc6cjyxckr4g",
+      "activitySourceKey": "ACT_1",
+      "amount": 72488.85
+    },
+    {
+      "boqItemId": "cmrn7l1o8006qvc6cgm7etgze",
+      "activitySourceKey": "ACT_1",
+      "amount": 54526.98
+    },
+    {
+      "boqItemId": "cmrn7l1o8006rvc6cc6cvoq97",
+      "activitySourceKey": "ACT_1",
+      "amount": 6500.56
+    },
+    {
+      "boqItemId": "cmrn7l1o8006svc6cw5207paz",
+      "activitySourceKey": "ACT_1",
+      "amount": 5240.06
+    },
+    {
+      "boqItemId": "cmrn7l1o8006tvc6cb8i9qd87",
+      "activitySourceKey": "ACT_10",
+      "amount": 213.84
+    },
+    {
+      "boqItemId": "cmrn7l1o8006uvc6ccyd4ntva",
+      "activitySourceKey": "ACT_2",
+      "amount": 737348.84
+    },
+    {
+      "boqItemId": "cmrn7l1o8006vvc6ccw58qd0b",
+      "activitySourceKey": "ACT_10",
+      "amount": 5010.49
+    },
+    {
+      "boqItemId": "cmrn7l1o8006wvc6c54y3qplz",
+      "activitySourceKey": "ACT_11",
+      "amount": 38342.14
+    },
+    {
+      "boqItemId": "cmrn7l1o8006xvc6cw74q6kka",
+      "activitySourceKey": "ACT_4",
+      "amount": 2367951.57
+    },
+    {
+      "boqItemId": "cmrn7l1o8006yvc6cwissdoxd",
+      "activitySourceKey": "ACT_4",
+      "amount": 175061.38
+    },
+    {
+      "boqItemId": "cmrn7l1o9006zvc6c82e2ux1b",
+      "activitySourceKey": "ACT_7",
+      "amount": 141128.64
+    },
+    {
+      "boqItemId": "cmrn7l1o90070vc6c1ucqv8lc",
+      "activitySourceKey": "ACT_5",
+      "amount": 44690.74
+    },
+    {
+      "boqItemId": "cmrn7l1o90071vc6clpoyituf",
+      "activitySourceKey": "ACT_6",
+      "amount": 17405.88
+    },
+    {
+      "boqItemId": "cmrn7l1o90072vc6crpujxkeh",
+      "activitySourceKey": "ACT_6",
+      "amount": 4939.51
+    },
+    {
+      "boqItemId": "cmrn7l1o90073vc6cwounmbow",
+      "activitySourceKey": "ACT_6",
+      "amount": 24697.53
+    },
+    {
+      "boqItemId": "cmrn7l1o90074vc6ctg771wa4",
+      "activitySourceKey": "ACT_6",
+      "amount": 42338.61
+    },
+    {
+      "boqItemId": "cmrn7l1o90075vc6c7ppkwdqo",
+      "activitySourceKey": "ACT_6",
+      "amount": 17993.91
+    },
+    {
+      "boqItemId": "cmrn7l1o90076vc6cd2csz5k7",
+      "activitySourceKey": "ACT_6",
+      "amount": 39751.22
+    },
+    {
+      "boqItemId": "cmrn7l1oa0077vc6co0tfxrv3",
+      "activitySourceKey": "ACT_6",
+      "amount": 16962.64
+    },
+    {
+      "boqItemId": "cmrn7l1oa0078vc6cy4knl2di",
+      "activitySourceKey": "ACT_6",
+      "amount": 35428.2
+    },
+    {
+      "boqItemId": "cmrn7l1oa0079vc6cxc68aozc",
+      "activitySourceKey": "ACT_6",
+      "amount": 46969.2
+    },
+    {
+      "boqItemId": "cmrn7l1oa007avc6c0sohhxgf",
+      "activitySourceKey": "ACT_6",
+      "amount": 94863.3
+    },
+    {
+      "boqItemId": "cmrn7l1oa007bvc6c5lnb5j96",
+      "activitySourceKey": "ACT_6",
+      "amount": 138277.28
+    },
+    {
+      "boqItemId": "cmrn7l1oa007cvc6ck3vpvoye",
+      "activitySourceKey": "ACT_6",
+      "amount": 21740.02
+    },
+    {
+      "boqItemId": "cmrn7l1oa007dvc6cd23sduwg",
+      "activitySourceKey": "ACT_6",
+      "amount": 77834.6
+    },
+    {
+      "boqItemId": "cmrn7l1ob007evc6cu3wvqsmj",
+      "activitySourceKey": "ACT_6",
+      "amount": 42030.66
+    },
+    {
+      "boqItemId": "cmrn7l1ob007fvc6c6arnceal",
+      "activitySourceKey": "ACT_6",
+      "amount": 378556.78
+    },
+    {
+      "boqItemId": "cmrn7l1ob007gvc6c0ff7x8ta",
+      "activitySourceKey": "ACT_6",
+      "amount": 6937.12
+    },
+    {
+      "boqItemId": "cmrn7l1ob007hvc6c9rxksso9",
+      "activitySourceKey": "ACT_6",
+      "amount": 10603.92
+    },
+    {
+      "boqItemId": "cmrn7l1ob007ivc6cdk1qflem",
+      "activitySourceKey": "ACT_6",
+      "amount": 9806.85
+    },
+    {
+      "boqItemId": "cmrn7l1ob007jvc6c0cyi2k3h",
+      "activitySourceKey": "ACT_6",
+      "amount": 17002.17
+    },
+    {
+      "boqItemId": "cmrn7l1ob007kvc6c38v1akrf",
+      "activitySourceKey": "ACT_6",
+      "amount": 21952.96
+    },
+    {
+      "boqItemId": "cmrn7l1ob007lvc6cqlry74p4",
+      "activitySourceKey": "ACT_6",
+      "amount": 3138.2
+    },
+    {
+      "boqItemId": "cmrn7l1oc007mvc6c8secpxu3",
+      "activitySourceKey": "ACT_6",
+      "amount": 8464.9
+    },
+    {
+      "boqItemId": "cmrn7l1oc007nvc6cmc7pkbwj",
+      "activitySourceKey": "ACT_6",
+      "amount": 3584.12
+    },
+    {
+      "boqItemId": "cmrn7l1oc007ovc6cv6rxxkjf",
+      "activitySourceKey": "ACT_6",
+      "amount": 27314.82
+    },
+    {
+      "boqItemId": "cmrn7l1oc007pvc6c4jbvtuqa",
+      "activitySourceKey": "ACT_6",
+      "amount": 96659.97
+    },
+    {
+      "boqItemId": "cmrn7l1oc007qvc6c0qwtrhiy",
+      "activitySourceKey": "ACT_6",
+      "amount": 76979.52
+    },
+    {
+      "boqItemId": "cmrn7l1oc007rvc6cgmcu5wu8",
+      "activitySourceKey": "ACT_6",
+      "amount": 32220
+    },
+    {
+      "boqItemId": "cmrn7l1oc007svc6cp0o6xi9m",
+      "activitySourceKey": "ACT_4",
+      "amount": 28867.23
+    },
+    {
+      "boqItemId": "cmrn7l1oc007tvc6cocrfvbbw",
+      "activitySourceKey": "ACT_6",
+      "amount": 12528.65
+    },
+    {
+      "boqItemId": "cmrn7l1oc007uvc6chom7nb6k",
+      "activitySourceKey": "ACT_6",
+      "amount": 24389.54
+    },
+    {
+      "boqItemId": "cmrn7l1od007vvc6cyx7rf32x",
+      "activitySourceKey": "ACT_6",
+      "amount": 26087.87
+    },
+    {
+      "boqItemId": "cmrn7l1od007wvc6cf23wm5dp",
+      "activitySourceKey": "ACT_6",
+      "amount": 60942.75
+    },
+    {
+      "boqItemId": "cmrn7l1od007xvc6crtz4r0ad",
+      "activitySourceKey": "ACT_4",
+      "amount": 304731.6
+    },
+    {
+      "boqItemId": "cmrn7l1od007yvc6c4r3dvv3p",
+      "activitySourceKey": "ACT_6",
+      "amount": 427.68
+    },
+    {
+      "boqItemId": "cmrn7l1od007zvc6cldi1chq9",
+      "activitySourceKey": "ACT_6",
+      "amount": 2117.06
+    },
+    {
+      "boqItemId": "cmrn7l1od0080vc6c4y3ka017",
+      "activitySourceKey": "ACT_6",
+      "amount": 160.41
+    },
+    {
+      "boqItemId": "cmrn7l1od0081vc6c3deo41p2",
+      "activitySourceKey": "ACT_6",
+      "amount": 609.45
+    },
+    {
+      "boqItemId": "cmrn7l1od0082vc6c8ki388so",
+      "activitySourceKey": "ACT_6",
+      "amount": 305.41
+    },
+    {
+      "boqItemId": "cmrn7l1oe0083vc6cz84omc42",
+      "activitySourceKey": "ACT_6",
+      "amount": 1283.04
+    },
+    {
+      "boqItemId": "cmrn7l1oe0084vc6clehqxiej",
+      "activitySourceKey": "ACT_3",
+      "amount": 59544.42
+    },
+    {
+      "boqItemId": "cmrn7l1oe0085vc6cne2iiavq",
+      "activitySourceKey": "ACT_3",
+      "amount": 43078.98
+    },
+    {
+      "boqItemId": "cmrn7l1oe0086vc6ce8dhhgx3",
+      "activitySourceKey": "ACT_3",
+      "amount": 1026.88
+    },
+    {
+      "boqItemId": "cmrn7l1oe0087vc6cj1ugn8l6",
+      "activitySourceKey": "ACT_7",
+      "amount": 38156.48
+    },
+    {
+      "boqItemId": "cmrn7l1oe0088vc6cteddpxi6",
+      "activitySourceKey": "ACT_7",
+      "amount": 6009.9
+    },
+    {
+      "boqItemId": "cmrn7l1oe0089vc6cllnvmbly",
+      "activitySourceKey": "ACT_7",
+      "amount": 3122.86
+    },
+    {
+      "boqItemId": "cmrn7l1oe008avc6ckz494c5o",
+      "activitySourceKey": "ACT_7",
+      "amount": 55353.8
+    },
+    {
+      "boqItemId": "cmrn7l1of008bvc6cb76u0foq",
+      "activitySourceKey": "ACT_7",
+      "amount": 5878.08
+    },
+    {
+      "boqItemId": "cmrn7l1of008cvc6c5vyt8j0u",
+      "activitySourceKey": "ACT_7",
+      "amount": 6220.2
+    },
+    {
+      "boqItemId": "cmrn7l1of008dvc6c21r99eyv",
+      "activitySourceKey": "ACT_6",
+      "amount": 27798.2
+    },
+    {
+      "boqItemId": "cmrn7l1of008evc6cgfs1njfo",
+      "activitySourceKey": "ACT_6",
+      "amount": 17662.54
+    },
+    {
+      "boqItemId": "cmrn7l1of008fvc6cruzzcqe2",
+      "activitySourceKey": "ACT_1",
+      "amount": 6671.76
+    },
+    {
+      "boqItemId": "cmrn7l1of008gvc6ctn7gz9ks",
+      "activitySourceKey": "ACT_1",
+      "amount": 17588.34
+    },
+    {
+      "boqItemId": "cmrn7l1of008hvc6cgvrfloj6",
+      "activitySourceKey": "ACT_6",
+      "amount": 17791.28
+    },
+    {
+      "boqItemId": "cmrn7l1of008ivc6ctylnz1xm",
+      "activitySourceKey": "ACT_6",
+      "amount": 684.48
+    },
+    {
+      "boqItemId": "cmrn7l1of008jvc6cz00rzr4d",
+      "activitySourceKey": "ACT_6",
+      "amount": 342.4
+    },
+    {
+      "boqItemId": "cmrn7l1og008kvc6cmj1e6nhq",
+      "activitySourceKey": "ACT_10",
+      "amount": 3432
+    },
+    {
+      "boqItemId": "cmrn7l1og008lvc6cbt17siwh",
+      "activitySourceKey": "ACT_6",
+      "amount": 16812.54
+    },
+    {
+      "boqItemId": "cmrn7l1og008mvc6cg885mmop",
+      "activitySourceKey": "ACT_1",
+      "amount": 115982.16
+    },
+    {
+      "boqItemId": "cmrn7l1og008nvc6c4m8k6fct",
+      "activitySourceKey": "ACT_1",
+      "amount": 72702.64
+    },
+    {
+      "boqItemId": "cmrn7l1og008ovc6cx8c9u2uj",
+      "activitySourceKey": "ACT_1",
+      "amount": 9750.84
+    },
+    {
+      "boqItemId": "cmrn7l1og008pvc6cr8nhzyri",
+      "activitySourceKey": "ACT_1",
+      "amount": 8448.26
+    },
+    {
+      "boqItemId": "cmrn7l1og008qvc6c3l9elurp",
+      "activitySourceKey": "ACT_10",
+      "amount": 213.84
+    },
+    {
+      "boqItemId": "cmrn7l1og008rvc6cueawf473",
+      "activitySourceKey": "ACT_2",
+      "amount": 737348.84
+    },
+    {
+      "boqItemId": "cmrn7l1og008svc6cyxjvhk38",
+      "activitySourceKey": "ACT_10",
+      "amount": 7277.91
+    },
+    {
+      "boqItemId": "cmrn7l1oh008tvc6czvqm11km",
+      "activitySourceKey": "ACT_11",
+      "amount": 44240.94
+    },
+    {
+      "boqItemId": "cmrn7l1oh008uvc6cyqzmugc9",
+      "activitySourceKey": "ACT_7",
+      "amount": 5149053.36
+    },
+    {
+      "boqItemId": "cmrn7l1oh008vvc6cwm06qg08",
+      "activitySourceKey": "ACT_7",
+      "amount": 644571.72
+    },
+    {
+      "boqItemId": "cmrn7l1oh008wvc6c5u0151mk",
+      "activitySourceKey": "ACT_7",
+      "amount": 439327.2
+    },
+    {
+      "boqItemId": "cmrn7l1oh008xvc6ccvaux2ve",
+      "activitySourceKey": "ACT_7",
+      "amount": 515401.92
+    },
+    {
+      "boqItemId": "cmrn7l1oh008yvc6ctpiae0ph",
+      "activitySourceKey": "ACT_7",
+      "amount": 32123.91
+    },
+    {
+      "boqItemId": "cmrn7l1oh008zvc6cul9ncu53",
+      "activitySourceKey": "ACT_7",
+      "amount": 46653.1
+    },
+    {
+      "boqItemId": "cmrn7l1oh0090vc6c17nme2zx",
+      "activitySourceKey": "ACT_7",
+      "amount": 874356.98
+    },
+    {
+      "boqItemId": "cmrn7l1oi0091vc6cn0n28z72",
+      "activitySourceKey": "ACT_7",
+      "amount": 120280.5
+    },
+    {
+      "boqItemId": "cmrn7l1oi0092vc6c4mrt1e8f",
+      "activitySourceKey": "ACT_7",
+      "amount": 772225.45
+    },
+    {
+      "boqItemId": "cmrn7l1oi0093vc6c00tgbtuv",
+      "activitySourceKey": "ACT_7",
+      "amount": 125827.11
+    },
+    {
+      "boqItemId": "cmrn7l1oi0094vc6cy7v9at17",
+      "activitySourceKey": "ACT_7",
+      "amount": 135268.13
+    },
+    {
+      "boqItemId": "cmrn7l1oi0095vc6clv727qd8",
+      "activitySourceKey": "ACT_7",
+      "amount": 120190.82
+    },
+    {
+      "boqItemId": "cmrn7l1oi0096vc6cltdykt2a",
+      "activitySourceKey": "ACT_7",
+      "amount": 131472.25
+    },
+    {
+      "boqItemId": "cmrn7l1oi0097vc6ctgh12eec",
+      "activitySourceKey": "ACT_7",
+      "amount": 473575.57
+    },
+    {
+      "boqItemId": "cmrn7l1oi0098vc6ckc4m9692",
+      "activitySourceKey": "ACT_5",
+      "amount": 932598.82
+    },
+    {
+      "boqItemId": "cmrn7l1oj0099vc6ces26zpmk",
+      "activitySourceKey": "ACT_5",
+      "amount": 302047.59
+    },
+    {
+      "boqItemId": "cmrn7l1oj009avc6cnj867zsm",
+      "activitySourceKey": "ACT_7",
+      "amount": 27691.2
+    },
+    {
+      "boqItemId": "cmrn7l1oj009bvc6clcnqsipa",
+      "activitySourceKey": "ACT_7",
+      "amount": 32074.68
+    },
+    {
+      "boqItemId": "cmrn7l1oj009cvc6cbzwge732",
+      "activitySourceKey": "ACT_5",
+      "amount": 116076.44
+    },
+    {
+      "boqItemId": "cmrn7l1oj009dvc6cpubg9j61",
+      "activitySourceKey": "ACT_5",
+      "amount": 77586.88
+    },
+    {
+      "boqItemId": "cmrn7l1oj009evc6c4gzve17p",
+      "activitySourceKey": "ACT_5",
+      "amount": 150867.52
+    },
+    {
+      "boqItemId": "cmrn7l1oj009fvc6c3vsr5gpv",
+      "activitySourceKey": "ACT_5",
+      "amount": 216872.06
+    },
+    {
+      "boqItemId": "cmrn7l1oj009gvc6c8qtp3rsi",
+      "activitySourceKey": "ACT_7",
+      "amount": 130972.1
+    },
+    {
+      "boqItemId": "cmrn7l1oj009hvc6cuxhv5p7r",
+      "activitySourceKey": "ACT_7",
+      "amount": 1758690.29
+    },
+    {
+      "boqItemId": "cmrn7l1ok009ivc6czo553i2r",
+      "activitySourceKey": "ACT_7",
+      "amount": 24540.75
+    },
+    {
+      "boqItemId": "cmrn7l1ok009jvc6c6pdkyal2",
+      "activitySourceKey": "ACT_7",
+      "amount": 598841.1
+    },
+    {
+      "boqItemId": "cmrn7l1ok009kvc6c9z19sf4b",
+      "activitySourceKey": "ACT_7",
+      "amount": 979795.74
+    },
+    {
+      "boqItemId": "cmrn7l1ok009lvc6cnatmerve",
+      "activitySourceKey": "ACT_7",
+      "amount": 51318.41
+    },
+    {
+      "boqItemId": "cmrn7l1ok009mvc6cru0nvpc6",
+      "activitySourceKey": "ACT_7",
+      "amount": 459054.05
+    },
+    {
+      "boqItemId": "cmrn7l1ok009nvc6ck05zhxh0",
+      "activitySourceKey": "ACT_2",
+      "amount": 145441.09
+    },
+    {
+      "boqItemId": "cmrn7l1ok009ovc6coxyjgo4z",
+      "activitySourceKey": "ACT_6",
+      "amount": 174529.31
+    },
+    {
+      "boqItemId": "cmrn7l1ok009pvc6c7z9dt4ls",
+      "activitySourceKey": "ACT_10",
+      "amount": 87264.66
+    },
+    {
+      "boqItemId": "cmrn7l1ol009qvc6cutmst56g",
+      "activitySourceKey": "ACT_11",
+      "amount": 884818.61
+    }
+  ]
+}

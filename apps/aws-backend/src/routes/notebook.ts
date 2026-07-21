@@ -3,7 +3,7 @@ import { Router } from 'express';
 // Assuming prisma and requirePermission are available in the AWS environment
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient(); // Adjust path as needed for AWS setup
-import { requirePermission } from './permissions'; // Adjust path as needed for AWS setup
+import { requirePermission } from '../lib/permissions'; // Adjust path as needed for AWS setup
 
 const router = Router();
 

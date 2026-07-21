@@ -1,0 +1,29 @@
+import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
+import { adoptProjectShell } from '@/lib/services/reconstruction';
+
+export async function POST(req: Request) {
+  if (process.env.GATE7D_REPLAY_MODE !== 'ENABLED') {
+    return NextResponse.json({ error: 'Reconstruction endpoints are disabled' }, { status: 410 });
+  }
+
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (session.user.role !== 'PROJECT_MANAGER' && session.user.role !== 'SITE_ENGINEER') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  try {
+    const { projectId } = await req.json();
+    if (!projectId) return NextResponse.json({ error: 'Missing projectId' }, { status: 400 });
+
+    const result = await adoptProjectShell(projectId, session.user.id);
+    return NextResponse.json({ success: true, result });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+
+

@@ -1,7 +1,9 @@
 // @ts-nocheck
 import { Router } from 'express';
-import { prisma } from './prismaClient'; // Adjust path as needed for your AWS setup
-import { requirePermission, submitTransaction, approveTransaction } from './workflow'; // Adjust path as needed
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+import { submitTransaction, approveTransaction } from '../lib/workflow';
+import { requirePermission } from '../lib/permissions';
 
 const router = Router();
 

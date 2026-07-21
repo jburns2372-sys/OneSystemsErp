@@ -1,7 +1,8 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
-import { auth } from '@/auth'; // Assuming '@/auth' provides session
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 // Base URL for the AWS backend API. This should point to your AWS Express.js application.
@@ -9,19 +10,22 @@ const BACKEND_API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL || 'ht
 
 /**
  * A wrapper around fetch that includes authentication headers and handles API responses.
- * Assumes the existence of an `auth` function from NextAuth.js or similar for session management.
  */
 async function fetchWithAuth(url: string, options?: RequestInit) {
-  const session = await auth();
-  if (!session?.accessToken) {
+  const cookieStore = await cookies();
+  const __session = await verifySession();
+  const session = __session?.id || '';
+  
+  if (!session) {
     // If not authenticated, redirect to login or throw an error
-    redirect('/api/auth/signin'); 
+    redirect('/login'); 
   }
 
   const headers = {
     ...options?.headers,
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${session.accessToken}`,
+    'Authorization': `Bearer ${session}`,
+    'x-user-session': session,
   };
 
   // Construct the full URL for the backend endpoint

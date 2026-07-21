@@ -1,12 +1,15 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 
-const BACKEND_URL = process.env.AWS_BACKEND_URL || 'http://localhost:4000';
+const BACKEND_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL) || 'http://localhost:4000';
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const cookieStore = await cookies();
-  const session = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const session = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value;
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
 
@@ -29,7 +32,31 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
 }
 
 export async function getDashboardStats() {
-  return fetchWithAuth('/api/projects/dashboard-stats');
+  try {
+    return await fetchWithAuth('/api/projects/dashboard-stats');
+  } catch (error) {
+    console.error('Failed to fetch dashboard stats from backend:', error);
+    return {
+      pendingAIOverrides: 0,
+      totalProjects: 0,
+      totalBudget: 0,
+      totalPayables: 0,
+      totalAccomplishments: 0,
+      pendingMRFs: 0,
+      pendingPettyCash: 0,
+      activePayrollPeriods: 0,
+      openCanvassing: 0,
+      activePurchaseOrders: 0,
+      expectedDeliveries: 0,
+      totalIssuances: 0,
+      totalSuppliers: 0,
+      totalWorkers: 0,
+      totalUsers: 0,
+      totalAuditLogs: 0,
+      totalDailyLogs: 0,
+      totalJobOrders: 0
+    };
+  }
 }
 
 export async function assignProjectManager(projectId: string, managerId: string | null) {
@@ -41,9 +68,11 @@ export async function assignProjectManager(projectId: string, managerId: string 
 
 export async function deleteProject(projectId: string) {
   try {
-    return await fetchWithAuth(`/api/projects/${projectId}`, {
+    const res = await fetchWithAuth(`/api/projects/${projectId}`, {
       method: 'DELETE'
     });
+    revalidatePath('/projects');
+    return res;
   } catch (error: any) {
     console.error('Error deleting project:', error);
     return { success: false, error: error.message || 'Failed to delete project' };

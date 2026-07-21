@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
 import { PrismaClient } from '@prisma/client';
@@ -17,7 +18,8 @@ export async function submitAIOverrideRequest(data: {
 }) {
   try {
     const cookieStore = await cookies();
-    const sessionId = cookieStore.get('session')?.value;
+    const __session = await verifySession();
+  const sessionId = __session?.id || '';
     if (!sessionId) throw new Error('Unauthorized');
     const user = await prisma.user.findUnique({ where: { id: sessionId } });
     if (!user) throw new Error('User not found');

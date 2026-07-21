@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { SimulationEngine } from '@/lib/simulationEngine';
@@ -7,7 +8,8 @@ import { cookies } from 'next/headers';
 export async function POST(req: Request) {
   try {
     const cookieStore = await cookies();
-    const userId = cookieStore.get('session')?.value;
+    const __session = await verifySession();
+  const userId = __session?.id || '';
 
     const user = userId
       ? await prisma.user.findUnique({ where: { id: userId } })

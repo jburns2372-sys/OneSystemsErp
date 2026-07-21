@@ -12,33 +12,21 @@ const MASTER_ADMIN_MODULES = [
 ];
 
 export async function getUserPermissions(userId: string) {
-  const cookieStore = await cookies();
-  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+  let simulatedRole;
+  try {
+    const cookieStore = await cookies();
+    simulatedRole = cookieStore.get('simulatedRole')?.value;
+  } catch (err) {
+    // Expected when running in background CLI scripts outside Next.js request scope
+  }
 
-  let [user, userRoles] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-    prisma.userRole.findMany({
-      where: { userId },
-      include: {
-        role: {
-          include: {
-            rolePermissions: true
-          }
-        }
-      }
-    })
-  ]);
-
-  // Fallback to demo user if session is invalid or missing
-  if (!user) {
-    const demoUser = await prisma.user.findFirst({
-      where: { email: 'jburns@demo.com' },
-      select: { id: true, role: true }
-    });
-    if (demoUser) {
-      user = demoUser;
-      userRoles = await prisma.userRole.findMany({
-        where: { userId: demoUser.id },
+  let user = null;
+  let userRoles = [];
+  try {
+    const results = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+      prisma.userRole.findMany({
+        where: { userId },
         include: {
           role: {
             include: {
@@ -46,8 +34,17 @@ export async function getUserPermissions(userId: string) {
             }
           }
         }
-      });
-    }
+      })
+    ]);
+    user = results[0];
+    userRoles = results[1] as any;
+  } catch (error) {
+    console.error("Database connection failed in getUserPermissions:", error);
+  }
+
+  // Fallback to demo user if session is invalid or missing
+  if (!user) {
+    return { IS_GUEST_USER: true };
   }
 
   const isActualAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR' || user?.role === 'DIRECTORS';
@@ -80,10 +77,10 @@ export async function getUserPermissions(userId: string) {
   }
 
   // Then aggregate from userRoles relationship if it exists
-  userRoles.forEach(ur => {
+  userRoles.forEach((ur: { role: { isActive: boolean; rolePermissions: any[]; roleCode?: string; roleName?: string } }) => {
     if (!ur.role.isActive) return;
 
-    ur.role.rolePermissions.forEach(rp => {
+    ur.role.rolePermissions.forEach((rp: { moduleName: string; [key: string]: any }) => {
       if (!aggregatedPermissions[rp.moduleName]) {
         aggregatedPermissions[rp.moduleName] = { ...rp };
       } else {
@@ -113,7 +110,7 @@ export async function getUserPermissions(userId: string) {
   // >>> GUEST USER OVERRIDE <<<
   // The Prompt requires a universal READ-ONLY / VIEW-ONLY system role.
   const isGuestUser = user?.role === 'GUEST_USER' || user?.role === 'GUEST USER' || 
-                      userRoles.some(ur => ur.role.roleCode === 'GUEST_USER' || ur.role.roleName === 'GUEST USER');
+                      userRoles.some((ur: { role: { roleCode?: string; roleName?: string } }) => ur.role.roleCode === 'GUEST_USER' || ur.role.roleName === 'GUEST USER');
 
   if (isGuestUser) {
     aggregatedPermissions['IS_ADMIN'] = false;

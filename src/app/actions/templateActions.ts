@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 // This is a placeholder. In a real app, it would handle token injection, base URL, etc.
 // For demonstration, it just acts as a basic fetch wrapper.
 async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const apiUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL || 'http://localhost:3001'; // Define your AWS backend URL
+  const apiUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:3001'; // Define your AWS backend URL
   const url = `${apiUrl}${input}`;
 
   // In a real app, you'd add authentication headers here, e.g., Bearer token

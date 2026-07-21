@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
@@ -278,17 +279,10 @@ export async function createProject(formData: FormData) {
           description: descCell,
           unit: unit || "LOT",
           quantity: qty,
-          materialUnitCost: getNum(getSafeCell(row, cMat)),
-          laborUnitCost: getNum(getSafeCell(row, cLab)),
-          equipmentUnitCost: getNum(getSafeCell(row, cEqu)),
           directCost: getNum(getSafeCell(row, cTdc)),
-          ocmAmount: getNum(getSafeCell(row, cOcm)),
-          cpAmount: getNum(getSafeCell(row, cCp)),
-          vatAmount: getNum(getSafeCell(row, cVat)),
           indirectCost: getNum(getSafeCell(row, cTic)),
           combinedUnitCost: getNum(getSafeCell(row, cUc)),
           totalCost: amount,
-          percentageOfTotal: getNum(getSafeCell(row, cPct)) * 100,
           status: 'PENDING',
           processingType: 'MATERIAL_EQUIPMENT'
         });
@@ -423,7 +417,10 @@ export async function createProject(formData: FormData) {
     if (aiResult.name) name = aiResult.name;
     if (aiResult.location) location = aiResult.location;
     if (aiResult.contractAmount) contractAmount = aiResult.contractAmount;
-    parsedItems = aiResult.items;
+    parsedItems = aiResult.items.map((item: any) => {
+      const { materialUnitCost, laborUnitCost, equipmentUnitCost, ...rest } = item;
+      return rest;
+    });
     
     // Fallback if AI didn't compute total contract amount correctly
     if (contractAmount === 0 && parsedItems.length > 0) {
@@ -488,7 +485,8 @@ export async function createProject(formData: FormData) {
   });
 
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || cookieStore.get('userId')?.value;
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
 
   if (sessionId) {
@@ -1014,6 +1012,12 @@ export async function deleteProcurementBenchmark(projectId: string) {
 
   await prisma.procurementBenchmarkItem.deleteMany({
     where: { projectId }
+  });
+
+  // Reset the locked status so the user can upload a new benchmark
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { procurementBenchmarkLocked: false }
   });
 
   revalidatePath(`/projects/${projectId}`);

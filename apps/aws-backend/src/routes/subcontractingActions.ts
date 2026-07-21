@@ -220,31 +220,31 @@ router.post('/createBilling', async (req: Request, res: Response) => {
 router.post('/createFullSubcontractPackage', async (req: Request, res: Response) => {
   try {
     const { packageData, boqItems, powData } = req.body;
-    // This complex logic would typically be a Prisma transaction.
-    // Replicating a simplified version here, but in a real app, ensure atomicity.
     const result = await prisma.$transaction(async (tx) => {
+      if (packageData.startDate) packageData.startDate = new Date(packageData.startDate);
+      if (packageData.targetCompletion) packageData.targetCompletion = new Date(packageData.targetCompletion);
+      if (!packageData.packageNumber) packageData.packageNumber = 'SP-' + Date.now();
+
       const newPackage = await tx.subcontractPackage.create({ data: packageData });
-      // Assuming boqItems is an array of objects directly insertable or requiring transformation
-      const createdBoqItems = await Promise.all(boqItems.map(item => 
-        tx.subcontractorBOQItem.create({ 
-          data: { 
-            ...item, 
-            packageId: newPackage.id, 
-            awardedBoqItemId: item.awardedBoqItemId || null // Handle optional awardedBoqItemId
-          }
-        })
-      ));
-      // Assuming powData is an array of objects
-      const createdPowItems = await Promise.all(powData.map(item => 
-        tx.subcontractProgramOfWork.create({ 
-          data: { 
-            ...item, 
-            packageId: newPackage.id, 
-            awardedBoqItemId: item.awardedBoqItemId || null // Handle optional awardedBoqItemId
-          }
-        })
-      ));
-      return { newPackage, createdBoqItems, createdPowItems };
+
+      if (boqItems && boqItems.length > 0) {
+        const boqData = boqItems.map((item: any) => ({
+          subcontractorId: newPackage.subcontractorId,
+          awardedBoqItemId: item.id,
+          quantity: parseFloat(item.subcontractorQuantity) || 0,
+          unitCost: parseFloat(item.subcontractorUnitCost) || 0,
+          totalCost: (parseFloat(item.subcontractorQuantity) || 0) * (parseFloat(item.subcontractorUnitCost) || 0),
+        }));
+        await tx.subcontractorBOQItem.createMany({ data: boqData });
+      }
+
+      if (powData) {
+        if (powData.startDate) powData.startDate = new Date(powData.startDate);
+        if (powData.endDate) powData.endDate = new Date(powData.endDate);
+        await tx.programOfWorks.create({ data: { ...powData, packageId: newPackage.id } });
+      }
+
+      return newPackage;
     });
     res.json({ success: true, data: result });
   } catch (error: any) {
@@ -268,38 +268,48 @@ router.post('/updateFullSubcontractPackage', async (req: Request, res: Response)
     const { id, packageData, boqItems, powData } = req.body;
     if (!id) return res.status(400).json({ success: false, error: 'Subcontract Package ID is required' });
     const result = await prisma.$transaction(async (tx) => {
+      if (packageData.startDate) packageData.startDate = new Date(packageData.startDate);
+      if (packageData.targetCompletion) packageData.targetCompletion = new Date(packageData.targetCompletion);
+
       const updatedPackage = await tx.subcontractPackage.update({ where: { id }, data: packageData });
 
-      // For boqItems and powData, a common strategy is to delete existing and re-create
-      // or iterate and update/create as needed. For simplicity, assuming delete all then re-create.
-
-      // Delete existing related BOQ items
-      await tx.subcontractorBOQItem.deleteMany({ where: { packageId: id } });
-      // Re-create BOQ items
-      const createdBoqItems = await Promise.all(boqItems.map(item => 
-        tx.subcontractorBOQItem.create({ 
-          data: { 
-            ...item, 
-            packageId: id, 
-            awardedBoqItemId: item.awardedBoqItemId || null
+      if (boqItems && boqItems.length > 0) {
+        // Find existing BOQ items for this subcontractor and delete those that are replaced
+        const boqData = boqItems.map((item: any) => ({
+          subcontractorId: updatedPackage.subcontractorId,
+          awardedBoqItemId: item.id,
+          quantity: parseFloat(item.subcontractorQuantity) || 0,
+          unitCost: parseFloat(item.subcontractorUnitCost) || 0,
+          totalCost: (parseFloat(item.subcontractorQuantity) || 0) * (parseFloat(item.subcontractorUnitCost) || 0),
+        }));
+        // Basic sync approach: clear existing mapping for this package's subcontractor and reinsert
+        await tx.subcontractorBOQItem.deleteMany({ 
+          where: { 
+            subcontractorId: updatedPackage.subcontractorId,
+            awardedBoqItemId: { in: boqItems.map((i: any) => i.id) }
           }
-        })
-      ));
+        });
+        await tx.subcontractorBOQItem.createMany({ data: boqData });
+      }
 
-      // Delete existing related Program of Work items
-      await tx.subcontractProgramOfWork.deleteMany({ where: { packageId: id } });
-      // Re-create Program of Work items
-      const createdPowItems = await Promise.all(powData.map(item => 
-        tx.subcontractProgramOfWork.create({ 
-          data: { 
-            ...item, 
-            packageId: id, 
-            awardedBoqItemId: item.awardedBoqItemId || null
-          }
-        })
-      ));
+      if (powData) {
+        if (powData.startDate) powData.startDate = new Date(powData.startDate);
+        if (powData.endDate) powData.endDate = new Date(powData.endDate);
+        
+        const existingPow = await tx.programOfWorks.findFirst({ where: { packageId: id } });
+        if (existingPow) {
+          await tx.programOfWorks.update({ 
+            where: { id: existingPow.id }, 
+            data: powData 
+          });
+        } else {
+          await tx.programOfWorks.create({ 
+            data: { ...powData, packageId: id } 
+          });
+        }
+      }
 
-      return { updatedPackage, createdBoqItems, createdPowItems };
+      return updatedPackage;
     });
     res.json({ success: true, data: result });
   } catch (error: any) {

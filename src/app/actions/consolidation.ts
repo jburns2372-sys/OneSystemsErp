@@ -1,17 +1,19 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import * as xlsx from 'xlsx';
 import { uploadToS3 as put } from '@/lib/s3'; // S3 upload utility remains in Next.js Server Action
 
-const BACKEND_URL = process.env.AWS_BACKEND_URL || 'http://localhost:4000';
+const BACKEND_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL) || 'http://localhost:4000';
 const API_ROUTE_PREFIX = '/api/consolidation'; // The base route name for the AWS backend
 
 // fetchWithAuth wrapper to handle session/project headers and backend response structure
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const cookieStore = await cookies(); // `cookies()` is not async
-  const session = cookieStore.get('session')?.value;
+  const __session = await verifySession();
+  const session = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value;
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
 
@@ -20,7 +22,7 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
   if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
   // Only set Content-Type if a body is present and it's JSON
-  if (options.body && typeof options.body === 'string' && options.headers?.['Content-Type'] !== 'multipart/form-data') {
+  if (options.body && typeof options.body === 'string') {
     headers.set('Content-Type', 'application/json');
   }
 

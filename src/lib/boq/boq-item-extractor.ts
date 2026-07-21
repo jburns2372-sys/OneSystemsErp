@@ -16,76 +16,83 @@ export async function extractBOQItems(
   let currentSectionCode = null;
   let sectionDisplayOrder = 1;
 
-  for (let rowNum = 14; rowNum <= 500; rowNum++) {
+  for (let rowNum = 9; rowNum <= 1000; rowNum++) {
     const row = sheet.getRow(rowNum);
     
-    // Stop at Grand Total
-    const colCText = row.getCell(3).text?.toString().toUpperCase() || '';
-    if (colCText.includes('GRAND TOTAL') || rowNum === 162) {
+    // Stop at TOTAL PROJECT COST
+    const colBText = row.getCell(2).text?.toString().toUpperCase() || '';
+    const colAText = row.getCell(1).text?.toString().toUpperCase() || '';
+    if (colBText.includes('TOTAL PROJECT COST') || colAText.includes('TOTAL PROJECT COST')) {
       break;
     }
 
+    const colA = row.getCell(1).value?.toString().trim() || '';
     const colB = row.getCell(2).value?.toString().trim() || '';
-    const colC = row.getCell(3).value?.toString().trim() || '';
 
     // If empty row, skip
-    if (!colB && !colC) continue;
+    if (!colA && !colB) continue;
 
-    // Detect Section (Roman Numeral in Col B)
-    if (colB && ROMAN_NUMERAL_REGEX.test(colB.replace('.', ''))) {
+    // Detect Section (Roman Numeral in Col A)
+    if (colA && ROMAN_NUMERAL_REGEX.test(colA.replace('.', ''))) {
       const sectionRecord = await prisma.bOQExtractedSection.create({
         data: {
           uploadedWorkbookFileId,
           projectId,
-          sheetName: 'BOQ_DATA_ENTRY',
+          sheetName: sheet.name,
           sourceRowNumber: rowNum,
-          sectionCode: colB,
-          sectionName: colC,
+          sectionCode: colA,
+          sectionName: colB,
           displayOrder: sectionDisplayOrder++
         }
       });
       currentSectionId = sectionRecord.id;
-      currentSectionCode = colB;
+      currentSectionCode = colA;
       sections.push(sectionRecord);
       continue;
     }
 
-    // Detect Item (Numeric in Col B, or just descriptions under a section)
-    if (currentSectionId && (colB || colC)) {
+    // Detect Item (Numeric in Col A, or just descriptions under a section)
+    if (currentSectionId && (colA || colB)) {
       // It's an item row
-      const getVal = (col: number) => {
+      const getVal = (col: number): number => {
         const cell = row.getCell(col);
-        if (typeof cell.value === 'object' && cell.value !== null) {
-           return (cell.value as any).result || 0;
+        let val = cell.value;
+        if (typeof val === 'object' && val !== null) {
+          val = (val as any).result;
         }
-        return parseFloat(cell.value?.toString() || '0') || 0;
+        const num = parseFloat(val as string);
+        if (isNaN(num)) return 0;
+        return Math.round(num * 100) / 100;
       };
 
       const itemRecord = {
         uploadedWorkbookFileId,
         projectId,
         sectionId: currentSectionId,
-        sheetName: 'BOQ_DATA_ENTRY',
+        sheetName: sheet.name,
         sourceRowNumber: rowNum,
-        itemNumber: colB,
-        description: colC,
-        unit: row.getCell(4).value?.toString() || null,
-        quantity: getVal(5),
-        materialUnitCost: getVal(6),
-        laborUnitCost: getVal(7),
-        equipmentUnitCost: getVal(8),
-        totalDirectCost: getVal(9),
-        ocm: getVal(10),
-        cp: getVal(11),
-        vat: getVal(12),
-        totalIndirectCost: getVal(13),
-        unitCost: getVal(14),
+        itemNumber: colA,
+        description: colB,
+        unit: row.getCell(3).value?.toString() || null,
+        quantity: getVal(4),
+        materialUnitCost: 0,
+        laborUnitCost: 0,
+        equipmentUnitCost: 0,
+        totalDirectCost: getVal(6),
+        ocm: getVal(8),
+        cp: getVal(10),
+        vat: getVal(13),
+        totalIndirectCost: getVal(14),
+        unitCost: getVal(5),
         amount: getVal(15),
-        percentage: getVal(16),
+        percentage: 0,
         validationStatus: 'SUCCESS'
       };
       
-      items.push(itemRecord);
+      // Missing and negative amounts are rejected, as per test
+      if (itemRecord.amount > 0) {
+        items.push(itemRecord);
+      }
     }
   }
 
@@ -98,3 +105,4 @@ export async function extractBOQItems(
 
   return { sectionsCount: sections.length, itemsCount: items.length };
 }
+
