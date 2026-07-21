@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath } from 'next/cache';
 
 // This is a placeholder fetchWithAuth function. 
 // In a real application, ensure it correctly handles authentication tokens
@@ -37,7 +37,7 @@ export async function preCheckVariationOrder(voId: string, userId: string) {
     if (response.success) {
       // Revalidation: The original action updates the Variation Order, so revalidate relevant UI.
       // Adjust these paths/tags to match your application's actual data fetching and caching strategy.
-      revalidateTag(`variationOrder-${voId}`); // Revalidate data for a specific Variation Order
+      revalidatePath(`/projects`); // Revalidate data for Variation Orders
       revalidatePath(`/projects/[projectId]/variation-orders`); // Revalidate a list of Variation Orders
       revalidatePath(`/projects/[projectId]/variation-orders/${voId}`); // Revalidate the detail page for a VO
       return response.data;

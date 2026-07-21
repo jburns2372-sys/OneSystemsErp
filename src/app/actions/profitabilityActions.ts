@@ -14,7 +14,7 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
   };
 
   // Ensure NEXT_PUBLIC_AWS_BACKEND_URL is set in your .env.local file (and other environments)
-  const baseUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL;
+  const baseUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL);
   if (!baseUrl) {
     throw new Error('NEXT_PUBLIC_AWS_BACKEND_URL is not defined in environment variables.');
   }

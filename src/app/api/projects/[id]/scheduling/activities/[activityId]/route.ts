@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { assertScheduleEditable } from '@/lib/scheduling/scheduleWorkflow';
 
 // PUT: Update an activity
 // DELETE: Delete an activity
@@ -11,12 +12,14 @@ export async function PUT(req: Request, { params }: { params: Promise<any> }) {
 
     const activityToUpdate = await prisma.scheduleActivity.findUnique({
       where: { id: activityId },
-      select: { scheduleId: true }
+      include: { schedule: true }
     });
     
     if (!activityToUpdate) {
       return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
     }
+
+    assertScheduleEditable(activityToUpdate.schedule);
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
@@ -67,6 +70,17 @@ export async function PUT(req: Request, { params }: { params: Promise<any> }) {
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string; activityId: string }> }) {
   try {
     const { activityId } = await params;
+
+    const activity = await prisma.scheduleActivity.findUnique({
+      where: { id: activityId },
+      include: { schedule: true }
+    });
+
+    if (!activity) {
+      return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
+    }
+
+    assertScheduleEditable(activity.schedule);
 
     await prisma.scheduleActivity.delete({
       where: { id: activityId }

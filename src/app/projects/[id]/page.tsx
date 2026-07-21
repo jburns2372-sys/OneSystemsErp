@@ -96,7 +96,7 @@ export default async function ProjectDetailsPage({
 
   let htmlTable = '';
   let consolidatedHtmlTable = '';
-  let hasBOQ = project.awardedBoqItems && project.awardedBoqItems.length > 0;
+  const hasBOQ = project.awardedBoqItems && project.awardedBoqItems.length > 0;
 
   let approvedAdditive = 0;
   let approvedDeductive = 0;

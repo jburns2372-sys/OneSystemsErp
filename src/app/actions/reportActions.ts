@@ -1,10 +1,11 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 // This `fetchWithAuth` function acts as a proxy to your AWS backend.
 // It assumes NEXT_PUBLIC_AWS_BACKEND_URL is configured in your Next.js environment variables
 // (e.g., .env.local, .env.production) and points to your AWS Express.js API base URL.
 async function fetchWithAuth(urlPath: string, options?: RequestInit) {
-  const backendUrl = process.env.NEXT_PUBLIC_AWS_BACKEND_URL;
+  const backendUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL);
   if (!backendUrl) {
     throw new Error("NEXT_PUBLIC_AWS_BACKEND_URL is not defined in your environment.");
   }
@@ -39,7 +40,8 @@ export async function getFinancialReport() {
   // Access cookies on the server side using Next.js headers API
   const { cookies } = await import('next/headers');
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
   // Call the AWS backend through the fetchWithAuth proxy
@@ -58,7 +60,8 @@ export async function getFinancialReport() {
 export async function getProjectReport() {
   const { cookies } = await import('next/headers');
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
   const response = await fetchWithAuth('/reportActions/getProjectReport', {
@@ -73,7 +76,8 @@ export async function getProjectReport() {
 export async function getInventoryReport() {
   const { cookies } = await import('next/headers');
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const sessionId = __session?.id || '';
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
   const response = await fetchWithAuth('/reportActions/getInventoryReport', {

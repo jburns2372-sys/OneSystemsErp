@@ -34,7 +34,7 @@ export default async function JobOrderDashboard() {
     );
   }
 
-  let jobOrders = await getJobOrders(activeProjectId);
+  const jobOrders = await getJobOrders(activeProjectId);
 
   // Basic KPI calculations
   const activeCount = jobOrders.length;

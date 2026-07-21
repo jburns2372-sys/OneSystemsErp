@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 // Define a placeholder fetchWithAuth for demonstration
 // In a real application, this would handle authentication (e.g., attach an auth token)
 async function fetchWithAuth(url: string, options?: RequestInit) {
-  const response = await fetch(process.env.NEXT_PUBLIC_AWS_BACKEND_URL + url, {
+  const response = await fetch((process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) + url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

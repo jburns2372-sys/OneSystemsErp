@@ -12,12 +12,69 @@
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type DurationMethod = 'PRODUCTION_QUANTITY' | 'CHILD_WORK_PACKAGES' | 'FIXED_TECHNICAL_DURATION' | 'LEVEL_OF_EFFORT' | 'MILESTONE';
+
+export interface BaseCPMActivityMetadata {
+  phaseIdentity?: string;
+  discipline?: string;
+  system?: string;
+  location?: string;
+  workArea?: string;
+  durationDriver?: string;
+  quantity?: number;
+  unit?: string;
+  productivity?: number;
+  crewCount?: number;
+  workFrontCount?: number;
+  sourceBoqLineIds?: string[];
+  isLevelOfEffort?: boolean;
+  isMilestone?: boolean;
+  aiConfidence?: number;
+  rationale?: string;
+  
+  // Fields for feasibility loop baseline
+  originalCrewCount?: number;
+}
+
+export interface ProductionQuantityMetadata extends BaseCPMActivityMetadata {
+  method: 'PRODUCTION_QUANTITY';
+  crewCount: number;
+  workFronts: number;
+  prodRate: number;
+  boqAssigned: string[];
+}
+
+export interface FixedTechnicalDurationMetadata extends BaseCPMActivityMetadata {
+  method: 'FIXED_TECHNICAL_DURATION';
+  fixedTechnicalDuration?: number;
+}
+
+export interface ChildWorkPackagesMetadata extends BaseCPMActivityMetadata {
+  method: 'CHILD_WORK_PACKAGES';
+}
+
+export interface LevelOfEffortMetadata extends BaseCPMActivityMetadata {
+  method: 'LEVEL_OF_EFFORT';
+}
+
+export interface MilestoneMetadata extends BaseCPMActivityMetadata {
+  method: 'MILESTONE';
+}
+
+export type CPMActivityMetadata = 
+  | ProductionQuantityMetadata
+  | FixedTechnicalDurationMetadata
+  | ChildWorkPackagesMetadata
+  | LevelOfEffortMetadata
+  | MilestoneMetadata;
+
 export interface CPMActivity {
   id: string;
   name: string;
   duration: number; // in working days
   plannedStart?: Date | null;
   plannedFinish?: Date | null;
+  metadata?: CPMActivityMetadata;
 }
 
 export interface CPMDependency {

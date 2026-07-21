@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getUserPermissions } from '@/lib/permissions';
@@ -5,7 +6,8 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   const simulatedRole = cookieStore.get('simulatedRole')?.value || '';
   
   const user = userId ? await prisma.user.findUnique({ where: { id: userId } }) : null;

@@ -48,9 +48,9 @@ export default async function SubcontractingDashboard() {
     );
   }
 
-  let packages = await getSubcontractPackages(activeProjectId);
-  let jobOrders = await getJobOrders(activeProjectId);
-  let variationOrders = await getAllSubcontractorVariationOrders(activeProjectId);
+  const packages = await getSubcontractPackages(activeProjectId);
+  const jobOrders = await getJobOrders(activeProjectId);
+  const variationOrders = await getAllSubcontractorVariationOrders(activeProjectId);
 
   return (
     <div className={styles.dashboardContainer} style={{ maxWidth: '1400px' }}>

@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getUserPermissions } from '@/lib/permissions';
@@ -9,7 +10,8 @@ import * as path from 'path';
 export async function POST(req: Request) {
   try {
     const cookieStore = await cookies();
-    const userId = cookieStore.get('session')?.value || '';
+    const __session = await verifySession();
+  const userId = __session?.id || '';
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

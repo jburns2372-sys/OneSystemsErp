@@ -5,7 +5,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   try {
     const { id: projectId } = await params;
 
-    const schedule = await prisma.projectSchedule.findUnique({
+    const schedule = await prisma.projectSchedule.findFirst({
       where: { projectId },
       include: {
         activities: true,

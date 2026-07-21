@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { GoogleGenAI, Type, Schema } from '@google/genai';
-import crypto from 'crypto';
+import { generateObject } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -19,7 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     // Check if schedule already exists
-    const existingSchedule = await prisma.projectSchedule.findUnique({
+    const existingSchedule = await prisma.projectSchedule.findFirst({
       where: { projectId }
     });
 
@@ -146,74 +147,37 @@ Please do the following:
 BOQ Items:
 ${JSON.stringify(payload, null, 2)}`;
 
-          const schema: Schema = {
-            type: Type.OBJECT,
-            properties: {
-              phases: {
-                type: Type.ARRAY,
-                description: "Logical construction phases",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    code: { type: Type.STRING, description: "Unique phase code e.g. WBS-1" },
-                    name: { type: Type.STRING, description: "Phase name" },
-                    pct: { type: Type.NUMBER, description: "Percentage of total project duration (0.0 to 1.0)" },
-                    orderIndex: { type: Type.INTEGER }
-                  }
-                }
-              },
-              activities: {
-                type: Type.ARRAY,
-                description: "The assigned phases and durations for each BOQ item",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING, description: "The exact id of the BOQ item e.g. ITEM_0" },
-                    wbsCode: { type: Type.STRING, description: "The phase code this activity belongs to" },
-                    durationDays: { type: Type.INTEGER, description: "Estimated duration in days" }
-                  }
-                }
-              },
-              dependencies: {
-                type: Type.ARRAY,
-                description: "Logical dependencies between activities",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    predecessorCode: { type: Type.STRING, description: "The id of the predecessor activity e.g. ITEM_0" },
-                    successorCode: { type: Type.STRING, description: "The id of the successor activity e.g. ITEM_1" },
-                    type: { type: Type.STRING, description: "Dependency type: FS, SS, FF, or SF. Default is FS." }
-                  }
-                }
-              }
-            }
-          };
+          const schema = z.object({
+            phases: z.array(z.object({
+              code: z.string().describe("Unique phase code e.g. WBS-1"),
+              name: z.string().describe("Phase name"),
+              pct: z.number().describe("Percentage of total project duration (0.0 to 1.0)"),
+              orderIndex: z.number().describe("Index order of the phase (e.g. 1, 2, 3)")
+            })).describe("Logical construction phases"),
+            activities: z.array(z.object({
+              id: z.string().describe("The exact id of the BOQ item e.g. ITEM_0"),
+              wbsCode: z.string().describe("The phase code this activity belongs to"),
+              durationDays: z.number().describe("Estimated duration in days")
+            })).describe("The assigned phases and durations for each BOQ item"),
+            dependencies: z.array(z.object({
+              predecessorCode: z.string().describe("The id of the predecessor activity e.g. ITEM_0"),
+              successorCode: z.string().describe("The id of the successor activity e.g. ITEM_1"),
+              type: z.string().describe("Dependency type: FS, SS, FF, or SF. Default is FS.")
+            })).describe("Logical dependencies between activities")
+          });
 
-          const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-          let response;
+          let result;
           try {
-            response = await ai.models.generateContent({
-              model: 'gemini-2.5-flash',
-              contents: prompt,
-              config: {
-                responseMimeType: 'application/json',
-                responseSchema: schema
-              }
+            const { object } = await generateObject({
+              model: openai('gpt-4o-mini'),
+              schema: schema,
+              prompt: prompt,
             });
+            result = object;
           } catch (aiError: any) {
-            console.warn("gemini-2.5-flash failed, falling back to gemini-2.0-flash...", aiError.message);
-            // Fallback to 2.0-flash if 2.5 is unavailable
-            response = await ai.models.generateContent({
-              model: 'gemini-2.0-flash',
-              contents: prompt,
-              config: {
-                responseMimeType: 'application/json',
-                responseSchema: schema
-              }
-            });
+            console.error("OpenAI schedule generation failed", aiError);
+            throw new Error('Failed to generate schedule: ' + aiError.message);
           }
-
-          const result = JSON.parse(response.text || '{}');
 
           const phases = result.phases || [];
           const activities = result.activities || [];
@@ -359,7 +323,7 @@ ${JSON.stringify(payload, null, 2)}`;
                 mappingsToInsert.push({
                   activityId: newActId,
                   awardedBoqItemId: item.id,
-                  mappedQuantity: item.quantity
+                  allocatedQuantity: item.quantity
                 });
               }
             }
@@ -369,7 +333,7 @@ ${JSON.stringify(payload, null, 2)}`;
             await prisma.scheduleActivity.createMany({ data: activitiesToInsert });
           }
           if (mappingsToInsert.length > 0) {
-            await prisma.scheduleBOQMapping.createMany({ data: mappingsToInsert });
+            await prisma.scheduleBOQAllocation.createMany({ data: mappingsToInsert });
           }
 
           // 3. Create Dependencies — use SS (Start-to-Start) within each phase for overlap
@@ -416,7 +380,7 @@ ${JSON.stringify(payload, null, 2)}`;
             mapsToInsert.push({
               activityId: actId,
               awardedBoqItemId: item.id,
-              mappedQuantity: item.quantity
+              allocatedQuantity: item.quantity
             });
           }
 
@@ -424,7 +388,7 @@ ${JSON.stringify(payload, null, 2)}`;
             await prisma.scheduleActivity.createMany({ data: actsToInsert });
           }
           if (mapsToInsert.length > 0) {
-            await prisma.scheduleBOQMapping.createMany({ data: mapsToInsert });
+            await prisma.scheduleBOQAllocation.createMany({ data: mapsToInsert });
           }
         }
       }
@@ -434,7 +398,7 @@ ${JSON.stringify(payload, null, 2)}`;
       where: { id: newSchedule.id },
       include: {
         wbsNodes: true,
-        activities: { include: { boqMappings: true } }
+        activities: { include: { boqAllocations: true } }
       }
     });
 
@@ -445,8 +409,8 @@ ${JSON.stringify(payload, null, 2)}`;
     // Rollback: If we fail anywhere after creating the schedule but before returning, delete it so the user isn't stuck.
     try {
       const { id: projectId } = await params;
-      const stuckSchedule = await prisma.projectSchedule.findUnique({ where: { projectId }, include: { _count: { select: { activities: true } } } });
-      if (stuckSchedule && stuckSchedule._count.activities === 0) {
+      const stuckSchedule = await prisma.projectSchedule.findFirst({ where: { projectId, status: 'DRAFT' }, include: { activities: true } });
+      if (stuckSchedule && stuckSchedule.activities.length === 0) {
         await prisma.projectSchedule.delete({ where: { id: stuckSchedule.id } });
       }
     } catch (cleanupError) {

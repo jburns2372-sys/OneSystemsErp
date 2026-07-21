@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
@@ -35,7 +36,8 @@ async function fetchWithAuth(url: string, options: RequestInit) {
 
 export async function updatePOStatus(poId: string, status: string) {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session')?.value; // This session ID might represent the approverId
+  const __session = await verifySession();
+  const sessionId = __session?.id || ''; // This session ID might represent the approverId
   
   if (!sessionId) {
     throw new Error('Not authenticated');

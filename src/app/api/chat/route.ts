@@ -1,3 +1,4 @@
+import { verifySession } from '@/lib/dal/auth';
 // @ts-nocheck
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
@@ -17,7 +18,8 @@ export async function POST(req: Request) {
   const lastUserMessage = messages[messages.length - 1]?.content || '';
 
   const cookieStore = await cookies();
-  const userId = cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  const userId = __session?.id || '';
   const permissions = await getUserPermissions(userId);
 
   // 0. Prompt Injection Detection
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    return new Response("System Error: OPENAI_API_KEY is missing in the environment variables. Please configure it in your Vercel dashboard to enable the AI Knowledge Center.", { status: 500 });
+    return new Response("System Error: OPENAI_API_KEY is missing in the environment variables. Please configure it in your Vercel dashboard or local .env file to enable the AI Knowledge Center.", { status: 500 });
   }
 
   // 1. Generate embedding for user's question

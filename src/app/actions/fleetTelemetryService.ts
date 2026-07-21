@@ -1,4 +1,5 @@
 'use server';
+import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
 
@@ -30,7 +31,8 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
 
 async function getUserId() {
   const cookieStore = await cookies(); // No await needed if using Next.js 13+ headers()
-  return cookieStore.get('session')?.value || '';
+  const __session = await verifySession();
+  return __session?.id || '';
 }
 
 export async function getLiveFleetLocations() {
