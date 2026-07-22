@@ -92,7 +92,7 @@ export default function ScheduleSetupWizard({
   };
 
   return (
-    <div style={{ maxWidth: '800px', margin: '40px auto', padding: '30px' }} className="glass-panel">
+    <div data-testid="no-valid-project-schedule" style={{ maxWidth: '800px', margin: '40px auto', padding: '30px' }} className="glass-panel">
       <h2 style={{ color: 'var(--accent-color)', textAlign: 'center', marginBottom: '10px' }}>Schedule Setup Wizard</h2>
       <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '30px' }}>
         Step {step} of 2: Configure Project Schedule Baseline
