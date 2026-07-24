@@ -2,10 +2,19 @@ import { POST } from '@/app/api/projects/[id]/scheduling/[scheduleId]/review/val
 import { prisma, transactionContext } from '@/lib/prisma';
 import crypto from 'crypto';
 
+jest.mock('@/lib/dal/auth', () => ({
+  verifySession: jest.fn().mockResolvedValue({ id: 'test-user', email: 'test@onesystems.com' }),
+  verifyApiSession: jest.fn().mockResolvedValue({ id: 'test-user', email: 'test@onesystems.com' })
+}));
+
 // Minimal mock setup for testing Next.js Route Handlers
 jest.mock('@/lib/scheduling/authUtils', () => ({
   getSessionActor: jest.fn(),
   checkSchedulingAccess: jest.fn(),
+}));
+
+jest.mock('@/lib/accessControl', () => ({
+  checkUserAccess: jest.fn().mockResolvedValue({ allowed: true }),
 }));
 
 import { getSessionActor, checkSchedulingAccess } from '@/lib/scheduling/authUtils';
@@ -21,9 +30,47 @@ const mockRequest = (body: any) => {
 };
 
 describe('Engineer Submission Route', () => {
-  const projectId = 'proj-123';
-  const scheduleId = 'sched-456';
-  const actorId = 'user-789';
+  const projectId = 'test-engineer-submission-project';
+  const scheduleId = 'test-engineer-submission-schedule';
+  const actorId = 'test-engineer-submission-actor';
+  const fixtureProjectIds = [projectId, 'proj-123'];
+  const fixtureScheduleIds = [scheduleId, 'sched-456'];
+  const fixtureActorIds = [actorId, 'user-789'];
+
+  const cleanupFixtures = async () => {
+    await transactionContext.run({ sourceProvenance: 'GATE9_WORKFLOW_ENGINE' }, async () => {
+      await prisma.scheduleWorkflowTransition.deleteMany({
+        where: { scheduleId: { in: fixtureScheduleIds } },
+      });
+      await prisma.baselineActivation.deleteMany({
+        where: { scheduleId: { in: fixtureScheduleIds } },
+      });
+      await prisma.scheduleApproval.deleteMany({
+        where: { scheduleId: { in: fixtureScheduleIds } },
+      });
+      await prisma.auditLog.deleteMany({
+        where: { userId: { in: fixtureActorIds } },
+      });
+      await prisma.scheduleActivity.deleteMany({
+        where: { scheduleId: { in: fixtureScheduleIds } },
+      });
+      await prisma.scheduleWBS.deleteMany({
+        where: { scheduleId: { in: fixtureScheduleIds } },
+      });
+      await prisma.projectSchedule.deleteMany({
+        where: { id: { in: fixtureScheduleIds } },
+      });
+      await prisma.projectUserAssignment.deleteMany({
+        where: { projectId: { in: fixtureProjectIds } },
+      });
+      await prisma.user.deleteMany({
+        where: { id: { in: fixtureActorIds } },
+      });
+      await prisma.project.deleteMany({
+        where: { id: { in: fixtureProjectIds } },
+      });
+    });
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -31,25 +78,16 @@ describe('Engineer Submission Route', () => {
     (checkSchedulingAccess as jest.Mock).mockResolvedValue({ allowed: true });
     
     await transactionContext.run({ sourceProvenance: 'GATE9_WORKFLOW_ENGINE' }, async () => {
-      // Setup isolated test database for this test suite
-      await prisma.scheduleWorkflowTransition.deleteMany({});
-      await prisma.auditLog.deleteMany({});
-      await prisma.scheduleActivity.deleteMany({});
-      await prisma.scheduleWBS.deleteMany({});
-      await prisma.baselineActivation.deleteMany({});
-      await prisma.scheduleApproval.deleteMany({});
-      await prisma.projectSchedule.deleteMany({});
-      await prisma.projectUserAssignment.deleteMany({});
-      await prisma.user.deleteMany({});
-      await prisma.project.deleteMany({});
+      await cleanupFixtures();
 
       await prisma.user.create({
         data: {
           id: actorId,
-          email: 'engineer@test.com',
+          email: 'actor@engineer-submission.test',
           name: 'Test Engineer',
           role: 'SITE_ENGINEER',
-          status: 'ACTIVE'
+          status: 'ACTIVE',
+          sessionVersion: 1
         }
       });
 
@@ -73,8 +111,16 @@ describe('Engineer Submission Route', () => {
     });
   });
 
+  afterEach(async () => {
+    await cleanupFixtures();
+  });
+
   afterAll(async () => {
-    await prisma.$disconnect();
+    try {
+      await cleanupFixtures();
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   const setupSchedule = async (status = 'AI_GENERATED_DRAFT', expectedRowVersion = 1) => {
@@ -190,7 +236,7 @@ describe('Engineer Submission Route', () => {
     expect(current?.workflowStatus).toBe('AI_GENERATED_DRAFT');
     expect(current?.rowVersion).toBe(1);
 
-    const transitions = await prisma.scheduleWorkflowTransition.count();
+    const transitions = await prisma.scheduleWorkflowTransition.count({ where: { scheduleId } });
     expect(transitions).toBe(0);
   });
 
@@ -211,6 +257,9 @@ describe('Engineer Submission Route', () => {
     const req1 = mockRequest({ expectedRowVersion: 1 });
     const res1 = await POST(req1, { params: Promise.resolve({ id: projectId, scheduleId }) });
     
+    if (res1.status === 403) {
+      console.log('403 Response:', await res1.clone().json());
+    }
     expect(res1.status).toBe(200);
 
     // Re-run identical request
@@ -222,7 +271,7 @@ describe('Engineer Submission Route', () => {
     const data = await res2.json();
     expect(data.error).toBe('WORKFLOW_STATE_CONFLICT');
     
-    const transitions = await prisma.scheduleWorkflowTransition.count();
+    const transitions = await prisma.scheduleWorkflowTransition.count({ where: { scheduleId } });
     expect(transitions).toBe(1);
   });
 });

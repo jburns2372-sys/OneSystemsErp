@@ -9,15 +9,51 @@ import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 
+const fixtureEmails = [
+  'test_current@example.com',
+  'test_new@example.com',
+  'test_success@example.com',
+  'test_duplicate@example.com',
+  'test_inactive@example.com',
+  'test_new_inactive@example.com',
+];
+
 async function cleanup() {
-  await prisma.auditLog.deleteMany({ where: { actionType: 'UAT_USER_EMAIL_CORRECTION' } });
-  await prisma.passwordRecoveryToken.deleteMany({ where: { purpose: 'TEST_RECOVERY' } });
-  await prisma.user.deleteMany({ where: { email: { startsWith: 'test_' } } });
+  const fixtureUsers = await prisma.user.findMany({
+    where: { email: { in: fixtureEmails } },
+    select: { id: true },
+  });
+  const fixtureUserIds = fixtureUsers.map(({ id }) => id);
+
+  if (fixtureUserIds.length === 0) {
+    return;
+  }
+
+  await prisma.baselineActivation.deleteMany({
+    where: { activatedById: { in: fixtureUserIds } },
+  });
+  await prisma.scheduleApproval.deleteMany({
+    where: { reviewerId: { in: fixtureUserIds } },
+  });
+  await prisma.auditLog.deleteMany({
+    where: {
+      userId: { in: fixtureUserIds },
+      actionType: 'UAT_USER_EMAIL_CORRECTION',
+    },
+  });
+  await prisma.passwordRecoveryToken.deleteMany({
+    where: {
+      userId: { in: fixtureUserIds },
+      purpose: 'TEST_RECOVERY',
+    },
+  });
+  await prisma.user.deleteMany({ where: { id: { in: fixtureUserIds } } });
 }
 
 describe('Secure User Email Change', () => {
   it('should run all tests', async () => {
-    console.log('Setting up test data...');
+  try {
+  console.log('Setting up test data...');
   await cleanup();
 
   const user = await prisma.user.create({
@@ -186,7 +222,6 @@ describe('Secure User Email Change', () => {
   const consumed = tokens.find(t => t.id === consumedToken.id);
 
   assert(unused?.revokedAt !== null);
-  console.log('expired token:', expired);
   assert(expired !== undefined);
   assert(expired.revokedAt === null); // preserved
   assert(consumed?.revokedAt === null); // preserved
@@ -225,7 +260,12 @@ describe('Secure User Email Change', () => {
   }
 
   console.log('All tests passed!');
-  await cleanup();
-  await prisma.$disconnect();
+  } finally {
+    try {
+      await cleanup();
+    } finally {
+      await prisma.$disconnect();
+    }
+  }
   }, 60000);
 });

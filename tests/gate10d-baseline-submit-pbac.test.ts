@@ -5,10 +5,14 @@ import { POST as submitBaselinePost } from '@/app/api/projects/[id]/scheduling/[
 import { prismaBase } from '@/lib/prisma-base';
 import { verifySession } from '@/lib/dal/auth';
 
-jest.mock('@/lib/dal/auth', () => ({
-  __esModule: true,
-  verifySession: jest.fn()
-}));
+jest.mock('@/lib/dal/auth', () => {
+  const mockFn = jest.fn();
+  return {
+    __esModule: true,
+    verifySession: mockFn,
+    verifyApiSession: mockFn
+  };
+});
 
 jest.mock('@/lib/permissions', () => ({
   __esModule: true,
@@ -16,13 +20,21 @@ jest.mock('@/lib/permissions', () => ({
     // We can just rely on the fallback or mock it to false to force checking project roles
     return false;
   }),
-  getPermissionsForRole: jest.fn().mockImplementation((roleCode: string) => {
-    // For baseline submit, we need canApprove to be true for the roles that can submit baseline
+  getUserPermissions: jest.fn().mockImplementation(async (userId: string) => {
+    const prisma = require('@/lib/prisma-base').prismaBase;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return {};
+    const roleCode = user.role;
     const canApproveRoles = ['PROJECT_DIRECTOR', 'DIRECTORS', 'PROJECT_MANAGER', 'SUPER_ADMIN', 'SYSTEM_ADMIN'];
     const canApprove = canApproveRoles.includes(roleCode);
     return {
-      'PROJECT_MANAGEMENT': { canApprove }
+      'PROJECT_MANAGEMENT': { canApprove, canSubmit: canApprove, canEdit: canApprove },
+      'Scheduling': { canApprove, canSubmit: canApprove, canEdit: canApprove },
+      'ALL': { canApprove, canSubmit: canApprove, canEdit: canApprove }
     };
+  }),
+  getPermissionsForRole: jest.fn().mockImplementation((roleCode: string) => {
+    return { 'PROJECT_MANAGEMENT': { canApprove: true } };
   })
 }));
 
@@ -79,19 +91,27 @@ describe('Gate 10D Baseline Submit PBAC Validation', () => {
   });
 
   afterAll(async () => {
-    if (scheduleId) {
-      await prismaBase.scheduleApproval.deleteMany({ where: { scheduleId } });
-      await prismaBase.baselineActivation.deleteMany({ where: { scheduleId } });
-      await prismaBase.projectSchedule.deleteMany({ where: { id: scheduleId } });
+    try {
+      if (Object.keys(users).length > 0) {
+        await prismaBase.auditLog.deleteMany({
+          where: { userId: { in: Object.values(users) } },
+        });
+      }
+      if (scheduleId) {
+        await prismaBase.baselineActivation.deleteMany({ where: { scheduleId } });
+        await prismaBase.scheduleApproval.deleteMany({ where: { scheduleId } });
+        await prismaBase.projectSchedule.deleteMany({ where: { id: scheduleId } });
+      }
+      if (projectId) {
+        await prismaBase.projectUserAssignment.deleteMany({ where: { projectId } });
+        await prismaBase.project.deleteMany({ where: { id: projectId } });
+      }
+      if (Object.keys(users).length > 0) {
+        await prismaBase.user.deleteMany({ where: { id: { in: Object.values(users) } } });
+      }
+    } finally {
+      await prismaBase.$disconnect();
     }
-    if (projectId) {
-      await prismaBase.projectUserAssignment.deleteMany({ where: { projectId } });
-      await prismaBase.project.deleteMany({ where: { id: projectId } });
-    }
-    if (Object.keys(users).length > 0) {
-      await prismaBase.user.deleteMany({ where: { id: { in: Object.values(users) } } });
-    }
-    await prismaBase.$disconnect();
   });
 
   function mockRequest(body: any) {

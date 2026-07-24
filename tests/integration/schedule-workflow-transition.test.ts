@@ -12,76 +12,114 @@ import crypto from 'crypto';
 jest.setTimeout(30000); // 30 seconds
 
 describe('Schedule Workflow Transition Service Integration Tests', () => {
-  const projectId = 'cmrirhhw30000ic0406v47smb';
+  const projectId = 'test-schedule-workflow-transition-project';
+  const engineerId = 'test-schedule-workflow-transition-engineer';
+  const managerId = 'test-schedule-workflow-transition-manager';
   let scheduleId: string;
   let expectedRowVersion: number;
   let engineerUser: OperationalSession;
   let managerUser: OperationalSession;
 
+  const cleanupFixtures = async () => {
+    await transactionContext.run({ sourceProvenance: 'GATE9_WORKFLOW_ENGINE' }, async () => {
+      const schedules = await prisma.projectSchedule.findMany({
+        where: { projectId },
+        select: { id: true },
+      });
+      const scheduleIds = schedules.map(({ id }) => id);
+
+      await prisma.auditLog.deleteMany({
+        where: { userId: { in: [engineerId, managerId] } },
+      });
+
+      if (scheduleIds.length > 0) {
+        await prisma.scheduleWorkflowTransition.deleteMany({
+          where: { scheduleId: { in: scheduleIds } },
+        });
+        await prisma.baselineActivation.deleteMany({
+          where: { scheduleId: { in: scheduleIds } },
+        });
+        await prisma.scheduleApproval.deleteMany({
+          where: { scheduleId: { in: scheduleIds } },
+        });
+        await prisma.scheduleActivity.deleteMany({
+          where: { scheduleId: { in: scheduleIds } },
+        });
+        await prisma.scheduleWBS.deleteMany({
+          where: { scheduleId: { in: scheduleIds } },
+        });
+        await prisma.projectSchedule.deleteMany({
+          where: { id: { in: scheduleIds } },
+        });
+      }
+
+      await prisma.projectUserAssignment.deleteMany({ where: { projectId } });
+      await prisma.user.deleteMany({
+        where: { id: { in: [engineerId, managerId] } },
+      });
+      await prisma.project.deleteMany({ where: { id: projectId } });
+    });
+  };
+
   beforeAll(async () => {
     console.log("Connecting to Prisma...");
-    let engineer = await prisma.user.findFirst({ where: { email: 'engineer@onesystemserp.com' } });
-    if (!engineer) {
-        engineer = await prisma.user.create({
-            data: {
-                email: 'engineer@onesystemserp.com',
-                role: 'SITE_ENGINEER',
-                status: 'ACTIVE',
-                sessionVersion: 1
-            }
-        });
-    }
+    await cleanupFixtures();
+    await prisma.project.create({
+      data: {
+        id: projectId,
+        name: 'Schedule Workflow Transition Test Project',
+        status: 'ACTIVE',
+      },
+    });
+
+    const engineer = await prisma.user.create({
+      data: {
+        id: engineerId,
+        email: 'engineer@schedule-workflow-transition.test',
+        role: 'SITE_ENGINEER',
+        status: 'ACTIVE',
+        sessionVersion: 1,
+      },
+    });
     console.log("Found engineer:", !!engineer);
-    
-    let manager = await prisma.user.findFirst({ where: { email: 'manager@onesystemserp.com' } });
-    if (!manager) {
-        manager = await prisma.user.create({
-            data: {
-                email: 'manager@onesystemserp.com',
-                role: 'PROJECT_MANAGER',
-                status: 'ACTIVE',
-                sessionVersion: 1
-            }
-        });
-    }
+
+    const manager = await prisma.user.create({
+      data: {
+        id: managerId,
+        email: 'manager@schedule-workflow-transition.test',
+        role: 'PROJECT_MANAGER',
+        status: 'ACTIVE',
+        sessionVersion: 1,
+      },
+    });
     console.log("Found manager:", !!manager);
-    
+
     if (!engineer || !manager) {
       throw new Error("Missing users for testing!");
     }
-    
+
     // Ensure PBAC assignment for engineer
-    let engAssignment = await prisma.projectUserAssignment.findUnique({
-        where: { userId_projectId: { userId: engineer.id, projectId: projectId } }
+    await prisma.projectUserAssignment.create({
+      data: {
+        userId: engineer.id,
+        projectId,
+        projectRole: 'SITE_ENGINEER',
+        accessLevel: 'WRITE',
+        assignmentStatus: 'active',
+      },
     });
-    if (!engAssignment) {
-        await prisma.projectUserAssignment.create({
-            data: {
-                userId: engineer.id,
-                projectId: projectId,
-                projectRole: 'SITE_ENGINEER',
-                accessLevel: 'WRITE',
-                assignmentStatus: 'active'
-            }
-        });
-    }
 
     // Ensure PBAC assignment for manager
-    let mgrAssignment = await prisma.projectUserAssignment.findUnique({
-        where: { userId_projectId: { userId: manager.id, projectId: projectId } }
+    await prisma.projectUserAssignment.create({
+      data: {
+        userId: manager.id,
+        projectId,
+        projectRole: 'PROJECT_MANAGER',
+        accessLevel: 'WRITE',
+        assignmentStatus: 'active',
+      },
     });
-    if (!mgrAssignment) {
-        await prisma.projectUserAssignment.create({
-            data: {
-                userId: manager.id,
-                projectId: projectId,
-                projectRole: 'PROJECT_MANAGER',
-                accessLevel: 'WRITE',
-                assignmentStatus: 'active'
-            }
-        });
-    }
-    
+
     engineerUser = {
       userId: engineer.id,
       email: engineer.email,
@@ -99,32 +137,29 @@ describe('Schedule Workflow Transition Service Integration Tests', () => {
       accountLocked: false,
       mustChangePassword: manager.mustChangePassword
     };
-    
-    let schedule = await prisma.projectSchedule.findFirst({ where: { projectId } });
-    if (!schedule) {
-      await transactionContext.run({ sourceProvenance: 'GATE9_WORKFLOW_ENGINE' }, async () => {
-        schedule = await prisma.projectSchedule.create({
-          data: {
-            projectId,
-            name: 'Test Schedule',
-            status: 'AI_GENERATED_DRAFT',
-            calendarDays: 100,
-            workingDays: 100,
-            workDaysConfig: '[]',
-            lockedBOQChecksum: 'abc',
-            awardedContractAmount: 0,
-            scheduledAmount: 0,
-            differenceAmount: 0,
-            generatedBy: engineer.id,
-            baselineStartDate: new Date(),
-            baselineFinishDate: new Date(),
-            workflowStatus: 'AI_GENERATED_DRAFT',
-            lockedBOQVersionId: 'some-boq-id',
-          }
-        });
+
+    const schedule = await transactionContext.run({ sourceProvenance: 'GATE9_WORKFLOW_ENGINE' }, async () => {
+      return prisma.projectSchedule.create({
+        data: {
+          projectId,
+          name: 'Schedule Workflow Transition Test Schedule',
+          status: 'AI_GENERATED_DRAFT',
+          calendarDays: 100,
+          workingDays: 100,
+          workDaysConfig: '[]',
+          lockedBOQChecksum: 'abc',
+          awardedContractAmount: 0,
+          scheduledAmount: 0,
+          differenceAmount: 0,
+          generatedBy: engineer.id,
+          baselineStartDate: new Date(),
+          baselineFinishDate: new Date(),
+          workflowStatus: 'AI_GENERATED_DRAFT',
+          lockedBOQVersionId: 'schedule-workflow-transition-boq',
+        },
       });
-    }
-    scheduleId = schedule!.id;
+    });
+    scheduleId = schedule.id;
   });
 
   afterEach(async () => {
@@ -144,8 +179,16 @@ describe('Schedule Workflow Transition Service Integration Tests', () => {
     });
   });
 
+  afterAll(async () => {
+    try {
+      await cleanupFixtures();
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
   it('Schema and migration: transition table exists and starts empty', async () => {
-    const count = await prisma.scheduleWorkflowTransition.count();
+    const count = await prisma.scheduleWorkflowTransition.count({ where: { scheduleId } });
     expect(count).toBeGreaterThanOrEqual(0);
   });
 
@@ -179,7 +222,7 @@ describe('Schedule Workflow Transition Service Integration Tests', () => {
       startTechnicalReview(projectId, scheduleId, 1, 'key5', engineerUser)
     ).rejects.toThrow(AuthorizationError);
   });
-  
+
   it('Concurrency: stale rowVersion rejected (Optimistic Locking)', async () => {
     // Assuming current rowVersion is correctly passed, passing a stale one should fail
     const schedule = await prisma.projectSchedule.findUnique({ where: { id: scheduleId } });
@@ -193,5 +236,5 @@ describe('Schedule Workflow Transition Service Integration Tests', () => {
 
   // Note: To preserve Gate 8D state without side effects, we mock or isolate the actual 
   // mutation tests. We will verify the logic runs correctly up to the actual commit.
-  
+
 });

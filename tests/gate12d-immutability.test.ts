@@ -21,7 +21,7 @@ async function setupIsolatedBaseline() {
 
   const projectId = dummyProject.id;
   const scheduleId = 'gate12d-test-sched-' + Date.now();
-  
+
   await db.projectSchedule.create({
     data: {
       id: scheduleId,
@@ -290,20 +290,31 @@ async function runTests() {
   }, directMutationErr);
 
   console.log(`\nResults: ${successCount} PASSED, ${failCount} FAILED`);
-  
+
   // Cleanup
   await db.baselineActivation.deleteMany({ where: { scheduleId } });
   await db.scheduleActivity.deleteMany({ where: { scheduleId } });
   await db.scheduleWBS.deleteMany({ where: { scheduleId } });
   await db.projectSchedule.deleteMany({ where: { id: scheduleId } });
   await db.project.deleteMany({ where: { id: projectId } });
-  
+
+  console.log(`\nResults: ${successCount} PASSED, ${failCount} FAILED`);
+
+  // Cleanup
+  await db.baselineActivation.deleteMany({ where: { scheduleId } });
+  await db.scheduleActivity.deleteMany({ where: { scheduleId } });
+  await db.scheduleWBS.deleteMany({ where: { scheduleId } });
+  await db.projectSchedule.deleteMany({ where: { id: scheduleId } });
+  await db.project.deleteMany({ where: { id: projectId } });
+
   if (failCount > 0) {
-    process.exit(1);
+    throw new Error('Test suite failed');
   }
 }
 
-runTests().catch(e => {
-  console.error(e);
-  process.exit(1);
+describe('Gate 12D Immutability', () => {
+  jest.setTimeout(30000);
+  it('should run all tests successfully', async () => {
+    await runTests();
+  });
 });

@@ -90,6 +90,7 @@ export async function seedWorkers() {
 
   const createdWorkers = await prisma.worker.createMany({
     data: workers,
+    skipDuplicates: true,
   });
 
   console.log(`Created ${createdWorkers.count} seeded workers.`);

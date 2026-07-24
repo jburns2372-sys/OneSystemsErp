@@ -7,22 +7,38 @@ import { POST as submitBaselinePost } from '@/app/api/projects/[id]/scheduling/[
 import { prismaBase } from '@/lib/prisma-base';
 import { verifySession } from '@/lib/dal/auth';
 
-jest.mock('@/lib/dal/auth', () => ({
-  __esModule: true,
-  verifySession: jest.fn()
-}));
+jest.mock('@/lib/dal/auth', () => {
+  const mockFn = jest.fn();
+  return {
+    __esModule: true,
+    verifySession: mockFn,
+    verifyApiSession: mockFn
+  };
+});
 
 jest.mock('@/lib/permissions', () => ({
   __esModule: true,
   hasPermission: jest.fn().mockImplementation((userId: string, module: string, action: string) => {
     return false;
   }),
-  getPermissionsForRole: jest.fn().mockImplementation((roleCode: string) => {
-    // For gate 10D tests, roles need canApprove to be true to pass PBAC
+  getUserPermissions: jest.fn().mockImplementation(async (userId: string) => {
+    const prisma = require('@/lib/prisma-base').prismaBase;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return {};
+    const roleCode = user.role;
     const canApproveRoles = ['PROJECT_DIRECTOR', 'DIRECTORS', 'PROJECT_MANAGER', 'FINANCE_OFFICER', 'SUPER_ADMIN', 'SYSTEM_ADMIN'];
     const canApprove = canApproveRoles.includes(roleCode);
     return {
-      'PROJECT_MANAGEMENT': { canApprove }
+      'PROJECT_MANAGEMENT': { canApprove, canSubmit: canApprove, canEdit: canApprove },
+      'Scheduling': { canApprove, canSubmit: canApprove, canEdit: canApprove },
+      'ALL': { canApprove, canSubmit: canApprove, canEdit: canApprove }
+    };
+  }),
+  getPermissionsForRole: jest.fn().mockImplementation((roleCode: string) => {
+    const canApproveRoles = ['PROJECT_DIRECTOR', 'DIRECTORS', 'PROJECT_MANAGER', 'FINANCE_OFFICER', 'SUPER_ADMIN', 'SYSTEM_ADMIN'];
+    const canApprove = canApproveRoles.includes(roleCode);
+    return {
+      'PROJECT_MANAGEMENT': { canApprove, canEdit: true }
     };
   })
 }));

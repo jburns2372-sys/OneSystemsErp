@@ -9,10 +9,14 @@ import { prismaBase } from '@/lib/prisma-base';
 import { verifySession } from '@/lib/dal/auth';
 import ScheduleReviewPanel from '@/app/projects/[id]/scheduling/review/ScheduleReviewPanel';
 
-jest.mock('@/lib/dal/auth', () => ({
-  __esModule: true,
-  verifySession: jest.fn()
-}));
+jest.mock('@/lib/dal/auth', () => {
+  const mockFn = jest.fn();
+  return {
+    __esModule: true,
+    verifySession: mockFn,
+    verifyApiSession: mockFn
+  };
+});
 
 jest.mock('next/headers', () => ({
   cookies: jest.fn().mockResolvedValue({ get: jest.fn() })
@@ -24,10 +28,23 @@ jest.mock('@/lib/permissions', () => ({
     // Wait, let's just make it return false initially, and we will mock it INSIDE the test where we have `users['SUPER_ADMIN']`!
     return false;
   }),
-  getPermissionsForRole: jest.fn().mockImplementation(async (role) => {
+  getUserPermissions: jest.fn().mockImplementation(async (userId: string) => {
+    const prisma = require('@/lib/prisma-base').prismaBase;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return {};
+    const role = user.role;
     if (role === 'FINANCE_OFFICER') {
-      return { PROJECT_MANAGEMENT: { canView: true, canApprove: true, canBaseline: false } };
+      return { 'Scheduling': { canView: true, canApprove: true, canBaseline: false, canSubmit: false, canEdit: false } };
     }
+    if (role === 'PROJECT_DIRECTOR' || role === 'DIRECTORS') {
+      return { 'Scheduling': { canView: true, canApprove: true, canBaseline: true, canSubmit: true, canEdit: true } };
+    }
+    if (role === 'PROJECT_MANAGER' || role === 'SUPER_ADMIN') {
+      return { 'Scheduling': { canView: true, canApprove: true, canBaseline: true, canSubmit: true, canEdit: true } };
+    }
+    return { 'Scheduling': { canView: true, canApprove: false, canBaseline: false, canSubmit: false, canEdit: false } };
+  }),
+  getPermissionsForRole: jest.fn().mockImplementation(async (role) => {
     return { PROJECT_MANAGEMENT: { canView: true, canEdit: true, canApprove: true, canBaseline: true } };
   })
 }));
@@ -84,18 +101,27 @@ describe('Gate 10D Finance UI and Gating Validation', () => {
   });
 
   afterAll(async () => {
-    if (scheduleId) {
-      await prismaBase.scheduleApproval.deleteMany({ where: { scheduleId } });
-      await prismaBase.projectSchedule.deleteMany({ where: { id: scheduleId } });
+    try {
+      if (Object.keys(users).length > 0) {
+        await prismaBase.auditLog.deleteMany({
+          where: { userId: { in: Object.values(users) } },
+        });
+      }
+      if (scheduleId) {
+        await prismaBase.baselineActivation.deleteMany({ where: { scheduleId } });
+        await prismaBase.scheduleApproval.deleteMany({ where: { scheduleId } });
+        await prismaBase.projectSchedule.deleteMany({ where: { id: scheduleId } });
+      }
+      if (projectId) {
+        await prismaBase.projectUserAssignment.deleteMany({ where: { projectId } });
+        await prismaBase.project.deleteMany({ where: { id: projectId } });
+      }
+      if (Object.keys(users).length > 0) {
+        await prismaBase.user.deleteMany({ where: { id: { in: Object.values(users) } } });
+      }
+    } finally {
+      await prismaBase.$disconnect();
     }
-    if (projectId) {
-      await prismaBase.projectUserAssignment.deleteMany({ where: { projectId } });
-      await prismaBase.project.deleteMany({ where: { id: projectId } });
-    }
-    if (Object.keys(users).length > 0) {
-      await prismaBase.user.deleteMany({ where: { id: { in: Object.values(users) } } });
-    }
-    await prismaBase.$disconnect();
   });
 
   function mockRequest(body: any) {

@@ -70,11 +70,12 @@ export async function seedSubcontractors() {
     });
   }
 
-  const createdSubcontractors = await prisma.subcontractor.createMany({
+  const created = await prisma.subcontractor.createMany({
     data: subcontractors,
+    skipDuplicates: true,
   });
 
-  console.log(`Created ${createdSubcontractors.count} seeded subcontractors and JOCs.`);
+  console.log(`Created ${created.count} seeded subcontractors and JOCs.`);
 }
 
 if (require.main === module) {

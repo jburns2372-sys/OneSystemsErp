@@ -3,6 +3,15 @@ import { validateScheduleForReview } from '@/lib/scheduling/scheduleWorkflow';
 import { submitDraftForReview } from '@/lib/services/schedule-workflow.service';
 import { POST } from '@/app/api/projects/[id]/scheduling/[scheduleId]/review/validate/route';
 
+jest.mock('@/lib/dal/auth', () => ({
+  verifySession: jest.fn().mockResolvedValue({ id: 'test-user', email: 'test@onesystems.com' }),
+  verifyApiSession: jest.fn().mockResolvedValue({ id: 'test-user', email: 'test@onesystems.com' })
+}));
+
+jest.mock('@/lib/accessControl', () => ({
+  checkUserAccess: jest.fn().mockResolvedValue({ allowed: true }),
+}));
+
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     projectSchedule: {
@@ -13,8 +22,14 @@ jest.mock('@/lib/prisma', () => ({
     user: {
       findUnique: jest.fn(),
     },
+    userRole: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     projectUserAssignment: {
       findFirst: jest.fn(),
+    },
+    auditLog: {
+      create: jest.fn().mockResolvedValue({ id: 'mock-audit' }),
     },
     awardedBOQItem: {
       count: jest.fn(),
@@ -25,9 +40,6 @@ jest.mock('@/lib/prisma', () => ({
     },
     scheduleWorkflowTransition: {
       findUnique: jest.fn(),
-      create: jest.fn(),
-    },
-    auditLog: {
       create: jest.fn(),
     },
     $transaction: jest.fn((callback) => callback(require('@/lib/prisma').prisma)),

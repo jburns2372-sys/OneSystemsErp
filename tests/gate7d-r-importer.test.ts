@@ -10,10 +10,32 @@ jest.setTimeout(120000);
 const prisma = new PrismaClient();
 
 describe('Gate 7D-R Authoritative BOQ Importer and Financial Domain', () => {
+  const fixtureUserId = 'test-gate7d-r-importer-user';
+  const fixtureProjectId = 'test-gate7d-r-importer-project';
+  const fixtureFileId = 'test-gate7d-r-importer-file';
   let parsedRows: any[] = [];
   let totalCost = 0;
+
+  const cleanupFixtures = async () => {
+    await prisma.bOQExtractedItem.deleteMany({
+      where: { uploadedWorkbookFileId: { in: [fixtureFileId, 'fake-file-id'] } },
+    });
+    await prisma.bOQExtractedSection.deleteMany({
+      where: { uploadedWorkbookFileId: { in: [fixtureFileId, 'fake-file-id'] } },
+    });
+    await prisma.uploadedWorkbookFile.deleteMany({
+      where: { id: { in: [fixtureFileId, 'fake-file-id'] } },
+    });
+    await prisma.project.deleteMany({
+      where: { id: { in: [fixtureProjectId, 'fake-project-id'] } },
+    });
+    await prisma.user.deleteMany({
+      where: { id: { in: [fixtureUserId, 'fake-user-id'] } },
+    });
+  };
   
   beforeAll(async () => {
+    await cleanupFixtures();
     // We will parse the file directly as the importer does
     const filePath = path.join(__dirname, '..', 'pgh_files', 'PGH_AWARDED BILL OF QUANTITY.xlsx');
     const workbook = new ExcelJS.Workbook();
@@ -22,40 +44,34 @@ describe('Gate 7D-R Authoritative BOQ Importer and Financial Domain', () => {
     if (!sheet) throw new Error("Worksheet not found");
     
     // Create necessary dummy records if they don't exist
-    await prisma.user.upsert({
-      where: { id: 'fake-user-id' },
-      create: { id: 'fake-user-id', name: 'Fake User', email: 'fake@example.com', passwordHash: 'fake', role: 'SUPER_ADMIN', status: 'VERIFIED' },
-      update: {}
+    await prisma.user.create({
+      data: { id: fixtureUserId, name: 'Gate 7D-R User', email: 'user@gate7d-r-importer.test', passwordHash: 'test-only', role: 'SUPER_ADMIN', status: 'VERIFIED' },
     });
-    await prisma.project.upsert({
-      where: { id: 'fake-project-id' },
-      create: { id: 'fake-project-id', name: 'Fake Project' },
-      update: {}
+    await prisma.project.create({
+      data: { id: fixtureProjectId, name: 'Gate 7D-R Project' },
     });
-    await prisma.uploadedWorkbookFile.upsert({
-      where: { id: 'fake-file-id' },
-      create: { 
-        id: 'fake-file-id', 
-        projectId: 'fake-project-id', 
+    await prisma.uploadedWorkbookFile.create({
+      data: {
+        id: fixtureFileId,
+        projectId: fixtureProjectId,
         originalFilename: 'f', 
         fileHash: 'f', 
         mimeType: 'f', 
         fileSize: 100, 
         storagePath: 'f', 
-        uploadedBy: 'fake-user-id' 
+        uploadedBy: fixtureUserId,
       },
-      update: {}
     });
     
     // Use the actual application importer function to prove the logic
-    const { itemsCount } = await extractBOQItems(sheet, 'fake-file-id', 'fake-project-id');
+    const { itemsCount } = await extractBOQItems(sheet, fixtureFileId, fixtureProjectId);
     
     // But since extractBOQItems saves to DB and we want to test pure financial domain logic,
     // wait, extractBOQItems is inserting into bOQExtractedSection and bOQExtractedItem!
     // That means it needs the database!
     // I will fetch the items from DB to test the domain logic
     const rawRows = await prisma.bOQExtractedItem.findMany({
-      where: { uploadedWorkbookFileId: 'fake-file-id' },
+      where: { uploadedWorkbookFileId: fixtureFileId },
       include: { section: true }
     });
     parsedRows = rawRows.map(r => {
@@ -72,9 +88,11 @@ describe('Gate 7D-R Authoritative BOQ Importer and Financial Domain', () => {
   });
 
   afterAll(async () => {
-    await prisma.bOQExtractedItem.deleteMany({ where: { uploadedWorkbookFileId: 'fake-file-id' } });
-    await prisma.bOQExtractedSection.deleteMany({ where: { uploadedWorkbookFileId: 'fake-file-id' } });
-    await prisma.$disconnect();
+    try {
+      await cleanupFixtures();
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   test('All 326 source rows reconcile', () => {
