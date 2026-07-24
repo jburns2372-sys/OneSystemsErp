@@ -1,0 +1,32 @@
+{
+  "gate": "GATE 5E",
+  "status": "GATE_5_COMPLETE",
+  "result": "AUTHJS_MIGRATION_AND_UAT_ACTORS_READY",
+  "environment": {
+    "branch": "scheduling-reconstruction-uat-v2",
+    "application": "http://localhost:3000"
+  },
+  "actors": [
+    {
+      "email": "engineer@onesystemserp.com",
+      "role": "SITE_ENGINEER",
+      "status": "VALIDATED"
+    },
+    {
+      "email": "manager@onesystemserp.com",
+      "role": "PROJECT_MANAGER",
+      "status": "VALIDATED"
+    },
+    {
+      "email": "director@onesystemserp.com",
+      "role": "PROJECT_DIRECTOR",
+      "status": "VALIDATED"
+    }
+  ],
+  "securityValidation": {
+    "mustChangePasswordEnforced": true,
+    "sessionVersionValidation": true,
+    "legacyCookiesRejected": true,
+    "sessionIsolation": true
+  }
+}

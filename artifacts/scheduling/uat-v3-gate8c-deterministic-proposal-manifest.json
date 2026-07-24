@@ -1,0 +1,7 @@
+{
+  "expectedPhases": 12,
+  "expectedActivities": 14,
+  "expectedDependencies": 11,
+  "expectedAllocations": 326,
+  "sha256": "fa4c22cc5c784931314b60d53ae196227ed5845929a33fe6dc5ae43f87fc54fc"
+}

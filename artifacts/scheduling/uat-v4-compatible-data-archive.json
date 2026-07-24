@@ -1,0 +1,20 @@
+{
+  "sourceSanitizedDatabase": "local docker sanitized_audit",
+  "sourceArchiveHash": "9ffbd3d570d2462d5ba6f68cc2c4b5033edfa95e7f70e7296b3c7e7885a145bd",
+  "exactExclusions": [
+    "ScheduleBOQMapping",
+    "_prisma_migrations"
+  ],
+  "exclusionReasons": {
+    "ScheduleBOQMapping": "Retired in V4 schema, replaced by ScheduleBOQAllocation, zero rows.",
+    "_prisma_migrations": "Stale migration history, V4 has its own history."
+  },
+  "byteSize": 182551,
+  "sha256": "ec17472e01640b100efdc0f3b09c3ba62cd8a7ea14d93142f60d2fc393f2ebac",
+  "objectCount": 235,
+  "pgDumpVersion": "17",
+  "serverVersion": "17",
+  "timestamp": "2026-07-16T05:49:00Z",
+  "pgRestoreListResultFile": "artifacts/scheduling/uat-v4-compatible-archive-list.txt",
+  "status": "V4_COMPATIBLE_SANITIZED_DATA_ARCHIVE_CREATED"
+}

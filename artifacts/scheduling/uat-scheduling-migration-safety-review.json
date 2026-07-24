@@ -1,0 +1,88 @@
+{
+  "missingTables": [
+    "ScheduleBOQAllocation",
+    "ScheduleGenerationAudit",
+    "AIConfiguration",
+    "ScheduleApproval",
+    "ScheduleReviewComment",
+    "BaselineActivation",
+    "FinancialDataWaiver",
+    "ScheduleRevisionReason",
+    "BOQExtractedItem",
+    "BOQExtractedSection",
+    "OnlyOfficeSession",
+    "ProjectBOQVersion",
+    "SecuritySimulationArchive",
+    "SecuritySimulationCampaign",
+    "SecuritySimulationRun",
+    "SecuritySimulationScenario",
+    "UploadedWorkbookFile",
+    "WorkbookExtractionAudit",
+    "WorkbookFormulaValidation",
+    "WorkbookTemplateValidation",
+    "WorkbookVersion"
+  ],
+  "missingColumns": [],
+  "missingEnums": [
+    "ProjectScheduleWorkflowStatus",
+    "ScheduleApprovalStage",
+    "ScheduleApprovalDecision",
+    "ScheduleCommentType",
+    "ScheduleCommentStatus",
+    "FinancialWaiverStatus",
+    "ScheduleRevisionType"
+  ],
+  "missingForeignKeys": [],
+  "missingIndexes": [],
+  "missingUniqueConstraints": [],
+  "incompatibleTypes": [],
+  "nullableDifferences": [],
+  "defaultDifferences": [],
+  "obsoleteObjects": [
+    "ScheduleBOQMapping"
+  ],
+  "destructiveChanges": [
+    "DROP TABLE ScheduleBOQMapping"
+  ],
+  "ambiguousChanges": [],
+  "orderedSourceControlledMigrations": [
+    {
+      "migrationFolder": "20260714_reconcile_pre_phase3_schema_drift",
+      "executionOrder": 1,
+      "purpose": "Reconcile pre-phase 3 schema drift before applying core scheduling workflow migrations",
+      "affectedObjects": ["BOQExtractedItem", "SecuritySimulationArchive", "ProjectBOQVersion"],
+      "preconditions": "None",
+      "dataLossRisk": "None",
+      "lockRisk": "Low",
+      "rollbackConsideration": "Revert additive schema changes",
+      "classification": "SAFE_ADDITIVE"
+    },
+    {
+      "migrationFolder": "20260714114200_harden_schedule_baseline_activation",
+      "executionOrder": 2,
+      "purpose": "Add idempotency keys and required partial uniqueness protections for baseline activation",
+      "affectedObjects": ["BaselineActivation", "ProjectSchedule", "ScheduleApproval"],
+      "preconditions": "None",
+      "dataLossRisk": "None",
+      "lockRisk": "Low",
+      "rollbackConsideration": "Drop new columns and indexes",
+      "classification": "SAFE_ADDITIVE"
+    },
+    {
+      "migrationFolder": "20260714190000_phase3_baseline_workflow",
+      "executionOrder": 3,
+      "purpose": "Implement Phase 3 scheduling baseline workflow, lineage, and approval schema",
+      "affectedObjects": ["ProjectSchedule", "ScheduleBOQAllocation", "ScheduleApproval", "ScheduleBOQMapping"],
+      "preconditions": "ProjectSchedule table must be empty to safely drop ScheduleBOQMapping",
+      "dataLossRisk": "Zero (Precondition met: ProjectSchedule count is 0)",
+      "lockRisk": "Low",
+      "rollbackConsideration": "Restore database from backup due to dropped table ScheduleBOQMapping",
+      "classification": "SAFE_WITH_PRECONDITION"
+    }
+  ],
+  "compatibilityWithDeploy": true,
+  "requiredUniquenessProtections": {
+    "activeBaselinePerProject": true,
+    "authoritativeActivationPerSchedule": true
+  }
+}

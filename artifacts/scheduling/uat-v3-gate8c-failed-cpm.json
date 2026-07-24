@@ -1,0 +1,88 @@
+{
+  "activities": [
+    {
+      "name": "Activity 1",
+      "start": "2026-06-12T00:00:00.000Z",
+      "finish": "2026-06-21T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 2",
+      "start": "2026-06-22T00:00:00.000Z",
+      "finish": "2026-07-01T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 3",
+      "start": "2026-07-02T00:00:00.000Z",
+      "finish": "2026-07-11T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 4",
+      "start": "2026-07-12T00:00:00.000Z",
+      "finish": "2026-07-21T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 5",
+      "start": "2026-07-22T00:00:00.000Z",
+      "finish": "2026-07-31T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 6",
+      "start": "2026-08-01T00:00:00.000Z",
+      "finish": "2026-08-10T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 7",
+      "start": "2026-08-11T00:00:00.000Z",
+      "finish": "2026-08-20T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 8",
+      "start": "2026-08-21T00:00:00.000Z",
+      "finish": "2026-08-30T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 9",
+      "start": "2026-08-31T00:00:00.000Z",
+      "finish": "2026-09-09T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 10",
+      "start": "2026-09-10T00:00:00.000Z",
+      "finish": "2026-09-19T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 11",
+      "start": "2026-09-20T00:00:00.000Z",
+      "finish": "2026-09-29T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 12",
+      "start": "2026-09-30T00:00:00.000Z",
+      "finish": "2026-10-07T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 13",
+      "start": "2026-10-08T00:00:00.000Z",
+      "finish": "2026-10-15T00:00:00.000Z",
+      "critical": true
+    },
+    {
+      "name": "Activity 14",
+      "start": "2026-10-16T00:00:00.000Z",
+      "finish": "2026-10-23T00:00:00.000Z",
+      "critical": true
+    }
+  ]
+}

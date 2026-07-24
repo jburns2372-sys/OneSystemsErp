@@ -1,0 +1,487 @@
+[
+  {
+    "file": "src\\app\\actions\\accomplishmentFileActions.ts",
+    "line": 12,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\aiOverrideActions.ts",
+    "line": 20,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\aiQueryActions.ts",
+    "line": 34,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\actions\\aiQuotationActions.ts",
+    "line": 9,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\aiValidationActions.ts",
+    "line": 9,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\boqUploadParser.ts",
+    "line": 9,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\canvass.ts",
+    "line": 11,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\consolidation.ts",
+    "line": 14,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\deliveryActions.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\documentActions.ts",
+    "line": 16,
+    "content": "// const sessionToken = cookies().get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\documentActions.ts",
+    "line": 43,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\dtrActions.ts",
+    "line": 14,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\equipmentActions.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\executiveActions.ts",
+    "line": 8,
+    "content": "const sessionToken = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\executiveContextActions.ts",
+    "line": 24,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\actions\\executiveValidationActions.ts",
+    "line": 13,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\financeActions.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\fleetTelemetryService.ts",
+    "line": 33,
+    "content": "return cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\actions\\hikvisionDeviceService.ts",
+    "line": 13,
+    "content": "const authToken = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\hikvisionDeviceService.ts",
+    "line": 43,
+    "content": "return cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\actions\\issuanceActions.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\jobOrderActions.ts",
+    "line": 11,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\knowledgeActions.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\mutations.ts",
+    "line": 487,
+    "content": "const sessionId = cookieStore.get('session')?.value || cookieStore.get('userId')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\payrollActions.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\payrollEngine.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\permissions.ts",
+    "line": 12,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\poActions.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\poUpdates.ts",
+    "line": 38,
+    "content": "const sessionId = cookieStore.get('session')?.value; // This session ID might represent the approverId"
+  },
+  {
+    "file": "src\\app\\actions\\profile.ts",
+    "line": 35,
+    "content": "const userId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\progressActions.ts",
+    "line": 16,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\project.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\reportActions.ts",
+    "line": 42,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\actions\\reportActions.ts",
+    "line": 61,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\actions\\reportActions.ts",
+    "line": 76,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\actions\\schedulingActions.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\securityActions.ts",
+    "line": 9,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\subcontractingActions.ts",
+    "line": 11,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\systemResetActions.ts",
+    "line": 10,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\systemResetActions.ts",
+    "line": 290,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\user-roles.ts",
+    "line": 15,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\user.ts",
+    "line": 247,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\actions\\workerActions.ts",
+    "line": 10,
+    "content": "const session = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\admin\\ai-keyword-registry\\page.tsx",
+    "line": 9,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\admin\\ai-rag-test-center\\page.tsx",
+    "line": 8,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\admin\\security\\page.tsx",
+    "line": 13,
+    "content": "const userId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\api\\admin\\bulk-scan\\route.ts",
+    "line": 10,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\api\\admin\\document-ingest\\route.ts",
+    "line": 11,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\api\\admin\\document-upload\\route.ts",
+    "line": 13,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\api\\admin\\rag-test\\route.ts",
+    "line": 8,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\api\\admin\\security\\run-simulation\\route.ts",
+    "line": 10,
+    "content": "const userId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\api\\chat\\route.ts",
+    "line": 20,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\api\\debug-perms\\route.ts",
+    "line": 8,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\api\\knowledge\\index-system\\route.ts",
+    "line": 12,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\api\\knowledge\\upload\\route.ts",
+    "line": 12,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\api\\projects\\[id]\\pow-boq\\upload-original\\route.ts",
+    "line": 11,
+    "content": "const userId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\api\\projects\\[id]\\pow-boq\\[uploadId]\\extract\\route.ts",
+    "line": 9,
+    "content": "const userId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\api\\projects\\[id]\\pow-boq\\[uploadId]\\extracted-data\\route.ts",
+    "line": 8,
+    "content": "const userId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\boq-template\\page.tsx",
+    "line": 9,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\deliveries\\page.tsx",
+    "line": 12,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\deliveries\\[id]\\page.tsx",
+    "line": 27,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\director-audit\\page.tsx",
+    "line": 9,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\executive\\ai-center\\page.tsx",
+    "line": 13,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\executive\\validation\\page.tsx",
+    "line": 14,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\executive\\validation\\[projectId]\\page.tsx",
+    "line": 16,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\expenses\\page.tsx",
+    "line": 11,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\finance\\payment-batches\\page.tsx",
+    "line": 11,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\inventory\\stocks\\page.tsx",
+    "line": 13,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\job-orders\\dashboard\\page.tsx",
+    "line": 20,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\knowledge-center\\admin-center\\cleanup\\page.tsx",
+    "line": 9,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\knowledge-center\\admin-center\\coverage\\page.tsx",
+    "line": 10,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\knowledge-center\\admin-center\\page.tsx",
+    "line": 9,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\knowledge-center\\page.tsx",
+    "line": 10,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\layout.tsx",
+    "line": 45,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\material-issuance\\page.tsx",
+    "line": 9,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\material-requests\\page.tsx",
+    "line": 14,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\material-requests\\[id]\\page.tsx",
+    "line": 32,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\page.tsx",
+    "line": 14,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\payroll\\page.tsx",
+    "line": 11,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\procurement\\canvassing\\page.tsx",
+    "line": 8,
+    "content": "const sessionId = cookieStore.get('session')?.value || cookieStore.get('userId')?.value;"
+  },
+  {
+    "file": "src\\app\\procurement\\page.tsx",
+    "line": 11,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\procurement\\purchase-orders\\page.tsx",
+    "line": 12,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\procurement\\[id]\\page.tsx",
+    "line": 29,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\profile\\page.tsx",
+    "line": 8,
+    "content": "const userId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\progress-billings\\page.tsx",
+    "line": 9,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\projects\\page.tsx",
+    "line": 15,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\projects\\[id]\\BOQConsolidationTab.tsx",
+    "line": 36,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\scheduling\\page.tsx",
+    "line": 9,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\subcontracting\\dashboard\\page.tsx",
+    "line": 37,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\subcontracting\\packages\\[id]\\page.tsx",
+    "line": 19,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\supplier-payables\\page.tsx",
+    "line": 11,
+    "content": "const sessionId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\app\\supplier-payables\\subcontract\\[id]\\page.tsx",
+    "line": 18,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\supplier-payables\\[id]\\page.tsx",
+    "line": 12,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\app\\workers\\[id]\\page.tsx",
+    "line": 13,
+    "content": "const userId = cookieStore.get('session')?.value || '';"
+  },
+  {
+    "file": "src\\components\\layout\\Topbar.tsx",
+    "line": 10,
+    "content": "const sessionId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\lib\\scheduling\\authUtils.ts",
+    "line": 7,
+    "content": "const userId = cookieStore.get('session')?.value;"
+  },
+  {
+    "file": "src\\proxy.ts",
+    "line": 5,
+    "content": "const session = request.cookies.get('session');"
+  }
+]

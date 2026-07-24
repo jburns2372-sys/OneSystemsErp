@@ -1,0 +1,10 @@
+{
+  "sourceItems": 326,
+  "allocationRecords": 326,
+  "uniqueAllocatedSourceItems": 326,
+  "missingSourceItems": 0,
+  "duplicateAllocations": 0,
+  "allocatedTotal": 9030391.72999999,
+  "requiredTotal": 43106674.89,
+  "difference": -34076283.16000001
+}

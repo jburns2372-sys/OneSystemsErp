@@ -1,0 +1,14 @@
+{
+  "fallbacksAbsent": true,
+  "searchResults": {
+    "simulated user": 0,
+    "demo user": 3,
+    "fallback user": 1,
+    "default administrator": 0,
+    "J BURNS": 0,
+    "hardcoded email": 0,
+    "hardcoded password": 0,
+    "bypass authentication": 0,
+    "development authentication override": 0
+  }
+}

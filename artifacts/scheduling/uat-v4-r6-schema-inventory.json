@@ -1,0 +1,19 @@
+{
+  "prisma_validate_status": "The schema at prisma\\schema.prisma is valid",
+  "prisma_migrate_status": "Not synchronized (due to schema-only branch missing _prisma_migrations records)",
+  "required_tables_present": [
+    "ProjectBOQVersion",
+    "AwardedBOQItem",
+    "ProjectSchedule",
+    "ScheduleWBS",
+    "ScheduleActivity",
+    "ScheduleDependency",
+    "ScheduleBOQAllocation",
+    "ScheduleApproval",
+    "ScheduleReviewComment",
+    "BaselineActivation"
+  ],
+  "retired_tables_absent": [
+    "ScheduleBOQMapping"
+  ]
+}

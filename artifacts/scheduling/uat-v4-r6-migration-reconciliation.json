@@ -1,0 +1,46 @@
+{
+  "reason_for_reconciliation": "V4-R6 is a schema-only branch and did not inherit _prisma_migrations from its parent. Because the database schema physically matches the prisma/schema.prisma definition, the migration history must be marked as applied to prevent Prisma from attempting to recreate existing objects.",
+  "schema_diff_before_reconciliation": {
+    "missing_tables": 0,
+    "extra_tables": 0,
+    "missing_columns": 0,
+    "incompatible_columns": 0,
+    "enum_differences": 0,
+    "index_differences": 0,
+    "constraint_differences": 0
+  },
+  "reconciliation_execution": [
+    {
+      "migration": "20260626065906_init_postgres",
+      "command": "npx prisma migrate resolve --applied 20260626065906_init_postgres",
+      "status": "applied"
+    },
+    {
+      "migration": "20260714_reconcile_pre_phase3_schema_drift",
+      "command": "npx prisma migrate resolve --applied 20260714_reconcile_pre_phase3_schema_drift",
+      "status": "applied"
+    },
+    {
+      "migration": "20260714190000_phase3_baseline_workflow",
+      "command": "npx prisma migrate resolve --applied 20260714190000_phase3_baseline_workflow",
+      "status": "applied"
+    },
+    {
+      "migration": "20260714200000_harden_schedule_baseline_activation",
+      "command": "npx prisma migrate resolve --applied 20260714200000_harden_schedule_baseline_activation",
+      "status": "applied"
+    },
+    {
+      "migration": "20260715_reconcile_gate7_boq_integrity_metadata",
+      "command": "npx prisma migrate resolve --applied 20260715_reconcile_gate7_boq_integrity_metadata",
+      "status": "applied"
+    },
+    {
+      "migration": "20260715100000_security_remediation",
+      "command": "npx prisma migrate resolve --applied 20260715100000_security_remediation",
+      "status": "applied"
+    }
+  ],
+  "migrate_status_afterward": "Database schema is up to date!",
+  "schema_object_changed_during_reconciliation": false
+}

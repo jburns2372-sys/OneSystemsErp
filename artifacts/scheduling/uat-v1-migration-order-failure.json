@@ -1,0 +1,51 @@
+{
+  "auditTimestamp": "2026-07-15T06:31:46.861Z",
+  "migrations": [
+    {
+      "id": "333a4c5b-365f-478c-a0f9-a7ff2eb01704",
+      "checksum": "696e407e7273457d1e1ee86aa5e70e7796b61f27dd35e619a88f7823202dc73b",
+      "finished_at": "2026-06-26T06:59:11.124Z",
+      "migration_name": "20260626065906_init_postgres",
+      "logs": null,
+      "rolled_back_at": null,
+      "started_at": "2026-06-26T06:59:07.975Z",
+      "applied_steps_count": 1
+    },
+    {
+      "id": "493c5c01-2acf-4aa2-8392-3e9b4222f89f",
+      "checksum": "249ad4109057cd7f658d93ceb02f6c3e2de840e14ad4298a0bb1c9a3478851c6",
+      "finished_at": null,
+      "migration_name": "20260714_reconcile_pre_phase3_schema_drift",
+      "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260714_reconcile_pre_phase3_schema_drift\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"procurementBenchmarkItemId\" of relation \"BOQMapping\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"procurementBenchmarkItemId\\\" of relation \\\"BOQMapping\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7478), routine: Some(\"check_for_column_name_collision\") }\n\n   0: sql_schema_connector::apply_migration::apply_script\n           with migration_name=\"20260714_reconcile_pre_phase3_schema_drift\"\n             at schema-engine\\connectors\\sql-schema-connector\\src\\apply_migration.rs:113\n   1: schema_commands::commands::apply_migrations::Applying migration\n           with migration_name=\"20260714_reconcile_pre_phase3_schema_drift\"\n             at schema-engine\\commands\\src\\commands\\apply_migrations.rs:95\n   2: schema_core::state::ApplyMigrations\n             at schema-engine\\core\\src\\state.rs:260",
+      "rolled_back_at": "2026-07-15T06:24:52.583Z",
+      "started_at": "2026-07-15T06:16:30.346Z",
+      "applied_steps_count": 0
+    },
+    {
+      "id": "ef0de9a8-828b-42a7-b1eb-783b32f8704c",
+      "checksum": "249ad4109057cd7f658d93ceb02f6c3e2de840e14ad4298a0bb1c9a3478851c6",
+      "finished_at": "2026-07-15T06:24:53.066Z",
+      "migration_name": "20260714_reconcile_pre_phase3_schema_drift",
+      "logs": "",
+      "rolled_back_at": null,
+      "started_at": "2026-07-15T06:24:53.066Z",
+      "applied_steps_count": 0
+    },
+    {
+      "id": "1ac827ff-1a19-4619-871c-73b1929e1a15",
+      "checksum": "7fc62f231236922586c62facc16ac5b7f2200264b299fa5213f878b877e0e144",
+      "finished_at": null,
+      "migration_name": "20260714114200_harden_schedule_baseline_activation",
+      "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260714114200_harden_schedule_baseline_activation\n\nDatabase error code: 42P01\n\nDatabase error:\nERROR: relation \"BaselineActivation\" does not exist\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42P01), message: \"relation \\\"BaselineActivation\\\" does not exist\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"namespace.c\"), line: Some(637), routine: Some(\"RangeVarGetRelidExtended\") }\n\n   0: sql_schema_connector::apply_migration::apply_script\n           with migration_name=\"20260714114200_harden_schedule_baseline_activation\"\n             at schema-engine\\connectors\\sql-schema-connector\\src\\apply_migration.rs:113\n   1: schema_commands::commands::apply_migrations::Applying migration\n           with migration_name=\"20260714114200_harden_schedule_baseline_activation\"\n             at schema-engine\\commands\\src\\commands\\apply_migrations.rs:95\n   2: schema_core::state::ApplyMigrations\n             at schema-engine\\core\\src\\state.rs:260",
+      "rolled_back_at": null,
+      "started_at": "2026-07-15T06:25:16.542Z",
+      "applied_steps_count": 0
+    }
+  ],
+  "schemaObjectInventoryCount": 211,
+  "projectScheduleExists": true,
+  "projectScheduleCount": 0,
+  "baselineActivationExists": false,
+  "baselineActivationCount": 0,
+  "schedulingAcceptanceDataExists": false
+}

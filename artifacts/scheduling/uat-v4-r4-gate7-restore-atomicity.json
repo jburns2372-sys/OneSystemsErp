@@ -1,0 +1,5 @@
+{
+  "pg_restore_command": "unknown",
+  "single_transaction": false,
+  "status": "GATE8D_V4_R4_PARTIAL_RESTORE"
+}

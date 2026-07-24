@@ -1,0 +1,13 @@
+{
+  "Project": 0,
+  "UserBusinessRecords": 0,
+  "ProjectSchedule": 0,
+  "ScheduleWBS": 0,
+  "ScheduleActivity": 0,
+  "ScheduleDependency": 0,
+  "ScheduleBOQAllocation": 0,
+  "ScheduleWorkflowTransition": 0,
+  "ScheduleReviewComment": 0,
+  "ScheduleApproval": 0,
+  "BaselineActivation": 0
+}

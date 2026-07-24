@@ -1,0 +1,18 @@
+{
+  "project": "cmrlx3xcg00swvceoxntp02vz",
+  "boqVersionId": "cmrlx3yh500t1vceomq83o215",
+  "timestamp": "2026-07-15T15:18:00Z",
+  "determinations": {
+    "scheduleFound": true,
+    "countsVerified": true,
+    "schemaDriftClassification": "GATE8_DB_PUSH_NON_ADDITIVE_OR_UNPROVEN",
+    "actorProvenance": "GATE8_ACTOR_PROVENANCE_NOT_VERIFIED",
+    "varianceApprovalProvenance": "VARIANCE_APPROVALS_DIRECTLY_INJECTED",
+    "structureVerified": true,
+    "cpmVerified": true,
+    "financialReconciliation": "MATCHED",
+    "trueIdempotency": "GATE8_TRUE_IDEMPOTENCY_PASSED"
+  },
+  "selectedRecoveryPath": "PATH C \u2014 RECREATE GATE 8 ON A CLEAN BRANCH",
+  "finalResult": "GATE_8_CLEAN_RECONSTRUCTION_REQUIRED"
+}

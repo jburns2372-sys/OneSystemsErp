@@ -1,0 +1,10 @@
+{
+  "prismaMigrateStatus": 1,
+  "prismaValidate": 0,
+  "prismaGenerate": 1,
+  "tscCheck": 2,
+  "build": 1,
+  "jestBlueprint": 0,
+  "jestCpm": 0,
+  "jestAllocation": 0
+}

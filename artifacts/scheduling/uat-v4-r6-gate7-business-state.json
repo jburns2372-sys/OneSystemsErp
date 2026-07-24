@@ -1,0 +1,36 @@
+{
+  "counts": {
+    "Project": 2,
+    "User": 11,
+    "ProjectUserAssignment": 4,
+    "ProjectBOQVersion": 1,
+    "AwardedBOQItem": 326
+  },
+  "target_project": {
+    "id": "cmrirhhw30000ic0406v47smb",
+    "name": "PGH_AWARDED BILL OF QUANTITY",
+    "boqLocked": true
+  },
+  "boq_version": {
+    "ProjectBOQVersion": 1,
+    "AwardedBOQItem_count": 326,
+    "status": "LOCKED",
+    "technical_approval": 1,
+    "technical_actor": "cmrinimix001avchckwzmfxsu",
+    "final_approval": 1,
+    "final_actor": "cmrinimix001avchckwzmfxsu",
+    "lock_actor": "cmrinikue0017vchcnxm8wqzn",
+    "grand_total": 43106674.89,
+    "project_difference": 0.00,
+    "checksum": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17",
+    "canonicalization": "BOQ_CANONICAL_V1"
+  },
+  "comparison": {
+    "unexpected_records": 0,
+    "missing_records": 0,
+    "changed_stable_records": 0,
+    "boq_row_differences": 0,
+    "approval_differences": 0,
+    "lock_provenance_differences": 0
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "classification": {
+    "matched": 0,
+    "ambiguous": 0,
+    "unclassified": 0,
+    "multiplyClassified": 0,
+    "unexpected": 0,
+    "details": []
+  },
+  "financial": {
+    "generalRequirements": 0,
+    "mechanicalWorks": 0,
+    "electricalWorks": 0,
+    "scheduledTotal": 0,
+    "lockedTotal": 0,
+    "projectAmount": 43106674.89,
+    "differences": []
+  }
+}

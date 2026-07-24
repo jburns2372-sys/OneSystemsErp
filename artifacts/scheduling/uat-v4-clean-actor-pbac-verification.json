@@ -1,0 +1,48 @@
+{
+  "projectFound": true,
+  "projectId": "cmrirhhw30000ic0406v47smb",
+  "actors": [
+    {
+      "email": "J.BURNS2372@GMAIL.COM",
+      "role": "SUPER_ADMIN",
+      "status": "ACTIVE",
+      "mustChangePassword": false,
+      "sessionVersionPopulated": true,
+      "assignments": [
+        "cmrirhhw30000ic0406v47smb"
+      ]
+    },
+    {
+      "email": "admin01@demo.com",
+      "role": "SUPER_ADMIN",
+      "status": "ACTIVE",
+      "mustChangePassword": false,
+      "sessionVersionPopulated": true,
+      "assignments": []
+    },
+    {
+      "email": "director@onesystemserp.com",
+      "role": "PROJECT_DIRECTOR",
+      "status": "ACTIVE",
+      "mustChangePassword": false,
+      "sessionVersionPopulated": true,
+      "assignments": []
+    },
+    {
+      "email": "manager@onesystemserp.com",
+      "role": "PROJECT_MANAGER",
+      "status": "ACTIVE",
+      "mustChangePassword": false,
+      "sessionVersionPopulated": true,
+      "assignments": []
+    },
+    {
+      "email": "engineer@onesystemserp.com",
+      "role": "SITE_ENGINEER",
+      "status": "ACTIVE",
+      "mustChangePassword": false,
+      "sessionVersionPopulated": true,
+      "assignments": []
+    }
+  ]
+}

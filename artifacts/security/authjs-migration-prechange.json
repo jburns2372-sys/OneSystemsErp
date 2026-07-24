@@ -1,0 +1,10 @@
+{
+  "gate": "GATE 5D-R2",
+  "status": "PRECHANGE_CHECKPOINT",
+  "branch": "security-migration-authjs",
+  "commit": "e35a41d9a40411d0df99808eef95b7cc7bffd7a2",
+  "nextjsVersion": "16.2.7",
+  "nextAuthVersion": "5.0.0-beta.31",
+  "cookieReadersCount": 97,
+  "backupPath": "backups/scheduling-reconstruction-uat-v2-prechange.dump"
+}

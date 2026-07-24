@@ -1,0 +1,25 @@
+{
+  "gate": "GATE 5C",
+  "status": "AUTHENTICATION_BACKDOOR_REMOVED_ACTOR_LOGIN_PENDING",
+  "auditImplementation": "Existing AuditLog Prisma model",
+  "sessionArchitecture": "Custom stateless cookie strategy with sessionVersion added to User model",
+  "securityPrimitivesAdded": [
+    "mustChangePassword",
+    "sessionVersion",
+    "passwordChangedAt",
+    "failedLoginAttempts",
+    "lockedUntil"
+  ],
+  "bypassesRemoved": [
+    "admin123",
+    "jejors2026",
+    "plaintext fallback"
+  ],
+  "exposureAssessment": {
+    "affectedEnvironments": ["local", "uat", "vercel_preview", "vercel_production"],
+    "introducedCommit": "9528e40",
+    "introducedDate": "2026-07-13T12:00:22Z",
+    "sessionInvalidationRequired": true,
+    "incidentStatus": "AUTHENTICATION_SECURITY_INCIDENT_REVIEW_REQUIRED"
+  }
+}

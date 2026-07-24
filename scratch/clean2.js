@@ -1,0 +1,1 @@
+const fs=require('fs'); let f='src/app/api/internal/test-db/route.ts'; if(fs.existsSync(f)) { let c = fs.readFileSync(f, 'utf8'); c = c.replace(/const burnEmail = await prisma\.user\.findFirst.*?j\.burns.*?;\n/gi, ''); fs.writeFileSync(f, c); }

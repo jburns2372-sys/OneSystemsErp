@@ -1,0 +1,18 @@
+{
+  "gate": "GATE 5D-R2",
+  "status": "AUTHJS_MIGRATION_AND_UAT_ACTORS_READY",
+  "result": "SUCCESS",
+  "environment": {
+    "branch": "security-migration-authjs",
+    "prechangeCommit": "e35a41d9a40411d0df99808eef95b7cc7bffd7a2",
+    "nextAuthVersion": "5.0.0-beta.31",
+    "cookieReadersReplaced": 97
+  },
+  "security": {
+    "sessionMechanism": "Auth.js v5 JWT",
+    "dal": "verifySession() explicitly validating against PostgreSQL",
+    "mustChangePasswordEnforced": true,
+    "pbacPreserved": true,
+    "legacyCookieRejected": true
+  }
+}

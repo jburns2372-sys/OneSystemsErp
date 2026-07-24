@@ -1,0 +1,10 @@
+{
+  "physicalFilePath": "backups/scheduling-reconstruction-uat-v3-post-gate7c.dump",
+  "physicalFileSize": "249 KB",
+  "sha256": "c478301563dc00cefa9c68c9dba84d7cf0aa29c42b0a86a770cc3afba888f880",
+  "pgDumpClientVersion": "17.10",
+  "postgresqlServerVersion": "17.10",
+  "pgRestoreListExitCode": 1,
+  "archiveObjectCount": 1141,
+  "backupCreationTimestamp": "2026-07-15T18:20:18Z"
+}

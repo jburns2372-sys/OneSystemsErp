@@ -1,0 +1,215 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: tests\e2e\assign-financial-reviewer.spec.ts >> Assign Financial Reviewer >> Super Admin assigns finance@onesystemserp.com to project
+- Location: tests\e2e\assign-financial-reviewer.spec.ts:5:9
+
+# Error details
+
+```
+Test timeout of 120000ms exceeded.
+```
+
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - complementary [ref=e2]:
+    - generic [ref=e3]:
+      - link "OneSystemsErp" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - heading "OneSystemsErp" [level=2] [ref=e5]
+      - button "«" [ref=e6] [cursor=pointer]
+    - navigation [ref=e7]:
+      - link "⌂ Dashboard" [ref=e9] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e10]: ⌂
+        - generic [ref=e11]: Dashboard
+      - link "👑 Executive" [ref=e13] [cursor=pointer]:
+        - /url: /executive/home
+        - generic [ref=e14]: 👑
+        - generic [ref=e15]: Executive
+      - link "🏗️ Projects" [ref=e17] [cursor=pointer]:
+        - /url: /projects
+        - generic [ref=e18]: 🏗️
+        - generic [ref=e19]: Projects
+      - link "🛒 Procurement" [ref=e21] [cursor=pointer]:
+        - /url: /procurement
+        - generic [ref=e22]: 🛒
+        - generic [ref=e23]: Procurement
+      - link "📦 Inventory" [ref=e25] [cursor=pointer]:
+        - /url: /inventory
+        - generic [ref=e26]: 📦
+        - generic [ref=e27]: Inventory
+      - link "📤 Material Issuance" [ref=e29] [cursor=pointer]:
+        - /url: /material-issuance
+        - generic [ref=e30]: 📤
+        - generic [ref=e31]: Material Issuance
+      - link "💰 Finance" [ref=e33] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e34]: 💰
+        - generic [ref=e35]: Finance
+      - link "👷 Subcontracting" [ref=e37] [cursor=pointer]:
+        - /url: /subcontracting
+        - generic [ref=e38]: 👷
+        - generic [ref=e39]: Subcontracting
+      - link "📈 Accomplishments" [ref=e41] [cursor=pointer]:
+        - /url: /accomplishments
+        - generic [ref=e42]: 📈
+        - generic [ref=e43]: Accomplishments
+      - link "📅 Project Scheduling" [ref=e45] [cursor=pointer]:
+        - /url: /scheduling
+        - generic [ref=e46]: 📅
+        - generic [ref=e47]: Project Scheduling
+      - link "👥 Payroll" [ref=e49] [cursor=pointer]:
+        - /url: /payroll
+        - generic [ref=e50]: 👥
+        - generic [ref=e51]: Payroll
+      - link "🚜 Equipment" [ref=e53] [cursor=pointer]:
+        - /url: /equipment
+        - generic [ref=e54]: 🚜
+        - generic [ref=e55]: Equipment
+      - link "🔄 Variation Orders" [ref=e57] [cursor=pointer]:
+        - /url: /variation-orders
+        - generic [ref=e58]: 🔄
+        - generic [ref=e59]: Variation Orders
+      - link "📊 Reports" [ref=e61] [cursor=pointer]:
+        - /url: /reports
+        - generic [ref=e62]: 📊
+        - generic [ref=e63]: Reports
+      - link "📂 Documents" [ref=e65] [cursor=pointer]:
+        - /url: /documents
+        - generic [ref=e66]: 📂
+        - generic [ref=e67]: Documents
+      - link "🧠 Knowledge Center" [ref=e69] [cursor=pointer]:
+        - /url: /knowledge-center
+        - generic [ref=e70]: 🧠
+        - generic [ref=e71]: Knowledge Center
+      - link "👤 Users" [ref=e73] [cursor=pointer]:
+        - /url: /users
+        - generic [ref=e74]: 👤
+        - generic [ref=e75]: Users
+      - link "🛡️ Security (SOC)" [ref=e77] [cursor=pointer]:
+        - /url: /admin/security
+        - generic [ref=e78]: 🛡️
+        - generic [ref=e79]: Security (SOC)
+      - link "⚙️ Settings" [ref=e81] [cursor=pointer]:
+        - /url: /settings
+        - generic [ref=e82]: ⚙️
+        - generic [ref=e83]: Settings
+    - generic [ref=e84]:
+      - generic [ref=e85]:
+        - generic [ref=e86]: J
+        - generic [ref=e87]:
+          - generic [ref=e88]: J BURNS
+          - generic [ref=e89]: ONLINE
+      - generic [ref=e90]:
+        - button "🚪 Log Out" [ref=e92] [cursor=pointer]:
+          - text: 🚪
+          - generic [ref=e93]: Log Out
+        - link "⚙️ My Profile" [ref=e94] [cursor=pointer]:
+          - /url: /profile
+          - button "⚙️ My Profile" [ref=e95]:
+            - text: ⚙️
+            - generic [ref=e96]: My Profile
+  - main [ref=e98]:
+    - generic [ref=e99]:
+      - generic [ref=e100]:
+        - generic [ref=e101]:
+          - heading "Role Simulator Active" [level=3] [ref=e102]
+          - paragraph [ref=e103]: Change the role below to instantly reconfigure the entire dashboard layout, metrics, and quick actions to match the operational needs of that position.
+        - combobox [ref=e105] [cursor=pointer]:
+          - option "System Admin" [selected]
+          - option "Project Director"
+          - option "Directors"
+          - option "Administrator"
+          - option "Project Manager"
+          - option "Project Engineer"
+          - option "Project Mechanical Engineer"
+          - option "Project Electrical Engineer"
+          - option "Site Admin"
+          - option "Finance Officer"
+          - option "Project Accountant"
+          - option "Accountant"
+          - option "Cost Officer"
+          - option "Purchasing Officer"
+          - option "Procurement Officer"
+          - option "Stockman"
+          - option "Warehouseman"
+          - option "Materials Engineer"
+          - option "Driver"
+          - option "Liason Officer"
+          - option "HR Officer"
+          - option "Payroll Officer"
+          - option "Payroll Master"
+          - option "Auditor"
+          - option "Foreman"
+          - option "Billing Engineer"
+          - option "Guest User"
+      - generic [ref=e106]:
+        - heading "System Admin Dashboard" [level=1] [ref=e107]
+        - paragraph [ref=e108]: Welcome back! Here is your personalized daily summary based on your operational archetype (EXECUTIVE).
+      - generic [ref=e109]:
+        - heading "🛡️ Your Access Boundaries" [level=3] [ref=e110]:
+          - generic [ref=e111]: 🛡️
+          - text: Your Access Boundaries
+        - paragraph [ref=e112]:
+          - strong [ref=e113]: "Validated by AI Security Matrix:"
+          - text: You have Full System Access. You can manage users, roles, and global configurations.
+      - generic [ref=e114]:
+        - generic [ref=e115]:
+          - heading "AI Overrides Pending Approval" [level=3] [ref=e116]
+          - paragraph [ref=e117]: "0"
+          - link "View Audit Queue ➔" [ref=e118] [cursor=pointer]:
+            - /url: /director-audit
+        - generic [ref=e119]:
+          - heading "Total Active Projects" [level=3] [ref=e120]
+          - paragraph [ref=e121]: "0"
+          - link "View Projects ➔" [ref=e122] [cursor=pointer]:
+            - /url: /projects
+        - generic [ref=e123]:
+          - heading "Total Contract Budget" [level=3] [ref=e124]
+          - paragraph [ref=e125]: ₱ 0
+          - link "Financial Reports ➔" [ref=e126] [cursor=pointer]:
+            - /url: /reports
+        - generic [ref=e127]:
+          - heading "Outstanding Liabilities" [level=3] [ref=e128]
+          - paragraph [ref=e129]: ₱ 0
+          - link "View Liabilities ➔" [ref=e130] [cursor=pointer]:
+            - /url: /supplier-payables
+      - generic [ref=e131]:
+        - generic [ref=e132]:
+          - heading "Quick Access Tools" [level=3] [ref=e133]
+          - generic [ref=e134]:
+            - link "📋 Project Directory" [ref=e135] [cursor=pointer]:
+              - /url: /projects
+            - link "📊 Analytics & Reports" [ref=e136] [cursor=pointer]:
+              - /url: /reports
+            - link "🛡️ Global Audit Ledger" [ref=e137] [cursor=pointer]:
+              - /url: /system-audit
+        - generic [ref=e138]:
+          - heading "System Notices" [level=3] [ref=e139]
+          - generic [ref=e140]:
+            - paragraph [ref=e141]: AI Compliance Engine Active
+            - paragraph [ref=e142]: All transactions are currently being monitored by the AI Validation system. Anomalies will be routed to the Project Director for override approval.
+    - region "Notifications alt+T"
+  - generic [ref=e147] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e148]:
+      - img [ref=e149]
+    - generic [ref=e152]:
+      - button "Open issues overlay" [ref=e153]:
+        - generic [ref=e154]:
+          - generic [ref=e155]: "4"
+          - generic [ref=e156]: "5"
+        - generic [ref=e157]:
+          - text: Issue
+          - generic [ref=e158]: s
+      - button "Collapse issues badge" [ref=e159]:
+        - img [ref=e160]
+  - alert [ref=e162]
+```

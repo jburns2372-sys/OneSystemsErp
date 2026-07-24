@@ -1,0 +1,61 @@
+{
+  "archivePath": "backups/scheduling-reconstruction-uat-v2-prechange.dump",
+  "byteSize": 649821,
+  "sha256": "7926F66D6C9BB5A3E8D83053965897058E0B9485A50B44AF5D24C0AACF5C7257",
+  "objectCount": 1073,
+  "restoreCommand": "docker exec onesystemserp-gate7d-backup-audit pg_restore -U postgres -d gate7d_backup_audit --no-owner --no-privileges --exit-on-error --single-transaction /workspace/backups/scheduling-reconstruction-uat-v2-prechange.dump",
+  "migrationInventory": {
+    "count": 1,
+    "failed": 0,
+    "completed": [
+      "20260626065906_init_postgres"
+    ]
+  },
+  "projectShellResult": {
+    "exists": true,
+    "projectId": "cmrirhhw30000ic0406v47smb"
+  },
+  "actorAndPbacResult": {
+    "actorsExist": true,
+    "pbacExists": true,
+    "roles": [
+      {
+        "email": "director@onesystemserp.com",
+        "role": "PROJECT_DIRECTOR"
+      },
+      {
+        "email": "manager@onesystemserp.com",
+        "role": "PROJECT_MANAGER"
+      },
+      {
+        "email": "engineer@onesystemserp.com",
+        "role": "SITE_ENGINEER"
+      }
+    ]
+  },
+  "boqCounts": {
+    "projectVersions": 0,
+    "globalItems": 435,
+    "linkedItems": 0,
+    "orphanItems": 435,
+    "july13Items": 435,
+    "varianceApprovals": 0
+  },
+  "scheduleCounts": {
+    "globalSchedules": 0,
+    "projectSchedules": 0,
+    "wbs": 0,
+    "activity": 0,
+    "dependency": 0,
+    "allocations": 0,
+    "approvals": 0,
+    "comments": 0,
+    "baselines": 0
+  },
+  "auditCounts": {
+    "total": 0,
+    "gate7Or8": 0,
+    "reconstructionEvents": []
+  },
+  "classification": "PRE_GATE7_BACKUP_CONTAMINATED_BY_BOQ_RECORDS"
+}

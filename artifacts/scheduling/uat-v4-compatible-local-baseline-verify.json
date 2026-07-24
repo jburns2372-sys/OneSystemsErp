@@ -1,0 +1,9 @@
+{
+  "status": "V4_COMPATIBLE_SANITIZED_DATA_ARCHIVE_VERIFIED",
+  "projectShellMatch": true,
+  "userCountMatch": true,
+  "unexpectedDifferences": 0,
+  "requiredAccountsExist": true,
+  "zeroCounts": true,
+  "orphansZero": true
+}

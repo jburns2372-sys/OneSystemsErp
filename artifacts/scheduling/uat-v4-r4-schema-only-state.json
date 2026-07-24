@@ -1,0 +1,25 @@
+{
+  "DATABASE_URL_HOSTNAME_POOLER_CHECK": true,
+  "DIRECT_URL_HOSTNAME_POOLER_CHECK": true,
+  "DATABASE_NAME": "neondb",
+  "ROLE": "neondb_owner",
+  "SHELL_OVERRIDES_ABSENT": true,
+  "ENVIRONMENT_SOURCE": ".env",
+  "SCHEMA_VALIDATED": true,
+  "PRE_RESTORE_COUNTS": {
+    "Project": 2,
+    "User": 11,
+    "ProjectUserAssignment": 4,
+    "ProjectBOQVersion": 1,
+    "AwardedBOQItem": 326,
+    "ProjectSchedule": 0,
+    "ScheduleWBS": 0,
+    "ScheduleActivity": 0,
+    "ScheduleDependency": 0,
+    "ScheduleBOQAllocation": 0,
+    "ScheduleApproval": 0,
+    "ScheduleReviewComment": 0,
+    "BaselineActivation": 0
+  },
+  "VERIFICATION_RESULT": "GATE8D_V4_R4_SCHEMA_ONLY_STATE_INVALID"
+}

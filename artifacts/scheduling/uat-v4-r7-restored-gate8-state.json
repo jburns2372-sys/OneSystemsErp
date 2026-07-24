@@ -1,0 +1,41 @@
+{
+  "projectBOQVersion": 1,
+  "awardedBOQItem": 326,
+  "boqStatus": "LOCKED",
+  "projectBoqLocked": true,
+  "totalAwarded": "43106674.89",
+  "difference": "0.00",
+  "checksum": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17",
+  "canonicalization": "BOQ_CANONICAL_V1",
+  "projectSchedule": 1,
+  "workflowStatus": "AI_GENERATED_DRAFT",
+  "creator": "cmriniqgy001lvchcegw8qcxv",
+  "scheduleWBS": 13,
+  "rootWBS": 1,
+  "phaseWBS": 12,
+  "scheduleActivity": 14,
+  "scheduleDependency": 11,
+  "scheduleBOQAllocation": 326,
+  "allocatedTotal": "43106674.89",
+  "cpmFinish": "2026-10-18",
+  "phases": [
+    "Equipment Installation (Electrical)",
+    "Equipment Installation (Mechanical)",
+    "Finishes and Trims",
+    "Fixtures and Devices (Electrical)",
+    "Fixtures and Devices (Mechanical)",
+    "Mobilization and Site Prep",
+    "Piping and Ducting Works",
+    "Project Acceptance and Demobilization",
+    "Roughing-ins (Electrical)",
+    "Roughing-ins (Mechanical)",
+    "Testing and Commissioning",
+    "Wiring and Cabling Works"
+  ],
+  "gate9State": {
+    "transitions": 0,
+    "comments": 0,
+    "approvals": 0,
+    "activations": 0
+  }
+}

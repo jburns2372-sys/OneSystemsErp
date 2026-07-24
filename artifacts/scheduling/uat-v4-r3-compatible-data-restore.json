@@ -1,0 +1,10 @@
+{
+  "exactCommand": "docker run --rm -v \".:/workspace\" postgres:17 pg_restore -d DIRECT_URL --data-only --no-owner --no-privileges --exit-on-error --single-transaction /workspace/backups/scheduling-reconstruction-sanitized-pre-gate7-data-v4-compatible.dump",
+  "exitCode": 0,
+  "transactionCommitted": true,
+  "warningsClassifiedAsDataLoss": [],
+  "missingTableOrColumnErrors": 0,
+  "secondRestoreRequired": false,
+  "partialData": false,
+  "status": "V4_R3_COMPATIBLE_DATA_RESTORE_SUCCEEDED"
+}

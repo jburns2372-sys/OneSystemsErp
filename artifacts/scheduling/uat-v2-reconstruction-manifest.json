@@ -1,0 +1,41 @@
+{
+  "projectMetadata": {
+    "title": "PGH SCHEDULING ACCEPTANCE – RECOVERED BOQ",
+    "contractNumber": "UNKNOWN",
+    "client": "UNKNOWN",
+    "contractor": "UNKNOWN",
+    "location": "UNKNOWN",
+    "startDate": "2026-06-12",
+    "completionDate": "2026-12-09",
+    "awardedTotal": 43106674.89,
+    "sourceReference": "pgh_files/Progress_Accomplishment_Template_Based_on_Awarded_BOQ.xlsx"
+  },
+  "boqMetadata": {
+    "authoritativeSourceFiles": [
+      "Progress_Accomplishment_Template_Based_on_Awarded_BOQ.xlsx"
+    ],
+    "sourceFileHashes": {
+      "Progress_Accomplishment_Template_Based_on_Awarded_BOQ.xlsx": "dd4f54c61c54c13e0d5735ed8f6ce66842c15cf167d9fc65baa6410dd267f5b0"
+    },
+    "sheetNames": [
+      "BOQ_Master"
+    ],
+    "rawRowCount": 435,
+    "excludedRowsByReason": {
+      "blankRows": 0,
+      "headerSubtotalZeroValue": 109
+    },
+    "pricedDetailCount": 326,
+    "categoryTotals": {
+      "General Requirements": "2700549",
+      "Mechanical Works": "23674716.57",
+      "Electrical Works": "16731409.32"
+    },
+    "grandTotal": "43106674.89",
+    "canonicalChecksum": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17",
+    "provenanceClassification": "SYNTHESIZED_NORMALIZED_RECOVERY_FROM_VALIDATED_BOQ_DATA",
+    "duplicateAnalysisResult": "0 duplicates found",
+    "parserVersion": "custom-gate6-script",
+    "normalizationVersion": "1"
+  }
+}

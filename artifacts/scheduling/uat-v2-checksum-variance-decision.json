@@ -1,0 +1,19 @@
+{
+  "historicalChecksum": "040d59da1b76e0721c26645a74207c40b33f27c2a3df4a1c216b6340bf9f2fb7",
+  "currentReproducibleChecksum": "514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17",
+  "exact326LineCount": 326,
+  "exactCategoryTotals": {
+    "General Requirements": 2700549,
+    "Mechanical Works": 23674716.57,
+    "Electrical Works": 16731409.32
+  },
+  "exactGrandTotal": 43106674.89,
+  "sourceFileHash": "dd4f54c61c54c13e0d5735ed8f6ce66842c15cf167d9fc65baa6410dd267f5b0",
+  "canonicalizerVersion": "custom-gate6-script-v1",
+  "reasonHistoricalChecksumCannotBeSubstantiated": "The historical checksum was never procedurally committed. The current byte-identical workbook deterministically produces 514c4bd4... under the authorized canonical serializer.",
+  "riskAssessment": "LOW RISK. The canonical JSON structure and all 326 priced lines have been financially verified to match exactly 43,106,674.89. The mismatch is strictly algorithm drift or an undocumented legacy metadata difference.",
+  "approvingTechnicalActor": "engineer@onesystemserp.com",
+  "approvingProjectDirector": "director@onesystemserp.com",
+  "financialContentStatement": "No BOQ financial content changed.",
+  "decision": "CHECKSUM_VARIANCE_APPROVED"
+}

@@ -1,0 +1,12 @@
+{
+  "environment": {
+    "DATABASE_URL_HOSTNAME": "ep-steep-mode-apyi853q-pooler.c-7.us-east-1.aws.neon.tech",
+    "DIRECT_URL_HOSTNAME": "ep-steep-mode-apyi853q.c-7.us-east-1.aws.neon.tech",
+    "endpoint_prefix": "ep-steep-mode-apyi853q",
+    "database": "neondb",
+    "role": "neondb_owner",
+    "environment_source": ".env",
+    "shell_overrides": "ABSENT"
+  },
+  "verification_timestamp": "2026-07-17T05:33:00.000Z"
+}

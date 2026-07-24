@@ -1,0 +1,7 @@
+{
+  "differences": [
+    "Engineer user updated (password, updatedAt)",
+    "Engineer assignment updated (dateAssigned, createdAt, updatedAt)"
+  ],
+  "status": "GATE8D_V4_R4_BASELINE_MISMATCH"
+}

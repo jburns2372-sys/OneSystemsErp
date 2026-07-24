@@ -1,0 +1,32 @@
+{
+  "engineer": {
+    "email": "engineer@onesystemserp.com",
+    "id": "cmriniqgy001lvchcegw8qcxv",
+    "status": "ACTIVE",
+    "lockedUntil": null,
+    "mustChangePassword": false,
+    "passwordChangedAt": null,
+    "sessionVersion": 0
+  },
+  "assignments": [
+    {
+      "id": "cmrn6d3hw0005vcx8bua0fg5d",
+      "userId": "cmriniqgy001lvchcegw8qcxv",
+      "projectId": "cmrirhhw30000ic0406v47smb",
+      "projectRole": "SITE_ENGINEER",
+      "accessLevel": "READ_WRITE",
+      "assignmentStatus": "active",
+      "assignedBy": "cmqiy15bq0000vc1cq1f3zg6j",
+      "dateAssigned": "2026-07-16T07:15:43.989Z"
+    }
+  ],
+  "verification": {
+    "later_password_reset": false,
+    "gate8d_password_reset_completed": false,
+    "gate8d_user_sessions_revoked": false,
+    "generic_updateuser_password_mutation": false,
+    "direct_prisma_assignment": false,
+    "gate8d_preflight_audit_records": false,
+    "gate8d_idempotency_operation": false
+  }
+}

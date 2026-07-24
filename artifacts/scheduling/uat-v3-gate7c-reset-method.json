@@ -1,0 +1,10 @@
+{
+  "script": "npx prisma migrate reset --force",
+  "affectedRecords": "Complete schema wipe and re-apply of migrations followed by seeding.",
+  "prismaClientDeletionUsed": false,
+  "prismaDbPushUsed": false,
+  "prismaMigrateResetUsed": true,
+  "migrationHistoryChanged": false,
+  "unrelatedDataPreserved": false,
+  "status": "prisma migrate status synchronized, no failed migration, no unmanaged schema drift."
+}

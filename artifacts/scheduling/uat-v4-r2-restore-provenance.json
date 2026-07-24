@@ -1,0 +1,13 @@
+{
+  "archiveUsed": "backups/scheduling-reconstruction-sanitized-pre-gate7-data.dump",
+  "expectedSha256": "9FFBD3D570D2462D5BA6F68CC2C4B5033EDFA95E7F70E7296B3C7E7885A145BD",
+  "actualSha256": "9ffbd3d570d2462d5ba6f68cc2c4b5033edfa95e7f70e7296b3c7e7885a145bd",
+  "pgRestoreCommand": "docker run --rm -v \"${PWD}:/workspace\" postgres:17 pg_restore -d \"DIRECT_URL\" --data-only --no-owner --no-privileges /workspace/backups/scheduling-reconstruction-sanitized-pre-gate7-data.dump",
+  "optionsUsed": {
+    "dataOnly": true,
+    "noOwner": true,
+    "noPrivileges": true,
+    "exitOnError": false,
+    "singleTransaction": false
+  }
+}

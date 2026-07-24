@@ -1,0 +1,29 @@
+{
+  "business_counts": {
+    "project": 0,
+    "user": 0,
+    "projectUserAssignment": 0,
+    "projectBOQVersion": 0,
+    "awardedBOQItem": 0,
+    "projectSchedule": 0,
+    "scheduleWBS": 0,
+    "scheduleActivity": 0,
+    "scheduleDependency": 0,
+    "scheduleBOQAllocation": 0,
+    "scheduleApproval": 0,
+    "scheduleReviewComment": 0,
+    "baselineActivation": 0
+  },
+  "audit_counts": {
+    "auditLog": 0,
+    "password_reset_events": 0,
+    "session_revocation_events": 0,
+    "gate7_reconstruction_events": 0,
+    "gate8_reconstruction_events": 0,
+    "idempotencyRecord": 0,
+    "operational_approval_records": 0,
+    "active_baseline_records": 0
+  },
+  "other_application_tables_with_records": [],
+  "earliest_row_timestamp": null
+}
