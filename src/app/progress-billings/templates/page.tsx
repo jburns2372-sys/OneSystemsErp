@@ -2,6 +2,8 @@ import React from "react";
 import { fetchActiveTemplates } from "@/app/actions/documentTemplateActions";
 import TemplateUploadClient from "./TemplateUploadClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function ProgressBillingTemplatesPage() {
   const result = await fetchActiveTemplates();
   const templates = result.success ? result.data : [];

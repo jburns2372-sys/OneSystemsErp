@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { fetchActiveTemplatesService } from '../../../../src/lib/services/document-template.service';
 
 const prisma = new PrismaClient(); // Assuming prisma client is initialized here or imported from '@/lib/prisma'
 
@@ -40,15 +41,17 @@ router.post('/uploadDocumentTemplate', async (req, res) => {
 });
 
 // Endpoint for fetchActiveTemplates
-router.post('/fetchActiveTemplates', async (req, res) => {
+router.post('/fetchActiveTemplates', async (req: any, res) => {
   try {
-    const templates = await prisma.documentTemplate.findMany({
-      where: { status: 'ACTIVE' },
-      orderBy: { templateType: 'asc' },
-      include: {
-        uploadedBy: { select: { name: true } },
-      },
-    });
+    const actorId = req.user?.id || req.user?.userId; // Adjust based on how auth middleware attaches the user
+    if (!actorId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: Missing user session' });
+    }
+    
+    const projectId = req.pbacContext?.activeProjectId || null;
+
+    const templates = await fetchActiveTemplatesService(actorId, projectId);
+
     return res.json({ success: true, data: templates });
   } catch (error: any) {
     console.error('Fetch Templates Error (AWS Backend):', error);

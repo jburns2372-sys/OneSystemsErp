@@ -2,6 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { getBaseUrl } from '@/lib/urlResolver';
+import { fetchActiveTemplatesService } from '@/lib/services/document-template.service';
+import { verifySession } from '@/lib/dal/auth';
+import { cookies } from 'next/headers';
 
 // Basic fetchWithAuth definition (replace with your actual implementation)
 // This placeholder adds Content-Type header for POST requests
@@ -74,20 +77,19 @@ export async function uploadDocumentTemplate(formData: FormData) {
 
 export async function fetchActiveTemplates() {
   try {
-    const API_BASE_URL = getBaseUrl();
-    const response = await fetchWithAuth(
-      `${API_BASE_URL}/api/documentTemplateActions/fetchActiveTemplates`,
-      {
-        method: 'POST',
-        body: JSON.stringify({}), // No arguments needed, but POST typically expects a body
-      }
-    );
+    const session = await verifySession();
+    if (!session?.id) {
+      throw new Error('Unauthorized');
+    }
+    
+    const cookieStore = await cookies();
+    const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
-    const result = await response.json();
+    const templates = await fetchActiveTemplatesService(session.id, activeProjectId);
 
-    return result;
+    return { success: true, data: templates };
   } catch (error: any) {
-    console.error('Fetch Templates Error (Next.js Proxy):', error);
+    console.error('Fetch Templates Error (Next.js Action):', error);
     return { success: false, error: 'Failed to load templates' };
   }
 }
