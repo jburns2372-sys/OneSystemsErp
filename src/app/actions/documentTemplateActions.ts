@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { getBaseUrl } from '@/lib/urlResolver';
 
 // Basic fetchWithAuth definition (replace with your actual implementation)
 // This placeholder adds Content-Type header for POST requests
@@ -38,9 +39,8 @@ async function fetchWithAuth(
   return response;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_AWS_API_URL || 'http://localhost:3000'; // Define your AWS API base URL
-
 export async function uploadDocumentTemplate(formData: FormData) {
+  const API_BASE_URL = getBaseUrl();
   try {
     // Convert FormData to a plain object to send as JSON
     const payload = {
@@ -74,6 +74,7 @@ export async function uploadDocumentTemplate(formData: FormData) {
 
 export async function fetchActiveTemplates() {
   try {
+    const API_BASE_URL = getBaseUrl();
     const response = await fetchWithAuth(
       `${API_BASE_URL}/api/documentTemplateActions/fetchActiveTemplates`,
       {

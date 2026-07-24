@@ -2,6 +2,8 @@
 
 import { cookies } from "next/headers";
 
+import { getBaseUrl } from "@/lib/urlResolver";
+
 // Standard fetchWithAuth wrapper
 const fetchWithAuth = async (url: string, options?: RequestInit) => {
   const cookieStore = await cookies();
@@ -13,7 +15,7 @@ const fetchWithAuth = async (url: string, options?: RequestInit) => {
   }
   headers.set('Content-Type', 'application/json'); // Ensure JSON content type
 
-  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000'}${url}`, {
+  const response = await fetch(`${getBaseUrl()}${url}`, {
     ...options,
     headers,
     cache: 'no-store' // Server Actions typically don't cache, unless explicitly desired
