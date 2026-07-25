@@ -3,8 +3,20 @@ import { prisma } from '@/lib/prisma';
 import { generateObject } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { z } from 'zod';
+import { verifyApiSession } from '@/lib/dal/auth';
+import { checkUserAccess } from '@/lib/accessControl';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await verifyApiSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const _authParams = await params;
+  const access = await checkUserAccess(session.id, _authParams.id, 'Scheduling', 'CREATE');
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.denialReason || 'Access Denied' }, { status: 403 });
+  }
+
   try {
     const { id: projectId } = await params;
     const body = await req.json();

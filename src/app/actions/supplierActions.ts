@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 // The original `cookies()` and `sessionId` check is removed here,
 // as `fetchWithAuth` is expected to handle authentication.
@@ -21,7 +21,11 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
   // Example: const authToken = cookies().get('authToken')?.value;
   // if (authToken) { headers['Authorization'] = `Bearer ${authToken}`; }
 
-  const response = await fetch(`${baseUrl}${url}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(`${baseUrl}${url}`, {
     ...options,
     headers
   });

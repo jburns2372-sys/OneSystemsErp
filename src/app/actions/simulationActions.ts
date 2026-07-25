@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 import { revalidatePath, revalidateTag } from 'next/cache'; // Required imports even if not used in this specific scenario
 
 // Define SimulationMode if it's not globally available or needs explicit import in this file
@@ -18,7 +18,11 @@ async function fetchWithAuth(url: string, options: RequestInit) {
     throw new Error('BACKEND_API_URL environment variable is not set.');
   }
 
-  const response = await fetch(backendApiUrl + url, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(backendApiUrl + url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

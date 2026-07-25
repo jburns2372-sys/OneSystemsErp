@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { prisma, transactionContext } from '@/lib/prisma';
 import { requestPasswordReset, executePasswordReset } from '@/app/actions/recovery';
 import { PasswordRecoveryMailer } from '@/lib/services/PasswordRecoveryMailer';
 import crypto from 'crypto';
@@ -17,7 +17,71 @@ jest.mock('next/headers', () => ({
 jest.setTimeout(30000); // 30 seconds
 
 describe('Super Admin Recovery Integration', () => {
+  const testEmail = 'superadmin_test@onesystemserp.com';
+  const nonexistentEmail = 'nonexistent@onesystemserp.com';
   let testUserId: string;
+
+  const rateLimitIdentifier = (email: string) => {
+    const ipHash = crypto.createHash('sha256').update('127.0.0.1').digest('hex');
+    return crypto.createHash('sha256').update(`${ipHash}:${email.toLowerCase()}`).digest('hex');
+  };
+
+  const cleanupRequestFixtures = async () => {
+    if (testUserId) {
+      await prisma.passwordRecoveryToken.deleteMany({
+        where: { userId: testUserId },
+      });
+    }
+    await prisma.passwordRecoveryRateLimit.deleteMany({
+      where: {
+        identifierHash: {
+          in: [
+            rateLimitIdentifier(testEmail),
+            rateLimitIdentifier(nonexistentEmail),
+          ],
+        },
+      },
+    });
+  };
+
+  const cleanupAllFixtures = async () => {
+    await transactionContext.run({ sourceProvenance: 'GATE9_WORKFLOW_ENGINE' }, async () => {
+      const fixtureUser = await prisma.user.findUnique({
+        where: { email: testEmail },
+        select: { id: true },
+      });
+      const fixtureUserId = testUserId || fixtureUser?.id;
+
+      if (fixtureUserId) {
+        await prisma.baselineActivation.deleteMany({
+          where: { activatedById: fixtureUserId },
+        });
+        await prisma.scheduleApproval.deleteMany({
+          where: { reviewerId: fixtureUserId },
+        });
+        await prisma.passwordRecoveryToken.deleteMany({
+          where: { userId: fixtureUserId },
+        });
+        await prisma.auditLog.deleteMany({
+          where: { userId: fixtureUserId },
+        });
+        await prisma.user.deleteMany({
+          where: { id: fixtureUserId },
+        });
+      }
+
+      await prisma.passwordRecoveryRateLimit.deleteMany({
+        where: {
+          identifierHash: {
+            in: [
+              rateLimitIdentifier(testEmail),
+              rateLimitIdentifier(nonexistentEmail),
+            ],
+          },
+        },
+      });
+    });
+  };
 
   beforeAll(async () => {
     // 0. Prove the test database is not v4_r7_clean
@@ -25,9 +89,10 @@ describe('Super Admin Recovery Integration', () => {
     expect(dbUrl).not.toContain('v4_r7_clean');
 
     // Setup test user
+    await cleanupAllFixtures();
     const user = await prisma.user.create({
       data: {
-        email: 'superadmin_test@onesystemserp.com',
+        email: testEmail,
         role: 'SUPER_ADMIN',
         status: 'ACTIVE',
         passwordHash: 'oldhash',
@@ -38,35 +103,35 @@ describe('Super Admin Recovery Integration', () => {
   });
 
   afterAll(async () => {
-    await prisma.passwordRecoveryToken.deleteMany();
-    await prisma.passwordRecoveryRateLimit.deleteMany();
-    await prisma.auditLog.deleteMany();
-    await prisma.user.delete({ where: { id: testUserId } });
+    try {
+      await cleanupAllFixtures();
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   afterEach(async () => {
-    await prisma.passwordRecoveryToken.deleteMany();
-    await prisma.passwordRecoveryRateLimit.deleteMany();
+    await cleanupRequestFixtures();
     jest.clearAllMocks();
   });
 
   it('1. Existing and nonexistent account requests return identical responses', async () => {
-    const res1 = await requestPasswordReset('superadmin_test@onesystemserp.com');
-    const res2 = await requestPasswordReset('nonexistent@onesystemserp.com');
+    const res1 = await requestPasswordReset(testEmail);
+    const res2 = await requestPasswordReset(nonexistentEmail);
     expect(res1.message).toEqual(res2.message);
   });
 
   it('2. No token is created when email is unavailable', async () => {
     (PasswordRecoveryMailer.isConfigured as jest.Mock).mockReturnValueOnce(false);
-    const res = await requestPasswordReset('superadmin_test@onesystemserp.com');
+    const res = await requestPasswordReset(testEmail);
     expect(res.code).toBe('SUPER_ADMIN_RECOVERY_EMAIL_PROVIDER_CONFIGURATION_REQUIRED');
-    const tokens = await prisma.passwordRecoveryToken.findMany();
+    const tokens = await prisma.passwordRecoveryToken.findMany({ where: { userId: testUserId } });
     expect(tokens.length).toBe(0);
   });
 
   it('3. Plain token is never stored and 4. Token has at least 256 bits of entropy', async () => {
-    await requestPasswordReset('superadmin_test@onesystemserp.com');
-    const tokens = await prisma.passwordRecoveryToken.findMany();
+    await requestPasswordReset(testEmail);
+    const tokens = await prisma.passwordRecoveryToken.findMany({ where: { userId: testUserId } });
     expect(tokens.length).toBe(1);
     expect(tokens[0].tokenHash).toBeDefined();
     expect(tokens[0].tokenHash.length).toBe(64); // SHA-256 hash
@@ -74,8 +139,11 @@ describe('Super Admin Recovery Integration', () => {
   });
 
   it('5. Expired token is rejected', async () => {
-    await requestPasswordReset('superadmin_test@onesystemserp.com');
-    await prisma.passwordRecoveryToken.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+    await requestPasswordReset(testEmail);
+    await prisma.passwordRecoveryToken.updateMany({
+      where: { userId: testUserId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
     
     // simulate token
     const token = 'fake-token-we-dont-know'; 
@@ -95,17 +163,17 @@ describe('Super Admin Recovery Integration', () => {
     expect(resWeak.success).toBe(false);
     expect(resWeak.error).toContain('least 12 characters');
 
-    const resSame = await executePasswordReset(token, 'superadmin_test@onesystemserp.com');
+    const resSame = await executePasswordReset(token, testEmail);
     expect(resSame.success).toBe(false);
   });
 
   it('13. Rate limiting prevents abuse', async () => {
     for (let i = 0; i < 5; i++) {
-      await requestPasswordReset('superadmin_test@onesystemserp.com');
+      await requestPasswordReset(testEmail);
     }
-    const resBlocked = await requestPasswordReset('superadmin_test@onesystemserp.com');
+    const resBlocked = await requestPasswordReset(testEmail);
     expect(resBlocked.message).toBeDefined(); // still generic response
-    const tokens = await prisma.passwordRecoveryToken.findMany();
+    const tokens = await prisma.passwordRecoveryToken.findMany({ where: { userId: testUserId } });
     expect(tokens.length).toBe(5); // 6th request was blocked
   });
 

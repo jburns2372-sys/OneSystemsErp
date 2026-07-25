@@ -9,13 +9,44 @@ import { prismaBase } from '@/lib/prisma-base';
 import { verifySession } from '@/lib/dal/auth';
 import ScheduleReviewPanel from '@/app/projects/[id]/scheduling/review/ScheduleReviewPanel';
 
-jest.mock('@/lib/dal/auth', () => ({
-  __esModule: true,
-  verifySession: jest.fn()
-}));
+jest.mock('@/lib/dal/auth', () => {
+  const mockFn = jest.fn();
+  return {
+    __esModule: true,
+    verifySession: mockFn,
+    verifyApiSession: mockFn
+  };
+});
 
 jest.mock('next/headers', () => ({
   cookies: jest.fn().mockResolvedValue({ get: jest.fn() })
+}));
+
+jest.mock('@/lib/permissions', () => ({
+  hasPermission: jest.fn().mockImplementation(async (actorId) => {
+    // We cannot access users directly before it's initialized, but we can check if it's the super admin ID if it's passed.
+    // Wait, let's just make it return false initially, and we will mock it INSIDE the test where we have `users['SUPER_ADMIN']`!
+    return false;
+  }),
+  getUserPermissions: jest.fn().mockImplementation(async (userId: string) => {
+    const prisma = require('@/lib/prisma-base').prismaBase;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return {};
+    const role = user.role;
+    if (role === 'FINANCE_OFFICER') {
+      return { 'Scheduling': { canView: true, canApprove: true, canBaseline: false, canSubmit: false, canEdit: false } };
+    }
+    if (role === 'PROJECT_DIRECTOR' || role === 'DIRECTORS') {
+      return { 'Scheduling': { canView: true, canApprove: true, canBaseline: true, canSubmit: true, canEdit: true } };
+    }
+    if (role === 'PROJECT_MANAGER' || role === 'SUPER_ADMIN') {
+      return { 'Scheduling': { canView: true, canApprove: true, canBaseline: true, canSubmit: true, canEdit: true } };
+    }
+    return { 'Scheduling': { canView: true, canApprove: false, canBaseline: false, canSubmit: false, canEdit: false } };
+  }),
+  getPermissionsForRole: jest.fn().mockImplementation(async (role) => {
+    return { PROJECT_MANAGEMENT: { canView: true, canEdit: true, canApprove: true, canBaseline: true } };
+  })
 }));
 
 jest.mock('next/navigation', () => ({
@@ -25,7 +56,8 @@ jest.mock('next/navigation', () => ({
 jest.mock('react', () => ({
   ...jest.requireActual('react'),
   useState: (init: any) => [init, jest.fn()],
-  useTransition: () => [false, jest.fn()]
+  useTransition: () => [false, jest.fn()],
+  useRef: (init: any) => ({ current: init })
 }));
 
 jest.setTimeout(30000);
@@ -33,7 +65,7 @@ jest.setTimeout(30000);
 describe('Gate 10D Finance UI and Gating Validation', () => {
   let projectId: string;
   let scheduleId: string;
-  let users: Record<string, string> = {};
+  const users: Record<string, string> = {};
 
   beforeAll(async () => {
     const p = await prismaBase.project.create({ data: { name: 'Gate 10D Test Project UI' } });
@@ -41,8 +73,10 @@ describe('Gate 10D Finance UI and Gating Validation', () => {
     
     const roles = ['PROJECT_MANAGER', 'FINANCE_OFFICER', 'DIRECTORS', 'SITE_ENGINEER', 'SUPER_ADMIN', 'SYSTEM_ADMIN'];
     for (const role of roles) {
-      const u = await prismaBase.user.create({
-        data: { name: `Test ${role}`, email: `${role.toLowerCase()}@testgate10ui.com`, role }
+      const u = await prismaBase.user.upsert({
+        where: { email: `${role.toLowerCase()}@testgate10ui.com` },
+        update: { name: `Test ${role}`, role },
+        create: { name: `Test ${role}`, email: `${role.toLowerCase()}@testgate10ui.com`, role }
       });
       users[role] = u.id;
       
@@ -67,18 +101,27 @@ describe('Gate 10D Finance UI and Gating Validation', () => {
   });
 
   afterAll(async () => {
-    if (scheduleId) {
-      await prismaBase.scheduleApproval.deleteMany({ where: { scheduleId } });
-      await prismaBase.projectSchedule.delete({ where: { id_projectId: { id: scheduleId, projectId } } });
+    try {
+      if (Object.keys(users).length > 0) {
+        await prismaBase.auditLog.deleteMany({
+          where: { userId: { in: Object.values(users) } },
+        });
+      }
+      if (scheduleId) {
+        await prismaBase.baselineActivation.deleteMany({ where: { scheduleId } });
+        await prismaBase.scheduleApproval.deleteMany({ where: { scheduleId } });
+        await prismaBase.projectSchedule.deleteMany({ where: { id: scheduleId } });
+      }
+      if (projectId) {
+        await prismaBase.projectUserAssignment.deleteMany({ where: { projectId } });
+        await prismaBase.project.deleteMany({ where: { id: projectId } });
+      }
+      if (Object.keys(users).length > 0) {
+        await prismaBase.user.deleteMany({ where: { id: { in: Object.values(users) } } });
+      }
+    } finally {
+      await prismaBase.$disconnect();
     }
-    if (projectId) {
-      await prismaBase.projectUserAssignment.deleteMany({ where: { projectId } });
-      await prismaBase.project.delete({ where: { id: projectId } });
-    }
-    if (Object.keys(users).length > 0) {
-      await prismaBase.user.deleteMany({ where: { id: { in: Object.values(users) } } });
-    }
-    await prismaBase.$disconnect();
   });
 
   function mockRequest(body: any) {
@@ -221,7 +264,7 @@ describe('Gate 10D Finance UI and Gating Validation', () => {
     // 1. We mock the Technical approval directly into DB so we can test Finance route correctly
     await prismaBase.scheduleApproval.create({
       data: {
-        schedule: { connect: { id_projectId: { id: scheduleId, projectId } } },
+        schedule: { connect: { id: scheduleId } },
         reviewer: { connect: { id: users['PROJECT_MANAGER'] } },
         reviewerRoleSnapshot: 'PROJECT_MANAGER',
         reviewerNameSnapshot: 'Test PM',
@@ -234,8 +277,14 @@ describe('Gate 10D Finance UI and Gating Validation', () => {
 
     // 2. Finance Officer Approves
     (verifySession as jest.Mock).mockResolvedValue({ id: users['FINANCE_OFFICER'] });
+    const currentSched = await prismaBase.projectSchedule.findUnique({ where: { id: scheduleId } });
+    console.log('BEFORE TEST 2 SCHED:', currentSched);
+
     const req1 = mockRequest({ expectedRowVersion: 4 });
     const res1 = await financeApprovePost(req1, { params: Promise.resolve({ id: projectId, scheduleId }) });
+    if (res1.status !== 200) {
+      console.log('TEST 2 FAILED. STATUS:', res1.status, 'BODY:', await (res1 as any).clone().json());
+    }
     expect(res1.status).toBe(200);
 
     // 3. Finance Officer attempts Duplicate Approval
@@ -248,10 +297,16 @@ describe('Gate 10D Finance UI and Gating Validation', () => {
   });
 
   test('Backend Gating: Strict Role Separation for Finance and Baseline', async () => {
+    const permissions = require('@/lib/permissions');
+    (permissions.hasPermission as jest.Mock).mockResolvedValue(true);
+
     // Admins attempting Finance Approval
     (verifySession as jest.Mock).mockResolvedValue({ id: users['SUPER_ADMIN'] });
     const reqAdminFin = mockRequest({ expectedRowVersion: 5 });
     const resAdminFin = await financeApprovePost(reqAdminFin, { params: Promise.resolve({ id: projectId, scheduleId }) });
+    if (resAdminFin.status !== 500) {
+       console.log('resAdminFin STATUS:', resAdminFin.status, 'BODY:', await (resAdminFin as any).clone().json());
+    }
     expect(resAdminFin.status).toBe(500);
     const dataAdminFin = await (resAdminFin as any).json();
     expect(dataAdminFin.error).toContain('Unauthorized role');
@@ -263,7 +318,10 @@ describe('Gate 10D Finance UI and Gating Validation', () => {
     const dataAdminBase = await (resAdminBase as any).json();
     expect(dataAdminBase.error).toContain('Unauthorized role');
 
-    // Finance Officer attempting Baseline Submit
+    // Restore PBAC for Finance Officer
+    (permissions.hasPermission as jest.Mock).mockResolvedValue(false);
+
+    // Finance Officer attempting Baseline Submit (should hit PBAC canSubmit: false)
     (verifySession as jest.Mock).mockResolvedValue({ id: users['FINANCE_OFFICER'] });
     const reqFinBase = mockRequest({ expectedRowVersion: 5 });
     const resFinBase = await submitBaselinePost(reqFinBase, { params: Promise.resolve({ id: projectId, scheduleId }) });

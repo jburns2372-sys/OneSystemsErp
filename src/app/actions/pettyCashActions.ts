@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
 // Placeholder for fetchWithAuth, assuming it handles authentication and base URL
@@ -10,7 +10,11 @@ const fetchWithAuth = async (
   // In a real application, this would fetch an auth token (e.g., from session/cookies)
   // and add it to the headers. It might also prepend a base URL for the backend.
   const baseUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:3001/api'; // Adjust as needed
-  const res = await fetch(`${baseUrl}${url}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const res = await fetch(`${baseUrl}${url}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

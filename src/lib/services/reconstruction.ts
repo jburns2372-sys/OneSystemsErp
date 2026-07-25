@@ -80,7 +80,7 @@ export async function importBOQ(projectId: string, managerId: string) {
   const lines = loadAuthoritativeBOQ();
   if (lines.length !== 326) throw new Error(`Expected 326 lines, got ${lines.length}`);
 
-  let totalDirect = 0;
+  const totalDirect = 0;
   const canonicalLines = [];
   
   const checksum = '514c4bd4a7b188391c5ec7f04f198c2963035021a94b295a7b15d408ba831e17';

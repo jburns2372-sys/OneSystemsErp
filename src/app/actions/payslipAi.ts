@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 // Basic fetchWithAuth definition
 // In a real application, this would typically be a shared utility
 // that handles authentication headers (e.g., JWT, session token).
@@ -21,7 +21,11 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || ''; 
   const fullUrl = `${apiBaseUrl}${url}`;
 
-  const res = await fetch(fullUrl, options);
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const res = await fetch(fullUrl, options);
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ message: res.statusText }));

@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
 // Placeholder for fetchWithAuth. In a real app, this would handle authentication tokens
@@ -15,7 +15,11 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
   // This example uses a fallback for local development.
   const baseUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:3001'; // Example fallback
 
-  const response = await fetch(`${baseUrl}${url}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(`${baseUrl}${url}`, {
     ...options,
     headers,
   });

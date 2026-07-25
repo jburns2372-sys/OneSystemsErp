@@ -46,7 +46,7 @@ async function runTests() {
   });
 
   let testsPassed = 0;
-  let totalTests = 14;
+  const totalTests = 14;
 
   try {
     // 1. Missing authentication is rejected.

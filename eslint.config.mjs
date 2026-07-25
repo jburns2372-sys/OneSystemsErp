@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "artifacts/**",
+    "backups/**",
+    "PGH-PMS_*/**",
+    "OneSystemsERP_Checkpoints/**",
+    "test-results/**",
+    "scratch/**"
   ]),
 ]);
 

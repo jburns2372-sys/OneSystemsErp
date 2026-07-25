@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 // Standard fetchWithAuth wrapper. This would typically handle authentication headers.
 // The AWS_BACKEND_BASE_URL environment variable should point to your Express backend's base URL (e.g., 'https://your-api-gateway-id.execute-api.us-east-1.amazonaws.com/prod').
 async function fetchWithAuth(url: string, options?: RequestInit) {
@@ -8,7 +8,11 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
     throw new Error('AWS_BACKEND_BASE_URL is not defined in environment variables.');
   }
 
-  const response = await fetch(backendBaseUrl + url, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(backendBaseUrl + url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

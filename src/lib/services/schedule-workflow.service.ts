@@ -37,6 +37,18 @@ function hashIdempotencyKey(key: string): string {
   return crypto.createHash('sha256').update(key).digest('hex');
 }
 
+async function verifySession(actor: OperationalSession) {
+  console.log("verifySession actor:", actor);
+  if (!actor.accountActive || actor.accountLocked || actor.mustChangePassword) {
+    throw new AuthorizationError('Invalid or locked account.');
+  }
+  const user = await prisma.user.findUnique({ where: { id: actor.userId } });
+  console.log("verifySession DB user:", !!user, user?.sessionVersion);
+  if (!user || user.sessionVersion !== actor.sessionVersion) {
+    throw new AuthorizationError('Stale session.');
+  }
+}
+
 export async function submitDraftForReview(
   projectId: string,
   scheduleId: string,
@@ -44,9 +56,7 @@ export async function submitDraftForReview(
   idempotencyKey: string,
   actor: OperationalSession
 ) {
-  if (!actor.accountActive || actor.accountLocked || actor.mustChangePassword) {
-    throw new AuthorizationError('Invalid or locked account.');
-  }
+  await verifySession(actor);
 
   // 1. Verify Project Assignment and PBAC
   const assignment = await prisma.projectUserAssignment.findFirst({
@@ -171,9 +181,7 @@ export async function startTechnicalReview(
   idempotencyKey: string,
   actor: OperationalSession
 ) {
-  if (!actor.accountActive || actor.accountLocked || actor.mustChangePassword) {
-    throw new AuthorizationError('Invalid or locked account.');
-  }
+  await verifySession(actor);
 
   // Verify PBAC for Project Manager
   const assignment = await prisma.projectUserAssignment.findFirst({
@@ -208,9 +216,7 @@ export async function addRequiredReviewComments(
   expectedRowVersion: number,
   actor: OperationalSession
 ) {
-  if (!actor.accountActive || actor.accountLocked || actor.mustChangePassword) {
-    throw new AuthorizationError('Invalid or locked account.');
-  }
+  await verifySession(actor);
 
   const assignment = await prisma.projectUserAssignment.findFirst({
     where: {
@@ -243,9 +249,7 @@ export async function addFinanceReviewComment(
   expectedRowVersion: number,
   actor: OperationalSession
 ) {
-  if (!actor.accountActive || actor.accountLocked || actor.mustChangePassword) {
-    throw new AuthorizationError('Invalid or locked account.');
-  }
+  await verifySession(actor);
 
   const assignment = await prisma.projectUserAssignment.findFirst({
     where: {
@@ -279,9 +283,7 @@ export async function activateScheduleBaseline(
   idempotencyKey: string,
   actor: OperationalSession
 ) {
-  if (!actor.accountActive || actor.accountLocked || actor.mustChangePassword) {
-    throw new AuthorizationError('Invalid or locked account.');
-  }
+  await verifySession(actor);
 
   // Verify PBAC for Director roles via explicit project assignment
   const assignment = await prisma.projectUserAssignment.findFirst({

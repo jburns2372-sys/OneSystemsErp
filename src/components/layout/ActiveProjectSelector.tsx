@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useTransition, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { setActiveProjectCookie } from '@/app/actions/activeProject';
 
 export default function ActiveProjectSelector({ 
@@ -12,7 +12,18 @@ export default function ActiveProjectSelector({
   activeProjectId: string | null;
 }) {
   const router = useRouter();
+  const params = useParams();
   const [isPending, startTransition] = useTransition();
+
+  const urlProjectId = (params?.id || params?.projectId) as string | undefined;
+  const displayProjectId = urlProjectId || activeProjectId;
+
+  useEffect(() => {
+    if (urlProjectId && urlProjectId !== activeProjectId) {
+      // Sync cookie quietly when URL dictates a different project
+      setActiveProjectCookie(urlProjectId);
+    }
+  }, [urlProjectId, activeProjectId]);
 
   const handleProjectChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newProjectId = e.target.value;
@@ -20,8 +31,12 @@ export default function ActiveProjectSelector({
     // We can show a warning here if there is unsaved work, but for now we proceed
     startTransition(async () => {
       await setActiveProjectCookie(newProjectId || null);
-      // Refresh the route to trigger server components to read the new cookie
-      router.refresh();
+      
+      if (newProjectId) {
+        router.push(`/projects/${newProjectId}`);
+      } else {
+        router.push('/');
+      }
     });
   };
 
@@ -33,7 +48,7 @@ export default function ActiveProjectSelector({
     );
   }
 
-  const currentAssignment = assignments.find(a => a.projectId === activeProjectId);
+  const currentAssignment = assignments.find(a => a.projectId === displayProjectId);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginRight: '20px' }}>
@@ -42,7 +57,7 @@ export default function ActiveProjectSelector({
       </label>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         <select
-          value={activeProjectId || ''}
+          value={displayProjectId || ''}
           onChange={handleProjectChange}
           disabled={isPending}
           style={{

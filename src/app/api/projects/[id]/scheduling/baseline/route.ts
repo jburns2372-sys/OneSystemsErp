@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { verifyApiSession } from '@/lib/dal/auth';
+import { checkUserAccess } from '@/lib/accessControl';
 
 export async function POST() {
   return NextResponse.json({

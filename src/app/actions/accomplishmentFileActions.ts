@@ -22,7 +22,11 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   headers.set('Content-Type', 'application/json');
 
   // Construct the full backend API URL including the route name 'accomplishmentFileActions'
-  const res = await fetch(`${BACKEND_URL}/api/accomplishmentFileActions${endpoint}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const res = await fetch(`${BACKEND_URL}/api/accomplishmentFileActions${endpoint}`, {
     ...options,
     headers,
     method: 'POST', // Enforce POST as per instructions for router endpoints

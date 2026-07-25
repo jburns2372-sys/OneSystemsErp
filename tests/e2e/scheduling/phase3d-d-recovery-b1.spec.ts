@@ -28,7 +28,7 @@ test.describe('Phase 3D-D Recovery B1: Service Hardening', () => {
   });
 
   test.afterAll(async () => {
-    await prisma.user.delete({ where: { id: testActor.id } }).catch(() => {});
+    await prisma.user.deleteMany({ where: { id: testActor.id } }).catch(() => {});
     await prisma.$disconnect();
   });
 
@@ -149,9 +149,9 @@ test.describe('Phase 3D-D Recovery B1: Service Hardening', () => {
     await prisma.scheduleBOQAllocation.deleteMany({ where: { scheduleId: testSchedule.id } }).catch(() => {});
     await prisma.scheduleActivity.deleteMany({ where: { scheduleId: testSchedule.id } }).catch(() => {});
     await prisma.scheduleWBS.deleteMany({ where: { scheduleId: testSchedule.id } }).catch(() => {});
-    await prisma.projectSchedule.delete({ where: { id: testSchedule.id } }).catch(() => {});
+    await prisma.projectSchedule.deleteMany({ where: { id: testSchedule.id } }).catch(() => {});
     await prisma.awardedBOQItem.deleteMany({ where: { projectId: testProject.id } }).catch(() => {});
-    await prisma.project.delete({ where: { id: testProject.id } }).catch(() => {});
+    await prisma.project.deleteMany({ where: { id: testProject.id } }).catch(() => {});
   });
 
   test('should successfully activate baseline if all conditions met', async () => {
@@ -364,7 +364,7 @@ test.describe('Phase 3D-D Recovery B1: Service Hardening', () => {
     
     expect(result.baselineCode).toBe('BL-002');
     
-    await prisma.projectSchedule.delete({ where: { id: dummyActive.id } }).catch(() => {});
+    await prisma.projectSchedule.deleteMany({ where: { id: dummyActive.id } }).catch(() => {});
   });
 
   test('should correctly supersede previously active baseline of the project', async () => {
@@ -382,7 +382,7 @@ test.describe('Phase 3D-D Recovery B1: Service Hardening', () => {
     const oldActive = await prisma.projectSchedule.findUnique({ where: { id: dummyActive.id } });
     expect(oldActive?.workflowStatus).toBe(ProjectScheduleWorkflowStatus.SUPERSEDED_BASELINE);
     
-    await prisma.projectSchedule.delete({ where: { id: dummyActive.id } }).catch(() => {});
+    await prisma.projectSchedule.deleteMany({ where: { id: dummyActive.id } }).catch(() => {});
   });
 
   test('should correctly set baselineStartDate and baselineFinishDate on activities', async () => {

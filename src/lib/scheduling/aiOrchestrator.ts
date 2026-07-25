@@ -226,7 +226,7 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
           });
         }
 
-        let finalPhase = aiProposal.phases[aiProposal.phases.length - 1];
+        const finalPhase = aiProposal.phases[aiProposal.phases.length - 1];
         if (!finalPhase.phaseName.toLowerCase().includes("demobilization")) {
           aiProposal.phases.push({
             phaseName: "Project Acceptance and Demobilization",
@@ -594,7 +594,7 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
     const difference = scheduledTotal.minus(awardedTotalTx);
 
     // Line-level verification
-    let uniqueAllocatedBOQ = new Set<string>();
+    const uniqueAllocatedBOQ = new Set<string>();
     let overallocated = 0;
     let underallocated = 0;
 

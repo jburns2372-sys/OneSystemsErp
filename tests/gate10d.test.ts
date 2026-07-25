@@ -7,9 +7,40 @@ import { POST as submitBaselinePost } from '@/app/api/projects/[id]/scheduling/[
 import { prismaBase } from '@/lib/prisma-base';
 import { verifySession } from '@/lib/dal/auth';
 
-jest.mock('@/lib/dal/auth', () => ({
+jest.mock('@/lib/dal/auth', () => {
+  const mockFn = jest.fn();
+  return {
+    __esModule: true,
+    verifySession: mockFn,
+    verifyApiSession: mockFn
+  };
+});
+
+jest.mock('@/lib/permissions', () => ({
   __esModule: true,
-  verifySession: jest.fn()
+  hasPermission: jest.fn().mockImplementation((userId: string, module: string, action: string) => {
+    return false;
+  }),
+  getUserPermissions: jest.fn().mockImplementation(async (userId: string) => {
+    const prisma = require('@/lib/prisma-base').prismaBase;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return {};
+    const roleCode = user.role;
+    const canApproveRoles = ['PROJECT_DIRECTOR', 'DIRECTORS', 'PROJECT_MANAGER', 'FINANCE_OFFICER', 'SUPER_ADMIN', 'SYSTEM_ADMIN'];
+    const canApprove = canApproveRoles.includes(roleCode);
+    return {
+      'PROJECT_MANAGEMENT': { canApprove, canSubmit: canApprove, canEdit: canApprove },
+      'Scheduling': { canApprove, canSubmit: canApprove, canEdit: canApprove },
+      'ALL': { canApprove, canSubmit: canApprove, canEdit: canApprove }
+    };
+  }),
+  getPermissionsForRole: jest.fn().mockImplementation((roleCode: string) => {
+    const canApproveRoles = ['PROJECT_DIRECTOR', 'DIRECTORS', 'PROJECT_MANAGER', 'FINANCE_OFFICER', 'SUPER_ADMIN', 'SYSTEM_ADMIN'];
+    const canApprove = canApproveRoles.includes(roleCode);
+    return {
+      'PROJECT_MANAGEMENT': { canApprove, canEdit: true }
+    };
+  })
 }));
 
 jest.mock('next/headers', () => ({
@@ -21,7 +52,7 @@ jest.setTimeout(30000);
 describe('Gate 10D Explicit Approval Paths', () => {
   let projectId: string;
   let scheduleId: string;
-  let users: Record<string, string> = {}; // role -> id
+  const users: Record<string, string> = {}; // role -> id
 
   beforeAll(async () => {
     // 1. Create a disposable isolated test project
@@ -33,8 +64,10 @@ describe('Gate 10D Explicit Approval Paths', () => {
     // 2. Create users & assignments for canonical roles
     const roles = ['PROJECT_MANAGER', 'FINANCE_OFFICER', 'DIRECTORS'];
     for (const role of roles) {
-      const u = await prismaBase.user.create({
-        data: { name: `Test ${role}`, email: `${role.toLowerCase()}@testgate10.com`, role: role }
+      const u = await prismaBase.user.upsert({
+        where: { email: `${role.toLowerCase()}@testgate10.com` },
+        update: { name: `Test ${role}`, role: role },
+        create: { name: `Test ${role}`, email: `${role.toLowerCase()}@testgate10.com`, role: role }
       });
       users[role] = u.id;
       await prismaBase.projectUserAssignment.create({
@@ -59,11 +92,11 @@ describe('Gate 10D Explicit Approval Paths', () => {
     // Cleanup disposable test records
     if (scheduleId) {
       await prismaBase.scheduleApproval.deleteMany({ where: { scheduleId } });
-      await prismaBase.projectSchedule.delete({ where: { id_projectId: { id: scheduleId, projectId } } });
+      await prismaBase.projectSchedule.deleteMany({ where: { id: scheduleId } });
     }
     if (projectId) {
       await prismaBase.projectUserAssignment.deleteMany({ where: { projectId } });
-      await prismaBase.project.delete({ where: { id: projectId } });
+      await prismaBase.project.deleteMany({ where: { id: projectId } });
     }
     if (Object.keys(users).length > 0) {
       await prismaBase.user.deleteMany({ where: { id: { in: Object.values(users) } } });

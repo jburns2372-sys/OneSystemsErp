@@ -1,6 +1,9 @@
 'use server';
-
 import { revalidatePath } from 'next/cache';
+import { getBaseUrl } from '@/lib/urlResolver';
+import { fetchActiveTemplatesService } from '@/lib/services/document-template.service';
+import { verifySession } from '@/lib/dal/auth';
+import { cookies } from 'next/headers';
 
 // Basic fetchWithAuth definition (replace with your actual implementation)
 // This placeholder adds Content-Type header for POST requests
@@ -23,7 +26,11 @@ async function fetchWithAuth(
   // e.g., from cookies, session, or server-side auth providers.
   // Example: headers.set('Authorization', `Bearer ${await getAuthToken()}`);
 
-  const response = await fetch(input, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(input, {
     ...init,
     headers,
   });
@@ -38,9 +45,8 @@ async function fetchWithAuth(
   return response;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_AWS_API_URL || 'http://localhost:3000'; // Define your AWS API base URL
-
 export async function uploadDocumentTemplate(formData: FormData) {
+  const API_BASE_URL = getBaseUrl();
   try {
     // Convert FormData to a plain object to send as JSON
     const payload = {
@@ -74,19 +80,19 @@ export async function uploadDocumentTemplate(formData: FormData) {
 
 export async function fetchActiveTemplates() {
   try {
-    const response = await fetchWithAuth(
-      `${API_BASE_URL}/api/documentTemplateActions/fetchActiveTemplates`,
-      {
-        method: 'POST',
-        body: JSON.stringify({}), // No arguments needed, but POST typically expects a body
-      }
-    );
+    const session = await verifySession();
+    if (!session?.id) {
+      throw new Error('Unauthorized');
+    }
+    
+    const cookieStore = await cookies();
+    const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
 
-    const result = await response.json();
+    const templates = await fetchActiveTemplatesService(session.id, activeProjectId);
 
-    return result;
+    return { success: true, data: templates };
   } catch (error: any) {
-    console.error('Fetch Templates Error (Next.js Proxy):', error);
+    console.error('Fetch Templates Error (Next.js Action):', error);
     return { success: false, error: 'Failed to load templates' };
   }
 }

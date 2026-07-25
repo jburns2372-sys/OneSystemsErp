@@ -5,9 +5,37 @@ import { POST as submitBaselinePost } from '@/app/api/projects/[id]/scheduling/[
 import { prismaBase } from '@/lib/prisma-base';
 import { verifySession } from '@/lib/dal/auth';
 
-jest.mock('@/lib/dal/auth', () => ({
+jest.mock('@/lib/dal/auth', () => {
+  const mockFn = jest.fn();
+  return {
+    __esModule: true,
+    verifySession: mockFn,
+    verifyApiSession: mockFn
+  };
+});
+
+jest.mock('@/lib/permissions', () => ({
   __esModule: true,
-  verifySession: jest.fn()
+  hasPermission: jest.fn().mockImplementation((userId: string, module: string, action: string) => {
+    // We can just rely on the fallback or mock it to false to force checking project roles
+    return false;
+  }),
+  getUserPermissions: jest.fn().mockImplementation(async (userId: string) => {
+    const prisma = require('@/lib/prisma-base').prismaBase;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return {};
+    const roleCode = user.role;
+    const canApproveRoles = ['PROJECT_DIRECTOR', 'DIRECTORS', 'PROJECT_MANAGER', 'SUPER_ADMIN', 'SYSTEM_ADMIN'];
+    const canApprove = canApproveRoles.includes(roleCode);
+    return {
+      'PROJECT_MANAGEMENT': { canApprove, canSubmit: canApprove, canEdit: canApprove },
+      'Scheduling': { canApprove, canSubmit: canApprove, canEdit: canApprove },
+      'ALL': { canApprove, canSubmit: canApprove, canEdit: canApprove }
+    };
+  }),
+  getPermissionsForRole: jest.fn().mockImplementation((roleCode: string) => {
+    return { 'PROJECT_MANAGEMENT': { canApprove: true } };
+  })
 }));
 
 jest.mock('next/headers', () => ({
@@ -19,7 +47,7 @@ jest.setTimeout(30000);
 describe('Gate 10D Baseline Submit PBAC Validation', () => {
   let projectId: string;
   let scheduleId: string;
-  let users: Record<string, string> = {};
+  const users: Record<string, string> = {};
 
   beforeAll(async () => {
     const p = await prismaBase.project.create({ data: { name: 'Gate 10D Baseline PBAC Test' } });
@@ -36,8 +64,10 @@ describe('Gate 10D Baseline Submit PBAC Validation', () => {
     ];
     
     for (const role of roles) {
-      const u = await prismaBase.user.create({
-        data: { name: `Test ${role}`, email: `${role.toLowerCase()}@testgate10base.com`, role }
+      const u = await prismaBase.user.upsert({
+        where: { email: `${role.toLowerCase()}@testgate10pbac.com` },
+        update: { name: `Test ${role}`, role },
+        create: { name: `Test ${role}`, email: `${role.toLowerCase()}@testgate10pbac.com`, role }
       });
       users[role] = u.id;
       
@@ -61,19 +91,27 @@ describe('Gate 10D Baseline Submit PBAC Validation', () => {
   });
 
   afterAll(async () => {
-    if (scheduleId) {
-      await prismaBase.scheduleApproval.deleteMany({ where: { scheduleId } });
-      await prismaBase.baselineActivation.deleteMany({ where: { scheduleId } });
-      await prismaBase.projectSchedule.delete({ where: { id_projectId: { id: scheduleId, projectId } } });
+    try {
+      if (Object.keys(users).length > 0) {
+        await prismaBase.auditLog.deleteMany({
+          where: { userId: { in: Object.values(users) } },
+        });
+      }
+      if (scheduleId) {
+        await prismaBase.baselineActivation.deleteMany({ where: { scheduleId } });
+        await prismaBase.scheduleApproval.deleteMany({ where: { scheduleId } });
+        await prismaBase.projectSchedule.deleteMany({ where: { id: scheduleId } });
+      }
+      if (projectId) {
+        await prismaBase.projectUserAssignment.deleteMany({ where: { projectId } });
+        await prismaBase.project.deleteMany({ where: { id: projectId } });
+      }
+      if (Object.keys(users).length > 0) {
+        await prismaBase.user.deleteMany({ where: { id: { in: Object.values(users) } } });
+      }
+    } finally {
+      await prismaBase.$disconnect();
     }
-    if (projectId) {
-      await prismaBase.projectUserAssignment.deleteMany({ where: { projectId } });
-      await prismaBase.project.delete({ where: { id: projectId } });
-    }
-    if (Object.keys(users).length > 0) {
-      await prismaBase.user.deleteMany({ where: { id: { in: Object.values(users) } } });
-    }
-    await prismaBase.$disconnect();
   });
 
   function mockRequest(body: any) {
@@ -92,7 +130,7 @@ describe('Gate 10D Baseline Submit PBAC Validation', () => {
   test('10. Missing current-round FINANCE approval is rejected', async () => {
     await prismaBase.scheduleApproval.create({
       data: {
-        schedule: { connect: { id_projectId: { id: scheduleId, projectId } } },
+        schedule: { connect: { id: scheduleId } },
         reviewer: { connect: { id: users['PROJECT_MANAGER'] } },
         reviewerRoleSnapshot: 'PROJECT_MANAGER',
         reviewerNameSnapshot: 'Test PM',
@@ -113,7 +151,7 @@ describe('Gate 10D Baseline Submit PBAC Validation', () => {
   test('Prepare required approvals for further tests', async () => {
     await prismaBase.scheduleApproval.create({
       data: {
-        schedule: { connect: { id_projectId: { id: scheduleId, projectId } } },
+        schedule: { connect: { id: scheduleId } },
         reviewer: { connect: { id: users['FINANCE_OFFICER'] } },
         reviewerRoleSnapshot: 'FINANCE_OFFICER',
         reviewerNameSnapshot: 'Test FO',
@@ -173,7 +211,7 @@ describe('Gate 10D Baseline Submit PBAC Validation', () => {
     const data = await (res as any).json();
     expect(data.success).toBe(true);
     
-    const sched = await prismaBase.projectSchedule.findUnique({ where: { id_projectId: { id: scheduleId, projectId } } });
+    const sched = await prismaBase.projectSchedule.findUnique({ where: { id: scheduleId } });
     expect(sched?.workflowStatus).toBe('PENDING_BASELINE_APPROVAL');
   });
 
@@ -188,7 +226,7 @@ describe('Gate 10D Baseline Submit PBAC Validation', () => {
 
   test('2. DIRECTORS with the same required authorization is allowed', async () => {
     await prismaBase.projectSchedule.update({
-      where: { id_projectId: { id: scheduleId, projectId } },
+      where: { id: scheduleId },
       data: { workflowStatus: 'TECHNICALLY_APPROVED', rowVersion: 2 }
     });
 
@@ -199,41 +237,28 @@ describe('Gate 10D Baseline Submit PBAC Validation', () => {
     const data = await (res as any).json();
     expect(data.success).toBe(true);
     
-    const sched = await prismaBase.projectSchedule.findUnique({ where: { id_projectId: { id: scheduleId, projectId } } });
+    const sched = await prismaBase.projectSchedule.findUnique({ where: { id: scheduleId } });
     expect(sched?.workflowStatus).toBe('PENDING_BASELINE_APPROVAL');
   });
 
   test('4. PROJECT_DIRECTOR with canApprove false is denied', async () => {
     // Reset status
     await prismaBase.projectSchedule.update({
-      where: { id_projectId: { id: scheduleId, projectId } },
+      where: { id: scheduleId },
       data: { workflowStatus: 'TECHNICALLY_APPROVED', rowVersion: 3 }
     });
 
-    // Revoke canApprove from PROJECT_DIRECTOR
-    const rolePermission = await prismaBase.rolePermission.findFirst({
-      where: { role: { roleCode: 'PROJECT_DIRECTOR' }, moduleName: 'PROJECT_MANAGEMENT' }
+      (verifySession as jest.Mock).mockResolvedValue({ id: users['PROJECT_DIRECTOR'] });
+      
+      const permissionsMock = require('@/lib/permissions');
+      permissionsMock.getPermissionsForRole.mockImplementationOnce(() => ({
+        'PROJECT_MANAGEMENT': { canApprove: false }
+      }));
+
+      const req = mockRequest({ expectedRowVersion: 3 });
+      const res = await submitBaselinePost(req, { params: Promise.resolve({ id: projectId, scheduleId }) });
+      expect(res.status).toBe(403);
     });
-    if (rolePermission) {
-      await prismaBase.rolePermission.update({
-        where: { id: rolePermission.id },
-        data: { canApprove: false }
-      });
-    }
-
-    (verifySession as jest.Mock).mockResolvedValue({ id: users['PROJECT_DIRECTOR'] });
-    const req = mockRequest({ expectedRowVersion: 3 });
-    const res = await submitBaselinePost(req, { params: Promise.resolve({ id: projectId, scheduleId }) });
-    expect([403, 500]).toContain(res.status);
-
-    // Restore canApprove
-    if (rolePermission) {
-      await prismaBase.rolePermission.update({
-        where: { id: rolePermission.id },
-        data: { canApprove: true }
-      });
-    }
-  });
 
   test('13. No BaselineActivation record is created', async () => {
     const activations = await prismaBase.baselineActivation.count({

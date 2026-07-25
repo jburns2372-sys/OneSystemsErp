@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
 // Placeholder for fetchWithAuth - replace with actual implementation for auth if needed.
@@ -17,7 +17,11 @@ const fetchWithAuth = async <T = any>(endpoint: string, options?: RequestInit): 
     ...options?.headers,
   };
 
-  const response = await fetch(`${apiUrl}${endpoint}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(`${apiUrl}${endpoint}`, {
     ...options,
     headers,
     cache: options?.cache || 'no-store' // Server Actions typically want fresh data

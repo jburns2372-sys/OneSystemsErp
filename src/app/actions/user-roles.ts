@@ -32,7 +32,11 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
   // The `url` parameter here will be like '/api/user-roles/functionName'
   const fullUrl = `${BACKEND_API_BASE_URL}${url}`;
 
-  const response = await fetch(fullUrl, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(fullUrl, {
     ...options,
     headers,
     // Prevent Next.js from aggressively caching fetch requests in Server Actions

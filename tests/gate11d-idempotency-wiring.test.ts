@@ -9,6 +9,15 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: jest.fn() })
 }));
 
+jest.mock('@/lib/dal/auth', () => ({
+  verifySession: jest.fn().mockResolvedValue({ id: 'test-user', email: 'test@onesystems.com' }),
+  verifyApiSession: jest.fn().mockResolvedValue({ id: 'test-user', email: 'test@onesystems.com' })
+}));
+
+jest.mock('@/lib/accessControl', () => ({
+  checkUserAccess: jest.fn().mockResolvedValue({ allowed: true }),
+}));
+
 jest.mock('react', () => {
   const actual = jest.requireActual('react');
   return {
@@ -61,8 +70,8 @@ describe('Gate 11D Idempotency Wiring Tests', () => {
 
     const user = await prismaBase.user.upsert({
       where: { email: 'idemp-test-director@example.com' },
-      update: {},
-      create: { email: 'idemp-test-director@example.com', role: 'PROJECT_DIRECTOR' }
+      update: { sessionVersion: 1 },
+      create: { email: 'idemp-test-director@example.com', role: 'PROJECT_DIRECTOR', sessionVersion: 1 }
     });
     
     await prismaBase.projectUserAssignment.create({
@@ -76,13 +85,13 @@ describe('Gate 11D Idempotency Wiring Tests', () => {
 
     const pm = await prismaBase.user.upsert({
       where: { email: 'idemp-pm@example.com' },
-      update: {},
-      create: { email: 'idemp-pm@example.com', role: 'PROJECT_MANAGER' }
+      update: { sessionVersion: 1 },
+      create: { email: 'idemp-pm@example.com', role: 'PROJECT_MANAGER', sessionVersion: 1 }
     });
     const fo = await prismaBase.user.upsert({
       where: { email: 'idemp-fo@example.com' },
-      update: {},
-      create: { email: 'idemp-fo@example.com', role: 'FINANCE_OFFICER' }
+      update: { sessionVersion: 1 },
+      create: { email: 'idemp-fo@example.com', role: 'FINANCE_OFFICER', sessionVersion: 1 }
     });
 
     await prismaBase.scheduleApproval.createMany({
@@ -106,7 +115,7 @@ describe('Gate 11D Idempotency Wiring Tests', () => {
       await prismaBase.scheduleWBS.deleteMany({ where: { schedule: { projectId } } });
       await prismaBase.projectSchedule.deleteMany({ where: { projectId } });
       await prismaBase.projectUserAssignment.deleteMany({ where: { projectId } });
-      await prismaBase.project.delete({ where: { id: projectId } });
+      await prismaBase.project.deleteMany({ where: { id: projectId } });
     }
     await prismaBase.$disconnect();
   });

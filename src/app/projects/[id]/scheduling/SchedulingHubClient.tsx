@@ -176,7 +176,10 @@ export default function SchedulingHubClient({
           <h1 style={{ color: 'var(--accent-color)', margin: '0 0 4px 0', fontSize: '1.5rem' }}>📅 Project Scheduling: {project.name}</h1>
           <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', fontSize: '0.85rem' }}>
             <span style={{ color: 'var(--text-secondary)' }}>Schedule: <span style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>{schedule.name}</span></span>
-            <span style={{ color: 'var(--text-secondary)' }}>Status: <span style={{ 
+            <span style={{ color: 'var(--text-secondary)' }}>Status: <span 
+              className="workflow-status-badge"
+              data-testid="workflow-status-badge"
+              style={{ 
               color: schedule.workflowStatus === 'ACTIVE_BASELINE' ? '#10b981' : schedule.workflowStatus === 'DRAFT' ? '#f59e0b' : 'var(--accent-color)', 
               fontWeight: 'bold' 
             }}>{schedule.workflowStatus || schedule.status}</span></span>

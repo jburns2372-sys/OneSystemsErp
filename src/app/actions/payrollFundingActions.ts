@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
 // Placeholder for fetchWithAuth - replace with your actual implementation
@@ -17,7 +17,11 @@ const fetchWithAuth = async (
 
   // Ensure process.env.NEXT_PUBLIC_API_BASE_URL is defined in your .env file (e.g., http://localhost:3001)
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001'; // Default for development
-  const response = await fetch(baseUrl + url, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(baseUrl + url, {
     ...options,
     headers,
   });

@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 // Placeholder for fetchWithAuth, assuming it handles authentication (e.g., passing a token)
 // and sets appropriate headers (like Content-Type: application/json)
 async function fetchWithAuth(url: string, options?: RequestInit) {
@@ -19,7 +19,11 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
     throw new Error('NEXT_PUBLIC_AWS_BACKEND_URL is not defined in environment variables.');
   }
 
-  const response = await fetch(baseUrl + url, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(baseUrl + url, {
     ...options,
     headers,
   });

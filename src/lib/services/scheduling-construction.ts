@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { prisma, transactionContext } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -227,7 +227,9 @@ export async function generateScheduleFromBlueprint(
         prisma.scheduleBOQAllocation.createMany({ data: allocData })
     ];
 
-    await prisma.$transaction(txOperations);
+    await transactionContext.run({ sourceProvenance: 'GATE9_WORKFLOW_ENGINE' }, async () => {
+        await prisma.$transaction(txOperations);
+    });
 
     return { status: 'SUCCESS', scheduleId: schedId };
 }

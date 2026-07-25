@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
 // Basic fetchWithAuth definition - replace with your actual implementation
@@ -13,7 +13,11 @@ async function fetchWithAuth(input: RequestInfo, init?: RequestInit) {
     // 'Authorization': `Bearer ${await getSessionToken()}`
   };
 
-  const response = await fetch(input, { ...init, headers });
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(input, { ...init, headers });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ message: response.statusText }));

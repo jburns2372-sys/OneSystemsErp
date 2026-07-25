@@ -60,7 +60,7 @@ test.describe('Gate 7D Importer Tests', () => {
     expect(lines.length).toBe(326);
     
     let grandTotal = 0;
-    let categoryTotals: Record<string, number> = {};
+    const categoryTotals: Record<string, number> = {};
     
     for (const line of lines) {
       const res = simulateImportLine(line);

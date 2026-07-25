@@ -1,98 +1,267 @@
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
-dotenv.config();
+/**
+ * Authoritative origin: commit 12bc13dbd03e06ef59e897ba34be3b472566485b.
+ *
+ * This hardened version intentionally does not load dotenv files. The caller
+ * must provide an explicitly approved environment and database identity.
+ */
 import { PrismaClient } from '@prisma/client';
 import { SecureUserEmailChangeService } from '../src/lib/services/secure-user-email-change.service';
 
-const args = process.argv.slice(2);
-const helpText = `
-Usage: tsx correct-uat-user-email.ts [options]
-Options:
-  --userId <id>               Target user ID
-  --currentEmail <email>      Expected current email
-  --newEmail <email>          New email
-  --role <role>               Intended role
-  --reason <reason>           Reason for the change
-  --apply                     Execute the change (defaults to dry-run)
-`;
+interface CliArguments {
+  userId?: string;
+  currentEmail?: string;
+  newEmail?: string;
+  role?: string;
+  reason?: string;
+  apply: boolean;
+}
 
-function parseArgs() {
-  const parsed: any = { apply: false };
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--userId') parsed.userId = args[++i];
-    else if (args[i] === '--currentEmail') parsed.currentEmail = args[++i];
-    else if (args[i] === '--newEmail') parsed.newEmail = args[++i];
-    else if (args[i] === '--role') parsed.role = args[++i];
-    else if (args[i] === '--reason') parsed.reason = args[++i];
-    else if (args[i] === '--apply') parsed.apply = true;
+interface ParsedDatabaseIdentity {
+  hostname: string;
+  databaseName: string;
+  endpointId: string;
+}
+
+interface RuntimeDatabaseIdentity {
+  databaseName: string;
+  branchId: string | null;
+  endpointId: string | null;
+}
+
+class ValidationError extends Error {}
+
+const valueOptions = new Map<string, keyof Omit<CliArguments, 'apply'>>([
+  ['--userId', 'userId'],
+  ['--currentEmail', 'currentEmail'],
+  ['--newEmail', 'newEmail'],
+  ['--role', 'role'],
+  ['--reason', 'reason'],
+]);
+
+function parseArguments(args: string[]): CliArguments {
+  const parsed: CliArguments = { apply: false };
+  const seen = new Set<string>();
+
+  for (let index = 0; index < args.length; index += 1) {
+    const option = args[index];
+
+    if (seen.has(option)) {
+      throw new ValidationError('argument validation failed: duplicate option.');
+    }
+    seen.add(option);
+
+    if (option === '--apply') {
+      parsed.apply = true;
+      continue;
+    }
+
+    const property = valueOptions.get(option);
+    if (!property) {
+      throw new ValidationError('argument validation failed: unknown option.');
+    }
+
+    const value = args[index + 1];
+    if (!value || value.startsWith('--')) {
+      throw new ValidationError('argument validation failed: missing option value.');
+    }
+
+    parsed[property] = value;
+    index += 1;
   }
+
+  if (
+    !parsed.userId ||
+    !parsed.currentEmail ||
+    !parsed.newEmail ||
+    !parsed.role ||
+    !parsed.reason
+  ) {
+    throw new ValidationError('argument validation failed: required values are missing.');
+  }
+
   return parsed;
 }
 
-async function run() {
-  const parsed = parseArgs();
-  
-  if (!parsed.userId || !parsed.currentEmail || !parsed.newEmail || !parsed.role || !parsed.reason) {
-    console.error('Missing required arguments.');
-    console.log(helpText);
-    process.exit(1);
+function validateExecutionEnvironment(apply: boolean): void {
+  if (process.env.NODE_ENV?.trim().toLowerCase() === 'production') {
+    throw new ValidationError('production execution is prohibited.');
   }
 
-  // Environment checks
-  if (process.env.NODE_ENV === 'production') {
-    console.error('ERROR: Refusing to run in production environment.');
-    process.exit(1);
+  const configuredMarkers = [
+    process.env.ENVIRONMENT,
+    process.env.APP_ENV,
+    process.env.UAT_ENV,
+  ].filter((value): value is string => value !== undefined);
+  const exactMarkers = configuredMarkers.filter((value) => value === 'V4-R7');
+
+  if (
+    configuredMarkers.length !== 1 ||
+    exactMarkers.length !== 1
+  ) {
+    throw new ValidationError(
+      'environment validation failed: configure exactly one V4-R7 marker.',
+    );
   }
 
-  if (process.env.ENVIRONMENT !== 'V4-R7' && process.env.APP_ENV !== 'V4-R7' && process.env.UAT_ENV !== 'V4-R7') {
-    // If not strictly matched to V4-R7 somewhere in env. We can strictly require ENVIRONMENT=V4-R7
-    // Let's enforce exactly what was requested.
-    // "Refuse to run unless the configured environment is explicitly V4-R7 UAT."
-    // Let's check DATABASE_URL instead to verify the specific details.
+  if (apply && process.env.ALLOW_UAT_EMAIL_CHANGE !== 'true') {
+    throw new ValidationError(
+      'apply authorization failed: explicit UAT approval is required.',
+    );
   }
-
-  const dbUrl = process.env.DATABASE_URL || '';
-  if (!dbUrl.includes('v4_r7_clean') || !dbUrl.includes('ep-solitary-surf-aps3rmax')) {
-    console.error('ERROR: Database configuration does not match the approved V4-R7 UAT environment.');
-    process.exit(1);
-  }
-
-  const prisma = new PrismaClient();
-  const service = new SecureUserEmailChangeService(prisma);
-
-  const dryRun = !parsed.apply;
-  console.log(`Starting secure email change process... Mode: ${dryRun ? 'DRY RUN' : 'APPLY'}`);
-
-  const result = await service.execute({
-    targetUserId: parsed.userId,
-    expectedCurrentEmail: parsed.currentEmail,
-    newEmail: parsed.newEmail,
-    environment: 'V4-R7',
-    reason: parsed.reason,
-    operatorProvenance: 'CLI Maintenance Script',
-    intendedRole: parsed.role,
-    dryRun
-  });
-
-  if (!result.success) {
-    console.error('Operation Failed:', result.error);
-    process.exit(1);
-  }
-
-  console.log('\n--- Operation Result ---');
-  console.log(`Mode:                  ${result.dryRun ? 'DRY RUN' : 'APPLY'}`);
-  console.log(`Target User ID:        ${result.userId}`);
-  console.log(`Old Email (Masked):    ${result.oldEmailMasked}`);
-  console.log(`New Email (Masked):    ${result.newEmailMasked}`);
-  console.log(`Validation Outcome:    SUCCESS`);
-  console.log(`Session Incr:          ${result.sessionInvalidated ? 'yes' : 'no'}`);
-  console.log(`Tokens Revoked:        ${result.tokensRevoked}`);
-  console.log(`Audit Record Created:  ${result.auditRecordCreated ? 'yes' : 'no'}`);
-
-  await prisma.$disconnect();
 }
 
-run().catch(e => {
-  console.error('Unexpected error during script execution (details hidden for security).');
-  process.exit(1);
+function requireApprovalValue(name: string): string {
+  const value = process.env[name];
+  if (!value || value !== value.trim()) {
+    throw new ValidationError('database identity approval is incomplete.');
+  }
+  return value;
+}
+
+function parseDatabaseIdentity(): ParsedDatabaseIdentity {
+  const rawDatabaseUrl = process.env.DATABASE_URL;
+  if (!rawDatabaseUrl) {
+    throw new ValidationError('database identity validation failed.');
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawDatabaseUrl);
+  } catch {
+    throw new ValidationError('database identity validation failed.');
+  }
+
+  if (!['postgres:', 'postgresql:'].includes(parsedUrl.protocol)) {
+    throw new ValidationError('database identity validation failed.');
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase();
+  const hostnameLabels = hostname.split('.');
+  const endpointLabel = hostnameLabels[0];
+  const endpointId = endpointLabel.endsWith('-pooler')
+    ? endpointLabel.slice(0, -'-pooler'.length)
+    : endpointLabel;
+  const isStructuredNeonHostname =
+    hostnameLabels.length >= 4 &&
+    hostname.endsWith('.neon.tech') &&
+    /^ep-[a-z0-9]+(?:-[a-z0-9]+)+$/.test(endpointId) &&
+    (endpointLabel === endpointId || endpointLabel === `${endpointId}-pooler`);
+
+  let databaseName = '';
+  try {
+    databaseName = decodeURIComponent(parsedUrl.pathname.replace(/^\/+/, ''));
+  } catch {
+    throw new ValidationError('database identity validation failed.');
+  }
+
+  if (
+    !isStructuredNeonHostname ||
+    !databaseName ||
+    databaseName.includes('/')
+  ) {
+    throw new ValidationError('database identity validation failed.');
+  }
+
+  const approvedHostname = requireApprovalValue(
+    'APPROVED_UAT_DATABASE_HOSTNAME',
+  ).toLowerCase();
+  const approvedDatabaseName = requireApprovalValue(
+    'APPROVED_UAT_DATABASE_NAME',
+  );
+  const approvedScope = requireApprovalValue('APPROVED_UAT_DATABASE_SCOPE');
+
+  if (
+    !['V4-R7-UAT', 'RECONCILIATION-TEST'].includes(approvedScope) ||
+    hostname !== approvedHostname ||
+    databaseName !== approvedDatabaseName
+  ) {
+    throw new ValidationError('database identity is not approved.');
+  }
+
+  return { hostname, databaseName, endpointId };
+}
+
+async function validateRuntimeDatabaseIdentity(
+  prisma: PrismaClient,
+  parsedIdentity: ParsedDatabaseIdentity,
+): Promise<void> {
+  const approvedBranchId = requireApprovalValue(
+    'APPROVED_UAT_NEON_BRANCH_ID',
+  );
+  const mainBranchId = requireApprovalValue('NEON_MAIN_BRANCH_ID');
+
+  if (
+    !/^br-[a-z0-9]+(?:-[a-z0-9]+)+$/.test(approvedBranchId) ||
+    !/^br-[a-z0-9]+(?:-[a-z0-9]+)+$/.test(mainBranchId) ||
+    approvedBranchId === mainBranchId
+  ) {
+    throw new ValidationError('database branch approval is invalid.');
+  }
+
+  const rows = await prisma.$queryRaw<RuntimeDatabaseIdentity[]>`
+    SELECT
+      current_database()::text AS "databaseName",
+      current_setting('neon.branch_id', true)::text AS "branchId",
+      current_setting('neon.endpoint_id', true)::text AS "endpointId"
+  `;
+  const runtimeIdentity = rows[0];
+
+  if (
+    !runtimeIdentity ||
+    runtimeIdentity.databaseName !== parsedIdentity.databaseName ||
+    runtimeIdentity.branchId !== approvedBranchId ||
+    runtimeIdentity.branchId === mainBranchId ||
+    runtimeIdentity.endpointId !== parsedIdentity.endpointId
+  ) {
+    throw new ValidationError('runtime database identity is not approved.');
+  }
+}
+
+async function run(): Promise<void> {
+  let prisma: PrismaClient | undefined;
+
+  try {
+    const parsed = parseArguments(process.argv.slice(2));
+    validateExecutionEnvironment(parsed.apply);
+    const parsedDatabaseIdentity = parseDatabaseIdentity();
+
+    prisma = new PrismaClient();
+    await validateRuntimeDatabaseIdentity(prisma, parsedDatabaseIdentity);
+
+    const service = new SecureUserEmailChangeService(prisma);
+    const result = await service.execute({
+      targetUserId: parsed.userId!,
+      expectedCurrentEmail: parsed.currentEmail!,
+      newEmail: parsed.newEmail!,
+      environment: 'V4-R7',
+      reason: parsed.reason!,
+      operatorProvenance: 'CLI Maintenance Script',
+      intendedRole: parsed.role!,
+      dryRun: !parsed.apply,
+    });
+
+    if (!result.success) {
+      throw new ValidationError('operation validation failed.');
+    }
+
+    console.log(`Mode: ${result.dryRun ? 'DRY RUN' : 'APPLY'}`);
+    console.log(`Old email: ${result.oldEmailMasked}`);
+    console.log(`New email: ${result.newEmailMasked}`);
+    console.log(`Sessions invalidated: ${result.sessionInvalidated ? 'yes' : 'no'}`);
+    console.log(`Recovery tokens revoked: ${result.tokensRevoked}`);
+    console.log(`Audit record created: ${result.auditRecordCreated ? 'yes' : 'no'}`);
+  } finally {
+    if (prisma) {
+      await prisma.$disconnect();
+    }
+  }
+}
+
+run().catch((error: unknown) => {
+  if (error instanceof ValidationError) {
+    console.error(`Validation failed: ${error.message}`);
+  } else {
+    console.error('Unexpected failure; details withheld.');
+  }
+  process.exitCode = 1;
 });

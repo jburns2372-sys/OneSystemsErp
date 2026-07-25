@@ -50,6 +50,7 @@ export async function seedSuppliers() {
 
   const createdSuppliers = await prisma.supplier.createMany({
     data: suppliers,
+    skipDuplicates: true,
   });
 
   console.log(`Created ${createdSuppliers.count} seeded suppliers.`);

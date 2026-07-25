@@ -21,7 +21,7 @@ async function setupIsolatedBaseline() {
 
   const projectId = dummyProject.id;
   const scheduleId = 'gate12d-test-sched-' + Date.now();
-  
+
   await db.projectSchedule.create({
     data: {
       id: scheduleId,
@@ -122,7 +122,7 @@ async function runTests() {
 
   // 3. Schedule deletion
   await runTest('Schedule deletion', async () => {
-    await prisma.projectSchedule.delete({
+    await prisma.projectSchedule.deleteMany({
       where: { id: scheduleId }
     });
   }, directMutationErr);
@@ -147,7 +147,7 @@ async function runTests() {
   }, directMutationErr);
 
   await runTest('WBS deletion', async () => {
-    await prisma.scheduleWBS.delete({
+    await prisma.scheduleWBS.deleteMany({
       where: { id: 'wbs-' + scheduleId }
     });
   }, directMutationErr);
@@ -165,7 +165,7 @@ async function runTests() {
   }, directMutationErr);
 
   await runTest('Activity deletion', async () => {
-    await prisma.scheduleActivity.delete({
+    await prisma.scheduleActivity.deleteMany({
       where: { id: 'act-' + scheduleId }
     });
   }, directMutationErr);
@@ -276,7 +276,7 @@ async function runTests() {
   }, directMutationErr);
 
   await runTest('BaselineActivation deletion', async () => {
-    await prisma.baselineActivation.delete({
+    await prisma.baselineActivation.deleteMany({
       where: { id: 'actv-' + scheduleId }
     });
   }, directMutationErr);
@@ -290,20 +290,31 @@ async function runTests() {
   }, directMutationErr);
 
   console.log(`\nResults: ${successCount} PASSED, ${failCount} FAILED`);
-  
+
   // Cleanup
   await db.baselineActivation.deleteMany({ where: { scheduleId } });
   await db.scheduleActivity.deleteMany({ where: { scheduleId } });
   await db.scheduleWBS.deleteMany({ where: { scheduleId } });
-  await db.projectSchedule.delete({ where: { id: scheduleId } });
-  await db.project.delete({ where: { id: projectId } });
-  
+  await db.projectSchedule.deleteMany({ where: { id: scheduleId } });
+  await db.project.deleteMany({ where: { id: projectId } });
+
+  console.log(`\nResults: ${successCount} PASSED, ${failCount} FAILED`);
+
+  // Cleanup
+  await db.baselineActivation.deleteMany({ where: { scheduleId } });
+  await db.scheduleActivity.deleteMany({ where: { scheduleId } });
+  await db.scheduleWBS.deleteMany({ where: { scheduleId } });
+  await db.projectSchedule.deleteMany({ where: { id: scheduleId } });
+  await db.project.deleteMany({ where: { id: projectId } });
+
   if (failCount > 0) {
-    process.exit(1);
+    throw new Error('Test suite failed');
   }
 }
 
-runTests().catch(e => {
-  console.error(e);
-  process.exit(1);
+describe('Gate 12D Immutability', () => {
+  jest.setTimeout(30000);
+  it('should run all tests successfully', async () => {
+    await runTests();
+  });
 });

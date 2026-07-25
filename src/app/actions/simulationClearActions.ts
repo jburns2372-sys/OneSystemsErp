@@ -1,5 +1,5 @@
 'use server';
-
+import { cookies } from 'next/headers';
 // This is a placeholder for `fetchWithAuth`. In a real application, this would typically
 // handle authentication (e.g., attaching an auth token from a session or cookie),
 // set default headers like 'Content-Type', and define the base URL for your backend.
@@ -16,7 +16,11 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
   // Ensure BACKEND_API_BASE_URL is set in your .env file (e.g., http://localhost:3001 for a local Express app)
   const backendBaseUrl = process.env.BACKEND_API_BASE_URL || 'http://localhost:3001'; 
 
-  const response = await fetch(`${backendBaseUrl}${url}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+
+const response = await fetch(`${backendBaseUrl}${url}`, {
     ...options,
     headers,
   });

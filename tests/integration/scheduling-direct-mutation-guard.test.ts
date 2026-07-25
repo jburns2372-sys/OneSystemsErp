@@ -101,12 +101,22 @@ describe('Scheduling Direct Mutation Guard', () => {
     it('7. Transaction rollback: no partial scheduling records remain', async () => {
         await transactionContext.run({ sourceProvenance: 'GATE9_WORKFLOW_ENGINE' }, async () => {
             const tempId = uuidv4();
+            const tempProjId = uuidv4();
+            
+            await prisma.project.create({
+                data: {
+                    id: tempProjId,
+                    name: 'Temp',
+                    status: 'ACTIVE'
+                }
+            });
+
             try {
                 await prisma.$transaction(async (tx) => {
                     await tx.projectSchedule.create({
                         data: {
                             id: tempId,
-                            projectId: 'temp-project',
+                            projectId: tempProjId,
                             workflowStatus: 'AI_GENERATED_DRAFT',
                             rowVersion: 1,
                             name: 'Temp schedule'
@@ -120,17 +130,30 @@ describe('Scheduling Direct Mutation Guard', () => {
             
             const count = await prisma.projectSchedule.count({ where: { id: tempId } });
             expect(count).toBe(0);
+            
+            await prisma.project.deleteMany({ where: { id: tempProjId } });
         });
     });
 
     it('8. Unrelated nonscheduling Prisma writes continue to function normally', async () => {
         const tempId = uuidv4();
+        const tempUserId = uuidv4();
+        
+        await prisma.user.create({
+            data: {
+                id: tempUserId,
+                email: `${tempUserId}@test.com`,
+                name: 'Test',
+                passwordHash: 'dummy'
+            }
+        });
+
         // Just create an AuditLog or similar which is not protected
         await expect(
             prisma.auditLog.create({
                 data: {
                     id: tempId,
-                    userId: 'dummy',
+                    userId: tempUserId,
                     actionType: 'TEST',
                     moduleName: 'TEST'
                 }
@@ -138,6 +161,7 @@ describe('Scheduling Direct Mutation Guard', () => {
         ).resolves.toBeDefined();
         
         // Cleanup
-        await prisma.auditLog.delete({ where: { id: tempId } });
+        await prisma.auditLog.deleteMany({ where: { id: tempId } });
+        await prisma.user.deleteMany({ where: { id: tempUserId } });
     });
 });
