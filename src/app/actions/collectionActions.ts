@@ -1,5 +1,4 @@
-"use server";
-
+'use server';
 import { recordCollection } from "@/services/collectionService";
 import { revalidatePath } from "next/cache";
 

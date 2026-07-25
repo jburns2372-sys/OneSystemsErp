@@ -1,5 +1,4 @@
 'use server';
-
 import { revalidatePath } from 'next/cache';
 import { getBaseUrl } from '@/lib/urlResolver';
 import { fetchActiveTemplatesService } from '@/lib/services/document-template.service';

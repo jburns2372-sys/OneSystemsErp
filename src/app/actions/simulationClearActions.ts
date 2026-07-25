@@ -1,6 +1,5 @@
-import { cookies } from 'next/headers';
 'use server';
-
+import { cookies } from 'next/headers';
 // This is a placeholder for `fetchWithAuth`. In a real application, this would typically
 // handle authentication (e.g., attaching an auth token from a session or cookie),
 // set default headers like 'Content-Type', and define the base URL for your backend.

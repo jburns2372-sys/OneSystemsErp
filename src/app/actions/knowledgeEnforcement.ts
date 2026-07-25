@@ -1,6 +1,5 @@
-import { cookies } from 'next/headers';
 'use server';
-
+import { cookies } from 'next/headers';
 import { getBaseUrl } from '@/lib/urlResolver';
 
 // Placeholder for `fetchWithAuth` function

@@ -1,6 +1,5 @@
-import { cookies } from 'next/headers';
 'use server';
-
+import { cookies } from 'next/headers';
 // Standard fetchWithAuth wrapper. This would typically handle authentication headers.
 // The AWS_BACKEND_BASE_URL environment variable should point to your Express backend's base URL (e.g., 'https://your-api-gateway-id.execute-api.us-east-1.amazonaws.com/prod').
 async function fetchWithAuth(url: string, options?: RequestInit) {

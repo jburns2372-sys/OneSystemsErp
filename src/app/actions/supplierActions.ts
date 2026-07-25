@@ -1,6 +1,5 @@
-import { cookies } from 'next/headers';
 'use server';
-
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 // The original `cookies()` and `sessionId` check is removed here,
 // as `fetchWithAuth` is expected to handle authentication.

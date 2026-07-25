@@ -1,6 +1,5 @@
-import { cookies } from 'next/headers';
 'use server';
-
+import { cookies } from 'next/headers';
 // Basic fetchWithAuth definition
 // In a real application, this would typically be a shared utility
 // that handles authentication headers (e.g., JWT, session token).

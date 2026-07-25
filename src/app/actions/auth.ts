@@ -1,5 +1,4 @@
 'use server';
-
 import { signIn, signOut } from '@/auth';
 import { AuthError } from 'next-auth';
 import { cookies } from 'next/headers';

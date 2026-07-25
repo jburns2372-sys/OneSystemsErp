@@ -1,6 +1,5 @@
-import { cookies } from 'next/headers';
 'use server';
-
+import { cookies } from 'next/headers';
 // Placeholder for fetchWithAuth, assuming it handles authentication (e.g., passing a token)
 // and sets appropriate headers (like Content-Type: application/json)
 async function fetchWithAuth(url: string, options?: RequestInit) {

@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 'use server';
+import { cookies } from 'next/headers';
 import { verifySession } from '@/lib/dal/auth';
 
 // This `fetchWithAuth` function acts as a proxy to your AWS backend.

@@ -1,5 +1,4 @@
 'use server';
-
 import { revalidatePath } from 'next/cache';
 import { verifyOperationalSession } from '@/lib/dal/auth';
 import { assignExistingUserToProject, updateProjectUserAssignmentRole } from '@/lib/services/ProjectUserAssignmentService';
