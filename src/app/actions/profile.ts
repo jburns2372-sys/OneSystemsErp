@@ -16,7 +16,11 @@ async function fetchWithAuth(url: string, options: FetchWithAuthOptions = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(url, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { headers.Cookie = __allCookies; } }
+
+const response = await fetch(url, {
     ...options,
     headers,
   });

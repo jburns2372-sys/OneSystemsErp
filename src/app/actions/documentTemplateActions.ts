@@ -27,7 +27,11 @@ async function fetchWithAuth(
   // e.g., from cookies, session, or server-side auth providers.
   // Example: headers.set('Authorization', `Bearer ${await getAuthToken()}`);
 
-  const response = await fetch(input, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { headers.Cookie = __allCookies; } }
+
+const response = await fetch(input, {
     ...init,
     headers,
   });

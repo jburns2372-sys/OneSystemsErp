@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -21,7 +22,11 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
   // Example: const authToken = cookies().get('authToken')?.value;
   // if (authToken) { headers['Authorization'] = `Bearer ${authToken}`; }
 
-  const response = await fetch(`${baseUrl}${url}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { headers.Cookie = __allCookies; } }
+
+const response = await fetch(`${baseUrl}${url}`, {
     ...options,
     headers
   });

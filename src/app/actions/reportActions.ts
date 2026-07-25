@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 'use server';
 import { verifySession } from '@/lib/dal/auth';
 
@@ -10,7 +11,11 @@ async function fetchWithAuth(urlPath: string, options?: RequestInit) {
     throw new Error("NEXT_PUBLIC_AWS_BACKEND_URL is not defined in your environment.");
   }
 
-  const response = await fetch(`${backendUrl}${urlPath}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { headers.Cookie = __allCookies; } }
+
+const response = await fetch(`${backendUrl}${urlPath}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

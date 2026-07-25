@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 'use server';
 
 // Standard fetchWithAuth definition for making API calls.
@@ -5,7 +6,11 @@
 // with the actual URL of your deployed AWS Express backend.
 const fetchWithAuth = async (url: string, options?: RequestInit) => {
   const baseUrl = process.env.AWS_API_GATEWAY_URL || 'http://localhost:3001'; // Default for local dev
-  const response = await fetch(`${baseUrl}${url}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { headers.Cookie = __allCookies; } }
+
+const response = await fetch(`${baseUrl}${url}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

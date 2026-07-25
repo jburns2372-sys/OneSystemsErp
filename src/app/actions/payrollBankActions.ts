@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -9,7 +10,11 @@ import { revalidatePath } from 'next/cache';
  * targeting a Next.js API route that may then proxy to an external backend.
  */
 async function fetchWithAuth(url: string, options?: RequestInit) {
-  const response = await fetch(url, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { headers.Cookie = __allCookies; } }
+
+const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

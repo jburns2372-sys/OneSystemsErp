@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -5,7 +6,11 @@ import { revalidatePath } from 'next/cache';
 // Define a placeholder fetchWithAuth for demonstration
 // In a real application, this would handle authentication (e.g., attach an auth token)
 async function fetchWithAuth(url: string, options?: RequestInit) {
-  const response = await fetch((process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) + url, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { headers.Cookie = __allCookies; } }
+
+const response = await fetch((process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) + url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

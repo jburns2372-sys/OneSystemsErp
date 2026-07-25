@@ -11,7 +11,11 @@ async function fetchWithAuth(url: string, options: RequestInit) {
   // Replace '/api' with your actual AWS backend API endpoint if it's different.
   const API_BASE_URL = process.env.NEXT_PUBLIC_AWS_API_BASE_URL || 'http://localhost:3001'; // Example base URL
 
-  const response = await fetch(`${API_BASE_URL}${url}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { headers.Cookie = __allCookies; } }
+
+const response = await fetch(`${API_BASE_URL}${url}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

@@ -20,7 +20,11 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
 
   const awsBackendUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL) || 'http://localhost:3001';
 
-  const response = await fetch(`${awsBackendUrl}${url}`, {
+    const __injectedCookieStore = await cookies();
+  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { headers.Cookie = __allCookies; } }
+
+const response = await fetch(`${awsBackendUrl}${url}`, {
     ...options,
     headers,
   });
