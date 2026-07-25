@@ -1,6 +1,5 @@
 'use server';
 import { cookies } from 'next/headers';
-import { cookies } from "next/headers";
 
 import { getBaseUrl } from "@/lib/urlResolver";
 
