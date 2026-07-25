@@ -69,11 +69,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         where: { projectId, status: 'LOCKED' }
     });
     
+    let resolvedBoqVersionId = activeVersion?.id;
+
     if (!activeVersion) {
-        return NextResponse.json({ error: 'MISSING_LOCKED_BOQ_VERSION' }, { status: 400 });
+        // Fallback: Check if the project itself has boqLocked = true (legacy/direct import)
+        const project = await prisma.project.findUnique({
+            where: { id: projectId },
+            select: { boqLocked: true }
+        });
+        
+        if (!project?.boqLocked) {
+            return NextResponse.json({ error: 'MISSING_LOCKED_BOQ_VERSION' }, { status: 400 });
+        }
     }
 
-    if (lockedBOQVersionId && activeVersion.id !== lockedBOQVersionId) {
+    if (lockedBOQVersionId && activeVersion && activeVersion.id !== lockedBOQVersionId) {
         return NextResponse.json({ error: 'BOQ_VERSION_MISMATCH' }, { status: 400 });
     }
 
@@ -84,7 +94,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       generationRequestId,
       userId: actor.id,
       consolidateBoq: body.consolidateBoq ?? true,
-      lockedBOQVersionId: activeVersion.id
+      lockedBOQVersionId: resolvedBoqVersionId
     });
 
     if (!result.success) {
