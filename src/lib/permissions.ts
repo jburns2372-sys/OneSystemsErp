@@ -9,6 +9,7 @@ const MASTER_ADMIN_MODULES = [
   'SYSTEM_ROLES', 'SYSTEM_SETTINGS',
   // Functional modules
   'WORKER_DATABASE', 'DELIVERY_RECEIVING', 'PURCHASE_ORDER', 'PAYMENT_ISSUANCE',
+  'Scheduling', 'PROJECT_SCHEDULING',
 ];
 
 export async function getUserPermissions(userId: string) {
@@ -47,7 +48,7 @@ export async function getUserPermissions(userId: string) {
     return { IS_GUEST_USER: true };
   }
 
-  const isActualAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR' || user?.role === 'DIRECTORS';
+  const isActualAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SUPER ADMIN' || user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR' || user?.role === 'DIRECTORS';
 
   if (simulatedRole && isActualAdmin) {
     return getPermissionsForRole(simulatedRole);
@@ -94,7 +95,7 @@ export async function getUserPermissions(userId: string) {
     });
   });
 
-  if (user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN') {
+  if (user?.role === 'SUPER_ADMIN' || user?.role === 'SUPER ADMIN' || user?.role === 'SYSTEM_ADMIN') {
     aggregatedPermissions['IS_ADMIN'] = true;
 
     // Auto-populate commonly checked modules to bypass manual checks in frontend
