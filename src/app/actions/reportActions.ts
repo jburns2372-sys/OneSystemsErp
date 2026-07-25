@@ -13,7 +13,7 @@ async function fetchWithAuth(urlPath: string, options?: RequestInit) {
 
     const __injectedCookieStore = await cookies();
   const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { headers.Cookie = __allCookies; } }
+  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
 
 const response = await fetch(`${backendUrl}${urlPath}`, {
     ...options,
