@@ -59,7 +59,7 @@ router.post('/uploadAccomplishmentFileAction', async (req, res) => {
         fileType: fileType || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         isLockedOriginal: false,
         uploadedById: currentUserId,
-        status: "UPLOADED",
+        status: "ACTIVE",
         fileVersion: 1, // Initial version
         workingFilePath: publicPath, // Initial working path is the original
       },
@@ -106,9 +106,135 @@ router.post('/deleteAccomplishmentFileAction', async (req, res) => {
 // Handler for extractAccomplishmentDataAction
 router.post('/extractAccomplishmentDataAction', async (req, res) => {
   try {
-    // Original just had a setTimeout and returned a static message. fileId is not used in logic.
-    await new Promise(r => setTimeout(r, 1500));
-    res.json({ success: true, message: "Data successfully extracted to database without altering the original file." });
+    const { fileId } = req.body;
+    if (!fileId) return res.status(400).json({ success: false, error: "File ID is required" });
+
+    // 1. Validate File
+    const file = await prisma.projectAccomplishmentFile.findUnique({ where: { id: fileId } });
+    if (!file) return res.status(404).json({ success: false, error: "File not found" });
+    if (file.status !== 'BILLING' && !file.isLockedOriginal) {
+      return res.status(400).json({ success: false, error: "Only locked billings can be extracted to the schedule." });
+    }
+
+    // 2. Fetch Active Schedule Baseline
+    const activeSchedule = await prisma.projectSchedule.findFirst({
+      where: { projectId: file.projectId, workflowStatus: 'ACTIVE_BASELINE' }
+    });
+    if (!activeSchedule) {
+      return res.status(400).json({ success: false, error: "No ACTIVE_BASELINE schedule found for this project. Please activate a schedule first." });
+    }
+
+    // 3. Fetch File Buffer
+    const fileUrl = file.workingFilePath || file.originalFilePath;
+    const fetchUrl = fileUrl.startsWith('/uploads/') ? `${process.env.AWS_BACKEND_URL || 'http://localhost:4000'}${fileUrl}` : fileUrl;
+    const fileRes = await fetch(fetchUrl);
+    if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.statusText}`);
+    const sourceBuffer = Buffer.from(await fileRes.arrayBuffer());
+
+    // 4. Load Excel
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(sourceBuffer as any);
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) throw new Error("No worksheet found in Excel file.");
+
+    // 5. Parse Data & Update Prisma
+    let itemsExtracted = 0;
+    const affectedActivityIds = new Set<string>();
+    
+    // Pass 1: Update BOQ Items from Excel
+    for (let rowNumber = 3; rowNumber <= worksheet.rowCount; rowNumber++) {
+      const row = worksheet.getRow(rowNumber);
+      const descCell = row.getCell(2).value;
+      const desc = descCell ? String(descCell).trim() : "";
+      if (!desc || desc.toUpperCase().includes("TOTAL PROJECT COST") || desc.toUpperCase().includes("GENERAL REQUIREMENTS")) continue;
+
+      const qtyAccomplishedCol = row.getCell(8).value;
+      const amountAccomplishedCol = row.getCell(10).value;
+      
+      const qtyAccomplished = typeof qtyAccomplishedCol === 'object' && qtyAccomplishedCol !== null ? Number((qtyAccomplishedCol as any).result) || 0 : Number(qtyAccomplishedCol) || 0;
+      let amountAccomplished = typeof amountAccomplishedCol === 'object' && amountAccomplishedCol !== null ? Number((amountAccomplishedCol as any).result) || 0 : Number(amountAccomplishedCol) || 0;
+
+      // Find AwardedBOQItem by Description and Project
+      const awardedItem = await prisma.awardedBOQItem.findFirst({
+        where: { projectId: file.projectId, description: { equals: desc, mode: 'insensitive' } }
+      });
+      
+      if (!awardedItem) continue; // Skip if no match
+
+      // Update AwardedBOQItem
+      const percentage = awardedItem.totalCost > 0 ? (amountAccomplished / awardedItem.totalCost) * 100 : 0;
+      await prisma.awardedBOQItem.update({
+        where: { id: awardedItem.id },
+        data: {
+          totalQuantityAccomplished: qtyAccomplished,
+          amountAccomplished: amountAccomplished,
+          percentageAccomplished: percentage
+        }
+      });
+      
+      itemsExtracted++;
+
+      // Find all allocations for this BOQ item in this schedule to mark them as affected
+      const allocations = await prisma.scheduleBOQAllocation.findMany({
+        where: { scheduleId: activeSchedule.id, awardedBoqItemId: awardedItem.id }
+      });
+
+      for (const alloc of allocations) {
+        affectedActivityIds.add(alloc.activityId);
+      }
+    }
+
+    // Pass 2: Calculate Weighted Average Progress for Affected Activities
+    for (const activityId of affectedActivityIds) {
+      const allAllocations = await prisma.scheduleBOQAllocation.findMany({
+        where: { scheduleId: activeSchedule.id, activityId: activityId },
+        include: { awardedBoqItem: true }
+      });
+
+      let totalAllocatedAmount = 0;
+      let totalAccomplishedAmount = 0;
+
+      for (const alloc of allAllocations) {
+        const allocAmount = Number(alloc.allocatedAmount) || 0;
+        totalAllocatedAmount += allocAmount;
+        totalAccomplishedAmount += ((alloc.awardedBoqItem.percentageAccomplished || 0) / 100) * allocAmount;
+      }
+
+      const activityPct = totalAllocatedAmount > 0 ? (totalAccomplishedAmount / totalAllocatedAmount) * 100 : 0;
+
+      // Upsert ScheduleProgressUpdate
+      const existingProgress = await prisma.scheduleProgressUpdate.findFirst({
+        where: { scheduleId: activeSchedule.id, activityId: activityId, accomplishmentId: file.id }
+      });
+
+      if (existingProgress) {
+        await prisma.scheduleProgressUpdate.update({
+          where: { id: existingProgress.id },
+          data: { progressPercent: activityPct, updateDate: new Date() }
+        });
+      } else {
+        await prisma.scheduleProgressUpdate.create({
+          data: {
+            scheduleId: activeSchedule.id,
+            activityId: activityId,
+            updateDate: new Date(),
+            progressPercent: activityPct,
+            accomplishmentId: file.id
+          }
+        });
+      }
+      
+      // Update Activity Status
+      await prisma.scheduleActivity.update({
+        where: { id: activityId },
+        data: {
+           actualProgressPercent: activityPct,
+           status: activityPct >= 100 ? "COMPLETED" : (activityPct > 0 ? "IN_PROGRESS" : "NOT_STARTED")
+        }
+      });
+    }
+
+    res.json({ success: true, message: `Successfully extracted ${itemsExtracted} items and synced ${affectedActivityIds.size} schedule activities.` });
   } catch (error: any) {
     console.error("Error in extractAccomplishmentDataAction (backend):", error);
     res.status(500).json({ success: false, error: error.message || "Failed to extract data" });
@@ -230,7 +356,6 @@ router.post('/saveFileEditAction', async (req, res) => {
         fileId: fileRecord.id,
         versionNumber,
         filePath: publicPath,
-        isLocked,
       }
     });
 
@@ -240,6 +365,8 @@ router.post('/saveFileEditAction', async (req, res) => {
             fileVersion: versionNumber,
             workingFilePath: publicPath,
             fileSize: buffer.length,
+            isLockedOriginal: isLocked !== undefined ? isLocked : fileRecord.isLockedOriginal,
+            status: isLocked ? "BILLING" : fileRecord.status,
         }
     });
 
@@ -356,20 +483,27 @@ router.post('/createSuccessiveBillingAction', async (req, res) => {
       if (worksheet) {
         worksheet.eachRow((row, rowNumber) => {
           if (rowNumber > 1) {
+            let currentCol10Val: any = row.getCell(10).value;
+            let baseCol10 = typeof currentCol10Val === 'object' && currentCol10Val !== null ? (currentCol10Val as any).result : currentCol10Val;
+            baseCol10 = Number(baseCol10) || 0;
+
             const col13Value = row.getCell(13).value;
             let newCol11Val: any = 0;
 
             if (col13Value !== null && col13Value !== undefined) {
               newCol11Val = typeof col13Value === 'object' && col13Value !== null ? (col13Value as any).result : col13Value;
-              row.getCell(11).value = Number(newCol11Val) || 0;
             } else {
               const c11 = row.getCell(11).value;
               newCol11Val = typeof c11 === 'object' && c11 !== null ? (c11 as any).result : c11;
             }
 
-            let currentCol10Val: any = row.getCell(10).value;
+            // Fallback to baseCol10 if formula result was stripped by web UI edits
+            if (!newCol11Val || Number(newCol11Val) === 0) {
+              newCol11Val = baseCol10;
+            }
 
-            const baseCol10 = Number(currentCol10Val) || 0;
+            row.getCell(11).value = Number(newCol11Val) || 0;
+
             if (Number(newCol11Val) > 0 || baseCol10 > 0) {
               const computedResult = baseCol10 - (Number(newCol11Val) || 0);
               row.getCell(12).value = { formula: `J${rowNumber}-K${rowNumber}`, result: computedResult };

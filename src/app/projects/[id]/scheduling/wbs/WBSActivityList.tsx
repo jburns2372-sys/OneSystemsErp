@@ -344,8 +344,9 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                       }
                     }
                     
-                    const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (mapping.allocatedQuantity / item.quantity) : 0;
-                    phaseBoqs.get(key)!.qty += mapping.allocatedQuantity;
+                    const allocatedQty = mapping.allocatedQuantity ?? mapping.mappedQuantity ?? 0;
+                    const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (allocatedQty / item.quantity) : 0;
+                    phaseBoqs.get(key)!.qty += allocatedQty;
                     phaseBoqs.get(key)!.cost += proportionalCost;
                   });
                 });
@@ -481,7 +482,8 @@ export default function WBSActivityList({ projectId, schedule, onRefresh }: WBSA
                     const activityTotalCost = (act.boqAllocations || []).reduce((sum: number, mapping: any) => {
                       const item = mapping.awardedBoqItem;
                       if (!item) return sum;
-                      const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (mapping.allocatedQuantity / item.quantity) : 0;
+                      const allocatedQty = mapping.allocatedQuantity ?? mapping.mappedQuantity ?? 0;
+                      const proportionalCost = item.quantity > 0 ? (item.totalCost || 0) * (allocatedQty / item.quantity) : 0;
                       return sum + proportionalCost;
                     }, 0);
                     const formattedActivityCost = `₱ ${activityTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
