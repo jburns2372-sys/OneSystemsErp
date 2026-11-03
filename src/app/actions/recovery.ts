@@ -1,6 +1,7 @@
 'use server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { headers } from 'next/headers';
 import { PasswordRecoveryMailer } from '@/lib/services/PasswordRecoveryMailer';
 import { validatePasswordPolicy } from '@/lib/passwordPolicy';
@@ -11,7 +12,7 @@ const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 
 export async function requestPasswordReset(email: string) {
   // Normalize email
-  const normalizedEmail = email.toLowerCase().trim();
+  const normalizedEmail = (email || '').toLowerCase().trim();
   
   const headersList = await headers();
   const ip = headersList.get('x-forwarded-for') || '127.0.0.1';
@@ -23,6 +24,10 @@ export async function requestPasswordReset(email: string) {
   const identifierHash = crypto.createHash('sha256').update(`${ipHash}:${normalizedEmail}`).digest('hex');
 
   const genericResponse = { success: true, message: 'If an eligible account exists, password-recovery instructions have been sent.' };
+
+  if (!normalizedEmail) {
+    return genericResponse;
+  }
 
   try {
     // 1. Rate Limiting Check
@@ -69,9 +74,11 @@ export async function requestPasswordReset(email: string) {
       });
     }
 
-    // 2. Fetch User
-    const user = await prisma.user.findUnique({
-      where: { email: normalizedEmail }
+    // 2. Fetch User (case-insensitive to match login lookup in src/auth.ts)
+    const user = await prisma.user.findFirst({
+      where: {
+        email: { equals: normalizedEmail, mode: 'insensitive' }
+      }
     });
 
     if (!user || user.status !== 'ACTIVE') {
@@ -103,7 +110,7 @@ export async function requestPasswordReset(email: string) {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const expiresAt = new Date(now.getTime() + 30 * 60 * 1000); // 30 mins expiry
 
-    await prisma.passwordRecoveryToken.create({
+    const createdToken = await prisma.passwordRecoveryToken.create({
       data: {
         userId: user.id,
         tokenHash,
@@ -126,11 +133,34 @@ export async function requestPasswordReset(email: string) {
     });
 
     // 7. Send Email
-    await PasswordRecoveryMailer.sendResetLink(normalizedEmail, token);
+    const delivered = await PasswordRecoveryMailer.sendResetLink(user.email || normalizedEmail, token);
+    if (!delivered) {
+      await prisma.passwordRecoveryToken.update({
+        where: { id: createdToken.id },
+        data: { revokedAt: new Date() }
+      });
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          userRole: user.role,
+          moduleName: 'SECURITY',
+          actionType: 'PASSWORD_RECOVERY_EMAIL_DISPATCH_FAILED',
+          remarks: `Failed to dispatch password recovery email for ${normalizedEmail}; token revoked.`
+        }
+      });
+    }
 
     return genericResponse;
 
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'P2021') {
+      console.error('Password recovery schema tables missing (pending migration):', error.meta || error.message);
+      return {
+        success: false,
+        code: 'SUPER_ADMIN_RECOVERY_SCHEMA_MIGRATION_REQUIRED',
+        error: 'Password recovery service is unavailable until pending database migrations are applied.',
+      };
+    }
     console.error('Error in requestPasswordReset:', error);
     return genericResponse; // fail closed
   }
@@ -138,6 +168,10 @@ export async function requestPasswordReset(email: string) {
 
 export async function executePasswordReset(token: string, newPasswordRaw: string) {
   try {
+    if (!token || typeof token !== 'string') {
+      return { success: false, error: 'Invalid or expired token.' };
+    }
+
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const now = new Date();
 
@@ -178,7 +212,6 @@ export async function executePasswordReset(token: string, newPasswordRaw: string
         return { success: false, error: policyResult.error };
       }
 
-      const bcrypt = require('bcryptjs');
       const newPasswordHash = await bcrypt.hash(newPasswordRaw, 10);
 
       // Update User
@@ -195,11 +228,14 @@ export async function executePasswordReset(token: string, newPasswordRaw: string
         }
       });
 
-      // Consume Token
-      await tx.passwordRecoveryToken.update({
-        where: { id: recoveryToken.id },
+      // Consume Token (atomic check that consumedAt is still null)
+      const consumed = await tx.passwordRecoveryToken.updateMany({
+        where: { id: recoveryToken.id, consumedAt: null, revokedAt: null },
         data: { consumedAt: now }
       });
+      if (consumed.count !== 1) {
+        throw new Error('TOKEN_ALREADY_CONSUMED');
+      }
 
       // Revoke other active tokens
       await tx.passwordRecoveryToken.updateMany({
@@ -225,7 +261,17 @@ export async function executePasswordReset(token: string, newPasswordRaw: string
 
       return { success: true };
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error instanceof Error && error.message === 'TOKEN_ALREADY_CONSUMED') {
+      return { success: false, error: 'Token is already consumed or revoked.' };
+    }
+    if (error?.code === 'P2021') {
+      return {
+        success: false,
+        code: 'SUPER_ADMIN_RECOVERY_SCHEMA_MIGRATION_REQUIRED',
+        error: 'Password recovery service is unavailable until pending database migrations are applied.',
+      };
+    }
     console.error('Password reset transaction failed:', error);
     return { success: false, error: 'An error occurred during password reset.' };
   }

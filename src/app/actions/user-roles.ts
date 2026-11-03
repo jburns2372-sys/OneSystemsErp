@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
@@ -12,43 +13,21 @@ const BACKEND_API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL || 'ht
  * A wrapper around fetch that includes authentication headers and handles API responses.
  */
 async function fetchWithAuth(url: string, options?: RequestInit) {
-  const cookieStore = await cookies();
   const __session = await verifySession();
-  const session = __session?.id || '';
-  
-  if (!session) {
-    // If not authenticated, redirect to login or throw an error
-    redirect('/login'); 
+  if (!__session?.id) {
+    redirect('/login');
   }
 
-  const headers = {
-    ...options?.headers,
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${session}`,
-    'x-user-session': session,
-  };
-
-  // Construct the full URL for the backend endpoint
-  // The `url` parameter here will be like '/api/user-roles/functionName'
-  const fullUrl = `${BACKEND_API_BASE_URL}${url}`;
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(fullUrl, {
+  const response = await fetchAuthenticatedBackend(url, {
     ...options,
-    headers,
-    // Prevent Next.js from aggressively caching fetch requests in Server Actions
-    cache: 'no-store', 
+    cache: 'no-store',
   });
 
   if (!response.ok) {
-    let errorData;
+    let errorData: any;
     try {
       errorData = await response.json();
-    } catch (e) {
-      // If JSON parsing fails, return a generic error message
+    } catch {
       errorData = { message: `Server error: ${response.statusText || 'Unknown'}` };
     }
     throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);

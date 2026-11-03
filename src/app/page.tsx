@@ -9,21 +9,22 @@ import RoleDashboardClient from './RoleDashboardClient';
 import { redirect } from 'next/navigation';
 
 export default async function Home() {
-  const stats = await getDashboardStats();
-
-  const cookieStore = await cookies();
   const __session = await verifySession();
-  const sessionId = __session?.id || '';
-  
+  if (!__session?.id) {
+    redirect('/login');
+  }
+
+  const stats = await getDashboardStats();
+  const cookieStore = await cookies();
+  const sessionId = __session.id;
+
   let currentUser = null;
   if (sessionId) {
     currentUser = await prisma.user.findUnique({
       where: { id: sessionId },
       include: { userRoles: { include: { role: true } } }
     });
-  } 
-  
-  
+  }
 
   let isSystemAdmin = false;
   let primaryRole = 'PROJECT_DIRECTOR';
@@ -42,7 +43,6 @@ export default async function Home() {
   if (primaryRole === 'DIRECTORS' && !simulatedRole) {
     redirect('/executive/home');
   }
-
 
   return (
     <RoleDashboardClient stats={stats} isSystemAdmin={isSystemAdmin} initialRole={primaryRole} />

@@ -14,32 +14,22 @@ const router = Router();
 
 router.post('/resetTransactionData', async (req, res) => {
   try {
-    const { confirmationText, sessionId, simulatedRole } = req.body; // sessionId/simulatedRole expected from proxy
+    const { confirmationText } = req.body;
 
     if (confirmationText !== 'RESET TRANSACTION DATA ONLY') {
       return res.status(400).json({ success: false, error: 'Invalid confirmation text.' });
     }
 
-    let currentUser = null;
-    if (sessionId) {
-      currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
-    } else {
-      // Fallback for development if session not present, find any user for testing
-      // In a production AWS backend, you'd likely reject unauthenticated requests or
-      // get user info from an auth token (e.g., from Cognito).
-      currentUser = await prisma.user.findFirst();
+    if (!req.user?.id) {
+      return res.status(401).json({ success: false, error: 'Authentication required.' });
     }
 
-    const userCount = await prisma.user.count();
-    let effectiveRole = simulatedRole;
-
-    if (userCount > 0) {
-      if (!currentUser) throw new Error('User not found');
-      effectiveRole = simulatedRole || currentUser.role;
-      
-      if (effectiveRole !== 'SUPER_ADMIN') {
-        throw new Error('Unauthorized Action: Only SUPER_ADMIN can perform a master reset.');
-      }
+    // Master transaction reset requires genuine SUPER_ADMIN authority (simulatedRole cannot escalate).
+    if (req.user.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized Action: Only SUPER_ADMIN can perform a master reset.',
+      });
     }
 
     // 1. Create a Backup First
@@ -359,18 +349,11 @@ router.post('/resetTransactionData', async (req, res) => {
 
 router.post('/getCurrentUserRole', async (req, res) => {
   try {
-    const { sessionId, simulatedRole } = req.body; // sessionId expected from proxy
-
-    if (simulatedRole) return res.json({ success: true, role: simulatedRole });
-    if (!sessionId) return res.json({ success: true, role: null });
-    const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
-    
-    if (!currentUser) {
-      const userCount = await prisma.user.count();
-      if (userCount === 0) return res.json({ success: true, role: 'SUPER_ADMIN' });
+    if (!req.user?.id) {
+      return res.status(401).json({ success: false, error: 'Authentication required.' });
     }
-
-    return res.json({ success: true, role: currentUser?.role || null });
+    const effectiveRole = req.pbacContext?.simulatedRole || req.user.role || null;
+    return res.json({ success: true, role: effectiveRole });
   } catch (e: any) {
     console.error('Failed to get current user role:', e);
     return res.status(500).json({ success: false, error: e.message });

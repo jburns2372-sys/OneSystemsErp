@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { login } from '@/app/actions/auth';
 
 export default function LoginPage() {
@@ -59,7 +60,15 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label htmlFor="password" style={{ display: 'block', marginBottom: '8px', color: '#cbd5e1', fontSize: '14px' }}>Password</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <label htmlFor="password" style={{ color: '#cbd5e1', fontSize: '14px' }}>Password</label>
+              <Link
+                href="/forgot-password"
+                style={{ color: '#00ffa3', fontSize: '13px', textDecoration: 'none', fontWeight: 500 }}
+              >
+                Forgot Password?
+              </Link>
+            </div>
             <input 
               id="password" 
               name="password" 

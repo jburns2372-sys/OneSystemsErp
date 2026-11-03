@@ -18,10 +18,16 @@ export default function ProfileForm({ initialName, initialEmail }: { initialName
     if (res.success) {
       setMessage(res.message || 'Profile updated');
       // Clear password fields
+      const currentPasswordInput = document.getElementById('currentPassword') as HTMLInputElement;
       const passwordInput = document.getElementById('password') as HTMLInputElement;
       const confirmInput = document.getElementById('confirmPassword') as HTMLInputElement;
+      if (currentPasswordInput) currentPasswordInput.value = '';
       if (passwordInput) passwordInput.value = '';
       if (confirmInput) confirmInput.value = '';
+      if (res.passwordChanged) {
+        window.location.href = '/login';
+        return;
+      }
     } else {
       setError(res.error || 'Failed to update profile');
     }
@@ -78,15 +84,35 @@ export default function ProfileForm({ initialName, initialEmail }: { initialName
 
       <div style={{ marginTop: '20px', borderTop: '1px solid var(--glass-border)', paddingTop: '20px' }}>
         <h2 style={{ fontSize: '1.2rem', color: 'var(--text-primary)', marginBottom: '15px' }}>Change Password</h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '20px' }}>Leave these fields blank if you do not want to change your password.</p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '20px' }}>Leave these fields blank if you do not want to change your password. Password must be at least 12 characters.</p>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label htmlFor="currentPassword" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Current Password</label>
+            <input 
+              type="password" 
+              id="currentPassword" 
+              name="currentPassword" 
+              autoComplete="current-password"
+              style={{
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid var(--glass-border)',
+                background: 'rgba(0, 0, 0, 0.2)',
+                color: 'var(--text-primary)',
+                fontSize: '1rem',
+                outline: 'none'
+              }}
+            />
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label htmlFor="password" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>New Password</label>
             <input 
               type="password" 
               id="password" 
               name="password" 
+              autoComplete="new-password"
               style={{
                 padding: '12px',
                 borderRadius: '8px',
@@ -105,6 +131,7 @@ export default function ProfileForm({ initialName, initialEmail }: { initialName
               type="password" 
               id="confirmPassword" 
               name="confirmPassword" 
+              autoComplete="new-password"
               style={{
                 padding: '12px',
                 borderRadius: '8px',

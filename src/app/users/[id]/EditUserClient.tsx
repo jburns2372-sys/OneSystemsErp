@@ -132,10 +132,11 @@ export default function EditUserClient({ user, roles = [] }: { user: UserData, r
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ color: 'var(--accent-color)', fontSize: '0.9rem', fontWeight: '500' }}>Override Password (Optional)</label>
             <input 
-              type="text" 
+              type="password" 
               name="password"
               value={formData.password}
               onChange={handleChange}
+              autoComplete="new-password"
               placeholder="Leave blank to keep current password"
               style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--accent-glow)', backgroundColor: 'rgba(0,240,255,0.05)', color: 'var(--text-primary)' }}
             />

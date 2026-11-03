@@ -35,6 +35,7 @@ export async function verifySession() {
   return {
     id: dbUser.id,
     role: dbUser.role,
+    sessionVersion: dbUser.sessionVersion,
     mustChangePassword: dbUser.mustChangePassword,
   };
 }

@@ -4,7 +4,7 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 
-const PUBLIC_AUTH_ROUTES = ['/login', '/forgot-password', '/reset-password'];
+const PUBLIC_AUTH_ROUTES = ['/login', '/forgot-password', '/reset-password', '/change-password'];
 
 export default function MainContentWrapper({ 
   children, 

@@ -1,5 +1,7 @@
+import './loadEnv';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import dotenv from 'dotenv';
 import s3Routes from './routes/s3';
 import projectsRoutes from './routes/projects';
@@ -73,15 +75,50 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
+const allowedOrigins = new Set<string>(
+  [
+    process.env.NEXTAUTH_URL,
+    process.env.APP_BASE_URL,
+    process.env.APP_URL,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+  ]
+    .filter(Boolean)
+    .map((u) => {
+      try {
+        return new URL(u as string).origin;
+      } catch {
+        return '';
+      }
+    })
+    .filter(Boolean)
+);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow server-to-server requests with no browser Origin header, or verified first-party origins
+      if (!origin || allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('CORS origin not allowed'));
+    },
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: '50mb' }));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
-    timestamp: new Date().toISOString()
+    service: 'onesystemserp-aws-backend',
+    timestamp: new Date().toISOString(),
   });
 });
+
+// Enforce cryptographic internal authentication + role/project isolation across ALL /api routes
+app.use('/api', requireAuth);
 
 app.use('/api/s3', s3Routes);
 app.use('/api/accomplishmentFileActions', accomplishmentFileActionsRoutes);
@@ -132,9 +169,6 @@ app.use('/api/user-roles', userRolesRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/variationOrderActions', variationOrderActionsRoutes);
 
-// Apply auth middleware to all other API routes
-app.use('/api', requireAuth);
-
 app.use('/api/projects', projectsRoutes);
 app.use('/api/procurement', procurementRoutes);
 app.use('/api/canvass', canvassRoutes);
@@ -146,24 +180,12 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/subcontracting', subcontractingRoutes);
 app.use('/api/progress', progressRoutes);
-app.use('/api/consolidation', consolidationRoutes);
 app.use('/api/scheduling', schedulingRoutes);
 app.use('/api/security', securityRoutes);
 app.use('/api/permissions', permissionsRoutes);
 app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/jobs', jobsRoutes);
-
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'onesystemserp-aws-backend',
-    database: 'connected', // TODO: implement actual db check
-    storage: 'connected', // TODO: implement actual storage check
-    ai: 'configured',
-    timestamp: new Date().toISOString()
-  });
-});
 
 if (!process.env.VERCEL) {
   app.listen(PORT, () => {

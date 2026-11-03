@@ -8,6 +8,7 @@ export default function AddUserModal({ onClose, roles = [] }: { onClose: () => v
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState('PROJECT_ENGINEER');
   const [customRole, setCustomRole] = useState('');
   const [error, setError] = useState('');
@@ -23,7 +24,7 @@ export default function AddUserModal({ onClose, roles = [] }: { onClose: () => v
           setError('Please specify a custom role.');
           return;
         }
-        const res = await createUser({ name, email, role: finalRole });
+        const res = await createUser({ name, email, role: finalRole, password });
         if (res && !res.success) {
           setError(res.error || 'Failed to create user.');
           return;
@@ -58,6 +59,14 @@ export default function AddUserModal({ onClose, roles = [] }: { onClose: () => v
             <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Email</label>
             <input 
               type="email" required value={email} onChange={e => setEmail(e.target.value)}
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Initial Password (min 12 chars)</label>
+            <input 
+              type="password" required minLength={12} value={password} onChange={e => setPassword(e.target.value)}
+              autoComplete="new-password"
               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', backgroundColor: 'var(--bg-dark)', color: 'var(--text-primary)' }}
             />
           </div>
