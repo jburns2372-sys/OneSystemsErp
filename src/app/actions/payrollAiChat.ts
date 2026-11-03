@@ -1,29 +1,13 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 // Standard fetchWithAuth wrapper. This would typically handle authentication headers.
 // The AWS_BACKEND_BASE_URL environment variable should point to your Express backend's base URL (e.g., 'https://your-api-gateway-id.execute-api.us-east-1.amazonaws.com/prod').
 async function fetchWithAuth(url: string, options?: RequestInit) {
-  const backendBaseUrl = process.env.AWS_BACKEND_BASE_URL;
-  if (!backendBaseUrl) {
-    throw new Error('AWS_BACKEND_BASE_URL is not defined in environment variables.');
-  }
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(backendBaseUrl + url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-
+  const response = await fetchAuthenticatedBackend(url, options);
   const responseData = await response.json();
 
   if (!response.ok) {
-    // If the HTTP status is not OK (e.g., 500), throw an error with the backend's error message.
     throw new Error(responseData.error || 'Something went wrong with the backend request.');
   }
 

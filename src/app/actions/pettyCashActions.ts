@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
@@ -7,23 +8,13 @@ const fetchWithAuth = async (
   url: string,
   options?: RequestInit & { cache?: RequestCache }
 ) => {
-  // In a real application, this would fetch an auth token (e.g., from session/cookies)
-  // and add it to the headers. It might also prepend a base URL for the backend.
-  const baseUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:3001/api'; // Adjust as needed
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
+  const normalizedUrl = url.startsWith('/api/')
+    ? url
+    : `/api${url.startsWith('/') ? url : `/${url}`}`;
 
-const res = await fetch(`${baseUrl}${url}`, {
+  const res = await fetchAuthenticatedBackend(normalizedUrl, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      // 'Authorization': `Bearer ${authToken}`, // Example for auth
-      ...options?.headers,
-    },
-    // Server Actions are not always idempotent, so 'no-store' or specific caching behavior
-    // might be desired depending on the API and if data should always be fresh.
-    cache: options?.cache || 'no-store' 
+    cache: options?.cache || 'no-store',
   });
 
   if (!res.ok) {

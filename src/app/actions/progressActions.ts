@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
@@ -9,34 +10,14 @@ import { uploadToS3 as put } from '@/lib/s3';
 import fs from 'fs';
 
 const PDFParse = require('pdf-parse');
-const BACKEND_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL) || 'http://localhost:4000';
 const API_ROUTE_PREFIX = '/api/progressActions'; // The agreed-upon route name for the API
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-  const cookieStore = await cookies();
-  const __session = await verifySession();
-  const session = __session?.id || '';
-  const activeProjectId = cookieStore.get('activeProjectId')?.value;
-  const simulatedRole = cookieStore.get('simulatedRole')?.value;
-
-  const headers = new Headers(options.headers);
-  if (session) headers.set('x-user-session', session);
-  if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
-  if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
-  
-  // Only set Content-Type to application/json if a JSON body is present
-  if (options.body && typeof options.body === 'string' && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const res = await fetch(`${BACKEND_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const res = await fetchAuthenticatedBackend(
+    endpoint,
+    options,
+    { defaultJsonContentType: Boolean(options.body && typeof options.body === 'string') }
+  );
 
   if (!res.ok) {
     const errorText = await res.text();

@@ -1,33 +1,23 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
 // Placeholder for fetchWithAuth. In a real app, this would handle authentication tokens
 // (e.g., from a session or cookie) and potentially refresh logic.
-async function fetchWithAuth(url: string, options?: RequestInit) {
-  const headers = {
-    'Content-Type': 'application/json',
-    // 'Authorization': `Bearer ${yourAuthToken}`, // Add actual auth token here
-    ...options?.headers,
-  };
-
-  // Ensure NEXT_PUBLIC_AWS_BACKEND_URL is defined in your .env.local or environment variables.
-  // This example uses a fallback for local development.
-  const baseUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:3001'; // Example fallback
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(`${baseUrl}${url}`, {
-    ...options,
-    headers,
-  });
+async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchAuthenticatedBackend(endpoint, options);
 
   if (!response.ok) {
-    // Attempt to parse error message from response body, fallback to status text
-    const errorData = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(errorData.error || errorData.message || 'An unknown network error occurred');
+    const errorText = await response.text();
+    let errorMessage = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed.error || parsed.message || errorText;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
   }
 
   return response.json();

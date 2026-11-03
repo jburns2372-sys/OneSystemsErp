@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 import { verifySession } from '@/lib/dal/auth';
 
@@ -6,30 +7,19 @@ import { verifySession } from '@/lib/dal/auth';
 // It assumes NEXT_PUBLIC_AWS_BACKEND_URL is configured in your Next.js environment variables
 // (e.g., .env.local, .env.production) and points to your AWS Express.js API base URL.
 async function fetchWithAuth(urlPath: string, options?: RequestInit) {
-  const backendUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL);
-  if (!backendUrl) {
-    throw new Error("NEXT_PUBLIC_AWS_BACKEND_URL is not defined in your environment.");
-  }
+  const normalizedUrl = urlPath.startsWith('/api/')
+    ? urlPath
+    : `/api${urlPath.startsWith('/') ? urlPath : `/${urlPath}`}`;
 
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(`${backendUrl}${urlPath}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers
-    }
-  });
+  const response = await fetchAuthenticatedBackend(normalizedUrl, options);
 
   if (!response.ok) {
     let errorDetail = 'Unknown error occurred.';
     try {
       const errorResponse = await response.json();
       errorDetail = errorResponse.error || errorResponse.message || errorDetail;
-    } catch (e) {
-      // If response is not JSON, use default error message
+    } catch {
+      // non-JSON response
     }
     throw new Error(`Backend fetch failed: ${response.status} ${response.statusText} - ${errorDetail}`);
   }

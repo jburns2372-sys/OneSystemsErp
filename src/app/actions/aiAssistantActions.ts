@@ -1,44 +1,27 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
 // Placeholder for fetchWithAuth - replace with actual implementation for auth if needed.
 // Assumes NEXT_PUBLIC_API_URL environment variable is set to your AWS backend URL.
-const fetchWithAuth = async <T = any>(endpoint: string, options?: RequestInit): Promise<T> => {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
-    throw new Error('NEXT_PUBLIC_API_URL is not defined. Please set it in your environment variables.');
-  }
-
-  const headers = {
-    'Content-Type': 'application/json',
-    // Add authentication headers here if your AWS backend requires them,
-    // e.g., 'Authorization': `Bearer ${await getAuthToken()}`
-    ...options?.headers,
-  };
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(`${apiUrl}${endpoint}`, {
-    ...options,
-    headers,
-    cache: options?.cache || 'no-store' // Server Actions typically want fresh data
-  });
+async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchAuthenticatedBackend(endpoint, options);
 
   if (!response.ok) {
-    let errorData: any = {};
+    const errorText = await response.text();
+    let errorMessage = errorText;
     try {
-      errorData = await response.json();
-    } catch (e) {
-      // If response is not JSON, use statusText
-      errorData.message = response.statusText;
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed.error || parsed.message || errorText;
+    } catch {
+      // non-JSON error body
     }
-    throw new Error(errorData.error || errorData.message || `API request failed with status ${response.status}`);
+    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
   }
+
   return response.json();
-};
+}
 
 export async function askERPAssistant(question: string) {
   try {

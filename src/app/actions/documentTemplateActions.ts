@@ -1,6 +1,7 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { revalidatePath } from 'next/cache';
-import { getBaseUrl } from '@/lib/urlResolver';
+import { getBackendUrl } from '@/lib/backendUrl';
 import { fetchActiveTemplatesService } from '@/lib/services/document-template.service';
 import { verifySession } from '@/lib/dal/auth';
 import { cookies } from 'next/headers';
@@ -16,24 +17,11 @@ async function fetchWithAuth(
   input: RequestInfo | URL,
   init?: FetchWithAuthOptions
 ): Promise<Response> {
-  const headers = new Headers(init?.headers);
-
-  if (init?.method === 'POST' && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  // In a real application, you would add authentication tokens here,
-  // e.g., from cookies, session, or server-side auth providers.
-  // Example: headers.set('Authorization', `Bearer ${await getAuthToken()}`);
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(input, {
-    ...init,
-    headers,
-  });
+  const response = await fetchAuthenticatedBackend(
+    input,
+    init,
+    { defaultJsonContentType: init?.method === 'POST' }
+  );
 
   if (!response.ok) {
     const errorBody = await response.text();
@@ -46,7 +34,7 @@ const response = await fetch(input, {
 }
 
 export async function uploadDocumentTemplate(formData: FormData) {
-  const API_BASE_URL = getBaseUrl();
+  const API_BASE_URL = getBackendUrl();
   try {
     // Convert FormData to a plain object to send as JSON
     const payload = {

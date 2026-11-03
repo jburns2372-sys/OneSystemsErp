@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
@@ -6,30 +7,17 @@ import { cookies } from 'next/headers';
 
 // Standard fetchWithAuth definition
 async function fetchWithAuth(url: string, options: RequestInit) {
-  // In a real application, this would handle authentication tokens (e.g., from cookies, JWT, etc.)
-  // For this example, we'll just forward the request, ensuring JSON content type.
-  // Replace '/api' with your actual AWS backend API endpoint if it's different.
-  const API_BASE_URL = process.env.NEXT_PUBLIC_AWS_API_BASE_URL || 'http://localhost:3001'; // Example base URL
+  const normalizedUrl = url.startsWith('/api/')
+    ? url
+    : `/api${url.startsWith('/') ? url : `/${url}`}`;
 
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(`${API_BASE_URL}${url}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-      // Add auth token if available, e.g.:
-      // 'Authorization': `Bearer ${getAuthTokenFromCookieOrSession()}`
-    },
-  });
+  const response = await fetchAuthenticatedBackend(normalizedUrl, options);
 
   if (!response.ok) {
     let errorData: any;
     try {
       errorData = await response.json();
-    } catch (e) {
+    } catch {
       errorData = { message: 'Unknown error', status: response.status };
     }
     throw new Error(errorData.error || errorData.message || `Failed to fetch data with status ${response.status}`);

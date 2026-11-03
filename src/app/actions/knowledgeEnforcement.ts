@@ -1,34 +1,23 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
-import { getBaseUrl } from '@/lib/urlResolver';
 
 // Placeholder for `fetchWithAuth` function
 // In a real application, this would typically involve token authentication
 // and proper error handling specific to your auth setup.
-async function fetchWithAuth(url: string, options?: RequestInit) {
-  // Ensure the URL is absolute for server-side fetching
-  const absoluteUrl = url.startsWith('/') ? `${getBaseUrl()}${url}` : url;
-
-  // Example: Add an Authorization header if needed
-  // const token = await getAuthToken(); // Assuming a function to get the auth token
-  const headers = {
-    'Content-Type': 'application/json',
-    // ... any other headers like Authorization
-    ...(options?.headers || {})
-  };
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(absoluteUrl, {
-    ...options,
-    headers
-  });
+async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchAuthenticatedBackend(endpoint, options);
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: response.statusText }));
-    throw new Error(errorData.error || errorData.message || 'An unknown error occurred');
+    const errorText = await response.text();
+    let errorMessage = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed.error || parsed.message || errorText;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
   }
 
   return response.json();

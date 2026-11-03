@@ -1,29 +1,26 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
 // Placeholder for fetchWithAuth function
 // In a real application, this would handle authentication tokens etc.
-async function fetchWithAuth(url: string, options?: RequestInit) {
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      // 'Authorization': `Bearer ${await getAuthToken()}`, // Example for a real app
-      ...options?.headers,
-    },
-  });
+async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchAuthenticatedBackend(endpoint, options);
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: response.statusText }));
-    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    const errorText = await response.text();
+    let errorMessage = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed.error || parsed.message || errorText;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
   }
 
-  return response.json(); // Return JSON body
+  return response.json();
 }
 
 export async function createMaterialReturn(data: any) {

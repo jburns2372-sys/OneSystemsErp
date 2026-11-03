@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
@@ -7,28 +8,21 @@ import { cookies } from 'next/headers';
 // In a real application, this would typically be a more robust utility
 // that handles token retrieval (e.g., from cookies/session), error parsing,
 // and potentially token refreshing.
-async function fetchWithAuth(url: string, options?: RequestInit) {
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
+async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchAuthenticatedBackend(endpoint, options);
 
   if (!response.ok) {
-    let errorData;
+    const errorText = await response.text();
+    let errorMessage = errorText;
     try {
-      errorData = await response.json();
-    } catch (e) {
-      errorData = { error: response.statusText || 'Unknown error occurred.' };
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed.error || parsed.message || errorText;
+    } catch {
+      // non-JSON error body
     }
-    throw new Error(errorData.error || errorData.message || response.statusText);
+    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
   }
+
   return response.json();
 }
 // ---

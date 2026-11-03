@@ -1,31 +1,18 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 
-import { getBaseUrl } from "@/lib/urlResolver";
+import { verifyOperationalSession } from '@/lib/dal/auth';
 
 // Standard fetchWithAuth wrapper
 const fetchWithAuth = async (url: string, options?: RequestInit) => {
-  const cookieStore = await cookies();
-  const authToken = cookieStore.get('auth_token')?.value; // Example: get your actual auth token
-
-  const headers = new Headers(options?.headers);
-  if (authToken) {
-    headers.set('Authorization', `Bearer ${authToken}`);
-  }
-  headers.set('Content-Type', 'application/json'); // Ensure JSON content type
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(`${getBaseUrl()}${url}`, {
+  const response = await fetchAuthenticatedBackend(url, {
     ...options,
-    headers,
-    cache: 'no-store' // Server Actions typically don't cache, unless explicitly desired
+    cache: 'no-store',
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
+    const errorData = await response.json().catch(() => ({ error: `API call failed with status ${response.status}` }));
     throw new Error(errorData.error || `API call failed with status ${response.status}`);
   }
   return response.json();
@@ -34,8 +21,10 @@ const response = await fetch(`${getBaseUrl()}${url}`, {
 export async function generateBOQTemplate(projectId?: string) {
   try {
     // Extract user email from cookies to pass to the backend for audit logging
+    const opSession = await verifyOperationalSession();
     const cookieStore = await cookies();
-    const email = cookieStore.get('demo_user_email')?.value; if(!email) throw new Error('No session');
+    const email = opSession?.email || cookieStore.get('demo_user_email')?.value;
+    if (!email) throw new Error('No session');
 
     const response = await fetchWithAuth('/api/boqTemplateService/generateBOQTemplate', {
       method: 'POST',

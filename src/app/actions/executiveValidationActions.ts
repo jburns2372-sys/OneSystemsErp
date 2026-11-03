@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
@@ -13,31 +14,20 @@ async function fetchWithAuth(url: string, options: RequestInit) {
   const cookieStore = await cookies();
   const __session = await verifySession();
   const session = __session?.id || '';
-  const simulatedRole = cookieStore.get('simulatedRole')?.value;
+  const rawSimulatedRole = cookieStore.get('simulatedRole')?.value;
+  const canSimulate = __session?.role && ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'ADMIN', 'PROJECT_DIRECTOR', 'DIRECTORS'].includes(__session.role);
+  const simulatedRole = canSimulate ? rawSimulatedRole : undefined;
 
-  const headers = {
-    'Content-Type': 'application/json',
-    // Example if backend expects a Bearer token:
-    // 'Authorization': session ? `Bearer ${session}` : '',
-    ...(options.headers || {}),
-  };
-
-  // Ensure userId and simulatedRole are part of the body for backend validation
-  let body;
+  let body: string;
   if (options.body && typeof options.body === 'string') {
     const parsedBody = JSON.parse(options.body);
-    body = JSON.stringify({ ...parsedBody, userId: session, simulatedRole });
+    body = JSON.stringify({ ...parsedBody, userId: session, ...(simulatedRole ? { simulatedRole } : {}) });
   } else {
-    body = JSON.stringify({ userId: session, simulatedRole }); // Case for empty original body
+    body = JSON.stringify({ userId: session, ...(simulatedRole ? { simulatedRole } : {}) });
   }
 
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(`${(process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL)}${url}`, {
+  const response = await fetchAuthenticatedBackend(url, {
     ...options,
-    headers,
     body,
   });
 

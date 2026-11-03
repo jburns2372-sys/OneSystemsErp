@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 import { revalidatePath, revalidateTag } from 'next/cache'; // Required imports even if not used in this specific scenario
 
@@ -13,22 +14,7 @@ type SimulationMode = 'dryRun' | 'live'; // Example definition if not imported
  * or the AWS backend uses other means of authentication (e.g., API Gateway IAM).
  */
 async function fetchWithAuth(url: string, options: RequestInit) {
-  const backendApiUrl = process.env.BACKEND_API_URL; // Ensure this env variable is set
-  if (!backendApiUrl) {
-    throw new Error('BACKEND_API_URL environment variable is not set.');
-  }
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(backendApiUrl + url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  const response = await fetchAuthenticatedBackend(url, options);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ message: 'Unknown error occurred on backend.' }));
@@ -36,7 +22,6 @@ const response = await fetch(backendApiUrl + url, {
   }
 
   const jsonResponse = await response.json();
-
   if (!jsonResponse.success) {
     throw new Error(jsonResponse.error || 'Backend operation failed with no specific error message.');
   }

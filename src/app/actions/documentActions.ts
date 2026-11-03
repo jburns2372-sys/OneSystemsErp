@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
@@ -11,27 +12,21 @@ const AWS_BACKEND_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || process.en
 // IMPORTANT: Implement your actual authentication logic here.
 // This is a placeholder function that assumes auth is handled by cookies/headers
 // and passed through or the backend itself handles session validation.
-async function fetchWithAuth(url: string, options?: RequestInit) {
-  const headers = new Headers(options?.headers);
-  // Example: Attach a session token or API key if needed by your backend
-  const __session = await verifySession();
-  const sessionToken = __session?.id || '';
-  // if (sessionToken) {
-  //   headers.set('Authorization', `Bearer ${sessionToken}`);
-  // }
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(`${AWS_BACKEND_BASE_URL}${url}`, {
-    ...options,
-    headers,
-  });
+async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchAuthenticatedBackend(endpoint, options);
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-    throw new Error(errorData.error || response.statusText);
+    const errorText = await response.text();
+    let errorMessage = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed.error || parsed.message || errorText;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
   }
+
   return response.json();
 }
 

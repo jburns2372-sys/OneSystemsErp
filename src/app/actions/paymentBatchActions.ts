@@ -1,31 +1,22 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
 // Basic fetchWithAuth definition (adjust as per your actual implementation)
-async function fetchWithAuth(url: string, options: RequestInit) {
-  // In a real application, this would include logic to get and attach
-  // an authentication token (e.g., from a cookie, session, or server-side store)
-  // For this example, we'll assume the backend handles authentication based on session
-  // or other mechanisms.
-
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(process.env.NEXT_PUBLIC_API_BASE_URL + url, {
-    ...options,
-    headers,
-  });
+async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchAuthenticatedBackend(endpoint, options);
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(errorData.error || 'Failed to fetch data from backend');
+    const errorText = await response.text();
+    let errorMessage = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed.error || parsed.message || errorText;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
   }
 
   return response.json();

@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
@@ -10,37 +11,15 @@ import { revalidatePath } from 'next/cache';
  * (e.g., JWT from session cookies) to requests and managing the backend base URL.
  */
 async function fetchWithAuth(url: string, options?: RequestInit) {
-  const cookieStore = await cookies();
-  const __session = await verifySession();
-  const authToken = __session?.id || '';
-
-  const headers = new Headers(options?.headers);
-  headers.set('Content-Type', 'application/json');
-  if (authToken) {
-    headers.set('Authorization', `Bearer ${authToken}`);
-  }
-
-  // IMPORTANT: Configure this environment variable to point to your AWS Express backend URL.
-  // Example: 'https://your-aws-lambda-api-gateway-url.amazonaws.com'
-  const baseUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:3001'; 
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(`${baseUrl}${url}`, {
-    ...options,
-    headers,
-  });
-
+  const response = await fetchAuthenticatedBackend(url, options);
   const result = await response.json();
 
   if (!response.ok || result.success === false) {
     const errorMessage = result.error || response.statusText || 'Unknown backend error';
     throw new Error(`API call failed: ${errorMessage}`);
   }
-  
-  return result.data; // Assuming backend returns { success: true, data: ... }
+
+  return result.data;
 }
 
 // Helper function to get userId from Next.js cookies, used internally by the actions.
@@ -51,7 +30,7 @@ async function getUserId() {
 }
 
 // Define the API route prefix for this service
-const API_ROUTE_PREFIX = '/hikvisionDeviceService'; 
+const API_ROUTE_PREFIX = '/api/hikvisionDeviceService'; 
 
 export async function getHikvisionDevices() {
   // Obtain userId from Next.js context and pass to backend for permission check

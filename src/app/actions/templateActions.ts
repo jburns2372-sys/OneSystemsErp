@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 import { revalidatePath } from "next/cache";
 
@@ -6,22 +7,7 @@ import { revalidatePath } from "next/cache";
 // This is a placeholder. In a real app, it would handle token injection, base URL, etc.
 // For demonstration, it just acts as a basic fetch wrapper.
 async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const apiUrl = (process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:3001'; // Define your AWS backend URL
-  const url = `${apiUrl}${input}`;
-
-  // In a real app, you'd add authentication headers here, e.g., Bearer token
-  const headers = {
-    'Content-Type': 'application/json',
-    // 'Authorization': `Bearer ${await getAuthToken()}`, // Example for auth
-    ...(init?.headers || {})
-  };
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(url, { ...init, headers });
-  return response;
+  return fetchAuthenticatedBackend(input, init);
 }
 // --------------------------------------------------
 

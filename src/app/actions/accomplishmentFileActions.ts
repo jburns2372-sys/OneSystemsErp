@@ -1,35 +1,17 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { verifySession } from '@/lib/dal/auth';
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
 // Define the backend URL for the Server Action context
-const BACKEND_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.AWS_BACKEND_URL) || 'http://localhost:4000';
 
 // fetchWithAuth wrapper points to the new backend API routes
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-  const cookieStore = await cookies(); // Use direct cookies() in server action
-  const __session = await verifySession();
-  const session = __session?.id || '';
-  const activeProjectId = cookieStore.get('activeProjectId')?.value;
-  const simulatedRole = cookieStore.get('simulatedRole')?.value;
-
-  const headers = new Headers(options.headers);
-  if (session) headers.set('x-user-session', session);
-  if (activeProjectId) headers.set('x-active-project-id', activeProjectId);
-  if (simulatedRole) headers.set('x-simulated-role', simulatedRole);
-  headers.set('Content-Type', 'application/json');
-
-  // Construct the full backend API URL including the route name 'accomplishmentFileActions'
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const res = await fetch(`${BACKEND_URL}/api/accomplishmentFileActions${endpoint}`, {
+  const res = await fetchAuthenticatedBackend(`/api/accomplishmentFileActions${endpoint}`, {
     ...options,
-    headers,
-    method: 'POST', // Enforce POST as per instructions for router endpoints
+    method: 'POST',
   });
 
   if (!res.ok) {

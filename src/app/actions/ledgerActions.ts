@@ -1,25 +1,10 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 import { revalidatePath, revalidateTag } from 'next/cache';
 
 async function fetchWithAuth(url: string, options?: RequestInit): Promise<Response> {
-  const BACKEND_API_URL = process.env.BACKEND_API_URL;
-
-  if (!BACKEND_API_URL) {
-    throw new Error('BACKEND_API_URL is not defined in environment variables.');
-  }
-
-  const headers = new Headers(options?.headers);
-  headers.set('Content-Type', 'application/json');
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-return fetch(`${BACKEND_API_URL}${url}`, {
-    ...options,
-    headers,
-  });
+  return fetchAuthenticatedBackend(url, options);
 }
 
 export async function getProjectCostLedger(projectId: string) {

@@ -1,39 +1,25 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { cookies } from 'next/headers';
 // Basic fetchWithAuth definition
 // In a real application, this would typically be a shared utility
 // that handles authentication headers (e.g., JWT, session token).
-async function fetchWithAuth(url: string, options: RequestInit = {}) {
-  // Ensure Content-Type is application/json for POST requests with a body
-  options.headers = {
-    ...options.headers,
-    'Content-Type': 'application/json',
-  };
+async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchAuthenticatedBackend(endpoint, options);
 
-  // In a real app, you might get an auth token from a cookie, session, or other secure storage
-  // and add it to the headers:
-  // const authToken = getAuthTokenFromCookie(); // Example
-  // if (authToken) {
-  //   options.headers['Authorization'] = `Bearer ${authToken}`;
-  // }
-
-  // Use an environment variable for the backend API base URL
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || ''; 
-  const fullUrl = `${apiBaseUrl}${url}`;
-
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const res = await fetch(fullUrl, options);
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ message: res.statusText }));
-    // Prioritize 'error' property from backend, then 'message', then HTTP status text
-    throw new Error(errorData.error || errorData.message || `API request failed with status ${res.status}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    let errorMessage = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed.error || parsed.message || errorText;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
   }
 
-  return res.json();
+  return response.json();
 }
 
 export async function explainPayslipWithAI(payrollId: string) {

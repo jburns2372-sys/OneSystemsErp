@@ -1,4 +1,5 @@
 'use server';
+import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
 import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
@@ -6,28 +7,19 @@ import { cookies } from 'next/headers';
 // Placeholder for fetchWithAuth function
 // In a real application, this would handle base URL, authentication tokens,
 // error handling, and other common fetch concerns.
-async function fetchWithAuth(url: string, options?: RequestInit) {
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options?.headers || {}),
-  };
-
-  // Assume NEXT_PUBLIC_AWS_BACKEND_URL is set in your Next.js environment variables
-    const __injectedCookieStore = await cookies();
-  const __allCookies = __injectedCookieStore.getAll().map(c => "${c.name}=${c.value}").join('; ');
-  if (__allCookies) { if (typeof headers.set === 'function') { headers.set('Cookie', __allCookies); } else { (headers as any).Cookie = __allCookies; } }
-
-const response = await fetch(`${(process.env.NEXT_PUBLIC_AWS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL)}${url}`, {
-    ...options,
-    headers,
-    // Ensure cookies are forwarded if needed by the backend for session management
-    // For this specific migration, we're explicitly passing relevant cookie values in the body.
-    // 'credentials': 'include' might be used for other auth patterns.
-  });
+async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchAuthenticatedBackend(endpoint, options);
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-    throw new Error(errorData.error || response.statusText || 'Failed to fetch data from backend');
+    const errorText = await response.text();
+    let errorMessage = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed.error || parsed.message || errorText;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
   }
 
   return response.json();
