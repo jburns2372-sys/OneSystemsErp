@@ -38,7 +38,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'FORBIDDEN_PROJECT_ACCESS' }, { status: 403 });
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const idempotencyKey = body.idempotencyKey;
     const lockedBOQVersionId = body.lockedBOQVersionId;
     
@@ -103,7 +103,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Schedule successfully generated and balanced using Universal AI Orchestrator.',
+      message: (result as any).message || 'Schedule successfully generated and balanced using Universal AI Orchestrator.',
+      warningCode: (result as any).warningCode,
       scheduleId: (result as any).scheduleId,
       reconciliation: { diff: (result as any).difference },
       validationMetrics: (result as any).validationMetrics,

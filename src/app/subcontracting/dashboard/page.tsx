@@ -1,6 +1,7 @@
 import { verifySession } from '@/lib/dal/auth';
 import React from 'react';
 import Link from 'next/link';
+import type { VariationOrder } from '@prisma/client';
 import styles from '../../page.module.css';
 import DashboardClient from './DashboardClient';
 import SubcontractListClient from './SubcontractListClient';
@@ -48,9 +49,27 @@ export default async function SubcontractingDashboard() {
     );
   }
 
-  const packages = await getSubcontractPackages(activeProjectId);
-  const jobOrders = await getJobOrders(activeProjectId);
-  const variationOrders = await getAllSubcontractorVariationOrders(activeProjectId);
+  let packages: any[] = [];
+  try {
+    packages = (await getSubcontractPackages(activeProjectId)) || [];
+  } catch (error) {
+    console.error('Failed to fetch packages:', error);
+  }
+
+  let jobOrders: any[] = [];
+  try {
+    const joRes = await getJobOrders(activeProjectId);
+    jobOrders = Array.isArray(joRes) ? joRes : (joRes?.data || []);
+  } catch (error) {
+    console.error('Failed to fetch job orders:', error);
+  }
+
+  let variationOrders: VariationOrder[] = [];
+  try {
+    variationOrders = (await getAllSubcontractorVariationOrders(activeProjectId)) || [];
+  } catch (error) {
+    console.error('Failed to fetch variation orders:', error);
+  }
 
   return (
     <div className={styles.dashboardContainer} style={{ maxWidth: '1400px' }}>

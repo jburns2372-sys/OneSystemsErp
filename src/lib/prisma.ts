@@ -1,7 +1,9 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { prismaBase } from './prisma-base';
 
-export const transactionContext = new AsyncLocalStorage<{ sourceProvenance?: string }>();
+const globalForALS = globalThis as unknown as { transactionContext: AsyncLocalStorage<{ sourceProvenance?: string }> | undefined };
+export const transactionContext = globalForALS.transactionContext ?? new AsyncLocalStorage<{ sourceProvenance?: string }>();
+if (process.env.NODE_ENV !== 'production') globalForALS.transactionContext = transactionContext;
 
 function createPrismaClient() {
   return prismaBase.$extends({

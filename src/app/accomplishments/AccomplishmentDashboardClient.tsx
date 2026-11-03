@@ -297,7 +297,7 @@ export default function AccomplishmentDashboardClient({ projects }: { projects: 
               <option value="">-- Select Template --</option>
               {(() => {
                 const sp = projects.find(p => p.id === showCreateBillingModal);
-                const billingFiles = sp?.projectAccomplishmentFiles?.filter((f: any) => f.status === "BILLING") || [];
+                const billingFiles = sp?.projectAccomplishmentFiles?.filter((f: any) => f.status === "BILLING" || (f.status === "ACTIVE" && f.isLockedOriginal)) || [];
                 return billingFiles.map((f: any) => (
                   <option key={f.id} value={f.id}>{f.fileName} ({(f.fileSize / 1024).toFixed(1)} KB)</option>
                 ));

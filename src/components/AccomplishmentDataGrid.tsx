@@ -873,7 +873,7 @@ export default function AccomplishmentDataGrid({ fileRecord, onClose }: Accompli
           <button 
             onClick={() => {
               if (onClose) onClose();
-              else window.close();
+              else router.push('/accomplishments');
             }}
             className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-700 hover:bg-red-500 hover:text-white text-gray-300 rounded transition"
             title="Close Viewer"

@@ -266,25 +266,25 @@ export default function SchedulingHubClient({
         padding: '12px 20px',
         borderRadius: '8px',
         marginBottom: '15px',
-        border: `1px solid ${!hasValidSchedule ? '#f59e0b' : Number(schedule.differenceAmount || 0) === 0 ? '#10b981' : '#ef4444'}`,
-        backgroundColor: !hasValidSchedule ? 'rgba(245, 158, 11, 0.1)' : Number(schedule.differenceAmount || 0) === 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+        border: `1px solid ${!hasValidSchedule ? '#f59e0b' : Math.abs(Number(project.contractAmount || 0) - Number(schedule.scheduledAmount || 0)) < 0.01 ? '#10b981' : '#ef4444'}`,
+        backgroundColor: !hasValidSchedule ? 'rgba(245, 158, 11, 0.1)' : Math.abs(Number(project.contractAmount || 0) - Number(schedule.scheduledAmount || 0)) < 0.01 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '1.5rem' }}>{!hasValidSchedule ? '⚠️' : Number(schedule.differenceAmount || 0) === 0 ? '✅' : '❌'}</span>
+          <span style={{ fontSize: '1.5rem' }}>{!hasValidSchedule ? '⚠️' : Math.abs(Number(project.contractAmount || 0) - Number(schedule.scheduledAmount || 0)) < 0.01 ? '✅' : '❌'}</span>
           <div>
-            <div style={{ fontWeight: 'bold', color: !hasValidSchedule ? '#f59e0b' : Number(schedule.differenceAmount || 0) === 0 ? '#10b981' : '#ef4444' }}>
-              {!hasValidSchedule ? 'INCOMPLETE SCHEDULE (NOT CALCULATED)' : Number(schedule.differenceAmount || 0) === 0 ? 'Financially Reconciled' : 'Financial Mismatch Detected'}
+            <div style={{ fontWeight: 'bold', color: !hasValidSchedule ? '#f59e0b' : Math.abs(Number(project.contractAmount || 0) - Number(schedule.scheduledAmount || 0)) < 0.01 ? '#10b981' : '#ef4444' }}>
+              {!hasValidSchedule ? 'INCOMPLETE SCHEDULE (NOT CALCULATED)' : Math.abs(Number(project.contractAmount || 0) - Number(schedule.scheduledAmount || 0)) < 0.01 ? 'Financially Reconciled with Contract' : 'Financial Mismatch with Contract'}
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Awarded Contract: ₱{Number(schedule.awardedContractAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})} | Scheduled Amount: ₱{Number(schedule.scheduledAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+              Contract Amount: ₱{Number(project.contractAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})} | Scheduled Amount: ₱{Number(schedule.scheduledAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})} | BOQ Total: ₱{Number(schedule.awardedContractAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
             </div>
           </div>
         </div>
-        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: !hasValidSchedule ? '#f59e0b' : Number(schedule.differenceAmount || 0) === 0 ? '#10b981' : '#ef4444' }}>
-          Diff: ₱{Number(schedule.differenceAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: !hasValidSchedule ? '#f59e0b' : Math.abs(Number(project.contractAmount || 0) - Number(schedule.scheduledAmount || 0)) < 0.01 ? '#10b981' : '#ef4444' }}>
+          Diff: ₱{Math.abs(Number(project.contractAmount || 0) - Number(schedule.scheduledAmount || 0)).toLocaleString(undefined, {minimumFractionDigits: 2})}
         </div>
       </div>
 
