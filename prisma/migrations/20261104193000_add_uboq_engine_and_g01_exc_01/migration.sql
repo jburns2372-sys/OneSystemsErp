@@ -953,10 +953,8 @@ CREATE INDEX "idx_ii_uboq_governed" ON "IssuanceItem"("canonicalResourceId", "ub
 CREATE INDEX "idx_ri_uboq_governed" ON "ReturnItem"("canonicalResourceId", "uboqResourceRequirementId") WHERE "canonicalResourceId" IS NOT NULL;
 CREATE INDEX "idx_consi_uboq_governed" ON "ConsumptionItem"("canonicalResourceId", "uboqResourceRequirementId") WHERE "canonicalResourceId" IS NOT NULL;
 
--- 3. PostgreSQL Database Roles & Least-Privilege Separation (RLB-CTX-04 / I-03)
+-- 3. PostgreSQL Database Roles & Least-Privilege Separation (RLB-CTX-04 / I-03 / H08 Passwordless Group Roles)
 DO $$
-DECLARE
-  v_is_local_test boolean := (current_database() LIKE '%test%' OR current_database() LIKE '%local%' OR current_database() LIKE '%uboq%');
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oserp_migrations_owner') THEN
     CREATE ROLE oserp_migrations_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS;
@@ -965,42 +963,21 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oserp_compat_app') THEN
-    IF v_is_local_test THEN
-      CREATE ROLE oserp_compat_app LOGIN PASSWORD 'oserp_compat_local_only_pw' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-    ELSE
-      CREATE ROLE oserp_compat_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-    END IF;
+    CREATE ROLE oserp_compat_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
   ELSE
-    ALTER ROLE oserp_compat_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-    IF v_is_local_test THEN
-      ALTER ROLE oserp_compat_app LOGIN PASSWORD 'oserp_compat_local_only_pw';
-    END IF;
+    ALTER ROLE oserp_compat_app NOLOGIN PASSWORD NULL NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oserp_legacy_app') THEN
-    IF v_is_local_test THEN
-      CREATE ROLE oserp_legacy_app LOGIN PASSWORD 'oserp_legacy_local_only_pw' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-    ELSE
-      CREATE ROLE oserp_legacy_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-    END IF;
+    CREATE ROLE oserp_legacy_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
   ELSE
-    ALTER ROLE oserp_legacy_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-    IF v_is_local_test THEN
-      ALTER ROLE oserp_legacy_app LOGIN PASSWORD 'oserp_legacy_local_only_pw';
-    END IF;
+    ALTER ROLE oserp_legacy_app NOLOGIN PASSWORD NULL NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oserp_maint_cleanup_role') THEN
-    IF v_is_local_test THEN
-      CREATE ROLE oserp_maint_cleanup_role LOGIN PASSWORD 'oserp_maint_local_only_pw' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-    ELSE
-      CREATE ROLE oserp_maint_cleanup_role NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-    END IF;
+    CREATE ROLE oserp_maint_cleanup_role NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
   ELSE
-    ALTER ROLE oserp_maint_cleanup_role NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-    IF v_is_local_test THEN
-      ALTER ROLE oserp_maint_cleanup_role LOGIN PASSWORD 'oserp_maint_local_only_pw';
-    END IF;
+    ALTER ROLE oserp_maint_cleanup_role NOLOGIN PASSWORD NULL NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
   END IF;
 END $$;
 

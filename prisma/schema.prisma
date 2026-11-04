@@ -5266,6 +5266,7 @@ model UboqSourceDocument {
   project      Project                             @relation(fields: [projectId], references: [id], onDelete: Restrict)
   sections     UboqDocumentSection[]
   candidates   UboqExtractionCandidate[]
+  snapshots    UboqOperationalSnapshot[]
   phaseLines   UboqAwardedPhaseLine[]
   requirements UboqProcurementResourceRequirement[]
 
@@ -5377,22 +5378,26 @@ model UboqContractAuthority {
 }
 
 model UboqOperationalSnapshot {
-  id                   String             @id @default(cuid())
-  projectId            String
-  versionNumber        Int
-  versionLabel         String
-  status               UboqSnapshotStatus @default(DRAFT)
-  supersedesSnapshotId String?
-  canonicalHash        String
-  preparedById         String
-  reviewedById         String?
-  reviewedAt           DateTime?
-  approvedById         String?
-  approvedAt           DateTime?
-  remarks              String?
-  createdAt            DateTime           @default(now())
+  id                      String             @id @default(cuid())
+  projectId               String
+  sourceDocumentId        String?
+  versionNumber           Int
+  versionLabel            String
+  status                  UboqSnapshotStatus @default(DRAFT)
+  supersedesSnapshotId    String?
+  canonicalHash           String
+  stagedConsolidationJson Json?
+  stagedTakeoffsJson      Json?
+  preparedById            String
+  reviewedById            String?
+  reviewedAt              DateTime?
+  approvedById            String?
+  approvedAt              DateTime?
+  remarks                 String?
+  createdAt               DateTime           @default(now())
 
   project            Project                              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  sourceDocument     UboqSourceDocument?                  @relation(fields: [sourceDocumentId], references: [id], onDelete: Restrict)
   supersedesSnapshot UboqOperationalSnapshot?             @relation("UboqSnapshotLineage", fields: [supersedesSnapshotId], references: [id], onDelete: Restrict)
   supersededBy       UboqOperationalSnapshot[]            @relation("UboqSnapshotLineage")
   phaseLines         UboqAwardedPhaseLine[]
@@ -5424,9 +5429,10 @@ model UboqAwardedPhaseLine {
   originalQty         Decimal                @db.Decimal(18, 4)
   approvedQty         Decimal                @db.Decimal(18, 4)
   contractUnitRate    Decimal                @db.Decimal(18, 4)
-  contractLineAmount  Decimal                @db.Decimal(18, 2)
-  contractAmountExVat Decimal                @default(0) @db.Decimal(18, 2)
-  createdAt           DateTime               @default(now())
+  contractLineAmount   Decimal                @db.Decimal(18, 2)
+  contractAmountExVat  Decimal                @default(0) @db.Decimal(18, 2)
+  agencyEstimateStatus String                 @default("SOURCE_NOT_PROVIDED")
+  createdAt            DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
 
   project             Project                          @relation(fields: [projectId], references: [id], onDelete: Restrict)

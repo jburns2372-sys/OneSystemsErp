@@ -1,13 +1,14 @@
 // @ts-nocheck
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { backendPrisma } from '../lib/prismaRls';
 import {
   assertBackendProjectAccess,
   postBackendResourceLedgerDelta,
   withBackendLockedAccountsTx,
 } from '../lib/uboq/backendResourceGuard';
 
-const prisma = new PrismaClient();
+const prisma = backendPrisma;
 
 const router = Router();
 

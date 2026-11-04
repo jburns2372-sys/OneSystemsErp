@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { verifyOperationalSession } from '@/lib/dal/auth';
-import { assertProjectGraphOwnership } from '@/lib/uboq/project-ownership';
+import { assertProjectGraphOwnership, withUboqRlsContext } from '@/lib/uboq/project-ownership';
+import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { redactUboqPayloadForRole } from '@/lib/uboq/security/redact-payload';
 import { SYSTEM_TEMPLATE_PRESETS } from '@/lib/uboq/template-builder';
 
@@ -20,12 +21,59 @@ export default async function ProjectUboqWorkbenchPage({
     redirect('/login');
   }
 
+  let dashboardData: Awaited<ReturnType<typeof loadPageData>>;
+  async function loadPageData() {
+    return withUboqRlsContext(
+      { userId: actor!.userId, sessionVersion: actor!.sessionVersion, projectId },
+      async () => {
+        await assertUboqStageAuthorization(prisma, {
+          userId: actor!.userId,
+          projectId,
+          capability: 'UBOQ_VIEW',
+        });
+        await assertProjectGraphOwnership(prisma, {
+          userId: actor!.userId,
+          userRole: actor!.role,
+          projectId,
+        });
+        return Promise.all([
+          prisma.project.findUnique({
+            where: { id: projectId },
+            select: { id: true, name: true, contractNumber: true, contractAmount: true, uboqGovernanceEnabled: true },
+          }),
+          prisma.uboqContractAuthority.findFirst({
+            where: { projectId },
+            include: { taxProfile: true },
+            orderBy: { createdAt: 'desc' },
+          }),
+          prisma.uboqOperationalSnapshot.findMany({
+            where: { projectId },
+            orderBy: { versionNumber: 'desc' },
+          }),
+          prisma.uboqAwardedPhaseLine.findMany({
+            where: { projectId },
+            orderBy: { createdAt: 'asc' },
+          }),
+          prisma.uboqConsolidationGroup.findMany({
+            where: { projectId },
+            orderBy: { groupCode: 'asc' },
+          }),
+          prisma.uboqCanonicalResourceAccount.findMany({
+            where: { projectId },
+            include: { activeApprovedPr: true },
+            orderBy: { resourceCode: 'asc' },
+          }),
+          prisma.uboqValidationException.findMany({
+            where: { projectId, status: 'OPEN' },
+            orderBy: { createdAt: 'desc' },
+          }),
+        ]);
+      }
+    );
+  }
+
   try {
-    await assertProjectGraphOwnership(prisma, {
-      userId: actor.userId,
-      userRole: actor.role,
-      projectId,
-    });
+    dashboardData = await loadPageData();
   } catch {
     return (
       <div style={{ padding: '32px', color: '#ef4444' }}>
@@ -36,39 +84,7 @@ export default async function ProjectUboqWorkbenchPage({
     );
   }
 
-  const [project, contract, snapshots, phaseLines, consolidatedGroups, resourceAccounts, exceptions] =
-    await Promise.all([
-      prisma.project.findUnique({
-        where: { id: projectId },
-        select: { id: true, name: true, contractNumber: true, contractAmount: true, uboqGovernanceEnabled: true },
-      }),
-      prisma.uboqContractAuthority.findFirst({
-        where: { projectId },
-        include: { taxProfile: true },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.uboqOperationalSnapshot.findMany({
-        where: { projectId },
-        orderBy: { versionNumber: 'desc' },
-      }),
-      prisma.uboqAwardedPhaseLine.findMany({
-        where: { projectId },
-        orderBy: { createdAt: 'asc' },
-      }),
-      prisma.uboqConsolidationGroup.findMany({
-        where: { projectId },
-        orderBy: { groupCode: 'asc' },
-      }),
-      prisma.uboqCanonicalResourceAccount.findMany({
-        where: { projectId },
-        include: { activeApprovedPr: true },
-        orderBy: { resourceCode: 'asc' },
-      }),
-      prisma.uboqValidationException.findMany({
-        where: { projectId, status: 'OPEN' },
-        orderBy: { createdAt: 'desc' },
-      }),
-    ]);
+  const [project, contract, snapshots, phaseLines, consolidatedGroups, resourceAccounts, exceptions] = dashboardData;
 
   if (!project) {
     return <div style={{ padding: '32px', color: '#ef4444' }}>Project not found.</div>;

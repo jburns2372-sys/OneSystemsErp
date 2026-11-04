@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient, UboqLedgerEventType } from '@prisma/client';
+import { applyBackendRlsSessionVars, backendRlsStorage } from '../prismaRls';
 
 const MAX_TX_RETRIES = 2;
 const GLOBAL_ADMIN_ROLES = new Set(['SUPER_ADMIN', 'SYSTEM_ADMIN', 'PRESIDENT', 'VP_OPERATIONS']);
@@ -140,6 +141,10 @@ export async function withBackendLockedAccountsTx<T>(
     try {
       return await prisma.$transaction(
         async (tx) => {
+          const rlsCtx = backendRlsStorage.getStore();
+          if (rlsCtx && rlsCtx.projectId && !rlsCtx.inInteractiveTx) {
+            await applyBackendRlsSessionVars(tx, rlsCtx);
+          }
           await tx.$executeRawUnsafe(`SET LOCAL lock_timeout = '3000ms'`);
           const txRows = await tx.$queryRaw<Array<{ tx_id: string }>>`SELECT pg_current_xact_id()::text AS tx_id`;
           const txId = txRows[0]?.tx_id ?? String(Date.now());

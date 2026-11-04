@@ -1,10 +1,12 @@
 // @ts-nocheck
+import crypto from 'crypto';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { backendPrisma } from '../lib/prismaRls';
 import { assertBackendProjectAccess } from '../lib/uboq/backendResourceGuard';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = backendPrisma;
 
 function getPbacContext(req: any) {
   return {
@@ -62,7 +64,7 @@ router.post('/', async (req, res) => {
       const lastInt = parseInt(lastCanvass.canvassNumber.substring(prefix.length), 10);
       if (!isNaN(lastInt)) nextNumber = lastInt + 1;
     }
-    const canvassNumber = `${prefix}${String(nextNumber).padStart(4, '0')}`;
+    const canvassNumber = `${prefix}${String(nextNumber).padStart(4, '0')}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
     const canvass = await prisma.canvassForm.create({
       data: {
@@ -261,7 +263,7 @@ router.post('/:id/generate-po', async (req, res) => {
       const lastInt = parseInt(lastPO.poNumber.substring(prefix.length), 10);
       if (!isNaN(lastInt)) nextNumber = lastInt + 1;
     }
-    const poNumber = `${prefix}${String(nextNumber).padStart(4, '0')}`;
+    const poNumber = `${prefix}${String(nextNumber).padStart(4, '0')}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
     const po = await prisma.$transaction(async (tx) => {
       const createdPo = await tx.purchaseOrder.create({

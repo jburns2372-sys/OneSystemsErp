@@ -32,6 +32,7 @@
     "@react-google-maps/api": "^2.20.8",
     "@serwist/background-sync": "^9.5.11",
     "@serwist/next": "^9.5.11",
+    "@tesseract.js-data/eng": "^1.0.0",
     "@types/papaparse": "^5.5.2",
     "@types/react-datepicker": "^6.2.0",
     "@univerjs/core": "^0.25.1",
@@ -80,6 +81,7 @@
     "sonner": "^2.0.7",
     "sql.js": "^1.14.1",
     "tailwind-merge": "^3.6.0",
+    "tesseract.js": "^7.0.0",
     "ws": "^8.21.0",
     "xlsx": "^0.18.5",
     "zod": "^4.4.3"

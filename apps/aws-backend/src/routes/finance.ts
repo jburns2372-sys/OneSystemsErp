@@ -1,13 +1,14 @@
 // @ts-nocheck
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { backendPrisma } from '../lib/prismaRls';
 import { requirePermission } from '../lib/permissions';
 import { validateTransactionWithAI } from '../lib/aiValidation';
 import { logAudit } from '../lib/workflow';
 import { assertBackendProjectAccess } from '../lib/uboq/backendResourceGuard';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = backendPrisma;
 
 function getPbacContext(req: any) {
   return {

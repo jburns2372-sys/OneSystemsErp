@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     // ignoreBuildErrors: true,
   },
   turbopack: {},
-  serverExternalPackages: ['pdf-parse', 'pdfjs-dist'],
+  serverExternalPackages: ['pdf-parse', 'pdfjs-dist', 'tesseract.js', 'sharp'],
   // Allow Playwright to connect from 127.0.0.1
   ...({ allowedDevOrigins: ['127.0.0.1'] } as any),
   experimental: {

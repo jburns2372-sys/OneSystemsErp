@@ -1,7 +1,8 @@
 // @ts-nocheck
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { backendPrisma } from '../lib/prismaRls';
+const prisma = backendPrisma;
 import {
   VariationOrder,
   VariationOrderItem,

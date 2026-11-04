@@ -1,10 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import {
+  backendPrismaRaw,
+  backendRlsStorage,
+  resolveBackendRequestProjectContext,
+} from '../lib/prismaRls';
 
-const prisma = new PrismaClient();
-
-const ADMIN_GLOBAL_ROLES = new Set(['SUPER_ADMIN', 'SYSTEM_ADMIN']);
+const ADMIN_GLOBAL_ROLES = new Set(['SUPER_ADMIN', 'SYSTEM_ADMIN', 'PRESIDENT', 'VP_OPERATIONS']);
 const PRIVILEGED_SIMULATION_ROLES = new Set([
   'SUPER_ADMIN',
   'SYSTEM_ADMIN',
@@ -31,7 +33,9 @@ interface InternalAuthClaims {
   exp: number;
 }
 
-function verifyInternalAuthHeader(rawHeader: string | undefined): { valid: true; claims: InternalAuthClaims } | { valid: false; error: string } {
+function verifyInternalAuthHeader(
+  rawHeader: string | undefined
+): { valid: true; claims: InternalAuthClaims } | { valid: false; error: string } {
   if (!rawHeader || typeof rawHeader !== 'string') {
     return { valid: false, error: 'Unauthorized: Missing signed x-internal-auth header.' };
   }
@@ -100,7 +104,7 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
       return res.status(403).json({ error: 'Forbidden: x-user-session mismatch.' });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await backendPrismaRaw.user.findUnique({
       where: { id: claims.uid },
     });
 
@@ -158,52 +162,69 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
       }
     }
 
-    // Enforce project-based isolation for non-admin users whenever a target projectId is supplied
-    const candidateProjects = new Set<string>();
-    const rawProjectSources = [
-      claims.pid,
-      req.headers['x-active-project-id'] as string | undefined,
-      req.body?.projectId,
-      req.body?.activeProjectId,
-      req.query?.projectId as string | undefined,
-    ];
-    for (const candidate of rawProjectSources) {
-      if (typeof candidate === 'string') {
-        const trimmed = candidate.trim();
-        if (trimmed && trimmed.toUpperCase() !== 'ALL') {
-          candidateProjects.add(trimmed);
-        }
-      }
+    // Resolve all explicit + entity-derived projectIds for PBAC & transaction-local PostgreSQL RLS (H03)
+    const { allCandidateProjectIds, primaryProjectId } = await resolveBackendRequestProjectContext(
+      req,
+      claims.pid
+    );
+
+    if (allCandidateProjectIds.length > 1) {
+      return res.status(403).json({
+        error: 'Forbidden: Conflicting cross-project target identifiers in single request.',
+      });
     }
 
-    if (candidateProjects.size > 0 && !ADMIN_GLOBAL_ROLES.has(user.role)) {
-      const targetIds = Array.from(candidateProjects);
-      const assignments = await prisma.projectUserAssignment.findMany({
-        where: {
-          userId: user.id,
-          projectId: { in: targetIds },
-          assignmentStatus: 'active',
-        },
-        select: { projectId: true },
-      });
+    const effectiveRoleForPbac = (verifiedSimRole || user.role || '').trim().toUpperCase();
+    if (allCandidateProjectIds.length > 0 && !ADMIN_GLOBAL_ROLES.has(effectiveRoleForPbac)) {
+      const targetPid = allCandidateProjectIds[0];
+      const accessCheck = await backendPrismaRaw.$queryRaw<Array<{ ok: boolean }>>`
+        SELECT uboq_verify_bound_actor_for_project(
+          ${targetPid}::text,
+          ${user.id}::text,
+          ${String(user.sessionVersion)}::text
+        ) AS ok
+      `;
+      let hasAccess = Boolean(accessCheck[0]?.ok);
 
-      const assignedIds = new Set(assignments.map((a) => a.projectId));
-      const unauthorizedProject = targetIds.find((pid) => !assignedIds.has(pid));
-      if (unauthorizedProject) {
+      // If a global admin is simulating a non-admin role, verify explicit project assignment for simulated role
+      if (hasAccess && verifiedSimRole && ADMIN_GLOBAL_ROLES.has((user.role || '').toUpperCase())) {
+        const simAssign = await backendPrismaRaw.projectUserAssignment.findFirst({
+          where: {
+            userId: user.id,
+            projectId: targetPid,
+            assignmentStatus: { in: ['active', 'ACTIVE'] },
+          },
+          select: { id: true },
+        });
+        hasAccess = Boolean(simAssign);
+      }
+
+      if (!hasAccess) {
         return res.status(403).json({
           error: 'Forbidden: You do not have active assignment access to the requested project.',
         });
       }
     }
 
-    const activeProjectId =
-      (req.headers['x-active-project-id'] as string | undefined) || claims.pid || undefined;
+    const activeProjectId = primaryProjectId || undefined;
 
     req.user = user;
     req.pbacContext = {
       activeProjectId,
       simulatedRole: verifiedSimRole,
     };
+
+    if (activeProjectId) {
+      return backendRlsStorage.run(
+        {
+          userId: user.id,
+          sessionVersion: user.sessionVersion,
+          projectId: activeProjectId,
+          inInteractiveTx: false,
+        },
+        () => next()
+      );
+    }
 
     next();
   } catch (error) {

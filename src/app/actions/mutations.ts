@@ -1,6 +1,7 @@
 'use server';
 import { verifySession } from '@/lib/dal/auth';
-import { assertProjectGraphOwnership, isGlobalTenantAdminRole } from '@/lib/uboq/project-ownership';
+import { assertProjectGraphOwnership, isGlobalTenantAdminRole, withUboqRlsContext } from '@/lib/uboq/project-ownership';
+import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import {
   isProjectOrItemsUboqGoverned,
   validateAndNormalizeGovernedMrfLines,
@@ -12,6 +13,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import * as xlsx from 'xlsx';
 import { uploadToS3 as put } from '@/lib/s3';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
@@ -796,25 +798,35 @@ export async function createMaterialRequest(formData: FormData) {
 
   const projectId = formData.get('projectId') as string;
   const description = formData.get('description') as string;
-  await assertProjectGraphOwnership(prisma, {
-    userId: actor.id,
-    userRole: actor.role,
-    projectId,
-  });
 
-  // Create an MR, generating an automatic mrNumber
-  const count = await prisma.materialRequest.count();
-  const mrNumber = `MR-${new Date().getFullYear()}-${(count + 1).toString().padStart(4, '0')}`;
+  await withUboqRlsContext(
+    { userId: actor.id, sessionVersion: actor.sessionVersion, projectId },
+    async () => {
+      await assertUboqStageAuthorization(prisma, {
+        userId: actor.id,
+        projectId,
+        capability: 'UBOQ_MRF_CREATE',
+      });
+      await assertProjectGraphOwnership(prisma, {
+        userId: actor.id,
+        userRole: actor.role,
+        projectId,
+      });
 
-  await prisma.materialRequest.create({
-    data: {
-      mrNumber,
-      projectId,
-      requesterId: actor.id,
-      status: 'DRAFT',
-      remarks: description,
+      const count = await prisma.materialRequest.count({ where: { projectId } });
+      const mrNumber = `MR-${new Date().getFullYear()}-${(count + 1).toString().padStart(4, '0')}-${Math.floor(Math.random() * 1000)}`;
+
+      await prisma.materialRequest.create({
+        data: {
+          mrNumber,
+          projectId,
+          requesterId: actor.id,
+          status: 'DRAFT',
+          remarks: description,
+        },
+      });
     }
-  });
+  );
 
   revalidatePath('/material-requests');
   revalidatePath('/');
@@ -848,12 +860,20 @@ export async function generateMRFFromConsolidated(data: {
   }
 
   const consolidatedIds = items.map((i) => i.consolidatedBoqItemId);
-  await assertProjectGraphOwnership(prisma, {
-    userId: actor.id,
-    userRole: actor.role,
-    projectId,
-    consolidatedBoqItemIds: consolidatedIds,
-  });
+  return withUboqRlsContext(
+    { userId: actor.id, sessionVersion: actor.sessionVersion, projectId },
+    async () => {
+      await assertUboqStageAuthorization(prisma, {
+        userId: actor.id,
+        projectId,
+        capability: 'UBOQ_MRF_CREATE',
+      });
+      await assertProjectGraphOwnership(prisma, {
+        userId: actor.id,
+        userRole: actor.role,
+        projectId,
+        consolidatedBoqItemIds: consolidatedIds,
+      });
 
   const isGoverned = await isProjectOrItemsUboqGoverned(prisma, projectId, consolidatedIds);
   const createItemsPayload = isGoverned
@@ -891,9 +911,11 @@ export async function generateMRFFromConsolidated(data: {
     },
   });
 
-  revalidatePath('/material-requests');
-  revalidatePath(`/projects/${projectId}`);
-  return mr.id;
+      revalidatePath('/material-requests');
+      revalidatePath(`/projects/${projectId}`);
+      return mr.id;
+    }
+  );
 }
 
 // AI Validation for MRF (deterministic checks — PRR resource ceiling for UBOQ, BOQ balance for Legacy)
@@ -1036,7 +1058,7 @@ export async function runMRFAIValidation(mrId: string) {
       }
     }
     
-    officialMrNumber = `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+    officialMrNumber = `${prefix}${nextNumber.toString().padStart(4, '0')}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
   }
 
   const activeSnap = await prisma.uboqOperationalSnapshot.findFirst({
@@ -1077,40 +1099,61 @@ export async function updateMRStatus(mrId: string, newStatus: string, _userId?: 
   const actor = await verifySession();
   if (!actor) throw new Error('UBOQ_UNAUTHORIZED: Active authenticated session required');
 
-  const mrCheck = await prisma.materialRequest.findUnique({
-    where: { id: mrId },
-    select: { id: true, projectId: true, aiValidationRisk: true, validationPassHash: true, project: { select: { uboqGovernanceEnabled: true } } },
-  });
-  if (!mrCheck) throw new Error('Material Request not found');
+  const resolvedRows = await prisma.$queryRaw<Array<{ proj: string | null }>>`
+    SELECT uboq_resolve_mr_project(${mrId}::text) AS proj
+  `;
+  const targetProjectId = resolvedRows[0]?.proj;
+  if (!targetProjectId) throw new Error('Material Request not found');
 
-  await assertProjectGraphOwnership(prisma, {
-    userId: actor.id,
-    userRole: actor.role,
-    projectId: mrCheck.projectId,
-    mrId: mrCheck.id,
-  });
+  const requiredCapability = ['APPROVED', 'REJECTED', 'CANCELLED', 'VOID'].includes(newStatus)
+    ? 'UBOQ_MRF_APPROVE'
+    : 'UBOQ_MRF_CREATE';
 
-  if (mrCheck.project.uboqGovernanceEnabled && newStatus === 'APPROVED' && mrCheck.aiValidationRisk === 'CRITICAL') {
-    throw new Error('UBOQ_MRF_VALIDATION_FAILED: Cannot approve MaterialRequest with CRITICAL validation findings');
-  }
+  await withUboqRlsContext(
+    { userId: actor.id, sessionVersion: actor.sessionVersion, projectId: targetProjectId },
+    async () => {
+      await assertUboqStageAuthorization(prisma, {
+        userId: actor.id,
+        projectId: targetProjectId,
+        capability: requiredCapability,
+      });
 
-  const governedResult = await transitionGovernedMrfStatusAtomically(prisma, {
-    mrId,
-    newStatus,
-    actorUserId: actor.id,
-  });
+      const mrCheck = await prisma.materialRequest.findUnique({
+        where: { id: mrId },
+        select: { id: true, projectId: true, aiValidationRisk: true, validationPassHash: true, project: { select: { uboqGovernanceEnabled: true } } },
+      });
+      if (!mrCheck) throw new Error('Material Request not found');
 
-  if (!governedResult) {
-    const updateData: any = { status: newStatus };
-    if (newStatus === 'APPROVED') updateData.approverId = actor.id;
-    if (newStatus === 'FOR_REVIEW') updateData.checkerId = actor.id;
-    if (newStatus === 'SUBMITTED') updateData.preparerId = actor.id;
+      await assertProjectGraphOwnership(prisma, {
+        userId: actor.id,
+        userRole: actor.role,
+        projectId: mrCheck.projectId,
+        mrId: mrCheck.id,
+      });
 
-    await prisma.materialRequest.update({
-      where: { id: mrId },
-      data: updateData,
-    });
-  }
+      if (mrCheck.project.uboqGovernanceEnabled && newStatus === 'APPROVED' && mrCheck.aiValidationRisk === 'CRITICAL') {
+        throw new Error('UBOQ_MRF_VALIDATION_FAILED: Cannot approve MaterialRequest with CRITICAL validation findings');
+      }
+
+      const governedResult = await transitionGovernedMrfStatusAtomically(prisma, {
+        mrId,
+        newStatus,
+        actorUserId: actor.id,
+      });
+
+      if (!governedResult) {
+        const updateData: any = { status: newStatus };
+        if (newStatus === 'APPROVED') updateData.approverId = actor.id;
+        if (newStatus === 'FOR_REVIEW') updateData.checkerId = actor.id;
+        if (newStatus === 'SUBMITTED') updateData.preparerId = actor.id;
+
+        await prisma.materialRequest.update({
+          where: { id: mrId },
+          data: updateData,
+        });
+      }
+    }
+  );
 
   revalidatePath(`/material-requests/${mrId}`);
   revalidatePath('/material-requests');

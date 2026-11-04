@@ -1,14 +1,22 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { backendPrisma as prisma } from '../lib/prismaRls';
 import {
   assertBackendProjectAccess,
   postBackendResourceLedgerDelta,
   normalizeBackendUom,
   withBackendLockedAccountsTx,
 } from '../lib/uboq/backendResourceGuard';
+import { assertUboqStageAuthorization } from '../../../../src/lib/uboq/security/stage-rbac';
+import { withUboqRlsContext } from '../../../../src/lib/uboq/project-ownership';
+import { resolveUboqVaultStorageProvider } from '../../../../src/lib/uboq/storage/vault-storage';
+import {
+  approveOperationalSnapshotAndPrrs,
+  ingestAndStageProjectUboqPackage,
+  resolveExtractionCandidateHumanReview,
+  resolveUboqValidationException,
+} from '../../../../src/lib/uboq/adapters/snapshot-orchestrator';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const SENSITIVE_INTERNAL_COST_KEYS = new Set([
   'targetResourceUnitCost',
@@ -54,11 +62,41 @@ function redactBackendObject<T>(val: T, role: string): T {
   return val;
 }
 
+function mapUboqHttpErrorStatus(msg: string): number {
+  if (msg.includes('UBOQ_UNAUTHORIZED')) return 401;
+  if (
+    msg.includes('UBOQ_PBAC') ||
+    msg.includes('UBOQ_RBAC_FORBIDDEN') ||
+    msg.includes('UBOQ_SOD_VIOLATION') ||
+    msg.includes('CROSS_PROJECT')
+  ) {
+    return 403;
+  }
+  if (msg.includes('NOT_FOUND')) return 404;
+  if (
+    msg.includes('CEILING_EXCEEDED') ||
+    msg.includes('SUPERSEDED') ||
+    msg.includes('UBOQ_APPROVAL_BLOCKED') ||
+    msg.includes('INVALID_STATE')
+  ) {
+    return 409;
+  }
+  return 400;
+}
+
 router.get('/project/:projectId/overview', async (req, res) => {
   try {
     const { projectId } = req.params;
     const actorId = (req as any).user?.id;
-    const actorRole = (req as any).user?.role || '';
+    const actorRole = (req as any).pbacContext?.simulatedRole || (req as any).user?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actorId,
+      projectId,
+      capability: 'UBOQ_VIEW',
+      simulatedRole: simRole,
+    });
     await assertBackendProjectAccess(prisma, actorId, actorRole, projectId);
 
     const [contract, snapshots, resourceAccounts, exceptions, cashFlowPeriods] = await Promise.all([
@@ -101,8 +139,211 @@ router.get('/project/:projectId/overview', async (req, res) => {
     );
   } catch (err: any) {
     const msg = String(err.message || '');
-    const status = msg.includes('UBOQ_PBAC') ? 403 : msg.includes('NOT_FOUND') ? 404 : 400;
-    return res.status(status).json({ error: msg });
+    return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });
+  }
+});
+
+router.post('/project/:projectId/ingest', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const actor = (req as any).user;
+    const actorRole = (req as any).pbacContext?.simulatedRole || actor?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actor?.id,
+      projectId,
+      capability: 'UBOQ_INTAKE_STAGE',
+      simulatedRole: simRole,
+    });
+
+    const {
+      fileName,
+      fileBase64,
+      documentRole,
+      sectorType,
+      clientName,
+      contractRef,
+      taxProfileCode,
+      explicitPhaseLines,
+      resourceTakeoffs,
+      allowDuplicateNewRevision,
+    } = req.body || {};
+
+    if (!fileName || !fileBase64) {
+      return res.status(400).json({ error: 'fileName and fileBase64 are required' });
+    }
+    const buffer = Buffer.from(String(fileBase64), 'base64');
+
+    const staged = await withUboqRlsContext(
+      { userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId },
+      () =>
+        ingestAndStageProjectUboqPackage(prisma, {
+          projectId,
+          uploadedByUserId: actor.id,
+          fileName: String(fileName),
+          buffer,
+          documentRole,
+          sectorType,
+          clientName,
+          contractRef,
+          taxProfileCode,
+          explicitPhaseLines,
+          resourceTakeoffs,
+          allowDuplicateNewRevision: Boolean(allowDuplicateNewRevision),
+        })
+    );
+
+    return res.status(staged.duplicateIdempotentReplay ? 200 : 201).json(redactBackendObject(staged, actorRole));
+  } catch (err: any) {
+    const msg = String(err.message || '');
+    return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });
+  }
+});
+
+router.get('/project/:projectId/documents/:documentId/download', async (req, res) => {
+  try {
+    const { projectId, documentId } = req.params;
+    const actor = (req as any).user;
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actor?.id,
+      projectId,
+      capability: 'UBOQ_VIEW',
+      simulatedRole: simRole,
+    });
+
+    const doc = await prisma.uboqSourceDocument.findUnique({
+      where: { id: documentId },
+    });
+    if (!doc || doc.projectId !== projectId) {
+      return res.status(404).json({ error: 'UBOQ_VAULT_OBJECT_NOT_FOUND_OR_DENIED' });
+    }
+
+    const vaultProvider = resolveUboqVaultStorageProvider();
+    const verified = await vaultProvider.getAndVerify({
+      storageUri: doc.storageUri,
+      expectedProjectId: projectId,
+      expectedSha256Hash: doc.sha256Hash,
+    });
+    const safeName = doc.fileName.replace(/[^\w.\-() ]+/g, '_');
+
+    res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Length', String(verified.buffer.length));
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+    res.setHeader('X-UBOQ-SHA256', verified.verifiedSha256);
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+    return res.status(200).send(verified.buffer);
+  } catch (err: any) {
+    const msg = String(err.message || '');
+    return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });
+  }
+});
+
+router.post('/project/:projectId/candidates/:candidateId/review', async (req, res) => {
+  try {
+    const { projectId, candidateId } = req.params;
+    const actor = (req as any).user;
+    const actorRole = (req as any).pbacContext?.simulatedRole || actor?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actor?.id,
+      projectId,
+      capability: 'UBOQ_HUMAN_REVIEW_RESOLVE',
+      simulatedRole: simRole,
+    });
+
+    const { decision, reviewNotes, correctedMappedFields } = req.body || {};
+    const updated = await withUboqRlsContext(
+      { userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId },
+      () =>
+        resolveExtractionCandidateHumanReview(prisma, {
+          projectId,
+          candidateId,
+          reviewerUserId: actor.id,
+          decision,
+          reviewNotes,
+          correctedMappedFields,
+        })
+    );
+
+    return res.json(redactBackendObject(updated, actorRole));
+  } catch (err: any) {
+    const msg = String(err.message || '');
+    return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });
+  }
+});
+
+router.post('/project/:projectId/exceptions/:exceptionId/resolve', async (req, res) => {
+  try {
+    const { projectId, exceptionId } = req.params;
+    const actor = (req as any).user;
+    const actorRole = (req as any).pbacContext?.simulatedRole || actor?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actor?.id,
+      projectId,
+      capability: 'UBOQ_HUMAN_REVIEW_RESOLVE',
+      simulatedRole: simRole,
+    });
+
+    const { resolutionNote } = req.body || {};
+    const resolved = await withUboqRlsContext(
+      { userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId },
+      () =>
+        resolveUboqValidationException(prisma, {
+          projectId,
+          exceptionId,
+          resolverUserId: actor.id,
+          resolutionNote: String(resolutionNote || ''),
+        })
+    );
+
+    return res.json(redactBackendObject(resolved, actorRole));
+  } catch (err: any) {
+    const msg = String(err.message || '');
+    return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });
+  }
+});
+
+router.post('/project/:projectId/snapshots/:snapshotId/approve', async (req, res) => {
+  try {
+    const { projectId, snapshotId } = req.params;
+    const actor = (req as any).user;
+    const actorRole = (req as any).pbacContext?.simulatedRole || actor?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actor?.id,
+      projectId,
+      capability: 'UBOQ_SNAPSHOT_APPROVE',
+      simulatedRole: simRole,
+    });
+
+    const snap = await prisma.uboqOperationalSnapshot.findUnique({
+      where: { id: snapshotId },
+      select: { id: true, projectId: true },
+    });
+    if (!snap || snap.projectId !== projectId) {
+      return res.status(404).json({ error: 'UBOQ_SNAPSHOT_NOT_FOUND' });
+    }
+
+    const approved = await withUboqRlsContext(
+      { userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId },
+      () =>
+        approveOperationalSnapshotAndPrrs(prisma, {
+          snapshotId,
+          approverUserId: actor.id,
+        })
+    );
+
+    return res.json(redactBackendObject(approved, actorRole));
+  } catch (err: any) {
+    const msg = String(err.message || '');
+    return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });
   }
 });
 
@@ -110,7 +351,15 @@ router.post('/project/:projectId/allocate-opening-stock', async (req, res) => {
   try {
     const { projectId } = req.params;
     const actorId = (req as any).user?.id;
-    const actorRole = (req as any).user?.role || '';
+    const actorRole = (req as any).pbacContext?.simulatedRole || (req as any).user?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actorId,
+      projectId,
+      capability: 'UBOQ_STOCK_ALLOCATE',
+      simulatedRole: simRole,
+    });
     await assertBackendProjectAccess(prisma, actorId, actorRole, projectId);
 
     const {
@@ -206,16 +455,23 @@ router.post('/project/:projectId/allocate-opening-stock', async (req, res) => {
     return res.status(201).json(result);
   } catch (err: any) {
     const msg = String(err.message || '');
-    const status = msg.includes('UBOQ_PBAC') ? 403 : 400;
-    return res.status(status).json({ error: msg });
+    return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });
   }
 });
 
 router.post('/mrf/create-governed', async (req, res) => {
   try {
     const actorId = (req as any).user?.id;
-    const actorRole = (req as any).user?.role || '';
+    const actorRole = (req as any).pbacContext?.simulatedRole || (req as any).user?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
     const { projectId, purpose, priority, locationOfUse, remarks, items } = req.body;
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actorId,
+      projectId,
+      capability: 'UBOQ_MRF_CREATE',
+      simulatedRole: simRole,
+    });
     await assertBackendProjectAccess(prisma, actorId, actorRole, projectId);
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -276,14 +532,15 @@ router.post('/mrf/create-governed', async (req, res) => {
     return res.status(201).json(mr);
   } catch (err: any) {
     const msg = String(err.message || '');
-    return res.status(msg.includes('UBOQ_PBAC') ? 403 : 400).json({ error: msg });
+    return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });
   }
 });
 
 router.post('/mrf/:mrId/status', async (req, res) => {
   try {
     const actorId = (req as any).user?.id;
-    const actorRole = (req as any).user?.role || '';
+    const actorRole = (req as any).pbacContext?.simulatedRole || (req as any).user?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
     const { mrId } = req.params;
     const { newStatus, remarks } = req.body;
 
@@ -293,6 +550,16 @@ router.post('/mrf/:mrId/status', async (req, res) => {
     });
     if (!mrPre) return res.status(404).json({ error: 'MRF not found' });
 
+    const requiredCapability = ['APPROVED', 'REJECTED', 'CANCELLED', 'VOID'].includes(newStatus)
+      ? 'UBOQ_MRF_APPROVE'
+      : 'UBOQ_MRF_CREATE';
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actorId,
+      projectId: mrPre.projectId,
+      capability: requiredCapability,
+      simulatedRole: simRole,
+    });
     await assertBackendProjectAccess(prisma, actorId, actorRole, mrPre.projectId);
 
     if (newStatus === 'APPROVED' && mrPre.requesterId === actorId) {
@@ -380,8 +647,7 @@ router.post('/mrf/:mrId/status', async (req, res) => {
     return res.json(updated);
   } catch (err: any) {
     const msg = String(err.message || '');
-    const status = msg.includes('CEILING_EXCEEDED') || msg.includes('SUPERSEDED') ? 409 : msg.includes('PBAC') ? 403 : 400;
-    return res.status(status).json({ error: msg });
+    return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });
   }
 });
 

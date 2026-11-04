@@ -1,13 +1,14 @@
 // @ts-nocheck
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { backendPrisma } from '../lib/prismaRls';
 import {
   assertBackendProjectAccess,
   postBackendResourceLedgerDelta,
   withBackendLockedAccountsTx,
 } from '../lib/uboq/backendResourceGuard';
 
-const prisma = new PrismaClient(); // Assuming prisma client is configured and available in your AWS backend
+const prisma = backendPrisma; // Assuming prisma client is configured and available in your AWS backend
 
 const router = Router();
 

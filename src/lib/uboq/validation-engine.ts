@@ -24,6 +24,10 @@ export interface PhaseBoqInputLine {
   readonly approvedQty: number;
   readonly contractUnitRate: number;
   readonly contractLineAmount?: number;
+  readonly estimatedDirectCost?: number | null;
+  readonly agencyAbc?: number | null;
+  readonly sourceSheetName?: string | null;
+  readonly sourceCellRef?: string | null;
 }
 
 export interface ConsolidatedGroupPreview {

@@ -1,5 +1,7 @@
 import type { Prisma, PrismaClient, UboqLedgerEventType } from '@prisma/client';
 import { assertExactNormalizedUomMatch } from './uom-registry';
+import { applyProjectRlsSessionVars, uboqRlsStorage } from './project-ownership';
+import { assertUboqStageAuthorization } from './security/stage-rbac';
 
 const MAX_TX_RETRIES = 2;
 
@@ -95,6 +97,10 @@ export async function withLockedResourceAccountTx<T>(
     try {
       return await prisma.$transaction(
         async (tx) => {
+          const rlsStore = uboqRlsStorage.getStore();
+          if (rlsStore && !rlsStore.inInteractiveTx) {
+            await applyProjectRlsSessionVars(tx, rlsStore);
+          }
           await tx.$executeRawUnsafe(`SET LOCAL lock_timeout = '3000ms'`);
           const txIdRows = await tx.$queryRaw<Array<{ tx_id: string }>>`SELECT pg_current_xact_id()::text AS tx_id`;
           const txId = txIdRows[0]?.tx_id ?? String(Date.now());
@@ -306,6 +312,11 @@ export async function approvePrrVersionAtomically(
     where: { id: params.prrId },
   });
   if (!prrPre) throw new Error(`UBOQ_PRR_NOT_FOUND: PRR ${params.prrId} not found`);
+  await assertUboqStageAuthorization(prisma, {
+    userId: params.approverUserId,
+    projectId: prrPre.projectId,
+    capability: 'UBOQ_SNAPSHOT_APPROVE',
+  });
   if (prrPre.preparedById === params.approverUserId) {
     throw new Error('UBOQ_SOD_VIOLATION: PRR preparer cannot self-approve PRR (VAL-20)');
   }
@@ -379,6 +390,11 @@ export async function allocateVerifiedOpeningStockAtomically(
   }
 ) {
   const prisma = prismaInput as PrismaClient;
+  await assertUboqStageAuthorization(prisma, {
+    userId: params.verifiedByUserId,
+    projectId: params.projectId,
+    capability: 'UBOQ_STOCK_ALLOCATE',
+  });
   if (params.conditionCode.trim().toUpperCase() !== 'GOOD') {
     throw new Error(
       `UBOQ_UNUSABLE_STOCK_REJECTED: Cannot allocate opening stock lot ${params.lotNumber} with condition "${params.conditionCode}" (must be GOOD)`

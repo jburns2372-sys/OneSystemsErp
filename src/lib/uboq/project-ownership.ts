@@ -1,6 +1,38 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 export type AnyPrismaDb = PrismaClient | Prisma.TransactionClient | { readonly project: unknown };
+
+export interface UboqRlsContext {
+  readonly userId: string;
+  readonly sessionVersion?: number;
+  readonly projectId: string;
+  readonly inInteractiveTx?: boolean;
+}
+
+const globalForUboqRls = globalThis as unknown as {
+  uboqRlsStorage: AsyncLocalStorage<UboqRlsContext> | undefined;
+};
+
+export const uboqRlsStorage =
+  globalForUboqRls.uboqRlsStorage ?? new AsyncLocalStorage<UboqRlsContext>();
+
+globalForUboqRls.uboqRlsStorage = uboqRlsStorage;
+
+export function withUboqRlsContext<T>(
+  ctx: { userId: string; sessionVersion?: number; projectId: string },
+  fn: () => Promise<T>
+): Promise<T> {
+  return uboqRlsStorage.run(
+    {
+      userId: ctx.userId,
+      sessionVersion: ctx.sessionVersion ?? 0,
+      projectId: ctx.projectId,
+      inInteractiveTx: false,
+    },
+    async () => await fn()
+  );
+}
 
 const GLOBAL_TENANT_ADMIN_ROLES = new Set(['SUPER_ADMIN', 'SYSTEM_ADMIN', 'PRESIDENT', 'VP_OPERATIONS']);
 
@@ -26,9 +58,17 @@ export async function assertProjectGraphOwnership(
   }
 ): Promise<{ isGlobalAdmin: boolean; projectUboqGoverned: boolean }> {
   const db = dbInput as PrismaClient;
-  const { userId, userRole, projectId } = params;
+  const { userId, projectId } = params;
   if (!userId || !projectId) {
     throw new Error('UBOQ_PBAC_MISSING_CONTEXT: userId and projectId are required');
+  }
+
+  const dbUser = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, status: true },
+  });
+  if (!dbUser || dbUser.status.toUpperCase() !== 'ACTIVE') {
+    throw new Error(`UBOQ_UNAUTHORIZED: User ${userId} does not exist or is inactive`);
   }
 
   const project = await db.project.findUnique({
@@ -39,7 +79,8 @@ export async function assertProjectGraphOwnership(
     throw new Error(`UBOQ_PROJECT_NOT_FOUND: Project ${projectId} does not exist`);
   }
 
-  const isGlobalAdmin = isGlobalTenantAdminRole(userRole);
+  const authoritativeRole = dbUser.role || params.userRole;
+  const isGlobalAdmin = isGlobalTenantAdminRole(authoritativeRole);
   if (!isGlobalAdmin && project.managerId !== userId) {
     const assignment = await db.projectUserAssignment.findFirst({
       where: {
@@ -51,7 +92,7 @@ export async function assertProjectGraphOwnership(
     });
     if (!assignment) {
       throw new Error(
-        `UBOQ_PBAC_PROJECT_ACCESS_DENIED: User ${userId} (${userRole}) has no active assignment on project ${projectId}`
+        `UBOQ_PBAC_PROJECT_ACCESS_DENIED: User ${userId} (${authoritativeRole}) has no active assignment on project ${projectId}`
       );
     }
   }
@@ -131,15 +172,18 @@ export async function assertProjectGraphOwnership(
 }
 
 /**
- * Binds transaction-local PostgreSQL RLS GUC context (I-03).
+ * Binds transaction-local PostgreSQL RLS GUC context (I-03, Remediation H03/H07).
+ * Never sets any global-admin bypass GUC; PostgreSQL uboq_verify_bound_actor_for_project
+ * validates User, sessionVersion, Project, and ProjectUserAssignment directly in DB.
  */
 export async function applyProjectRlsSessionVars(
   tx: Prisma.TransactionClient,
-  params: { projectId: string; userId: string; isGlobalAdmin: boolean }
+  params: { projectId: string; userId: string; sessionVersion?: number; isGlobalAdmin?: boolean }
 ): Promise<void> {
+  const svText = params.sessionVersion !== undefined ? String(params.sessionVersion) : '';
   await tx.$executeRaw`SELECT
     set_config('app.enforce_project_rls', 'on', true),
     set_config('app.current_project_id', ${params.projectId}, true),
     set_config('app.current_user_id', ${params.userId}, true),
-    set_config('app.current_user_global_admin', ${params.isGlobalAdmin ? 'true' : 'false'}, true)`;
+    set_config('app.current_session_version', ${svText}, true)`;
 }

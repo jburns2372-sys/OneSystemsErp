@@ -1,6 +1,8 @@
 // @ts-nocheck
+import crypto from 'crypto';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { backendPrisma } from '../lib/prismaRls';
 import { requirePermission } from '../lib/permissions';
 import { submitTransaction, approveTransaction } from '../lib/workflow';
 import { validateTransactionWithAI, verifyDeliveryDocumentWithAI } from '../lib/aiValidation';
@@ -12,7 +14,7 @@ import {
 } from '../lib/uboq/backendResourceGuard';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = backendPrisma;
 
 function getPbacContext(req: any) {
   return {
@@ -481,7 +483,7 @@ router.post('/:id/approve', async (req, res) => {
       }
 
       const count = await tx.accountsPayable.count();
-      const voucherNumber = `PV-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+      const voucherNumber = `PV-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
       await tx.accountsPayable.create({
         data: {

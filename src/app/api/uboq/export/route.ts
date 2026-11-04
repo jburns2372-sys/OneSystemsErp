@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyOperationalSession } from '@/lib/dal/auth';
-import { assertProjectGraphOwnership } from '@/lib/uboq/project-ownership';
+import { assertProjectGraphOwnership, withUboqRlsContext } from '@/lib/uboq/project-ownership';
+import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import {
   buildTemplateProjection,
   exportProjectionToCsvString,
@@ -145,23 +146,34 @@ export async function GET(req: NextRequest) {
     const format = (searchParams.get('format') || 'xlsx').toLowerCase();
     const formal = searchParams.get('formal') === 'true';
 
-    await assertProjectGraphOwnership(prisma, {
-      userId: actor.userId,
-      userRole: actor.role,
-      projectId,
-    });
+    const projection = await withUboqRlsContext(
+      { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId },
+      async () => {
+        await assertUboqStageAuthorization(prisma, {
+          userId: actor.userId,
+          projectId,
+          capability: 'UBOQ_VIEW',
+        });
 
-    const openBlockers = await prisma.uboqValidationException.count({
-      where: { projectId, status: 'OPEN', severity: 'BLOCKING' },
-    });
+        await assertProjectGraphOwnership(prisma, {
+          userId: actor.userId,
+          userRole: actor.role,
+          projectId,
+        });
 
-    const canonicalRows = await loadCanonicalRowsForPreset(projectId, templateCode);
-    const projection = buildTemplateProjection(canonicalRows, {
-      templateCode,
-      userRole: actor.role,
-      isFormalSubmission: formal,
-      hasOpenBlockingExceptions: openBlockers > 0,
-    });
+        const openBlockers = await prisma.uboqValidationException.count({
+          where: { projectId, status: 'OPEN', severity: 'BLOCKING' },
+        });
+
+        const canonicalRows = await loadCanonicalRowsForPreset(projectId, templateCode);
+        return buildTemplateProjection(canonicalRows, {
+          templateCode,
+          userRole: actor.role,
+          isFormalSubmission: formal,
+          hasOpenBlockingExceptions: openBlockers > 0,
+        });
+      }
+    );
 
     if (format === 'csv') {
       const csv = exportProjectionToCsvString(projection);

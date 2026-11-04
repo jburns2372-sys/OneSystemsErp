@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { CANONICAL_FIELD_MAP, resolveCanonicalFieldId } from './field-catalog';
 import { canRoleAccessField, redactUboqPayloadForRole } from './security/redact-payload';
-import { inspectCellSecurity } from './intake/security-guard';
+import { inspectCellSecurity, neutralizeSpreadsheetFormulaForCsv } from './intake/security-guard';
 
 export type UboqTemplateGrain =
   | 'CONTRACT_HEADER'
@@ -274,11 +274,16 @@ export async function exportProjectionToXlsxBuffer(
 export function exportProjectionToCsvString(projection: ReturnType<typeof buildTemplateProjection>): string {
   const escapeCsv = (v: unknown): string => {
     if (v === null || v === undefined) return '';
-    const s = inspectCellSecurity(String(v)).sanitizedText;
-    if (/[",\r\n]/.test(s)) {
-      return `"${s.replace(/"/g, '""')}"`;
+    if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '0';
+    if (typeof v === 'boolean') return v ? 'true' : 'false';
+    const rawStr = String(v);
+    const cleaned = inspectCellSecurity(rawStr).sanitizedText;
+    // M02: Neutralize CSV formula triggers (=, +, -, @, leading \t or \r) on all string cells/headings
+    const safeStr = neutralizeSpreadsheetFormulaForCsv(rawStr.startsWith('\t') || rawStr.startsWith('\r') ? rawStr : cleaned);
+    if (/[",\r\n]/.test(safeStr)) {
+      return `"${safeStr.replace(/"/g, '""')}"`;
     }
-    return s;
+    return safeStr;
   };
   const headerLine = projection.visibleColumns.map((c) => escapeCsv(c.heading)).join(',');
   const dataLines = projection.projectedRows.map((r) =>
