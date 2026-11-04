@@ -12,6 +12,14 @@ import * as crypto from 'crypto';
 import { ProposalSchema, AIProposalType, SchedulingProvider } from './types';
 import { OpenAIProposalProvider } from './providers/OpenAIProposalProvider';
 import { DeterministicReconstructionProvider } from './providers/DeterministicReconstructionProvider';
+import {
+  BOQ_ADJUSTMENT_DESCRIPTION,
+  BOQ_ADJUSTMENT_ITEM_CODE,
+  BOQ_ADJUSTMENT_PLACEHOLDER_ID,
+  assessContractFeasibility,
+  computeActivityDates,
+  reconcileBoqToContract,
+} from './scheduleReconciliation';
 
 export interface OrchestratorContext {
   projectId: string;
@@ -87,22 +95,35 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
     );
     const awardedContractAmount = new Prisma.Decimal(project.contractAmount?.toString() || "0");
 
-    // Check for discrepancy between BOQ and Contract Amount
-    if (awardedContractAmount.gt(0)) {
-      const diff = awardedContractAmount.minus(awardedTotal).toNumber();
-      if (diff > 1.0) {
-         console.warn(`BOQ Total (${awardedTotal.toNumber()}) does not match Awarded Contract Amount (${awardedContractAmount.toNumber()}). Injecting dummy BOQ item for overhead/contingency.`);
-         pricedBoqLines.push({
-           id: "dummy-overhead-contingency",
-           itemCode: "GEN-REQ-001",
-           description: "General Requirements, Overhead, Profit, and Contingency",
-           unit: "LOT",
-           quantity: 1,
-           totalCost: diff,
-           projectId: project.id
-         } as any);
-         awardedTotal = awardedTotal.plus(new Prisma.Decimal(diff));
+    // Check for discrepancy between BOQ and Contract Amount.
+    // The shortfall is computed from the ORIGINAL BOQ total before any mutation so the
+    // persisted adjustment line amount equals its allocation (see scheduleReconciliation.ts).
+    const existingAdjustmentLine = pricedBoqLines.find(item => item.itemCode === BOQ_ADJUSTMENT_ITEM_CODE) || null;
+    const boqReconciliation = reconcileBoqToContract(
+      awardedTotal,
+      awardedContractAmount,
+      existingAdjustmentLine ? { id: existingAdjustmentLine.id, totalCost: existingAdjustmentLine.totalCost?.toString() || "0" } : null
+    );
+
+    if (boqReconciliation.policy === 'SHORTFALL_ADJUSTMENT') {
+      console.warn(`BOQ Total (${boqReconciliation.originalBoqTotal.toString()}) is below Awarded Contract Amount (${boqReconciliation.contractAmount.toString()}). Reconciling shortfall ${boqReconciliation.adjustmentAmount.toString()} via ${BOQ_ADJUSTMENT_ITEM_CODE}.`);
+      if (existingAdjustmentLine) {
+        // Reuse the single existing adjustment line (no duplicate adjustment entries).
+        existingAdjustmentLine.totalCost = boqReconciliation.adjustmentLineTotal.toNumber();
+      } else {
+        pricedBoqLines.push({
+          id: BOQ_ADJUSTMENT_PLACEHOLDER_ID,
+          itemCode: BOQ_ADJUSTMENT_ITEM_CODE,
+          description: BOQ_ADJUSTMENT_DESCRIPTION,
+          unit: "LOT",
+          quantity: 1,
+          totalCost: boqReconciliation.adjustmentLineTotal.toNumber(),
+          projectId: project.id
+        } as any);
       }
+      awardedTotal = boqReconciliation.reconciledBoqTotal;
+    } else if (boqReconciliation.policy === 'BOQ_EXCEEDS_CONTRACT') {
+      console.warn(`BOQ Total (${boqReconciliation.originalBoqTotal.toString()}) exceeds Awarded Contract Amount (${boqReconciliation.contractAmount.toString()}). No automatic reduction applied; schedule allocates the actual BOQ total.`);
     }
 
     const boqLines = pricedBoqLines;
@@ -495,20 +516,26 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
     }
     
     // Determine overall validation metrics
-    // Determine completion dates
+    // Determine completion dates from the mathematically calculated CPM duration.
+    // Dates are never clipped to the contract boundary; overruns are reported explicitly.
     const naturalCompletionDate = new Date(projectStartDate);
     naturalCompletionDate.setDate(naturalCompletionDate.getDate() + cpmResult.projectDuration);
     
-    const naturallyExceeded = cpmResult.projectDuration > targetDuration;
+    const contractFeasibility = assessContractFeasibility(cpmResult.projectDuration, targetDuration);
+    const naturallyExceeded = contractFeasibility.exceedsContract;
     if (naturallyExceeded) {
       feasibilityFlags.push({
-        activityId: 'PROJECT', action: 'BOUNDARY_CLAMP', originalDuration: cpmResult.projectDuration, proposedDuration: targetDuration, rationale: 'Schedule forced to clamp to contract boundary.'
+        activityId: 'PROJECT',
+        action: 'CONTRACT_DURATION_EXCEEDED',
+        originalDuration: cpmResult.projectDuration,
+        contractDuration: targetDuration,
+        overrunDays: contractFeasibility.overrunDays,
+        rationale: 'Calculated CPM duration exceeds the contract duration. Dates were preserved (not clamped); schedule requires review and justified compression.'
       });
     }
     
-    // final calculated date
-    const finalCalculatedCompletionDate = new Date(projectStartDate);
-    finalCalculatedCompletionDate.setDate(finalCalculatedCompletionDate.getDate() + Math.min(cpmResult.projectDuration, targetDuration));
+    // final calculated date (unclamped, equals the natural CPM completion)
+    const finalCalculatedCompletionDate = new Date(naturalCompletionDate);
 
     const diffTime = (project.endDate ? project.endDate.getTime() : projectStartDate.getTime()) - finalCalculatedCompletionDate.getTime();
     const completionVarianceDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -516,17 +543,28 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
     const validationMetrics = {
       FINANCIAL: "BALANCED", // will verify below
       BOQ: "FULLY_ALLOCATED",
-      DATES: "WITHIN_CONTRACT",
+      DATES: contractFeasibility.datesStatus,
       SEQUENCE: "VALID",
       CPM: cpmResult.results.size > 0 ? "CALCULATED" : "NOT_CALCULATED",
       PHASES: aiProposal!.phases[aiProposal!.phases.length - 1].phaseName === "Project Acceptance and Demobilization" ? "VALID" : "INVALID_FINAL_PHASE",
-      OVERALL: "READY_FOR_REVIEW",
+      OVERALL: naturallyExceeded ? "INFEASIBLE" : "READY_FOR_REVIEW",
       naturalCalculatedCompletionDate: naturalCompletionDate.toISOString(),
       finalCalculatedCompletionDate: finalCalculatedCompletionDate.toISOString(),
       contractStartDate: project.startDate ? project.startDate.toISOString() : projectStartDate.toISOString(),
       contractCompletionDate: project.endDate ? project.endDate.toISOString() : naturalCompletionDate.toISOString(),
       completionVarianceDays,
-      feasibilityStatus: naturallyExceeded ? 'SCHEDULE_INFEASIBLE_CLAMPED' : 'SCHEDULE_FEASIBLE'
+      calculatedDurationDays: cpmResult.projectDuration,
+      contractDurationDays: targetDuration,
+      contractOverrunDays: contractFeasibility.overrunDays,
+      feasibilityStatus: contractFeasibility.feasibilityStatus,
+      boqReconciliation: {
+        policy: boqReconciliation.policy,
+        originalBoqTotal: boqReconciliation.originalBoqTotal.toString(),
+        contractAmount: boqReconciliation.contractAmount.toString(),
+        shortfall: boqReconciliation.shortfall.toString(),
+        adjustmentAmount: boqReconciliation.adjustmentAmount.toString(),
+        reconciledBoqTotal: boqReconciliation.reconciledBoqTotal.toString()
+      }
     };
 
     // Pass 3: Exact Financial Reconciliation, Date Assignment, and Final Validation
@@ -545,18 +583,13 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
         let qty = 0;
         let unit = 'lot';
 
-        // Apply CPM Dates (Continuous calendar for now)
-        const clampedEarlyStart = Math.min(cpmAct.earlyStart, targetDuration - 1);
-        const clampedEarlyFinish = Math.min(cpmAct.earlyFinish, targetDuration);
-
-        const plannedStartDate = new Date(projectStartDate);
-        plannedStartDate.setDate(plannedStartDate.getDate() + clampedEarlyStart);
-
-        const plannedFinishDate = new Date(projectStartDate);
-        plannedFinishDate.setDate(plannedFinishDate.getDate() + Math.max(0, clampedEarlyFinish - 1));
-        
-        // Ensure duration doesn't break due to clamping
-        cpmInputAct.duration = Math.max(1, clampedEarlyFinish - clampedEarlyStart);
+        // Apply CPM Dates (Continuous calendar). Calculated dates are NOT clipped to the
+        // contract boundary and activity durations are never shortened to fit it.
+        const { plannedStartDate, plannedFinishDate, plannedDuration } = computeActivityDates(
+          projectStartDate,
+          cpmAct.earlyStart,
+          cpmAct.earlyFinish
+        );
 
         for (const boqId of act.assignedBOQItemIds) {
           const group = consolidatedPayload.find(g => g.id === boqId || g.boqLineIds.includes(boqId));
@@ -592,7 +625,7 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
 
         activityData.push({
           id: actId, scheduleId: schedule.id, wbsId: phaseWbsId, name: act.activityName,
-          activityCode: `ACT-${actSeq++}`, plannedDuration: cpmAct.earlyFinish - cpmAct.earlyStart,
+          activityCode: `ACT-${actSeq++}`, plannedDuration,
           plannedStartDate, plannedFinishDate, unit, plannedQuantity: qty,
           durationMethod: cpmInputAct.metadata?.method || act.durationMethod,
           productivityAssumption: prodRate,
@@ -688,33 +721,47 @@ export async function runAIOrchestrator(context: OrchestratorContext) {
       validationErrors.push("Testing and Commissioning phase is required.");
     }
 
-    // Persist dummy BOQ if we injected it
-    const hasDummy = allocationData.some(a => a.awardedBoqItemId === "dummy-overhead-contingency");
-    if (hasDummy) {
-       const diffToInject = awardedContractAmount.minus(awardedTotalTx).abs().toNumber();
-       const newDummy = await tx.awardedBOQItem.create({
-         data: {
-           projectId,
-           itemCode: "GEN-REQ-001",
-           description: "General Requirements, Overhead, Profit, and Contingency",
-           unit: "LOT",
-           quantity: 1,
-           totalCost: diffToInject,
-           directCost: diffToInject,
-           combinedUnitCost: diffToInject,
-           status: 'PENDING'
+    // Persist the BOQ shortfall adjustment line. The amount is the pre-mutation shortfall
+    // (plus any existing adjustment-line total), so the persisted line equals its allocation.
+    if (boqReconciliation.policy === 'SHORTFALL_ADJUSTMENT') {
+       const adjustmentAmount = boqReconciliation.adjustmentLineTotal.toNumber();
+       if (boqReconciliation.existingAdjustmentItemId) {
+         // Reuse the existing adjustment line instead of creating a duplicate entry.
+         await tx.awardedBOQItem.update({
+           where: { id: boqReconciliation.existingAdjustmentItemId },
+           data: {
+             totalCost: adjustmentAmount,
+             directCost: adjustmentAmount,
+             combinedUnitCost: adjustmentAmount
+           }
+         });
+       } else {
+         const newDummy = await tx.awardedBOQItem.create({
+           data: {
+             projectId,
+             itemCode: BOQ_ADJUSTMENT_ITEM_CODE,
+             description: BOQ_ADJUSTMENT_DESCRIPTION,
+             unit: "LOT",
+             quantity: 1,
+             totalCost: adjustmentAmount,
+             directCost: adjustmentAmount,
+             combinedUnitCost: adjustmentAmount,
+             status: 'PENDING'
+           }
+         });
+         // Update the allocation data to use the real database ID
+         for (const a of allocationData) {
+           if (a.awardedBoqItemId === BOQ_ADJUSTMENT_PLACEHOLDER_ID) {
+              a.awardedBoqItemId = newDummy.id;
+           }
          }
-       });
-       // Update the allocation data to use the real database ID
-       for (const a of allocationData) {
-         if (a.awardedBoqItemId === "dummy-overhead-contingency") {
-            a.awardedBoqItemId = newDummy.id;
-         }
+         // Also update our tracking variables so validation doesn't fail
+         const placeholderIdx = boqLines.findIndex(b => b.id === BOQ_ADJUSTMENT_PLACEHOLDER_ID);
+         if (placeholderIdx >= 0) boqLines.splice(placeholderIdx, 1);
+         boqLines.push(newDummy as any);
+         uniqueAllocatedBOQ.add(newDummy.id);
+         uniqueAllocatedBOQ.delete(BOQ_ADJUSTMENT_PLACEHOLDER_ID);
        }
-       // Also update our tracking variables so validation doesn't fail
-       boqLines.push(newDummy as any);
-       uniqueAllocatedBOQ.add(newDummy.id);
-       uniqueAllocatedBOQ.delete("dummy-overhead-contingency");
     }
 
     await tx.scheduleWBS.createMany({ data: phaseWbsData });
