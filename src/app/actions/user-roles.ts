@@ -75,13 +75,16 @@ export async function removeRoleFromUser(userId: string, roleId: string) {
 }
 
 export async function updateUserStatus(userId: string, status: string) {
+  // Served by the authenticated, RBAC-guarded Express handler
+  // POST /api/user-roles/updateUserStatus (apps/aws-backend/src/routes/user-roles.ts).
   const response = await fetchWithAuth(`${API_ROUTE_PREFIX}/updateUserStatus`, {
     method: 'POST',
     body: JSON.stringify({ userId, status }),
   });
   
-  if (response.success) {
-    revalidatePath('/admin/user-roles');
+  if (!response?.success) {
+    throw new Error(response?.error || 'Failed to update user status.');
   }
-  return response; // Returns { success: true } or { success: false, error: ... }
+  revalidatePath('/admin/user-roles');
+  return response; // Returns { success: true, status }
 }
