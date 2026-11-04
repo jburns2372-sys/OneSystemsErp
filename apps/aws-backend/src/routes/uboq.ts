@@ -12,6 +12,7 @@ import { resolveUboqVaultStorageProvider } from '../../../../src/lib/uboq/storag
 import {
   approveOperationalSnapshotAndPrrs,
   ingestAndStageProjectUboqPackage,
+  regenerateDraftSnapshotFromVerifiedDocument,
   resolveExtractionCandidateHumanReview,
   resolveUboqValidationException,
 } from '../../../../src/lib/uboq/adapters/snapshot-orchestrator';
@@ -77,6 +78,7 @@ function mapUboqHttpErrorStatus(msg: string): number {
     msg.includes('CEILING_EXCEEDED') ||
     msg.includes('SUPERSEDED') ||
     msg.includes('UBOQ_APPROVAL_BLOCKED') ||
+    msg.includes('UBOQ_DRAFT_REGEN_BLOCKED') ||
     msg.includes('INVALID_STATE')
   ) {
     return 409;
@@ -255,7 +257,7 @@ router.post('/project/:projectId/candidates/:candidateId/review', async (req, re
       simulatedRole: simRole,
     });
 
-    const { decision, reviewNotes, correctedMappedFields } = req.body || {};
+    const { decision, reviewNotes, canonicalFieldRemap, correctedMappedFields } = req.body || {};
     const updated = await withUboqRlsContext(
       { userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId },
       () =>
@@ -265,11 +267,49 @@ router.post('/project/:projectId/candidates/:candidateId/review', async (req, re
           reviewerUserId: actor.id,
           decision,
           reviewNotes,
+          canonicalFieldRemap,
           correctedMappedFields,
         })
     );
 
     return res.json(redactBackendObject(updated, actorRole));
+  } catch (err: any) {
+    const msg = String(err.message || '');
+    return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });
+  }
+});
+
+router.post('/project/:projectId/documents/:documentId/regenerate-draft', async (req, res) => {
+  try {
+    const { projectId, documentId } = req.params;
+    const actor = (req as any).user;
+    const actorRole = (req as any).pbacContext?.simulatedRole || actor?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actor?.id,
+      projectId,
+      capability: 'UBOQ_INTAKE_STAGE',
+      simulatedRole: simRole,
+    });
+
+    const { sectorType, clientName, contractRef, taxProfileCode, resourceTakeoffs } = req.body || {};
+    const regenerated = await withUboqRlsContext(
+      { userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId },
+      () =>
+        regenerateDraftSnapshotFromVerifiedDocument(prisma, {
+          projectId,
+          sourceDocumentId: documentId,
+          preparedByUserId: actor.id,
+          sectorType,
+          clientName,
+          contractRef,
+          taxProfileCode,
+          resourceTakeoffs,
+        })
+    );
+
+    return res.status(201).json(redactBackendObject(regenerated, actorRole));
   } catch (err: any) {
     const msg = String(err.message || '');
     return res.status(mapUboqHttpErrorStatus(msg)).json({ error: msg });

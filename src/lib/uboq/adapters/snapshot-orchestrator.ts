@@ -7,6 +7,7 @@ import type {
   UboqSectorType,
 } from '@prisma/client';
 import { extractUniversalDocumentPackage } from '../intake/parsers';
+import { CANONICAL_FIELD_MAP, resolveCanonicalFieldId } from '../field-catalog';
 import { normalizeUom } from '../uom-registry';
 import {
   buildSafePhaseConsolidation,
@@ -63,8 +64,111 @@ interface StagedValidatedTakeoff {
   readonly procurementBudget: number;
 }
 
+interface StagedIntakeOptionsMetadata {
+  readonly sectorType?: UboqSectorType;
+  readonly clientName?: string;
+  readonly contractRef?: string;
+  readonly taxProfileCode?: string;
+  readonly resourceTakeoffs?: ResourceTakeoffSpecInput[];
+}
+
+const NUMERIC_CANONICAL_FIELD_IDS = new Set([
+  'approved_qty',
+  'original_qty',
+  'contract_unit_rate',
+  'contract_line_amount',
+  'agency_edc_amt',
+  'agency_abc',
+  'estimate_material_cost',
+  'estimate_labor_cost',
+  'estimate_equipment_cost',
+  'estimated_direct_cost',
+  'ocm_rate',
+  'ocm_amount',
+  'contingency_ocm',
+  'contractor_profit_rate',
+  'contractor_profit_amt',
+  'estimate_vat_rate',
+  'estimate_vat_amt',
+  'estimated_indirect_cost',
+  'estimated_total_unit_cost',
+  'estimated_total_amount',
+  'resource_coeff',
+  'resource_summary_qty',
+  'resource_required_qty',
+  'target_resource_cost',
+  'procurement_budget',
+]);
+
 function round4(n: number): number {
   return Math.round((n + Number.EPSILON) * 10000) / 10000;
+}
+
+function toFiniteNumber(val: unknown): number | null {
+  if (typeof val === 'number' && Number.isFinite(val)) return val;
+  if (typeof val === 'string') {
+    const cleaned = val.replace(/[₱$,\s]/g, '').trim();
+    if (!cleaned || cleaned === '-' || cleaned === '—') return null;
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : null;
+  }
+  return null;
+}
+
+function toPositiveFiniteNumber(val: unknown): number | null {
+  const n = toFiniteNumber(val);
+  return n !== null && n > 0 ? n : null;
+}
+
+function buildPhaseInputLineFromCandidateFields(params: {
+  lineIndex: number;
+  candidateId: string;
+  sheetOrPageRef: string | null;
+  sourceCellRef: string | null;
+  fields: Record<string, unknown>;
+}): PhaseBoqInputLine | null {
+  const { lineIndex, candidateId, sheetOrPageRef, sourceCellRef, fields } = params;
+  const workDescription = String(fields.work_description ?? '').trim();
+  const unitRaw = String(fields.unit ?? '').trim();
+  const approvedQty = toFiniteNumber(fields.approved_qty);
+  const contractUnitRate = toFiniteNumber(fields.contract_unit_rate);
+
+  if (!workDescription || !unitRaw || approvedQty === null || contractUnitRate === null) {
+    return null;
+  }
+
+  const rawPhase = String(fields.phase_code ?? '').trim();
+  const resolvedPhase =
+    rawPhase && rawPhase.toUpperCase() !== 'GENERAL'
+      ? rawPhase
+      : String(sheetOrPageRef || 'PHASE-1').trim();
+
+  const origQty = toFiniteNumber(fields.original_qty);
+  const statedLineAmount = toFiniteNumber(fields.contract_line_amount);
+  const sourcedEdc =
+    toPositiveFiniteNumber(fields.agency_edc_amt) ??
+    toPositiveFiniteNumber(fields.estimated_direct_cost);
+  // R1-M02: Map agencyAbc STRICTLY from explicit sourced agency_abc — NEVER from derived estimated_total_amount!
+  const sourcedAbc = toPositiveFiniteNumber(fields.agency_abc);
+
+  return {
+    lineKey: `LINE-${lineIndex + 1}`,
+    itemCode: String(fields.item_code || `ITEM-${lineIndex + 1}`).trim(),
+    phaseCode: resolvedPhase,
+    sectionCode: fields.section_code ? String(fields.section_code).trim() : null,
+    workDescription,
+    specification: fields.specification ? String(fields.specification).trim() : null,
+    unitRaw,
+    originalQty: origQty !== null ? origQty : approvedQty,
+    approvedQty,
+    contractUnitRate,
+    contractLineAmount: statedLineAmount !== null ? statedLineAmount : undefined,
+    estimatedDirectCost: sourcedEdc,
+    agencyAbc: sourcedAbc,
+    sourceSheetName: sheetOrPageRef,
+    sourceCellRef,
+    extractionCandidateId: candidateId,
+  };
 }
 
 function mapLockedAccountRow(r: Record<string, unknown>): LockedResourceRow {
@@ -92,9 +196,360 @@ function mapLockedAccountRow(r: Record<string, unknown>): LockedResourceRow {
 }
 
 /**
+ * Shared verified staging helper used by both deterministic initial ingestion and
+ * post-human-review draft regeneration (R1-H01, R1-M02, H05, H06).
+ */
+async function stageVerifiedPhaseLinesIntoDraftSnapshot(
+  prisma: PrismaClient,
+  params: {
+    projectId: string;
+    sourceDocumentId: string;
+    sourceSha256Hash: string;
+    preparedByUserId: string;
+    phaseInputs: PhaseBoqInputLine[];
+    sectorType?: UboqSectorType;
+    clientName?: string;
+    contractRef?: string;
+    taxProfileCode?: string;
+    resourceTakeoffs?: ResourceTakeoffSpecInput[];
+    supersedePriorDraftForDocument?: boolean;
+  }
+) {
+  const { groups, issues } = buildSafePhaseConsolidation(params.phaseInputs);
+  const blockingIssues = issues.filter((i) => i.severity === 'BLOCKING');
+  if (blockingIssues.length > 0) {
+    for (const bi of blockingIssues) {
+      await prisma.uboqValidationException.create({
+        data: {
+          projectId: params.projectId,
+          ruleCode: bi.ruleCode,
+          severity: bi.severity,
+          entityType: bi.entityType,
+          entityId: bi.entityId ?? null,
+          message: bi.message,
+        },
+      });
+    }
+    throw new Error(
+      `UBOQ_CONSOLIDATION_VALIDATION_FAILED: ${blockingIssues.map((b) => `${b.ruleCode}: ${b.message}`).join('; ')}`
+    );
+  }
+
+  // H06: Validate resourceTakeoffs strictly against consolidated groups WITHOUT any default fallback to groups[0]!
+  const stagedTakeoffs: StagedValidatedTakeoff[] = [];
+  if (params.resourceTakeoffs && params.resourceTakeoffs.length > 0) {
+    for (const rt of params.resourceTakeoffs) {
+      const needle = (rt.consolidatedItemCodeOrDesc || '').trim();
+      const needleLower = needle.toLowerCase();
+      const matches = groups.filter((g) => {
+        const descLower = g.canonicalDescription.trim().toLowerCase();
+        const specLower = (g.specification || '').trim().toLowerCase();
+        const descAndSpecLower = specLower ? `${descLower} | ${specLower}` : descLower;
+        return g.groupKey === needle || descLower === needleLower || descAndSpecLower === needleLower;
+      });
+
+      if (matches.length !== 1) {
+        const ruleCode = matches.length === 0 ? 'VAL-PRR-UNMATCHED-GROUP' : 'VAL-PRR-AMBIGUOUS-GROUP';
+        const message =
+          matches.length === 0
+            ? `Resource takeoff "${rt.resourceCode}" target "${rt.consolidatedItemCodeOrDesc}" did not match any consolidated work scope group`
+            : `Resource takeoff "${rt.resourceCode}" target "${rt.consolidatedItemCodeOrDesc}" matched ${matches.length} consolidated groups ambiguously`;
+        await prisma.uboqValidationException.create({
+          data: {
+            projectId: params.projectId,
+            ruleCode,
+            severity: 'BLOCKING',
+            entityType: 'RESOURCE_TAKEOFF',
+            entityId: rt.resourceCode,
+            message,
+          },
+        });
+        throw new Error(`UBOQ_UNMATCHED_RESOURCE_TAKEOFF_GROUP [${ruleCode}]: ${message}`);
+      }
+
+      const matchedGrp = matches[0];
+      const resUom = normalizeUom(rt.resourceUnitRaw, rt.resourceSpec);
+      const resSpecHash = computeSpecSignatureHash(rt.resourceDescription, rt.resourceSpec);
+      const evalRes = evaluateResourceTakeoffRequirement({
+        resourceCode: rt.resourceCode,
+        takeoffBasis: rt.takeoffBasis,
+        resourceCoeff: rt.resourceCoeff,
+        workQuantityBasis: Number(matchedGrp.totalApprovedQty),
+        summaryVerifiedQty: rt.summaryVerifiedQty,
+      });
+      const blockTakeoff = evalRes.issues.find((i) => i.severity === 'BLOCKING');
+      if (blockTakeoff) {
+        await prisma.uboqValidationException.create({
+          data: {
+            projectId: params.projectId,
+            ruleCode: blockTakeoff.ruleCode,
+            severity: 'BLOCKING',
+            entityType: blockTakeoff.entityType,
+            entityId: rt.resourceCode,
+            message: blockTakeoff.message,
+          },
+        });
+        throw new Error(`UBOQ_TAKEOFF_BLOCKED [${blockTakeoff.ruleCode}]: ${blockTakeoff.message}`);
+      }
+
+      stagedTakeoffs.push({
+        targetGroupKey: matchedGrp.groupKey,
+        resourceCode: rt.resourceCode,
+        resourceDescription: rt.resourceDescription,
+        resourceSpec: rt.resourceSpec,
+        specSignatureHash: resSpecHash,
+        resourceClass: rt.resourceClass ?? 'MATERIAL',
+        fulfillmentChannel: rt.fulfillmentChannel ?? 'SUPPLIER_PO',
+        resourceUomNormalized: resUom.normalizedCode,
+        uomDimensionFamily: resUom.dimensionFamily,
+        takeoffBasis: rt.takeoffBasis,
+        resourceCoeff: rt.resourceCoeff ?? null,
+        workQuantityBasis:
+          rt.takeoffBasis === 'CONTRACTOR_DETAILED_DUPA' ? Number(matchedGrp.totalApprovedQty) : null,
+        summaryVerifiedQty: rt.summaryVerifiedQty ?? null,
+        requiredQty: evalRes.requiredQty,
+        benchmarkUnitCost: rt.benchmarkUnitCost,
+        targetResourceUnitCost: rt.targetResourceUnitCost ?? rt.benchmarkUnitCost,
+        procurementBudget: Number((evalRes.requiredQty * rt.benchmarkUnitCost).toFixed(2)),
+      });
+    }
+  }
+
+  const profileCfg: TaxPricingProfileConfig =
+    STANDARD_TAX_PROFILES[params.taxProfileCode ?? ''] ??
+    (params.sectorType === 'CORPORATE'
+      ? STANDARD_TAX_PROFILES.CORP_PH_VAT_EXCL_12
+      : params.sectorType === 'PRIVATE'
+        ? STANDARD_TAX_PROFILES.PRIVATE_NON_VAT_EXEMPT
+        : STANDARD_TAX_PROFILES.GOV_PH_DUPA_5PCT_EST);
+
+  // H05: Stage DRAFT Operational Snapshot & Phase Lines ONLY — ZERO mutations to live AwardedBOQItem,
+  // ConsolidatedBOQItem, BOQMapping, Project.uboqGovernanceEnabled, or UboqCanonicalResourceAccount!
+  const stagedResult = await prisma.$transaction(async (tx) => {
+    const rlsStore = uboqRlsStorage.getStore();
+    if (rlsStore && !rlsStore.inInteractiveTx) {
+      await applyProjectRlsSessionVars(tx, rlsStore);
+    }
+
+    if (params.supersedePriorDraftForDocument) {
+      await tx.uboqOperationalSnapshot.updateMany({
+        where: {
+          projectId: params.projectId,
+          sourceDocumentId: params.sourceDocumentId,
+          status: 'DRAFT',
+        },
+        data: { status: 'SUPERSEDED' },
+      });
+    }
+
+    const taxProfile = await tx.uboqTaxPricingProfile.upsert({
+      where: {
+        projectId_profileCode_versionCode: {
+          projectId: params.projectId,
+          profileCode: profileCfg.profileCode,
+          versionCode: profileCfg.versionCode,
+        },
+      },
+      update: {},
+      create: {
+        projectId: params.projectId,
+        profileCode: profileCfg.profileCode,
+        versionCode: profileCfg.versionCode,
+        sectorType: profileCfg.sectorType,
+        estimateVatComponentRate: profileCfg.estimateVatComponentRate,
+        estimateVatBaseMode: profileCfg.estimateVatBaseMode,
+        outputVatRate: profileCfg.outputVatRate,
+        salesVatCategory: profileCfg.salesVatCategory,
+        contractVatInclusive: profileCfg.contractVatInclusive,
+        govVatWithholdingRate: profileCfg.govVatWithholdingRate,
+        ewtRate: profileCfg.ewtRate,
+        ocmRate: profileCfg.ocmRate,
+        contractorProfitRate: profileCfg.contractorProfitRate,
+        contingencyRate: profileCfg.contingencyRate,
+        retentionRate: profileCfg.retentionRate,
+        advanceRecoupmentRate: profileCfg.advanceRecoupmentRate,
+      },
+    });
+
+    const latestSnap = await tx.uboqOperationalSnapshot.findFirst({
+      where: { projectId: params.projectId },
+      orderBy: { versionNumber: 'desc' },
+    });
+    const nextVer = (latestSnap?.versionNumber ?? 0) + 1;
+    const canonicalHash = crypto
+      .createHash('sha256')
+      .update(
+        JSON.stringify({
+          sha: params.sourceSha256Hash,
+          phaseInputs: params.phaseInputs.map((p) => ({
+            candidateId: p.extractionCandidateId ?? null,
+            phaseCode: p.phaseCode,
+            itemCode: p.itemCode,
+            unitRaw: p.unitRaw,
+            approvedQty: p.approvedQty,
+            contractUnitRate: p.contractUnitRate,
+          })),
+          groups,
+          stagedTakeoffs,
+        })
+      )
+      .digest('hex');
+
+    const snapshot = await tx.uboqOperationalSnapshot.create({
+      data: {
+        projectId: params.projectId,
+        sourceDocumentId: params.sourceDocumentId,
+        versionNumber: nextVer,
+        versionLabel: `v${nextVer}.0`,
+        status: 'DRAFT',
+        supersedesSnapshotId: latestSnap?.id ?? null,
+        canonicalHash,
+        stagedConsolidationJson: groups as unknown as Prisma.InputJsonValue,
+        stagedTakeoffsJson: stagedTakeoffs as unknown as Prisma.InputJsonValue,
+        preparedById: params.preparedByUserId,
+      },
+    });
+
+    const totalContractRev = groups.reduce((s, g) => s + g.totalContractAmount, 0);
+    const totalContractExVat =
+      profileCfg.outputVatRate > 0 && profileCfg.contractVatInclusive
+        ? Number((totalContractRev / (1 + profileCfg.outputVatRate)).toFixed(2))
+        : Number(totalContractRev.toFixed(2));
+
+    await tx.uboqContractAuthority.create({
+      data: {
+        projectId: params.projectId,
+        taxProfileId: taxProfile.id,
+        sectorType: profileCfg.sectorType,
+        clientName: params.clientName ?? 'Project Owner',
+        contractRef: params.contractRef ?? `CTR-${params.projectId}`,
+        contractVatBasis: profileCfg.contractVatInclusive ? 'VAT_INCLUSIVE' : 'VAT_EXCLUSIVE',
+        awardedRevenue: totalContractRev,
+        awardedRevenueExVat: totalContractExVat,
+        currentContractValue: totalContractRev,
+        status: 'DRAFT',
+      },
+    });
+
+    for (const pIn of params.phaseInputs) {
+      const uomDef = normalizeUom(pIn.unitRaw, pIn.specification);
+      const specHash = computeSpecSignatureHash(pIn.workDescription, pIn.specification);
+      const amt = pIn.contractLineAmount ?? Number((pIn.approvedQty * pIn.contractUnitRate).toFixed(2));
+      const amtExVat =
+        profileCfg.outputVatRate > 0 && profileCfg.contractVatInclusive
+          ? Number((amt / (1 + profileCfg.outputVatRate)).toFixed(2))
+          : amt;
+
+      const hasSourceEdc =
+        typeof pIn.estimatedDirectCost === 'number' &&
+        Number.isFinite(pIn.estimatedDirectCost) &&
+        pIn.estimatedDirectCost > 0;
+      const hasSourceAbc =
+        typeof pIn.agencyAbc === 'number' &&
+        Number.isFinite(pIn.agencyAbc) &&
+        pIn.agencyAbc > 0;
+
+      // R1-M02: Distinguish authoritative source-evidenced ABC from direct-cost-only derived estimates!
+      const agencyEstimateStatus =
+        hasSourceEdc && hasSourceAbc
+          ? 'SOURCE_EVIDENCED'
+          : hasSourceEdc && !hasSourceAbc
+            ? 'DIRECT_COST_ONLY_DERIVED'
+            : !hasSourceEdc && hasSourceAbc
+              ? 'NEEDS_REVIEW'
+              : 'SOURCE_NOT_PROVIDED';
+
+      const uboqPhase = await tx.uboqAwardedPhaseLine.create({
+        data: {
+          projectId: params.projectId,
+          snapshotId: snapshot.id,
+          awardedBoqItemId: null, // H05: Materialized into live AwardedBOQItem strictly upon snapshot approval!
+          sourceDocumentId: params.sourceDocumentId,
+          extractionCandidateId: pIn.extractionCandidateId ?? null, // R1-H01: Immutable L2 candidate provenance link!
+          sourceSheetName: pIn.sourceSheetName ?? null,
+          sourceCellRef: pIn.sourceCellRef ?? null,
+          itemCode: pIn.itemCode,
+          phaseCode: pIn.phaseCode,
+          sectionCode: pIn.sectionCode ?? null,
+          workDescription: pIn.workDescription,
+          specification: pIn.specification ?? null,
+          specSignatureHash: specHash,
+          unitRaw: pIn.unitRaw,
+          unitNormalized: uomDef.normalizedCode,
+          uomDimensionFamily: uomDef.dimensionFamily,
+          pricingType: pIn.pricingType ?? 'UNIT_PRICE',
+          originalQty: pIn.originalQty,
+          approvedQty: pIn.approvedQty,
+          contractUnitRate: pIn.contractUnitRate,
+          contractLineAmount: amt,
+          contractAmountExVat: amtExVat,
+          agencyEstimateStatus,
+        },
+      });
+
+      // H06 & R1-M02: Persist Agency Estimate Baseline ONLY when evidenced in source — NEVER invent amt * 0.78,
+      // and NEVER populate authoritative agencyAbcAmt from derived estimatedTotalAmount!
+      if (hasSourceEdc && pIn.estimatedDirectCost) {
+        const agencyEst = computeAgencyEstimateBreakdown(pIn.estimatedDirectCost, profileCfg);
+        await tx.uboqAgencyEstimateBaseline.create({
+          data: {
+            projectId: params.projectId,
+            phaseLineId: uboqPhase.id,
+            agencyEdcAmt: agencyEst.estimatedDirectCost,
+            agencyAbcAmt: hasSourceAbc ? pIn.agencyAbc! : null,
+            estimatedDirectCost: agencyEst.estimatedDirectCost,
+            ocmAmount: agencyEst.ocmAmount,
+            contingencyOcm: agencyEst.contingencyOcm,
+            contractorProfitAmt: agencyEst.contractorProfitAmt,
+            estimateVatAmt: agencyEst.estimateVatAmt,
+            estimatedIndirectCost: agencyEst.estimatedIndirectCost,
+            estimatedTotalAmount: agencyEst.estimatedTotalAmount,
+          },
+        });
+      } else if (!hasSourceEdc && hasSourceAbc && pIn.agencyAbc) {
+        await tx.uboqAgencyEstimateBaseline.create({
+          data: {
+            projectId: params.projectId,
+            phaseLineId: uboqPhase.id,
+            agencyEdcAmt: null,
+            agencyAbcAmt: pIn.agencyAbc,
+            estimatedDirectCost: 0,
+            ocmAmount: 0,
+            contingencyOcm: 0,
+            contractorProfitAmt: 0,
+            estimateVatAmt: 0,
+            estimatedIndirectCost: 0,
+            estimatedTotalAmount: 0,
+          },
+        });
+        await tx.uboqValidationException.create({
+          data: {
+            projectId: params.projectId,
+            snapshotId: snapshot.id,
+            ruleCode: 'VAL-EST-PARTIAL-ABC-ONLY',
+            severity: 'WARNING',
+            entityType: 'PHASE_LINE_AGENCY_ESTIMATE',
+            entityId: uboqPhase.id,
+            message: `Phase line ${pIn.phaseCode}:${pIn.itemCode} provided agency ABC without direct cost breakdown; marked NEEDS_REVIEW without fabricating direct cost.`,
+          },
+        });
+      }
+    }
+
+    return { snapshot };
+  });
+
+  return {
+    snapshot: stagedResult.snapshot,
+    groups,
+    stagedTakeoffsCount: stagedTakeoffs.length,
+  };
+}
+
+/**
  * Ingests a document into the private immutable L0 vault, stages L1/L2 extraction candidates,
  * validates Phase BOQ consolidation + resource takeoffs, and stages an isolated DRAFT Operational Snapshot
- * WITHOUT mutating live operative BOQ, Consolidated BOQ, BOQMapping, or Canonical Resource Account tables (H01, H02, H04, H05, H06, M01).
+ * WITHOUT mutating live operative BOQ, Consolidated BOQ, BOQMapping, or Canonical Resource Account tables (H01, H02, H04, H05, H06, M01, R1-H01, R1-M02).
  */
 export async function ingestAndStageProjectUboqPackage(
   prismaInput: PrismaClient | { readonly project: unknown },
@@ -123,6 +578,13 @@ export async function ingestAndStageProjectUboqPackage(
     capability: 'UBOQ_INTAKE_STAGE',
   });
 
+  // R1-H01: Reject unverified caller-supplied explicitPhaseLines — every operational BOQ line MUST derive from L0/L1/L2 provenance!
+  if (params.explicitPhaseLines !== undefined && params.explicitPhaseLines !== null) {
+    throw new Error(
+      'UBOQ_UNVERIFIED_EXPLICIT_PHASE_LINES_FORBIDDEN: Manually supplied explicitPhaseLines cannot bypass L0/L1/L2 extraction and human-review provenance'
+    );
+  }
+
   // H01 / H10: Genuine document security inspection + native PDF / OCR / XLSX / XLS / CSV extraction
   const extracted = await extractUniversalDocumentPackage(params.fileName, params.buffer);
   if (extracted.blockingErrors.length > 0) {
@@ -131,7 +593,7 @@ export async function ingestAndStageProjectUboqPackage(
 
   const vaultProvider = resolveUboqVaultStorageProvider();
 
-  // M01: Idempotent duplicate source upload check BEFORE writing duplicate sections/candidates/snapshots
+  // M01 & R1-H01: Idempotent duplicate source upload check BEFORE writing duplicate sections/candidates/snapshots
   const existingDoc = await prisma.uboqSourceDocument.findUnique({
     where: {
       projectId_sha256Hash_documentRole: {
@@ -141,8 +603,12 @@ export async function ingestAndStageProjectUboqPackage(
       },
     },
     include: {
-      candidates: { select: { id: true, requiresHumanReview: true } },
+      candidates: {
+        include: { section: { select: { sheetOrPageRef: true } } },
+        orderBy: [{ sourceRowNumber: 'asc' }, { createdAt: 'asc' }],
+      },
       snapshots: {
+        where: { status: { in: ['APPROVED', 'DRAFT', 'UNDER_REVIEW'] } },
         orderBy: { versionNumber: 'desc' },
         take: 1,
       },
@@ -156,11 +622,16 @@ export async function ingestAndStageProjectUboqPackage(
       expectedProjectId: params.projectId,
       expectedSha256Hash: existingDoc.sha256Hash,
     });
+    const unresolvedHumanReviewCount = existingDoc.candidates.filter(
+      (c) =>
+        c.requiresHumanReview &&
+        !['HUMAN_VERIFIED', 'HUMAN_EXCLUDED', 'AUTO_VERIFIED_DETERMINISTIC'].includes(c.reviewDecision)
+    ).length;
     return {
       duplicateIdempotentReplay: true,
       sourceDocument: existingDoc,
       extractedCandidateCount: existingDoc.candidates.length,
-      requiresHumanReviewCount: existingDoc.candidates.filter((c) => c.requiresHumanReview).length,
+      requiresHumanReviewCount: unresolvedHumanReviewCount,
       snapshot: existingDoc.snapshots[0] ?? null,
       consolidatedGroups: [],
       createdAccounts: [],
@@ -189,9 +660,37 @@ export async function ingestAndStageProjectUboqPackage(
   let sourceDocIdForOrphanGuard: string | null = existingDoc?.id ?? null;
 
   try {
+    const stagedIntakeOptions: StagedIntakeOptionsMetadata = {
+      sectorType: params.sectorType,
+      clientName: params.clientName,
+      contractRef: params.contractRef,
+      taxProfileCode: params.taxProfileCode,
+      resourceTakeoffs: params.resourceTakeoffs,
+    };
+
     // Persist L0 Source Document + L1 Sections + L2 Candidates (only once per unique source document)
-    const sourceDoc = existingDoc
-      ? existingDoc
+    const persistedDocBundle = existingDoc
+      ? {
+          sourceDoc: existingDoc,
+          persistedCandidates: existingDoc.candidates.map((c) => {
+            const pJson =
+              c.parsedJson && typeof c.parsedJson === 'object'
+                ? (c.parsedJson as Record<string, unknown>)
+                : {};
+            const effFields = (pJson.effectiveCanonicalFields ?? pJson.mappedFields ?? {}) as Record<
+              string,
+              unknown
+            >;
+            return {
+              id: c.id,
+              sheetOrPageRef: c.section?.sheetOrPageRef ?? null,
+              sourceCellRef: c.sourceCellRef,
+              requiresHumanReview: c.requiresHumanReview,
+              reviewDecision: c.reviewDecision,
+              fields: effFields,
+            };
+          }),
+        }
       : await prisma.$transaction(async (tx) => {
           const rlsStore = uboqRlsStorage.getStore();
           if (rlsStore && !rlsStore.inInteractiveTx) {
@@ -213,7 +712,8 @@ export async function ingestAndStageProjectUboqPackage(
               metadataJson: {
                 detectedFormat: extracted.security.detectedFormat,
                 vaultBackend: vaultReceipt.backend,
-              },
+                stagedIntakeOptions,
+              } as unknown as Prisma.InputJsonValue,
             },
           });
 
@@ -232,8 +732,20 @@ export async function ingestAndStageProjectUboqPackage(
             sectionByRef.set(sec.sheetOrPageRef, s.id);
           }
 
+          const createdCandidates: Array<{
+            id: string;
+            sheetOrPageRef: string | null;
+            sourceCellRef: string | null;
+            requiresHumanReview: boolean;
+            reviewDecision: string;
+            fields: Record<string, unknown>;
+          }> = [];
+
           for (const cand of extracted.candidates) {
-            await tx.uboqExtractionCandidate.create({
+            const reviewDecision = cand.requiresHumanReview
+              ? 'PENDING_HUMAN_REVIEW'
+              : 'AUTO_VERIFIED_DETERMINISTIC';
+            const dbCand = await tx.uboqExtractionCandidate.create({
               data: {
                 sourceDocumentId: createdDoc.id,
                 sectionId: sectionByRef.get(cand.sheetOrPageRef) ?? null,
@@ -249,64 +761,39 @@ export async function ingestAndStageProjectUboqPackage(
                 confidenceScore: cand.confidenceScore,
                 extractionMethod: cand.extractionMethod,
                 requiresHumanReview: cand.requiresHumanReview,
-                reviewDecision: cand.requiresHumanReview ? 'PENDING_HUMAN_REVIEW' : 'AUTO_VERIFIED_DETERMINISTIC',
+                reviewDecision,
               },
+            });
+            createdCandidates.push({
+              id: dbCand.id,
+              sheetOrPageRef: cand.sheetOrPageRef,
+              sourceCellRef: cand.sourceCellRef,
+              requiresHumanReview: cand.requiresHumanReview,
+              reviewDecision,
+              fields: cand.mappedFields,
             });
           }
 
-          return createdDoc;
+          return { sourceDoc: createdDoc, persistedCandidates: createdCandidates };
         });
 
+    const { sourceDoc, persistedCandidates } = persistedDocBundle;
     sourceDocIdForOrphanGuard = sourceDoc.id;
 
-    // Derive PhaseBoqInputLine[] either from explicitPhaseLines or high-confidence deterministic candidates
-    const phaseInputs: PhaseBoqInputLine[] =
-      params.explicitPhaseLines ??
-      extracted.candidates
-        .filter(
-          (c) =>
-            !c.requiresHumanReview &&
-            c.mappedFields.work_description &&
-            c.mappedFields.unit &&
-            typeof c.mappedFields.approved_qty === 'number' &&
-            typeof c.mappedFields.contract_unit_rate === 'number'
-        )
-        .map((c, idx) => ({
-          lineKey: `LINE-${idx + 1}`,
-          itemCode: String(c.mappedFields.item_code || `ITEM-${idx + 1}`),
-          phaseCode: String(c.mappedFields.phase_code || 'PHASE-1'),
-          sectionCode: c.mappedFields.section_code ? String(c.mappedFields.section_code) : null,
-          workDescription: String(c.mappedFields.work_description),
-          specification: c.mappedFields.specification ? String(c.mappedFields.specification) : null,
-          unitRaw: String(c.mappedFields.unit),
-          originalQty: Number(c.mappedFields.original_qty ?? c.mappedFields.approved_qty),
-          approvedQty: Number(c.mappedFields.approved_qty),
-          contractUnitRate: Number(c.mappedFields.contract_unit_rate),
-          contractLineAmount:
-            typeof c.mappedFields.contract_line_amount === 'number'
-              ? Number(c.mappedFields.contract_line_amount)
-              : undefined,
-          estimatedDirectCost:
-            typeof c.mappedFields.estimated_direct_cost === 'number'
-              ? Number(c.mappedFields.estimated_direct_cost)
-              : null,
-          agencyAbc:
-            typeof c.mappedFields.agency_abc === 'number'
-              ? Number(c.mappedFields.agency_abc)
-              : typeof c.mappedFields.estimated_total_amount === 'number'
-                ? Number(c.mappedFields.estimated_total_amount)
-                : null,
-          sourceSheetName: c.sheetOrPageRef,
-          sourceCellRef: c.sourceCellRef,
-        }));
+    const unresolvedHumanReviewCount = persistedCandidates.filter(
+      (c) =>
+        c.requiresHumanReview &&
+        !['HUMAN_VERIFIED', 'HUMAN_EXCLUDED', 'AUTO_VERIFIED_DETERMINISTIC'].includes(c.reviewDecision)
+    ).length;
 
-    if (phaseInputs.length === 0) {
-      // Low-confidence / OCR staged documents stop safely in L2 human review queue without fabricating BOQ lines!
+    // R1-H01: If ANY candidate requires human review and is unresolved, hold in L2 human-review queue
+    // (`snapshot: null`) until reviewed & regenerated via `regenerateDraftSnapshotFromVerifiedDocument`!
+    if (unresolvedHumanReviewCount > 0) {
       return {
         duplicateIdempotentReplay: false,
         sourceDocument: sourceDoc,
-        extractedCandidateCount: extracted.candidates.length,
-        requiresHumanReviewCount: extracted.candidates.filter((c) => c.requiresHumanReview).length,
+        extractedCandidateCount: persistedCandidates.length,
+        requiresHumanReviewCount: unresolvedHumanReviewCount,
         snapshot: null,
         consolidatedGroups: [],
         createdAccounts: [],
@@ -314,296 +801,56 @@ export async function ingestAndStageProjectUboqPackage(
       };
     }
 
-    const { groups, issues } = buildSafePhaseConsolidation(phaseInputs);
-    const blockingIssues = issues.filter((i) => i.severity === 'BLOCKING');
-    if (blockingIssues.length > 0) {
-      for (const bi of blockingIssues) {
-        await prisma.uboqValidationException.create({
-          data: {
-            projectId: params.projectId,
-            ruleCode: bi.ruleCode,
-            severity: bi.severity,
-            entityType: bi.entityType,
-            entityId: bi.entityId ?? null,
-            message: bi.message,
-          },
-        });
-      }
-      throw new Error(
-        `UBOQ_CONSOLIDATION_VALIDATION_FAILED: ${blockingIssues.map((b) => `${b.ruleCode}: ${b.message}`).join('; ')}`
-      );
-    }
-
-    // H06: Validate resourceTakeoffs strictly against consolidated groups WITHOUT any default fallback to groups[0]!
-    const stagedTakeoffs: StagedValidatedTakeoff[] = [];
-    if (params.resourceTakeoffs && params.resourceTakeoffs.length > 0) {
-      for (const rt of params.resourceTakeoffs) {
-        const needle = (rt.consolidatedItemCodeOrDesc || '').trim();
-        const needleLower = needle.toLowerCase();
-        const matches = groups.filter((g) => {
-          const descLower = g.canonicalDescription.trim().toLowerCase();
-          const specLower = (g.specification || '').trim().toLowerCase();
-          const descAndSpecLower = specLower ? `${descLower} | ${specLower}` : descLower;
-          return g.groupKey === needle || descLower === needleLower || descAndSpecLower === needleLower;
-        });
-
-        if (matches.length !== 1) {
-          const ruleCode = matches.length === 0 ? 'VAL-PRR-UNMATCHED-GROUP' : 'VAL-PRR-AMBIGUOUS-GROUP';
-          const message =
-            matches.length === 0
-              ? `Resource takeoff "${rt.resourceCode}" target "${rt.consolidatedItemCodeOrDesc}" did not match any consolidated work scope group`
-              : `Resource takeoff "${rt.resourceCode}" target "${rt.consolidatedItemCodeOrDesc}" matched ${matches.length} consolidated groups ambiguously`;
-          await prisma.uboqValidationException.create({
-            data: {
-              projectId: params.projectId,
-              ruleCode,
-              severity: 'BLOCKING',
-              entityType: 'RESOURCE_TAKEOFF',
-              entityId: rt.resourceCode,
-              message,
-            },
-          });
-          throw new Error(`UBOQ_UNMATCHED_RESOURCE_TAKEOFF_GROUP [${ruleCode}]: ${message}`);
-        }
-
-        const matchedGrp = matches[0];
-        const resUom = normalizeUom(rt.resourceUnitRaw, rt.resourceSpec);
-        const resSpecHash = computeSpecSignatureHash(rt.resourceDescription, rt.resourceSpec);
-        const evalRes = evaluateResourceTakeoffRequirement({
-          resourceCode: rt.resourceCode,
-          takeoffBasis: rt.takeoffBasis,
-          resourceCoeff: rt.resourceCoeff,
-          workQuantityBasis: Number(matchedGrp.totalApprovedQty),
-          summaryVerifiedQty: rt.summaryVerifiedQty,
-        });
-        const blockTakeoff = evalRes.issues.find((i) => i.severity === 'BLOCKING');
-        if (blockTakeoff) {
-          await prisma.uboqValidationException.create({
-            data: {
-              projectId: params.projectId,
-              ruleCode: blockTakeoff.ruleCode,
-              severity: 'BLOCKING',
-              entityType: blockTakeoff.entityType,
-              entityId: rt.resourceCode,
-              message: blockTakeoff.message,
-            },
-          });
-          throw new Error(`UBOQ_TAKEOFF_BLOCKED [${blockTakeoff.ruleCode}]: ${blockTakeoff.message}`);
-        }
-
-        stagedTakeoffs.push({
-          targetGroupKey: matchedGrp.groupKey,
-          resourceCode: rt.resourceCode,
-          resourceDescription: rt.resourceDescription,
-          resourceSpec: rt.resourceSpec,
-          specSignatureHash: resSpecHash,
-          resourceClass: rt.resourceClass ?? 'MATERIAL',
-          fulfillmentChannel: rt.fulfillmentChannel ?? 'SUPPLIER_PO',
-          resourceUomNormalized: resUom.normalizedCode,
-          uomDimensionFamily: resUom.dimensionFamily,
-          takeoffBasis: rt.takeoffBasis,
-          resourceCoeff: rt.resourceCoeff ?? null,
-          workQuantityBasis:
-            rt.takeoffBasis === 'CONTRACTOR_DETAILED_DUPA' ? Number(matchedGrp.totalApprovedQty) : null,
-          summaryVerifiedQty: rt.summaryVerifiedQty ?? null,
-          requiredQty: evalRes.requiredQty,
-          benchmarkUnitCost: rt.benchmarkUnitCost,
-          targetResourceUnitCost: rt.targetResourceUnitCost ?? rt.benchmarkUnitCost,
-          procurementBudget: Number((evalRes.requiredQty * rt.benchmarkUnitCost).toFixed(2)),
-        });
+    const phaseInputs: PhaseBoqInputLine[] = [];
+    for (const c of persistedCandidates) {
+      if (c.reviewDecision === 'HUMAN_EXCLUDED') continue;
+      const line = buildPhaseInputLineFromCandidateFields({
+        lineIndex: phaseInputs.length,
+        candidateId: c.id,
+        sheetOrPageRef: c.sheetOrPageRef,
+        sourceCellRef: c.sourceCellRef,
+        fields: c.fields,
+      });
+      if (line) {
+        phaseInputs.push(line);
       }
     }
 
-    const profileCfg: TaxPricingProfileConfig =
-      STANDARD_TAX_PROFILES[params.taxProfileCode ?? ''] ??
-      (params.sectorType === 'CORPORATE'
-        ? STANDARD_TAX_PROFILES.CORP_PH_VAT_EXCL_12
-        : params.sectorType === 'PRIVATE'
-          ? STANDARD_TAX_PROFILES.PRIVATE_NON_VAT_EXEMPT
-          : STANDARD_TAX_PROFILES.GOV_PH_DUPA_5PCT_EST);
+    if (phaseInputs.length === 0) {
+      return {
+        duplicateIdempotentReplay: false,
+        sourceDocument: sourceDoc,
+        extractedCandidateCount: persistedCandidates.length,
+        requiresHumanReviewCount: 0,
+        snapshot: null,
+        consolidatedGroups: [],
+        createdAccounts: [],
+        createdPrrs: [],
+      };
+    }
 
-    // H05: Stage DRAFT Operational Snapshot & Phase Lines ONLY — ZERO mutations to live AwardedBOQItem,
-    // ConsolidatedBOQItem, BOQMapping, Project.uboqGovernanceEnabled, or UboqCanonicalResourceAccount!
-    const stagedResult = await prisma.$transaction(async (tx) => {
-      const rlsStore = uboqRlsStorage.getStore();
-      if (rlsStore && !rlsStore.inInteractiveTx) {
-        await applyProjectRlsSessionVars(tx, rlsStore);
-      }
-
-      const taxProfile = await tx.uboqTaxPricingProfile.upsert({
-        where: {
-          projectId_profileCode_versionCode: {
-            projectId: params.projectId,
-            profileCode: profileCfg.profileCode,
-            versionCode: profileCfg.versionCode,
-          },
-        },
-        update: {},
-        create: {
-          projectId: params.projectId,
-          profileCode: profileCfg.profileCode,
-          versionCode: profileCfg.versionCode,
-          sectorType: profileCfg.sectorType,
-          estimateVatComponentRate: profileCfg.estimateVatComponentRate,
-          estimateVatBaseMode: profileCfg.estimateVatBaseMode,
-          outputVatRate: profileCfg.outputVatRate,
-          salesVatCategory: profileCfg.salesVatCategory,
-          contractVatInclusive: profileCfg.contractVatInclusive,
-          govVatWithholdingRate: profileCfg.govVatWithholdingRate,
-          ewtRate: profileCfg.ewtRate,
-          ocmRate: profileCfg.ocmRate,
-          contractorProfitRate: profileCfg.contractorProfitRate,
-          contingencyRate: profileCfg.contingencyRate,
-          retentionRate: profileCfg.retentionRate,
-          advanceRecoupmentRate: profileCfg.advanceRecoupmentRate,
-        },
-      });
-
-      const latestSnap = await tx.uboqOperationalSnapshot.findFirst({
-        where: { projectId: params.projectId },
-        orderBy: { versionNumber: 'desc' },
-      });
-      const nextVer = (latestSnap?.versionNumber ?? 0) + 1;
-      const canonicalHash = crypto
-        .createHash('sha256')
-        .update(JSON.stringify({ sha: extracted.security.sha256Hash, groups, stagedTakeoffs }))
-        .digest('hex');
-
-      const snapshot = await tx.uboqOperationalSnapshot.create({
-        data: {
-          projectId: params.projectId,
-          sourceDocumentId: sourceDoc.id,
-          versionNumber: nextVer,
-          versionLabel: `v${nextVer}.0`,
-          status: 'DRAFT',
-          supersedesSnapshotId: latestSnap?.id ?? null,
-          canonicalHash,
-          stagedConsolidationJson: groups as unknown as Prisma.InputJsonValue,
-          stagedTakeoffsJson: stagedTakeoffs as unknown as Prisma.InputJsonValue,
-          preparedById: params.uploadedByUserId,
-        },
-      });
-
-      const totalContractRev = groups.reduce((s, g) => s + g.totalContractAmount, 0);
-      const totalContractExVat =
-        profileCfg.outputVatRate > 0 && profileCfg.contractVatInclusive
-          ? Number((totalContractRev / (1 + profileCfg.outputVatRate)).toFixed(2))
-          : Number(totalContractRev.toFixed(2));
-
-      await tx.uboqContractAuthority.create({
-        data: {
-          projectId: params.projectId,
-          taxProfileId: taxProfile.id,
-          sectorType: profileCfg.sectorType,
-          clientName: params.clientName ?? 'Project Owner',
-          contractRef: params.contractRef ?? `CTR-${params.projectId}`,
-          contractVatBasis: profileCfg.contractVatInclusive ? 'VAT_INCLUSIVE' : 'VAT_EXCLUSIVE',
-          awardedRevenue: totalContractRev,
-          awardedRevenueExVat: totalContractExVat,
-          currentContractValue: totalContractRev,
-          status: 'DRAFT',
-        },
-      });
-
-      for (const pIn of phaseInputs) {
-        const uomDef = normalizeUom(pIn.unitRaw, pIn.specification);
-        const specHash = computeSpecSignatureHash(pIn.workDescription, pIn.specification);
-        const amt = pIn.contractLineAmount ?? Number((pIn.approvedQty * pIn.contractUnitRate).toFixed(2));
-        const amtExVat =
-          profileCfg.outputVatRate > 0 && profileCfg.contractVatInclusive
-            ? Number((amt / (1 + profileCfg.outputVatRate)).toFixed(2))
-            : amt;
-
-        const hasEvidencedDirectCost =
-          typeof pIn.estimatedDirectCost === 'number' &&
-          Number.isFinite(pIn.estimatedDirectCost) &&
-          pIn.estimatedDirectCost > 0;
-        const hasEvidencedAbcOnly =
-          !hasEvidencedDirectCost &&
-          typeof pIn.agencyAbc === 'number' &&
-          Number.isFinite(pIn.agencyAbc) &&
-          pIn.agencyAbc > 0;
-
-        const agencyEstimateStatus = hasEvidencedDirectCost
-          ? 'SOURCE_EVIDENCED'
-          : hasEvidencedAbcOnly
-            ? 'NEEDS_REVIEW'
-            : 'SOURCE_NOT_PROVIDED';
-
-        const uboqPhase = await tx.uboqAwardedPhaseLine.create({
-          data: {
-            projectId: params.projectId,
-            snapshotId: snapshot.id,
-            awardedBoqItemId: null, // H05: Materialized into live AwardedBOQItem strictly upon snapshot approval!
-            sourceDocumentId: sourceDoc.id,
-            sourceSheetName: pIn.sourceSheetName ?? null,
-            sourceCellRef: pIn.sourceCellRef ?? null,
-            itemCode: pIn.itemCode,
-            phaseCode: pIn.phaseCode,
-            sectionCode: pIn.sectionCode ?? null,
-            workDescription: pIn.workDescription,
-            specification: pIn.specification ?? null,
-            specSignatureHash: specHash,
-            unitRaw: pIn.unitRaw,
-            unitNormalized: uomDef.normalizedCode,
-            uomDimensionFamily: uomDef.dimensionFamily,
-            pricingType: pIn.pricingType ?? 'UNIT_PRICE',
-            originalQty: pIn.originalQty,
-            approvedQty: pIn.approvedQty,
-            contractUnitRate: pIn.contractUnitRate,
-            contractLineAmount: amt,
-            contractAmountExVat: amtExVat,
-            agencyEstimateStatus,
-          },
-        });
-
-        // H06: Persist Agency Estimate Baseline ONLY when evidenced in source — NEVER invent amt * 0.78!
-        if (hasEvidencedDirectCost && pIn.estimatedDirectCost) {
-          const agencyEst = computeAgencyEstimateBreakdown(pIn.estimatedDirectCost, profileCfg);
-          await tx.uboqAgencyEstimateBaseline.create({
-            data: {
-              projectId: params.projectId,
-              phaseLineId: uboqPhase.id,
-              agencyEdcAmt: agencyEst.estimatedDirectCost,
-              agencyAbcAmt:
-                typeof pIn.agencyAbc === 'number' && pIn.agencyAbc > 0
-                  ? pIn.agencyAbc
-                  : agencyEst.estimatedTotalAmount,
-              estimatedDirectCost: agencyEst.estimatedDirectCost,
-              ocmAmount: agencyEst.ocmAmount,
-              contingencyOcm: agencyEst.contingencyOcm,
-              contractorProfitAmt: agencyEst.contractorProfitAmt,
-              estimateVatAmt: agencyEst.estimateVatAmt,
-              estimatedIndirectCost: agencyEst.estimatedIndirectCost,
-              estimatedTotalAmount: agencyEst.estimatedTotalAmount,
-            },
-          });
-        } else if (hasEvidencedAbcOnly) {
-          await tx.uboqValidationException.create({
-            data: {
-              projectId: params.projectId,
-              snapshotId: snapshot.id,
-              ruleCode: 'VAL-EST-PARTIAL-ABC-ONLY',
-              severity: 'WARNING',
-              entityType: 'PHASE_LINE_AGENCY_ESTIMATE',
-              entityId: uboqPhase.id,
-              message: `Phase line ${pIn.phaseCode}:${pIn.itemCode} provided agency ABC without direct cost breakdown; marked NEEDS_REVIEW without fabricating direct cost.`,
-            },
-          });
-        }
-      }
-
-      return { snapshot };
+    const staged = await stageVerifiedPhaseLinesIntoDraftSnapshot(prisma, {
+      projectId: params.projectId,
+      sourceDocumentId: sourceDoc.id,
+      sourceSha256Hash: sourceDoc.sha256Hash,
+      preparedByUserId: params.uploadedByUserId,
+      phaseInputs,
+      sectorType: params.sectorType,
+      clientName: params.clientName,
+      contractRef: params.contractRef,
+      taxProfileCode: params.taxProfileCode,
+      resourceTakeoffs: params.resourceTakeoffs,
+      supersedePriorDraftForDocument: false,
     });
 
     return {
       duplicateIdempotentReplay: false,
       sourceDocument: sourceDoc,
-      extractedCandidateCount: extracted.candidates.length,
-      requiresHumanReviewCount: extracted.candidates.filter((c) => c.requiresHumanReview).length,
-      snapshot: stagedResult.snapshot,
-      stagedConsolidationPreview: groups,
-      stagedTakeoffsCount: stagedTakeoffs.length,
+      extractedCandidateCount: persistedCandidates.length,
+      requiresHumanReviewCount: 0,
+      snapshot: staged.snapshot,
+      stagedConsolidationPreview: staged.groups,
+      stagedTakeoffsCount: staged.stagedTakeoffsCount,
       consolidatedGroups: [],
       createdAccounts: [],
       createdPrrs: [],
@@ -618,7 +865,8 @@ export async function ingestAndStageProjectUboqPackage(
 }
 
 /**
- * Resolves a staged L2 extraction candidate requiring human review (H01 / H09).
+ * Resolves a staged L2 extraction candidate requiring human review with validated canonical field
+ * remapping + human value corrections while preserving 100% immutable raw OCR/parser provenance (R1-H01).
  */
 export async function resolveExtractionCandidateHumanReview(
   prismaInput: PrismaClient | { readonly project: unknown },
@@ -628,6 +876,7 @@ export async function resolveExtractionCandidateHumanReview(
     reviewerUserId: string;
     decision: 'HUMAN_VERIFIED' | 'HUMAN_EXCLUDED';
     reviewNotes: string;
+    canonicalFieldRemap?: Record<string, string>;
     correctedMappedFields?: Record<string, string | number | null>;
   }
 ) {
@@ -640,6 +889,9 @@ export async function resolveExtractionCandidateHumanReview(
 
   if (!params.reviewNotes?.trim()) {
     throw new Error('UBOQ_REVIEW_NOTES_REQUIRED: Human review resolution requires explicit audit notes');
+  }
+  if (params.decision !== 'HUMAN_VERIFIED' && params.decision !== 'HUMAN_EXCLUDED') {
+    throw new Error(`UBOQ_INVALID_REVIEW_DECISION: Unsupported decision "${String(params.decision)}"`);
   }
 
   const existing = await prisma.uboqExtractionCandidate.findUnique({
@@ -655,23 +907,254 @@ export async function resolveExtractionCandidateHumanReview(
       ? (existing.parsedJson as Record<string, unknown>)
       : {};
 
+  // Immutable original extraction map — NEVER overwritten in rawValueText or parsedJson.mappedFields!
+  const originalMappedFields: Record<string, string | number | null> =
+    prevJson.mappedFields && typeof prevJson.mappedFields === 'object'
+      ? { ...(prevJson.mappedFields as Record<string, string | number | null>) }
+      : {};
+
+  const effectiveFields: Record<string, string | number | null> = { ...originalMappedFields };
+  const normalizedRemap: Record<string, string> = {};
+  const normalizedCorrections: Record<string, string | number | null> = {};
+
+  if (params.canonicalFieldRemap) {
+    for (const [rawSrc, rawTarget] of Object.entries(params.canonicalFieldRemap)) {
+      const targetCanon = resolveCanonicalFieldId(String(rawTarget || ''));
+      if (!targetCanon || !CANONICAL_FIELD_MAP.has(targetCanon)) {
+        throw new Error(
+          `UBOQ_INVALID_CANONICAL_REMAP_FIELD: Target field "${rawTarget}" is not in the 129-field canonical registry`
+        );
+      }
+      const srcCanon = resolveCanonicalFieldId(String(rawSrc || '')) ?? String(rawSrc || '').trim();
+      if (!srcCanon) {
+        throw new Error('UBOQ_INVALID_CANONICAL_REMAP_FIELD: Empty source field key');
+      }
+      normalizedRemap[srcCanon] = targetCanon;
+      if (Object.prototype.hasOwnProperty.call(originalMappedFields, srcCanon) && srcCanon !== targetCanon) {
+        const movedVal = originalMappedFields[srcCanon];
+        if (NUMERIC_CANONICAL_FIELD_IDS.has(targetCanon) && movedVal !== null && movedVal !== '') {
+          const num = toFiniteNumber(movedVal);
+          if (num === null) {
+            throw new Error(
+              `UBOQ_INVALID_VERIFIED_CANDIDATE_FIELDS: Remapped field "${targetCanon}" requires a valid finite number`
+            );
+          }
+          effectiveFields[targetCanon] = num;
+        } else {
+          effectiveFields[targetCanon] = movedVal;
+        }
+        delete effectiveFields[srcCanon];
+      }
+    }
+  }
+
+  if (params.correctedMappedFields) {
+    for (const [rawKey, rawVal] of Object.entries(params.correctedMappedFields)) {
+      const canonKey = resolveCanonicalFieldId(String(rawKey || ''));
+      if (!canonKey || !CANONICAL_FIELD_MAP.has(canonKey)) {
+        throw new Error(
+          `UBOQ_INVALID_CANONICAL_REMAP_FIELD: Corrected field "${rawKey}" is not in the 129-field canonical registry`
+        );
+      }
+      if (rawVal === null || rawVal === undefined || rawVal === '') {
+        normalizedCorrections[canonKey] = null;
+        effectiveFields[canonKey] = null;
+      } else if (NUMERIC_CANONICAL_FIELD_IDS.has(canonKey)) {
+        const num = toFiniteNumber(rawVal);
+        if (num === null) {
+          throw new Error(
+            `UBOQ_INVALID_VERIFIED_CANDIDATE_FIELDS: Numeric canonical field "${canonKey}" received invalid value "${String(rawVal)}"`
+          );
+        }
+        normalizedCorrections[canonKey] = num;
+        effectiveFields[canonKey] = num;
+      } else {
+        const strVal = String(rawVal).trim();
+        normalizedCorrections[canonKey] = strVal;
+        effectiveFields[canonKey] = strVal;
+      }
+    }
+  }
+
+  if (params.decision === 'HUMAN_VERIFIED') {
+    const desc = String(effectiveFields.work_description ?? '').trim();
+    const unit = String(effectiveFields.unit ?? '').trim();
+    const qty = toFiniteNumber(effectiveFields.approved_qty);
+    const rate = toFiniteNumber(effectiveFields.contract_unit_rate);
+
+    const resDesc = String(effectiveFields.resource_description ?? '').trim();
+    const resUnit = String(effectiveFields.resource_unit ?? '').trim();
+
+    const isValidBoqLine = Boolean(desc && unit && qty !== null && qty > 0 && rate !== null && rate >= 0);
+    const isValidResourceLine = Boolean(resDesc && resUnit);
+
+    if (!isValidBoqLine && !isValidResourceLine) {
+      throw new Error(
+        'UBOQ_INVALID_VERIFIED_CANDIDATE_FIELDS: HUMAN_VERIFIED candidate requires non-empty work_description, valid unit, approved_qty > 0, and contract_unit_rate >= 0'
+      );
+    }
+    if (isValidBoqLine) {
+      normalizeUom(unit, effectiveFields.specification ? String(effectiveFields.specification) : null);
+    }
+    if (isValidResourceLine) {
+      normalizeUom(resUnit, effectiveFields.resource_spec ? String(effectiveFields.resource_spec) : null);
+    }
+  }
+
+  const updatedCanonicalList = Object.keys(effectiveFields)
+    .filter((k) => effectiveFields[k] !== null && effectiveFields[k] !== undefined && effectiveFields[k] !== '')
+    .join(',');
+
   return prisma.uboqExtractionCandidate.update({
     where: { id: existing.id },
     data: {
+      mappedCanonicalId: updatedCanonicalList || existing.mappedCanonicalId,
       reviewDecision: params.decision,
       reviewedById: params.reviewerUserId,
       reviewedAt: new Date(),
       reviewNotes: params.reviewNotes.trim(),
-      ...(params.correctedMappedFields
-        ? {
-            parsedJson: {
-              ...prevJson,
-              humanCorrectedFields: params.correctedMappedFields,
-            } as unknown as Prisma.InputJsonValue,
-          }
-        : {}),
+      parsedJson: {
+        ...prevJson,
+        mappedFields: originalMappedFields,
+        canonicalFieldRemap: normalizedRemap,
+        humanCorrectedFields: normalizedCorrections,
+        effectiveCanonicalFields: effectiveFields,
+      } as unknown as Prisma.InputJsonValue,
     },
   });
+}
+
+/**
+ * Regenerates a staged DRAFT Operational Snapshot from an L0 source document's verified L2 extraction
+ * candidates after human review & canonical remapping, preserving immutable source provenance (R1-H01).
+ */
+export async function regenerateDraftSnapshotFromVerifiedDocument(
+  prismaInput: PrismaClient | { readonly project: unknown },
+  params: {
+    projectId: string;
+    sourceDocumentId: string;
+    preparedByUserId: string;
+    sectorType?: UboqSectorType;
+    clientName?: string;
+    contractRef?: string;
+    taxProfileCode?: string;
+    resourceTakeoffs?: ResourceTakeoffSpecInput[];
+  }
+) {
+  const prisma = prismaInput as PrismaClient;
+  await assertUboqStageAuthorization(prisma, {
+    userId: params.preparedByUserId,
+    projectId: params.projectId,
+    capability: 'UBOQ_INTAKE_STAGE',
+  });
+
+  const sourceDoc = await prisma.uboqSourceDocument.findUnique({
+    where: { id: params.sourceDocumentId },
+    include: {
+      candidates: {
+        include: { section: { select: { sheetOrPageRef: true } } },
+        orderBy: [{ sourceRowNumber: 'asc' }, { createdAt: 'asc' }],
+      },
+      snapshots: {
+        where: { status: 'APPROVED' },
+        take: 1,
+      },
+    },
+  });
+
+  if (!sourceDoc || sourceDoc.projectId !== params.projectId) {
+    throw new Error('UBOQ_SOURCE_DOCUMENT_NOT_FOUND_FOR_PROJECT');
+  }
+  if (sourceDoc.snapshots.length > 0) {
+    throw new Error(
+      `UBOQ_SNAPSHOT_INVALID_STATE: Source document ${sourceDoc.id} is already promoted to APPROVED snapshot ${sourceDoc.snapshots[0].id}`
+    );
+  }
+
+  // Verify immutable L0 vault binary before regenerating draft snapshot
+  const vaultProvider = resolveUboqVaultStorageProvider();
+  await vaultProvider.getAndVerify({
+    storageUri: sourceDoc.storageUri,
+    expectedProjectId: params.projectId,
+    expectedSha256Hash: sourceDoc.sha256Hash,
+  });
+
+  const pendingReviewCount = sourceDoc.candidates.filter(
+    (c) =>
+      c.requiresHumanReview &&
+      !['HUMAN_VERIFIED', 'HUMAN_EXCLUDED', 'AUTO_VERIFIED_DETERMINISTIC'].includes(c.reviewDecision)
+  ).length;
+  if (pendingReviewCount > 0) {
+    throw new Error(
+      `UBOQ_DRAFT_REGEN_BLOCKED_PENDING_REVIEW: Source document ${sourceDoc.id} still has ${pendingReviewCount} unresolved extraction candidate(s) requiring human review`
+    );
+  }
+
+  const phaseInputs: PhaseBoqInputLine[] = [];
+  for (const cand of sourceDoc.candidates) {
+    if (
+      cand.reviewDecision !== 'AUTO_VERIFIED_DETERMINISTIC' &&
+      cand.reviewDecision !== 'HUMAN_VERIFIED'
+    ) {
+      continue;
+    }
+    const pJson =
+      cand.parsedJson && typeof cand.parsedJson === 'object'
+        ? (cand.parsedJson as Record<string, unknown>)
+        : {};
+    const effectiveFields = (pJson.effectiveCanonicalFields ?? pJson.mappedFields ?? {}) as Record<
+      string,
+      unknown
+    >;
+
+    const line = buildPhaseInputLineFromCandidateFields({
+      lineIndex: phaseInputs.length,
+      candidateId: cand.id,
+      sheetOrPageRef: cand.section?.sheetOrPageRef ?? null,
+      sourceCellRef: cand.sourceCellRef,
+      fields: effectiveFields,
+    });
+    if (line) {
+      phaseInputs.push(line);
+    }
+  }
+
+  if (phaseInputs.length === 0) {
+    throw new Error(
+      `UBOQ_DRAFT_REGEN_NO_VERIFIED_LINES: Source document ${sourceDoc.id} has 0 verified BOQ pay-item lines to stage`
+    );
+  }
+
+  const docMeta =
+    sourceDoc.metadataJson && typeof sourceDoc.metadataJson === 'object'
+      ? (sourceDoc.metadataJson as Record<string, unknown>)
+      : {};
+  const savedOpts =
+    docMeta.stagedIntakeOptions && typeof docMeta.stagedIntakeOptions === 'object'
+      ? (docMeta.stagedIntakeOptions as StagedIntakeOptionsMetadata)
+      : {};
+
+  const staged = await stageVerifiedPhaseLinesIntoDraftSnapshot(prisma, {
+    projectId: params.projectId,
+    sourceDocumentId: sourceDoc.id,
+    sourceSha256Hash: sourceDoc.sha256Hash,
+    preparedByUserId: params.preparedByUserId,
+    phaseInputs,
+    sectorType: params.sectorType ?? savedOpts.sectorType,
+    clientName: params.clientName ?? savedOpts.clientName,
+    contractRef: params.contractRef ?? savedOpts.contractRef,
+    taxProfileCode: params.taxProfileCode ?? savedOpts.taxProfileCode,
+    resourceTakeoffs: params.resourceTakeoffs ?? savedOpts.resourceTakeoffs,
+    supersedePriorDraftForDocument: true,
+  });
+
+  return {
+    sourceDocument: sourceDoc,
+    verifiedLineCount: phaseInputs.length,
+    snapshot: staged.snapshot,
+    stagedConsolidationPreview: staged.groups,
+    stagedTakeoffsCount: staged.stagedTakeoffsCount,
+  };
 }
 
 /**
@@ -983,6 +1466,7 @@ export async function approveOperationalSnapshotAndPrrs(
               approvedQty: Number(p.approvedQty),
               contractUnitRate: Number(p.contractUnitRate),
               contractLineAmount: Number(p.contractLineAmount),
+              extractionCandidateId: p.extractionCandidateId,
             }))
           ).groups;
 
@@ -1017,7 +1501,7 @@ export async function approveOperationalSnapshotAndPrrs(
               totalContractAmount: grp.totalContractAmount,
             },
           });
-          // H07: Promote via verified DB function (validates RLS, APPROVED snapshot, SoD, approver role, 0 pending reviews/exceptions)
+          // H07: Promote via verified DB function (validates RLS + signed proof, APPROVED snapshot, SoD, approver role, 0 pending reviews/exceptions)
           await tx.$executeRaw`SELECT uboq_promote_approved_consolidated_group(
             ${approvedSnap.id}::text,
             ${uboqGroup.id}::text

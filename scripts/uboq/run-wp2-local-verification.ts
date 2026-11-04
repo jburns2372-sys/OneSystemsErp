@@ -64,8 +64,19 @@ import {
   approveOperationalSnapshotAndPrrs,
 } from '../../src/lib/uboq/adapters/snapshot-orchestrator';
 import { approvePrrVersionAtomically } from '../../src/lib/uboq/resource-ledger';
-import { reconcileProjectVaultOrphans } from '../../src/lib/uboq/storage/vault-storage';
+import {
+  reconcileProjectVaultOrphans,
+  resolveUboqVaultStorageProvider,
+} from '../../src/lib/uboq/storage/vault-storage';
 import { provisionEphemeralRestrictedLogins } from './provision-local-restricted-logins';
+import {
+  buildSyntheticCleanupDryRunManifest,
+  executeManifestVerifiedSyntheticCleanup,
+} from './cleanup-synthetic-fixtures';
+import {
+  assertZeroMigrationChecksumDrift,
+  loadDiskMigrationChecksums,
+} from './verify-migrations-and-checksums';
 
 interface TestRecord {
   id: string;
@@ -219,6 +230,18 @@ async function renderBoqTableRasterBuffer(
     : pipeline.jpeg({ quality: degradedLowConfidence ? 25 : 95 }).toBuffer();
 }
 
+async function renderLowConfidenceAmbiguousScanPngBuffer(): Promise<Buffer> {
+  const svg = `<svg width="1360" height="320" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100%" height="100%" fill="#f4f4f4" />
+    <g font-family="Arial, Helvetica, sans-serif" font-size="24" fill="#1f1f1f">
+      <text x="30" y="95">Item Code | Description | Unit | Quantity | Total Amount</text>
+      <text x="30" y="175">SCN-201 | Site Clearing Works | sqm | 52X | 135.50</text>
+      <text x="30" y="250">SCN-202 | Gravel Bedding 100mm | cum | 9X | 1480.00</text>
+    </g>
+  </svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
 async function generateScannedImageOnlyPdfBuffer(pngBuf: Buffer): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: [1280, 360], margin: 0, compress: true });
@@ -261,8 +284,9 @@ async function main() {
   process.env.UBOQ_VAULT_BACKEND = 'local_durable';
   process.env.UBOQ_LOCAL_VAULT_DIR = vaultTestDir;
 
-  // Provision ephemeral least-privileged PostgreSQL logins OUTSIDE migrations (H03 & H08)
+  // Provision ephemeral least-privileged PostgreSQL logins + DB RLS trust anchor OUTSIDE migrations (H03, H08, R1-H02)
   const provisioned = await provisionEphemeralRestrictedLogins(adminDbUrl);
+  process.env.UBOQ_RLS_CONTEXT_SECRET = provisioned.rlsContextSecretHex;
 
   // Point BOTH Next.js Prisma and Express Backend Prisma strictly to oserp_compat_login BEFORE importing!
   process.env.DATABASE_URL = provisioned.compatDbUrl;
@@ -270,7 +294,7 @@ async function main() {
   process.env.VERCEL = '1';
 
   const { prisma } = await import('../../src/lib/prisma');
-  const { withUboqRlsContext } = await import('../../src/lib/uboq/project-ownership');
+  const { withUboqRlsContext, mintSignedRlsProof } = await import('../../src/lib/uboq/project-ownership');
   const { default: backendApp } = await import('../../apps/aws-backend/src/index');
 
   // Admin setup client used ONLY for initial synthetic fixture cleanup/seeding & full-table PGH scan
@@ -360,6 +384,90 @@ async function main() {
       }
       return `Scanned ${files.length} UBOQ engine modules and full testdb_uboq_001 table: 0 PGH dependencies`;
     });
+
+    await runCheck(
+      'VAULT-PROD-R1-M01',
+      'SUITE-1',
+      'Production Vault Fail-Closed Enforcement: NODE_ENV=production Rejects local_durable & UBOQ_ALLOW_LOCAL_TEST_VAULT Override (R1-M01)',
+      () => {
+        const origNodeEnv = process.env.NODE_ENV;
+        const origVaultBackend = process.env.UBOQ_VAULT_BACKEND;
+        const origAllowOverride = process.env.UBOQ_ALLOW_LOCAL_TEST_VAULT;
+        try {
+          (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+          process.env.UBOQ_VAULT_BACKEND = 'local_durable';
+          process.env.UBOQ_ALLOW_LOCAL_TEST_VAULT = 'true';
+          assert.throws(
+            () => resolveUboqVaultStorageProvider(),
+            /UBOQ_PROD_EPHEMERAL_STORAGE_FORBIDDEN/,
+            'NODE_ENV=production + local_durable + UBOQ_ALLOW_LOCAL_TEST_VAULT=true must fail closed'
+          );
+
+          process.env.UBOQ_VAULT_BACKEND = 's3_private';
+          process.env.UBOQ_ALLOW_LOCAL_TEST_VAULT = 'true';
+          assert.throws(
+            () => resolveUboqVaultStorageProvider(),
+            /UBOQ_PROD_EPHEMERAL_STORAGE_FORBIDDEN/,
+            'Any UBOQ_ALLOW_LOCAL_TEST_VAULT override in NODE_ENV=production must fail closed'
+          );
+        } finally {
+          (process.env as Record<string, string | undefined>).NODE_ENV = origNodeEnv;
+          process.env.UBOQ_VAULT_BACKEND = origVaultBackend;
+          if (origAllowOverride === undefined) {
+            delete process.env.UBOQ_ALLOW_LOCAL_TEST_VAULT;
+          } else {
+            process.env.UBOQ_ALLOW_LOCAL_TEST_VAULT = origAllowOverride;
+          }
+        }
+        return 'Verified NODE_ENV=production unconditionally rejects local_durable and UBOQ_ALLOW_LOCAL_TEST_VAULT=true';
+      }
+    );
+
+    await runCheck(
+      'CHECKSUM-IMMUTABLE-R1-H04',
+      'SUITE-1',
+      'Strictly Read-Only Migration Checksum Verifier & Simulated Drift Fail-Closed Rejection (R1-H04)',
+      async () => {
+        const verifierPath = path.resolve(process.cwd(), 'scripts/uboq/verify-migrations-and-checksums.ts');
+        const verifierSrc = fs.readFileSync(verifierPath, 'utf8');
+        assert.equal(
+          /UPDATEs+"_prisma_migrations"/i.test(verifierSrc),
+          false,
+          'Migration verifier must NEVER contain UPDATE "_prisma_migrations"'
+        );
+        assert.equal(
+          verifierSrc.includes('SET default_transaction_read_only = on'),
+          true,
+          'Migration verifier must enforce read-only SQL session'
+        );
+
+        const migrationsDir = path.resolve(process.cwd(), 'prisma/migrations');
+        const diskEntries = loadDiskMigrationChecksums(migrationsDir);
+        assert.equal(diskEntries.length, 16, 'Expected 16 forward-only migrations on disk');
+
+        const roClient = new pg.Client({ connectionString: adminDbUrl });
+        await roClient.connect();
+        try {
+          await roClient.query('SET default_transaction_read_only = on');
+          const dbRes = await roClient.query(
+            'SELECT migration_name, checksum, finished_at, rolled_back_at, applied_steps_count FROM "_prisma_migrations" ORDER BY migration_name ASC'
+          );
+          assertZeroMigrationChecksumDrift(dbRes.rows, diskEntries);
+
+          const driftedRows = dbRes.rows.map((r, i) =>
+            i === dbRes.rows.length - 1 ? { ...r, checksum: '0'.repeat(64) } : r
+          );
+          assert.throws(
+            () => assertZeroMigrationChecksumDrift(driftedRows, diskEntries),
+            /UBOQ_MIGRATION_CHECKSUM_DRIFT_DETECTED/,
+            'Checksum drift must fail closed without mutating _prisma_migrations'
+          );
+        } finally {
+          await roClient.end();
+        }
+        return `Verified 16/16 migrations match SHA-256 under default_transaction_read_only=on & simulated drift throws UBOQ_MIGRATION_CHECKSUM_DRIFT_DETECTED`;
+      }
+    );
 
     // =========================================================================
     // SUITE 2: REAL MULTI-FORMAT EXTRACTION, NATIVE PDF, TESSERACT OCR, LEGACY XLS & SECURITY (H01, H10, M02)
@@ -862,32 +970,39 @@ async function main() {
     // SUITE 4: RESTRICTED-ROLE HTTP VAULT (H02/M01), RBAC (H04), DRAFT ISOLATION (H05),
     //          ZERO FABRICATED ESTIMATES (H06), ATOMIC APPROVAL (H09), & SAFEGUARDS I-01, H4-01, H3-02, I-02
     // =========================================================================
-    // Clean up any prior SYNTH-UBOQ-TEST-001 run via oserp_maint_login
+    // Clean up any prior synthetic test projects via manifest-verified oserp_maint_login
     const maintCleanupPg = new pg.Client({ connectionString: provisioned.maintDbUrl });
     await maintCleanupPg.connect();
     try {
-      const adminCheck = await adminSetupPrisma.project.findUnique({ where: { id: 'SYNTH-UBOQ-TEST-001' } });
-      if (adminCheck) {
-        await adminSetupPrisma.project.update({
-          where: { id: 'SYNTH-UBOQ-TEST-001' },
-          data: { isSyntheticTestFixture: true },
-        });
-        await maintCleanupPg.query(`SELECT uboq_execute_verified_synthetic_cleanup('SYNTH-UBOQ-TEST-001')`);
-      }
-      const cleanup999 = await adminSetupPrisma.project.findUnique({ where: { id: 'SYNTH-UBOQ-TEST-CLEANUP-999' } });
-      if (cleanup999) {
-        await adminSetupPrisma.project.update({
-          where: { id: 'SYNTH-UBOQ-TEST-CLEANUP-999' },
-          data: { isSyntheticTestFixture: true },
-        });
-        await maintCleanupPg.query(`SELECT uboq_execute_verified_synthetic_cleanup('SYNTH-UBOQ-TEST-CLEANUP-999')`);
+      for (const synthId of ['SYNTH-UBOQ-TEST-001', 'SYNTH-UBOQ-TEST-OCR-002', 'SYNTH-UBOQ-TEST-CLEANUP-999']) {
+        const existingSynth = await adminSetupPrisma.project.findUnique({ where: { id: synthId } });
+        if (existingSynth) {
+          // Reset prior test run's synthetic AP/Expense state so startup fixture reset passes closure eligibility
+          await adminSetupPrisma.expenseBreakdownItem.deleteMany({ where: { expense: { projectId: synthId } } });
+          await adminSetupPrisma.expense.deleteMany({ where: { projectId: synthId } });
+          await adminSetupPrisma.accountsPayable.updateMany({
+            where: {
+              OR: [
+                { po: { is: { mr: { projectId: synthId } } } },
+                { po: { is: { canvassForm: { is: { projectId: synthId } } } } },
+              ],
+            },
+            data: { status: 'PENDING', paidAmount: 0, paidAt: null },
+          });
+          await adminSetupPrisma.project.update({
+            where: { id: synthId },
+            data: { isSyntheticTestFixture: true },
+          });
+          const startupManifest = (await buildSyntheticCleanupDryRunManifest(provisioned.maintDbUrl, synthId)) as any;
+          await executeManifestVerifiedSyntheticCleanup(provisioned.maintDbUrl, synthId, String(startupManifest.manifestSha256));
+        }
       }
     } finally {
       await maintCleanupPg.end();
     }
 
-    // Seed synthetic actors (Maker QS, Approver PM, Assigned Viewer, Unassigned Outsider, Legacy PM, Legacy Admin)
-    const makerUser = await prisma.user.upsert({
+    // Seed synthetic actors via adminSetupPrisma (oserp_compat_login has ZERO INSERT/UPDATE/DELETE on User per R1-H02!)
+    const makerUser = await adminSetupPrisma.user.upsert({
       where: { email: 'uboq-maker@synth.local' },
       update: { status: 'ACTIVE', role: 'QUANTITY_SURVEYOR', sessionVersion: 1, mustChangePassword: false },
       create: {
@@ -900,7 +1015,7 @@ async function main() {
         mustChangePassword: false,
       },
     });
-    const approverUser = await prisma.user.upsert({
+    const approverUser = await adminSetupPrisma.user.upsert({
       where: { email: 'uboq-approver@synth.local' },
       update: { status: 'ACTIVE', role: 'PROJECT_MANAGER', sessionVersion: 1, mustChangePassword: false },
       create: {
@@ -913,7 +1028,7 @@ async function main() {
         mustChangePassword: false,
       },
     });
-    const viewerUser = await prisma.user.upsert({
+    const viewerUser = await adminSetupPrisma.user.upsert({
       where: { email: 'uboq-viewer@synth.local' },
       update: { status: 'ACTIVE', role: 'VIEWER', sessionVersion: 1, mustChangePassword: false },
       create: {
@@ -926,7 +1041,7 @@ async function main() {
         mustChangePassword: false,
       },
     });
-    const outsiderUser = await prisma.user.upsert({
+    const outsiderUser = await adminSetupPrisma.user.upsert({
       where: { email: 'uboq-outsider@synth.local' },
       update: { status: 'ACTIVE', role: 'SITE_ENGINEER', sessionVersion: 1, mustChangePassword: false },
       create: {
@@ -939,7 +1054,7 @@ async function main() {
         mustChangePassword: false,
       },
     });
-    const legPmUser = await prisma.user.upsert({
+    const legPmUser = await adminSetupPrisma.user.upsert({
       where: { email: 'legacy-pm@synth.local' },
       update: { status: 'ACTIVE', role: 'PROJECT_MANAGER', sessionVersion: 1, mustChangePassword: false },
       create: {
@@ -1056,36 +1171,36 @@ async function main() {
       },
     });
 
-    // Seed RBAC modules & role permissions
-    const modPo = await prisma.module.upsert({
+    // Seed RBAC modules & role permissions via adminSetupPrisma (oserp_compat_login has ZERO DML on RBAC/PBAC tables per R1-H02!)
+    const modPo = await adminSetupPrisma.module.upsert({
       where: { moduleName: 'PURCHASE_ORDER' },
       update: { isActive: true },
       create: { moduleName: 'PURCHASE_ORDER', isActive: true },
     });
-    const modDel = await prisma.module.upsert({
+    const modDel = await adminSetupPrisma.module.upsert({
       where: { moduleName: 'DELIVERY_RECEIVING' },
       update: { isActive: true },
       create: { moduleName: 'DELIVERY_RECEIVING', isActive: true },
     });
-    const modPay = await prisma.module.upsert({
+    const modPay = await adminSetupPrisma.module.upsert({
       where: { moduleName: 'PAYMENT_ISSUANCE' },
       update: { isActive: true },
       create: { moduleName: 'PAYMENT_ISSUANCE', isActive: true },
     });
 
-    const qsRole = await prisma.role.upsert({
+    const qsRole = await adminSetupPrisma.role.upsert({
       where: { roleCode: 'QUANTITY_SURVEYOR' },
       update: { isActive: true },
       create: { roleName: 'QUANTITY_SURVEYOR', roleCode: 'QUANTITY_SURVEYOR', isActive: true },
     });
-    const pmRole = await prisma.role.upsert({
+    const pmRole = await adminSetupPrisma.role.upsert({
       where: { roleCode: 'PROJECT_MANAGER' },
       update: { isActive: true },
       create: { roleName: 'PROJECT_MANAGER', roleCode: 'PROJECT_MANAGER', isActive: true },
     });
 
-    await prisma.rolePermission.deleteMany({ where: { roleId: { in: [qsRole.id, pmRole.id] } } });
-    await prisma.rolePermission.createMany({
+    await adminSetupPrisma.rolePermission.deleteMany({ where: { roleId: { in: [qsRole.id, pmRole.id] } } });
+    await adminSetupPrisma.rolePermission.createMany({
       data: [
         { roleId: qsRole.id, moduleId: modPo.id, moduleName: 'PURCHASE_ORDER', canView: true, canCreate: true, canSubmit: true, canApprove: true },
         { roleId: qsRole.id, moduleId: modDel.id, moduleName: 'DELIVERY_RECEIVING', canView: true, canCreate: true, canSubmit: true },
@@ -1095,7 +1210,7 @@ async function main() {
       ],
     });
 
-    await prisma.projectUserAssignment.createMany({
+    await adminSetupPrisma.projectUserAssignment.createMany({
       data: [
         {
           projectId: uboqProj.id,
@@ -1162,17 +1277,12 @@ async function main() {
       async () => {
         const expectedSha = crypto.createHash('sha256').update(sampleMultiPhaseXlsxBuf).digest('hex');
 
-        // 1. Ingest DRAFT workbook over real HTTP under oserp_compat_login!
+        // 1. Ingest DRAFT workbook over real HTTP under oserp_compat_login WITHOUT explicitPhaseLines (pure L0/L1/L2 extraction)!
         const ingestRes = await apiCall(baseUrl, 'POST', `/api/uboq/project/${uboqProj.id}/ingest`, makerToken, {
           fileName: 'civic_complex_boq.xlsx',
           fileBase64: sampleMultiPhaseXlsxBuf.toString('base64'),
           sectorType: 'GOVERNMENT',
           taxProfileCode: 'GOV_PH_DUPA_5PCT_EST',
-          explicitPhaseLines: [
-            { lineKey: 'P1', itemCode: 'A-101', phaseCode: 'TOWER-A', workDescription: 'Structural Concrete Pouring', specification: 'Class A 4000 psi', unitRaw: 'cu.m', originalQty: 60, approvedQty: 60, contractUnitRate: 8500 },
-            { lineKey: 'P2', itemCode: 'B-201', phaseCode: 'TOWER-B', workDescription: 'Structural Concrete Pouring', specification: 'Class A 4000 psi', unitRaw: 'm3', originalQty: 40, approvedQty: 40, contractUnitRate: 8500 },
-            { lineKey: 'P3', itemCode: 'A-102', phaseCode: 'TOWER-A', workDescription: 'Structural Concrete Pouring', specification: 'Class AA 5000 psi', unitRaw: 'm3', originalQty: 25, approvedQty: 25, contractUnitRate: 9800 },
-          ],
           resourceTakeoffs: [
             {
               consolidatedItemCodeOrDesc: 'Structural Concrete Pouring | Class A 4000 psi',
@@ -1439,27 +1549,16 @@ async function main() {
           assert.equal(resExc.status, 200, JSON.stringify(resExc.json));
         }
 
-        // 3b. Verify H09 Preflight Gate 1: Unresolved PENDING_HUMAN_REVIEW OCR candidate blocks snapshot approval (409) until human-verified!
+        // 3b. Degraded low-confidence scan WITHOUT explicitPhaseLines holds in L2 human review queue (snapshot === null) & blocks draft regen (409)!
         const ocrStagedRes = await apiCall(baseUrl, 'POST', `/api/uboq/project/${uboqProj.id}/ingest`, makerToken, {
           fileName: 'degraded_scan_for_review.png',
           fileBase64: degradedLowConfPngBuf.toString('base64'),
           documentRole: 'SCANNED_FIELD_ANNEX',
-          explicitPhaseLines: [
-            {
-              lineKey: 'OCR-L1',
-              itemCode: 'SCN-101',
-              phaseCode: 'ANNEX-1',
-              workDescription: 'Site Clearing Works',
-              unitRaw: 'sq.m',
-              originalQty: 500,
-              approvedQty: 500,
-              contractUnitRate: 120,
-            },
-          ],
         });
         assert.equal(ocrStagedRes.status, 201, JSON.stringify(ocrStagedRes.json));
+        assert.equal(ocrStagedRes.json.snapshot, null, 'Low-confidence scan must hold in L2 review queue with snapshot=null');
+        assert.ok(ocrStagedRes.json.requiresHumanReviewCount >= 1);
         const ocrDocId = ocrStagedRes.json.sourceDocument.id;
-        const ocrSnapId = ocrStagedRes.json.snapshot.id;
 
         const pendingCands = await inGovCtx(() =>
           prisma.uboqExtractionCandidate.findMany({
@@ -1468,15 +1567,15 @@ async function main() {
         );
         assert.ok(pendingCands.length >= 1, 'Degraded OCR scan must persist PENDING_HUMAN_REVIEW candidate automatically');
 
-        const blockedByHumanReview = await apiCall(
+        const blockedRegen = await apiCall(
           baseUrl,
           'POST',
-          `/api/uboq/project/${uboqProj.id}/snapshots/${ocrSnapId}/approve`,
-          approverToken,
+          `/api/uboq/project/${uboqProj.id}/documents/${ocrDocId}/regenerate-draft`,
+          makerToken,
           {}
         );
-        assert.equal(blockedByHumanReview.status, 409, JSON.stringify(blockedByHumanReview.json));
-        assert.match(String(blockedByHumanReview.json.error || ''), /UBOQ_APPROVAL_BLOCKED_PENDING_HUMAN_REVIEW/);
+        assert.equal(blockedRegen.status, 409, JSON.stringify(blockedRegen.json));
+        assert.match(String(blockedRegen.json.error || ''), /UBOQ_DRAFT_REGEN_BLOCKED_PENDING_REVIEW/);
 
         // Viewer cannot resolve human review candidate (403)
         const viewerRev = await apiCall(
@@ -1488,7 +1587,7 @@ async function main() {
         );
         assert.equal(viewerRev.status, 403);
 
-        // Authorized reviewer resolves all pending OCR candidates (200)
+        // Authorized reviewer excludes the blurry annex lines after inspection (full OCR->BOQ promotion tested end-to-end in OCR-HUMAN-REVIEW-R1-H01)
         for (const pc of pendingCands) {
           const revOk = await apiCall(
             baseUrl,
@@ -1496,13 +1595,12 @@ async function main() {
             `/api/uboq/project/${uboqProj.id}/candidates/${pc.id}/review`,
             approverToken,
             {
-              decision: 'HUMAN_VERIFIED',
-              reviewNotes: 'Verified against signed hardcopy bid schedule',
-              correctedMappedFields: { item_code: 'SCN-101', approved_qty: 500, contract_unit_rate: 120 },
+              decision: 'HUMAN_EXCLUDED',
+              reviewNotes: 'Annex scan superseded by primary contract BOQ schedule',
             }
           );
           assert.equal(revOk.status, 200, JSON.stringify(revOk.json));
-          assert.equal(revOk.json.reviewDecision, 'HUMAN_VERIFIED');
+          assert.equal(revOk.json.reviewDecision, 'HUMAN_EXCLUDED');
         }
 
         // 4. Verify H09 Atomic Mid-Promotion Rollback: inject failure AFTER snapshot/consolidation writes inside tx -> 100% rolled back!
@@ -1592,6 +1690,322 @@ async function main() {
         rebPrrV1Id = postApprove.rebAcct.activeApprovedPrId!;
 
         return 'Verified DRAFT 0-live-write isolation (H05), 0 fabricated estimates & unmatched takeoff block (H06), exception gate + mid-tx rollback + SoD + atomic HTTP promotion (H09)';
+      }
+    );
+
+    await runCheck(
+      'OCR-HUMAN-REVIEW-R1-H01',
+      'SUITE-4',
+      'End-to-End Scanned-Only Low-Confidence OCR -> Canonical Field Remap -> Human Correction -> Draft Regeneration -> Approved BOQ Promotion With Immutable Provenance (Zero explicitPhaseLines)',
+      async () => {
+        // Create dedicated synthetic project SYNTH-UBOQ-TEST-OCR-002 to prove pure scanned-only BOQ promotion!
+        const ocrProj = await adminSetupPrisma.project.create({
+          data: {
+            id: 'SYNTH-UBOQ-TEST-OCR-002',
+            name: 'Synthetic Scanned-Only OCR Promotion Project',
+            contractNumber: 'CN-SYNTH-OCR-002',
+            location: 'Makati City',
+            contractAmount: 204337.5,
+            status: 'ONGOING',
+            managerId: approverUser.id,
+            uboqGovernanceEnabled: false,
+            isSyntheticTestFixture: true,
+          },
+        });
+        await adminSetupPrisma.projectUserAssignment.createMany({
+          data: [
+            { projectId: ocrProj.id, userId: makerUser.id, projectRole: 'QUANTITY_SURVEYOR', accessLevel: 'READ_WRITE', assignmentStatus: 'active' },
+            { projectId: ocrProj.id, userId: approverUser.id, projectRole: 'PROJECT_MANAGER', accessLevel: 'ADMIN', assignmentStatus: 'active' },
+          ],
+        });
+        const ocrMakerToken = signInternalAuth(makerUser.id, makerUser.role, makerUser.sessionVersion, ocrProj.id);
+        const ocrApproverToken = signInternalAuth(approverUser.id, approverUser.role, approverUser.sessionVersion, ocrProj.id);
+        const inOcrCtx = <T>(fn: () => Promise<T>) =>
+          withUboqRlsContext(
+            { userId: approverUser.id, sessionVersion: approverUser.sessionVersion, projectId: ocrProj.id },
+            fn
+          );
+
+        // 1. Passing explicitPhaseLines MUST fail closed (400 UBOQ_UNVERIFIED_EXPLICIT_PHASE_LINES_FORBIDDEN)
+        const bypassAttempt = await apiCall(baseUrl, 'POST', `/api/uboq/project/${ocrProj.id}/ingest`, ocrMakerToken, {
+          fileName: 'bypass_attempt.csv',
+          fileBase64: Buffer.from('Code,Description,Unit,Qty,Rate\nX-1,Test,m3,10,100\n').toString('base64'),
+          explicitPhaseLines: [
+            { lineKey: 'L1', itemCode: 'X-1', phaseCode: 'P1', workDescription: 'Bypass', unitRaw: 'm3', originalQty: 999, approvedQty: 999, contractUnitRate: 999 },
+          ],
+        });
+        assert.equal(bypassAttempt.status, 400, JSON.stringify(bypassAttempt.json));
+        assert.match(String(bypassAttempt.json.error || ''), /UBOQ_UNVERIFIED_EXPLICIT_PHASE_LINES_FORBIDDEN/);
+
+        // 2. Render real scanned image-only PDF (0 text operators) with smudged OCR numbers ('52X', '9X') + mislabeled 'Total Amount' column
+        const smudgedPng = await renderLowConfidenceAmbiguousScanPngBuffer();
+        const scannedLowConfPdf = await generateScannedImageOnlyPdfBuffer(smudgedPng);
+
+        const ingestScan = await apiCall(baseUrl, 'POST', `/api/uboq/project/${ocrProj.id}/ingest`, ocrMakerToken, {
+          fileName: 'scanned_low_conf_field_boq.pdf',
+          fileBase64: scannedLowConfPdf.toString('base64'),
+          documentRole: 'CONTRACT_BOQ',
+          sectorType: 'CORPORATE',
+          taxProfileCode: 'CORP_PH_VAT_EXCL_12',
+        });
+        assert.equal(ingestScan.status, 201, JSON.stringify(ingestScan.json));
+        assert.equal(ingestScan.json.snapshot, null, 'Low-confidence scanned PDF without explicitPhaseLines must return snapshot=null initially');
+        assert.equal(ingestScan.json.extractedCandidateCount, 2);
+        assert.equal(ingestScan.json.requiresHumanReviewCount, 2);
+        const scanDocId = ingestScan.json.sourceDocument.id;
+
+        // Duplicate replay BEFORE human review returns snapshot=null and requiresHumanReviewCount=2
+        const dupPreReview = await apiCall(baseUrl, 'POST', `/api/uboq/project/${ocrProj.id}/ingest`, ocrMakerToken, {
+          fileName: 'scanned_low_conf_field_boq_copy.pdf',
+          fileBase64: scannedLowConfPdf.toString('base64'),
+          documentRole: 'CONTRACT_BOQ',
+        });
+        assert.equal(dupPreReview.status, 200);
+        assert.equal(dupPreReview.json.duplicateIdempotentReplay, true);
+        assert.equal(dupPreReview.json.snapshot, null);
+        assert.equal(dupPreReview.json.requiresHumanReviewCount, 2);
+
+        // Draft regeneration BEFORE resolving candidates MUST fail 409
+        const earlyRegen = await apiCall(
+          baseUrl,
+          'POST',
+          `/api/uboq/project/${ocrProj.id}/documents/${scanDocId}/regenerate-draft`,
+          ocrMakerToken,
+          {}
+        );
+        assert.equal(earlyRegen.status, 409, JSON.stringify(earlyRegen.json));
+        assert.match(String(earlyRegen.json.error || ''), /UBOQ_DRAFT_REGEN_BLOCKED_PENDING_REVIEW/);
+
+        // Capture raw pre-review OCR candidates to verify 100% immutable provenance after review & promotion
+        const rawCandsBefore = await inOcrCtx(() =>
+          prisma.uboqExtractionCandidate.findMany({
+            where: { sourceDocumentId: scanDocId },
+            orderBy: { sourceRowNumber: 'asc' },
+          })
+        );
+        assert.equal(rawCandsBefore.length, 2);
+        for (const rc of rawCandsBefore) {
+          assert.equal(rc.extractionMethod, 'OCR_RASTER');
+          assert.equal(rc.requiresHumanReview, true);
+          assert.ok(Number(rc.confidenceScore) <= 0.55, `Expected low confidence <= 0.55, got ${rc.confidenceScore}`);
+          assert.match(String(rc.sourceCellRef || ''), /@x=\d+,y=\d+,w=\d+,h=\d+/);
+        }
+
+        // Invalid canonicalFieldRemap target MUST be rejected (400 UBOQ_INVALID_CANONICAL_REMAP_FIELD)
+        const badRemap = await apiCall(
+          baseUrl,
+          'POST',
+          `/api/uboq/project/${ocrProj.id}/candidates/${rawCandsBefore[0].id}/review`,
+          ocrApproverToken,
+          {
+            decision: 'HUMAN_VERIFIED',
+            reviewNotes: 'Bad remap test',
+            canonicalFieldRemap: { contract_line_amount: 'not_a_canonical_field_999' },
+          }
+        );
+        assert.equal(badRemap.status, 400, JSON.stringify(badRemap.json));
+        assert.match(String(badRemap.json.error || ''), /UBOQ_INVALID_CANONICAL_REMAP_FIELD/);
+
+        // 3. Human review + canonical remapping (contract_line_amount -> contract_unit_rate) + corrected smudged quantities (525 & 90)
+        // Note: contract_unit_rate is NOT passed in correctedMappedFields on row 1 (135.50), proving canonicalFieldRemap drives the rate!
+        const rev1 = await apiCall(
+          baseUrl,
+          'POST',
+          `/api/uboq/project/${ocrProj.id}/candidates/${rawCandsBefore[0].id}/review`,
+          ocrApproverToken,
+          {
+            decision: 'HUMAN_VERIFIED',
+            reviewNotes: 'Verified smudged 52X -> 525 sqm; remapped mislabeled Total Amount column to contract_unit_rate (135.50)',
+            canonicalFieldRemap: { contract_line_amount: 'contract_unit_rate' },
+            correctedMappedFields: {
+              item_code: 'SCN-201',
+              phase_code: 'OCR-PH1',
+              approved_qty: 525,
+            },
+          }
+        );
+        assert.equal(rev1.status, 200, JSON.stringify(rev1.json));
+
+        const rev2 = await apiCall(
+          baseUrl,
+          'POST',
+          `/api/uboq/project/${ocrProj.id}/candidates/${rawCandsBefore[1].id}/review`,
+          ocrApproverToken,
+          {
+            decision: 'HUMAN_VERIFIED',
+            reviewNotes: 'Verified smudged 9X -> 90 cum and updated negotiated unit rate to 1495.00',
+            canonicalFieldRemap: { contract_line_amount: 'contract_unit_rate' },
+            correctedMappedFields: {
+              item_code: 'SCN-202',
+              phase_code: 'OCR-PH1',
+              approved_qty: 90,
+              contract_unit_rate: 1495,
+            },
+          }
+        );
+        assert.equal(rev2.status, 200, JSON.stringify(rev2.json));
+
+        // 4. Regenerate DRAFT Operational Snapshot from verified L2 candidates (Maker prepares draft)
+        const regenRes = await apiCall(
+          baseUrl,
+          'POST',
+          `/api/uboq/project/${ocrProj.id}/documents/${scanDocId}/regenerate-draft`,
+          ocrMakerToken,
+          {}
+        );
+        assert.equal(regenRes.status, 201, JSON.stringify(regenRes.json));
+        assert.equal(regenRes.json.verifiedLineCount, 2);
+        const regenSnapId = regenRes.json.snapshot.id;
+        assert.equal(regenRes.json.snapshot.status, 'DRAFT');
+
+        // Verify 0 live BOQ items exist while regenerated snapshot is still DRAFT
+        const liveBeforeApprove = await inOcrCtx(() => prisma.awardedBOQItem.count({ where: { projectId: ocrProj.id } }));
+        assert.equal(liveBeforeApprove, 0);
+
+        // Duplicate replay AFTER review + draft regeneration returns requiresHumanReviewCount=0 and the regenerated snapshot!
+        const dupPostReview = await apiCall(baseUrl, 'POST', `/api/uboq/project/${ocrProj.id}/ingest`, ocrMakerToken, {
+          fileName: 'scanned_low_conf_field_boq_replay2.pdf',
+          fileBase64: scannedLowConfPdf.toString('base64'),
+          documentRole: 'CONTRACT_BOQ',
+        });
+        assert.equal(dupPostReview.status, 200);
+        assert.equal(dupPostReview.json.requiresHumanReviewCount, 0);
+        assert.equal(dupPostReview.json.snapshot?.id, regenSnapId, 'Duplicate replay after human review must return regenerated snapshot');
+
+        // 5. Approve regenerated snapshot as Approver PM (Maker-Checker SoD satisfied)
+        const approveOcr = await apiCall(
+          baseUrl,
+          'POST',
+          `/api/uboq/project/${ocrProj.id}/snapshots/${regenSnapId}/approve`,
+          ocrApproverToken,
+          {}
+        );
+        assert.equal(approveOcr.status, 200, JSON.stringify(approveOcr.json));
+        assert.equal(approveOcr.json.snapshot.status, 'APPROVED');
+
+        // 6. Verify exact corrected quantities & remapped/corrected prices in live AwardedBOQItem & ConsolidatedBOQItem + immutable OCR provenance!
+        const promotedOcrState = await inOcrCtx(async () => {
+          const awarded = await prisma.awardedBOQItem.findMany({
+            where: { projectId: ocrProj.id },
+            orderBy: { itemCode: 'asc' },
+          });
+          const consolidated = await prisma.consolidatedBOQItem.findMany({
+            where: { projectId: ocrProj.id },
+            orderBy: { unit: 'asc' },
+          });
+          const phaseLines = await prisma.uboqAwardedPhaseLine.findMany({
+            where: { snapshotId: regenSnapId },
+            include: { extractionCandidate: true },
+            orderBy: { itemCode: 'asc' },
+          });
+          return { awarded, consolidated, phaseLines };
+        });
+
+        assert.equal(promotedOcrState.awarded.length, 2);
+        const awd201 = promotedOcrState.awarded.find((a) => a.itemCode === 'OCR-PH1:SCN-201')!;
+        const awd202 = promotedOcrState.awarded.find((a) => a.itemCode === 'OCR-PH1:SCN-202')!;
+        assert.ok(awd201 && awd202);
+        assert.equal(Number(awd201.quantity), 525, 'Approved AwardedBOQItem SCN-201 must have human-corrected qty 525');
+        assert.equal(Number(awd201.combinedUnitCost), 135.5, 'Approved AwardedBOQItem SCN-201 must have canonically remapped rate 135.5');
+        assert.equal(Number(awd201.totalCost), 71137.5);
+        assert.equal(Number(awd202.quantity), 90, 'Approved AwardedBOQItem SCN-202 must have human-corrected qty 90');
+        assert.equal(Number(awd202.combinedUnitCost), 1495, 'Approved AwardedBOQItem SCN-202 must have human-corrected rate 1495');
+        assert.equal(Number(awd202.totalCost), 134550);
+
+        assert.equal(promotedOcrState.consolidated.length, 2);
+        const consM2 = promotedOcrState.consolidated.find((c) => c.unit === 'm2')!;
+        const consM3 = promotedOcrState.consolidated.find((c) => c.unit === 'm3')!;
+        assert.equal(Number(consM2.quantity), 525);
+        assert.equal(Number(consM2.unitCost), 135.5);
+        assert.equal(Number(consM3.quantity), 90);
+        assert.equal(Number(consM3.unitCost), 1495);
+
+        // Verify immutable raw OCR provenance on UboqAwardedPhaseLine -> UboqExtractionCandidate
+        for (let i = 0; i < 2; i++) {
+          const pl = promotedOcrState.phaseLines[i];
+          const orig = rawCandsBefore[i];
+          assert.equal(pl.extractionCandidateId, orig.id, 'Phase line must link to exact L2 OCR candidate');
+          assert.ok(pl.extractionCandidate);
+          assert.equal(pl.extractionCandidate!.rawValueText, orig.rawValueText, 'Original OCR rawValueText must remain immutable');
+          assert.equal(Number(pl.extractionCandidate!.confidenceScore), Number(orig.confidenceScore), 'Original OCR confidenceScore must remain immutable');
+          assert.equal(pl.extractionCandidate!.sourceCellRef, orig.sourceCellRef, 'Original OCR bounding-box cellRef must remain immutable');
+          assert.equal(pl.extractionCandidate!.sourceRowNumber, orig.sourceRowNumber);
+          const pJson = pl.extractionCandidate!.parsedJson as Record<string, any>;
+          assert.equal(pJson.mappedFields.approved_qty, null, 'Pre-review smudged approved_qty=null must remain untouched in mappedFields');
+        }
+
+        return 'Scanned-only PDF (0 explicitPhaseLines) -> human review + canonical remap -> regenerated DRAFT -> APPROVED BOQ (525 m2 @ 135.50 & 90 m3 @ 1495.00) with 100% immutable OCR provenance';
+      }
+    );
+
+    await runCheck(
+      'AGENCY-ABC-R1-M02',
+      'SUITE-4',
+      'Direct-Cost-Only vs Source-Evidenced Agency ABC Separation: agencyAbcAmt Remains NULL When Source Provides Direct Cost Without Official ABC (R1-M02)',
+      async () => {
+        const ocrMakerToken = signInternalAuth(makerUser.id, makerUser.role, makerUser.sessionVersion, 'SYNTH-UBOQ-TEST-OCR-002');
+        const inOcrCtx = <T>(fn: () => Promise<T>) =>
+          withUboqRlsContext(
+            { userId: approverUser.id, sessionVersion: approverUser.sessionVersion, projectId: 'SYNTH-UBOQ-TEST-OCR-002' },
+            fn
+          );
+
+        const csvContent = [
+          'item_code,phase_code,work_description,unit,approved_qty,contract_unit_rate,estimated_direct_cost,agency_abc',
+          'EST-EDC-ONLY,PH-EST,Earthwork Excavation Direct Cost Only,m3,100,950,80000,',
+          'EST-BOTH,PH-EST,Structural Backfill With Official ABC,m3,100,1350,100000,128500',
+          'EST-ABC-ONLY,PH-EST,Drainage Culvert ABC Only,ln.m,50,2100,,110000',
+        ].join('\n');
+
+        const estIngest = await apiCall(
+          baseUrl,
+          'POST',
+          '/api/uboq/project/SYNTH-UBOQ-TEST-OCR-002/ingest',
+          ocrMakerToken,
+          {
+            fileName: 'agency_estimate_separation_test.csv',
+            fileBase64: Buffer.from(csvContent, 'utf8').toString('base64'),
+            documentRole: 'AGENCY_ESTIMATE_SCHEDULE',
+            sectorType: 'GOVERNMENT',
+            taxProfileCode: 'GOV_PH_DUPA_5PCT_EST',
+          }
+        );
+        assert.equal(estIngest.status, 201, JSON.stringify(estIngest.json));
+        const estSnapId = estIngest.json.snapshot.id;
+
+        const estRows = await inOcrCtx(() =>
+          prisma.uboqAwardedPhaseLine.findMany({
+            where: { snapshotId: estSnapId },
+            include: { agencyEstimates: true },
+            orderBy: { itemCode: 'asc' },
+          })
+        );
+        assert.equal(estRows.length, 3);
+
+        const rowEdcOnly = estRows.find((r) => r.itemCode === 'EST-EDC-ONLY')!;
+        const estEdcOnly = rowEdcOnly.agencyEstimates[0];
+        assert.equal(rowEdcOnly.agencyEstimateStatus, 'DIRECT_COST_ONLY_DERIVED');
+        assert.ok(estEdcOnly, 'Direct-cost-only row must store derived breakdown');
+        assert.equal(Number(estEdcOnly.agencyEdcAmt), 80000);
+        assert.equal(estEdcOnly.agencyAbcAmt, null, 'R1-M02: agencyAbcAmt MUST be NULL when agency_abc is absent from source');
+        assert.equal(Number(estEdcOnly.estimatedTotalAmount), 100800, 'Derived DUPA total remains in estimatedTotalAmount');
+
+        const rowBoth = estRows.find((r) => r.itemCode === 'EST-BOTH')!;
+        const estBoth = rowBoth.agencyEstimates[0];
+        assert.equal(rowBoth.agencyEstimateStatus, 'SOURCE_EVIDENCED');
+        assert.ok(estBoth);
+        assert.equal(Number(estBoth.agencyEdcAmt), 100000);
+        assert.equal(Number(estBoth.agencyAbcAmt), 128500, 'Source-evidenced agency_abc preserved verbatim');
+        assert.equal(Number(estBoth.estimatedTotalAmount), 126000);
+
+        const rowAbcOnly = estRows.find((r) => r.itemCode === 'EST-ABC-ONLY')!;
+        const estAbcOnly = rowAbcOnly.agencyEstimates[0];
+        assert.equal(rowAbcOnly.agencyEstimateStatus, 'NEEDS_REVIEW');
+        assert.ok(estAbcOnly);
+        assert.equal(estAbcOnly.agencyEdcAmt, null);
+        assert.equal(Number(estAbcOnly.agencyAbcAmt), 110000);
+
+        return 'Verified DIRECT_COST_ONLY_DERIVED keeps agencyAbcAmt=NULL (derived total=100,800), SOURCE_EVIDENCED keeps agencyAbcAmt=128,500, and ABC-only marks NEEDS_REVIEW';
       }
     );
 
@@ -2147,6 +2561,151 @@ async function main() {
     );
 
     await runCheck(
+      'DB-LEAST-PRIVILEGE-AND-PROOF-R1-H02',
+      'SUITE-5',
+      'Auth/RBAC Table Privilege Revocation Audit, Tampering Rejection, & Cryptographic Non-Forgeable Session Proof Binding Against Valid-Actor GUC Impersonation (R1-H02)',
+      async () => {
+        const compatClient = new pg.Client({ connectionString: provisioned.compatDbUrl });
+        const legacyClient = new pg.Client({ connectionString: provisioned.legacyDbUrl });
+        await compatClient.connect();
+        await legacyClient.connect();
+        try {
+          // 1. Effective privilege inventory on sensitive auth/RBAC/PBAC/secret tables under BOTH runtime logins
+          const readOnlyAuthTables = [
+            'User',
+            'SystemRole',
+            'Role',
+            'UserRole',
+            'Module',
+            'RolePermission',
+            'RoleConflictRule',
+            'ProjectUserAssignment',
+          ];
+          const zeroAccessTables = [
+            '_prisma_migrations',
+            '_uboq_rls_trust_anchor',
+            'PasswordRecoveryToken',
+            'PasswordRecoveryRateLimit',
+          ];
+
+          for (const [label, c] of [
+            ['oserp_compat_login', compatClient],
+            ['oserp_legacy_login', legacyClient],
+          ] as const) {
+            for (const tbl of readOnlyAuthTables) {
+              const p = await c.query(
+                `SELECT has_table_privilege(current_user, $1, 'INSERT') AS ins,
+                        has_table_privilege(current_user, $1, 'UPDATE') AS upd,
+                        has_table_privilege(current_user, $1, 'DELETE') AS del,
+                        has_table_privilege(current_user, $1, 'TRUNCATE') AS trn`,
+                [`public."${tbl}"`]
+              );
+              assert.deepEqual(
+                p.rows[0],
+                { ins: false, upd: false, del: false, trn: false },
+                `${label} must have ZERO INSERT/UPDATE/DELETE/TRUNCATE on ${tbl}`
+              );
+            }
+            for (const tbl of zeroAccessTables) {
+              const p = await c.query(
+                `SELECT has_table_privilege(current_user, $1, 'SELECT') AS sel,
+                        has_table_privilege(current_user, $1, 'INSERT') AS ins,
+                        has_table_privilege(current_user, $1, 'UPDATE') AS upd,
+                        has_table_privilege(current_user, $1, 'DELETE') AS del`,
+                [`public."${tbl}"`]
+              );
+              assert.deepEqual(
+                p.rows[0],
+                { sel: false, ins: false, upd: false, del: false },
+                `${label} must have ZERO access (including SELECT) on ${tbl}`
+              );
+            }
+          }
+
+          // 2. Direct SQL authorization-table & secret-anchor tampering attempts under oserp_compat_login MUST all fail!
+          const tamperStatements: Array<[string, string, unknown[]]> = [
+            ['User UPDATE', `UPDATE "User" SET role = 'SUPER_ADMIN' WHERE id = $1`, [outsiderUser.id]],
+            ['ProjectUserAssignment INSERT', `INSERT INTO "ProjectUserAssignment" (id, "projectId", "userId", "projectRole", "accessLevel", "assignmentStatus", "updatedAt") VALUES ('hack-pua-1', 'SYNTH-UBOQ-TEST-001', $1, 'PROJECT_MANAGER', 'ADMIN', 'active', NOW())`, [outsiderUser.id]],
+            ['RolePermission UPDATE', `UPDATE "RolePermission" SET "canApprove" = true` , []],
+            ['_uboq_rls_trust_anchor SELECT', `SELECT "secretHex" FROM "_uboq_rls_trust_anchor"`, []],
+            ['_prisma_migrations UPDATE', `UPDATE "_prisma_migrations" SET checksum = 'forged'`, []],
+            ['PasswordRecoveryToken SELECT', `SELECT id FROM "PasswordRecoveryToken"`, []],
+          ];
+          for (const [desc, sql, params] of tamperStatements) {
+            await compatClient.query('BEGIN');
+            await assert.rejects(
+              () => compatClient.query(sql, params),
+              /permission denied/i,
+              `${desc} must be denied by PostgreSQL table privileges`
+            );
+            await compatClient.query('ROLLBACK');
+          }
+
+          // 3. Valid-actor + valid-sessionVersion GUC impersonation WITHOUT valid cryptographic app.current_rls_proof MUST return 0 rows!
+          await compatClient.query('BEGIN');
+          await compatClient.query(`SELECT set_config('app.current_project_id', 'SYNTH-UBOQ-TEST-001', true)`);
+          await compatClient.query(`SELECT set_config('app.current_user_id', $1, true)`, [approverUser.id]);
+          await compatClient.query(`SELECT set_config('app.current_session_version', '1', true)`);
+          const spoofNoProofProj = await compatClient.query(`SELECT id FROM "Project"`);
+          const spoofNoProofAcct = await compatClient.query(`SELECT id FROM "UboqCanonicalResourceAccount"`);
+          assert.equal(spoofNoProofProj.rowCount, 0, 'Valid actor + sessionVersion without app.current_rls_proof must return 0 Project rows');
+          assert.equal(spoofNoProofAcct.rowCount, 0, 'Valid actor + sessionVersion without app.current_rls_proof must return 0 UboqCanonicalResourceAccount rows');
+          await compatClient.query('COMMIT');
+
+          // 4. Forged MAC & cross-project replayed valid proof & expired proof MUST all return 0 rows!
+          const nowSec = Math.floor(Date.now() / 1000);
+          const validLegProof = mintSignedRlsProof({
+            projectId: 'SYNTH-LEGACY-PREMIG-001',
+            userId: legPmUser.id,
+            sessionVersion: 1,
+            issuedEpochSec: nowSec,
+          });
+          const expiredApproverProof = mintSignedRlsProof({
+            projectId: 'SYNTH-UBOQ-TEST-001',
+            userId: approverUser.id,
+            sessionVersion: 1,
+            issuedEpochSec: nowSec - 600,
+          });
+
+          for (const [proofLabel, badProof] of [
+            ['forged-mac', `${nowSec}.${'b'.repeat(24)}.${'a'.repeat(64)}`],
+            ['cross-project-replayed-proof', validLegProof],
+            ['expired-proof', expiredApproverProof],
+          ] as const) {
+            await compatClient.query('BEGIN');
+            await compatClient.query(`SELECT set_config('app.current_project_id', 'SYNTH-UBOQ-TEST-001', true)`);
+            await compatClient.query(`SELECT set_config('app.current_user_id', $1, true)`, [approverUser.id]);
+            await compatClient.query(`SELECT set_config('app.current_session_version', '1', true)`);
+            await compatClient.query(`SELECT set_config('app.current_rls_proof', $1, true)`, [badProof]);
+            const rows = await compatClient.query(`SELECT id FROM "Project"`);
+            assert.equal(rows.rowCount, 0, `Impersonation attempt (${proofLabel}) must fail closed with 0 rows`);
+            await compatClient.query('COMMIT');
+          }
+
+          // 5. ProjectUserAssignment FORCE RLS: scoped to SYNTH-UBOQ-TEST-001 with valid proof sees ONLY SYNTH-UBOQ-TEST-001 assignments
+          const validGovProof = mintSignedRlsProof({
+            projectId: 'SYNTH-UBOQ-TEST-001',
+            userId: approverUser.id,
+            sessionVersion: 1,
+          });
+          await compatClient.query('BEGIN');
+          await compatClient.query(`SELECT set_config('app.current_project_id', 'SYNTH-UBOQ-TEST-001', true)`);
+          await compatClient.query(`SELECT set_config('app.current_user_id', $1, true)`, [approverUser.id]);
+          await compatClient.query(`SELECT set_config('app.current_session_version', '1', true)`);
+          await compatClient.query(`SELECT set_config('app.current_rls_proof', $1, true)`, [validGovProof]);
+          const puaRows = await compatClient.query(`SELECT DISTINCT "projectId" FROM "ProjectUserAssignment"`);
+          assert.deepEqual(puaRows.rows.map((r) => r.projectId), ['SYNTH-UBOQ-TEST-001']);
+          await compatClient.query('COMMIT');
+
+          return 'Verified 0 DML grants on 12 auth/RBAC/secret tables, 6 SQL tamper attempts rejected, and non-forgeable app.current_rls_proof blocked valid-actor GUC spoofing, replay & expiry';
+        } finally {
+          await compatClient.end();
+          await legacyClient.end();
+        }
+      }
+    );
+
+    await runCheck(
       'SAFEGUARD-I-03-A',
       'SUITE-5',
       'PostgreSQL FORCE ROW LEVEL SECURITY Fail-Closed & Cross-Project Isolation Under oserp_compat_login (Direct & FK-Joined Tables)',
@@ -2160,11 +2719,17 @@ async function main() {
           assert.equal(noCtx.rowCount, 0, 'oserp_compat_login without project context must fail closed (0 rows)');
           await client.query('COMMIT');
 
-          // 2. Scoped tenant isolation proof using legPmUser (assigned ONLY to SYNTH-LEGACY-PREMIG-001)
+          // 2. Scoped tenant isolation proof using legPmUser (assigned ONLY to SYNTH-LEGACY-PREMIG-001) + cryptographic session proof
+          const legProof = mintSignedRlsProof({
+            projectId: 'SYNTH-LEGACY-PREMIG-001',
+            userId: legPmUser.id,
+            sessionVersion: 1,
+          });
           await client.query('BEGIN');
           await client.query(`SELECT set_config('app.current_project_id', 'SYNTH-LEGACY-PREMIG-001', true)`);
           await client.query(`SELECT set_config('app.current_user_id', $1, true)`, [legPmUser.id]);
           await client.query(`SELECT set_config('app.current_session_version', '1', true)`);
+          await client.query(`SELECT set_config('app.current_rls_proof', $1, true)`, [legProof]);
 
           const pRows = await client.query(`SELECT id FROM "Project"`);
           assert.deepEqual(pRows.rows.map((r) => r.id), ['SYNTH-LEGACY-PREMIG-001']);
@@ -2196,10 +2761,16 @@ async function main() {
         const client = new pg.Client({ connectionString: provisioned.compatDbUrl });
         await client.connect();
         try {
+          const legProofB = mintSignedRlsProof({
+            projectId: 'SYNTH-LEGACY-PREMIG-001',
+            userId: legPmUser.id,
+            sessionVersion: 1,
+          });
           await client.query('BEGIN');
           await client.query(`SELECT set_config('app.current_project_id', 'SYNTH-LEGACY-PREMIG-001', true)`);
           await client.query(`SELECT set_config('app.current_user_id', $1, true)`, [legPmUser.id]);
           await client.query(`SELECT set_config('app.current_session_version', '1', true)`);
+          await client.query(`SELECT set_config('app.current_rls_proof', $1, true)`, [legProofB]);
 
           const consRows = await client.query(
             `SELECT id, "isUboqResourceGoverned", unit, quantity FROM "ConsolidatedBOQItem" WHERE "projectId" = 'SYNTH-LEGACY-PREMIG-001'`
@@ -2217,7 +2788,7 @@ async function main() {
         }
 
         // Full HTTP Narrow Regression (REG-01) on SYNTH-LEGACY-PREMIG-001 under oserp_compat_login!
-        const legAdmin = await prisma.user.upsert({
+        const legAdmin = await adminSetupPrisma.user.upsert({
           where: { email: 'legacy-admin@synth.local' },
           update: { role: 'SUPER_ADMIN', status: 'ACTIVE', sessionVersion: 1, mustChangePassword: false },
           create: {
@@ -2369,14 +2940,20 @@ async function main() {
         const compatClient = new pg.Client({ connectionString: provisioned.compatDbUrl });
         await compatClient.connect();
         try {
+          const govProofC = mintSignedRlsProof({
+            projectId: 'SYNTH-UBOQ-TEST-001',
+            userId: approverUser.id,
+            sessionVersion: 1,
+          });
           await compatClient.query('BEGIN');
           await compatClient.query(`SELECT set_config('app.current_project_id', 'SYNTH-UBOQ-TEST-001', true)`);
           await compatClient.query(`SELECT set_config('app.current_user_id', $1, true)`, [approverUser.id]);
           await compatClient.query(`SELECT set_config('app.current_session_version', '1', true)`);
+          await compatClient.query(`SELECT set_config('app.current_rls_proof', $1, true)`, [govProofC]);
 
           await assert.rejects(
             () => compatClient.query(`DELETE FROM "UboqResourceLedgerEntry" WHERE "projectId" = 'SYNTH-UBOQ-TEST-001'`),
-            /UBOQ_LEDGER_IMMUTABLE|cannot delete/i
+            /permission denied|UBOQ_LEDGER_IMMUTABLE|cannot delete/i
           );
           await compatClient.query('ROLLBACK');
         } finally {
@@ -2388,44 +2965,94 @@ async function main() {
     );
 
     await runCheck(
-      'SAFEGUARD-I-03-D',
+      'SAFEGUARD-I-03-D & CLEANUP-CLOSURE-R1-H03',
       'SUITE-5',
-      'Privileged Cleanup Separation (oserp_compat_login GUC Forgery Blocked vs oserp_maint_login Dual-Gate Purge)',
+      'Privileged Cleanup Separation, Transitive Dependency-Closure Dry-Run Manifest, Paid/Posted & Cross-Project Disqualification, and Stale-Manifest Denial (I-03-D, R1-H03)',
       async () => {
         const compatClient = new pg.Client({ connectionString: provisioned.compatDbUrl });
         const maintClient = new pg.Client({ connectionString: provisioned.maintDbUrl });
         await compatClient.connect();
         await maintClient.connect();
         try {
-          // 1. oserp_compat_login GUC forgery MUST FAIL both direct DELETE and function execution!
+          const govProofD = mintSignedRlsProof({
+            projectId: 'SYNTH-UBOQ-TEST-001',
+            userId: approverUser.id,
+            sessionVersion: 1,
+          });
+
+          // 1. oserp_compat_login GUC forgery MUST FAIL both direct DELETE and cleanup routines!
           await compatClient.query('BEGIN');
           await compatClient.query(`SELECT set_config('app.current_project_id', 'SYNTH-UBOQ-TEST-001', true)`);
           await compatClient.query(`SELECT set_config('app.current_user_id', $1, true)`, [approverUser.id]);
           await compatClient.query(`SELECT set_config('app.current_session_version', '1', true)`);
+          await compatClient.query(`SELECT set_config('app.current_rls_proof', $1, true)`, [govProofD]);
           await compatClient.query(`SELECT set_config('app.synthetic_cleanup_authorized', 'on', true)`);
 
           await assert.rejects(
             () => compatClient.query(`DELETE FROM "ConsolidatedBOQItem" WHERE id = $1`, [cemConsBoqId]),
-            /UBOQ_PROTECTED_CONSOLIDATED_DELETE|violates foreign key/i
+            /permission denied|UBOQ_PROTECTED_CONSOLIDATED_DELETE|violates foreign key/i
           );
           await compatClient.query('ROLLBACK');
 
-          await compatClient.query('BEGIN');
-          await assert.rejects(
-            () => compatClient.query(`SELECT uboq_execute_verified_synthetic_cleanup('SYNTH-UBOQ-TEST-001')`),
-            /permission denied for function/i
-          );
-          await compatClient.query('ROLLBACK');
+          for (const sql of [
+            `SELECT uboq_build_synthetic_cleanup_manifest('SYNTH-UBOQ-TEST-001')`,
+            `SELECT uboq_execute_verified_synthetic_cleanup('SYNTH-UBOQ-TEST-001')`,
+            `SELECT uboq_execute_verified_synthetic_cleanup('SYNTH-UBOQ-TEST-001', '${'a'.repeat(64)}')`,
+          ]) {
+            await compatClient.query('BEGIN');
+            await assert.rejects(() => compatClient.query(sql), /permission denied for function/i);
+            await compatClient.query('ROLLBACK');
+          }
 
-          // 2. oserp_maint_login MUST REJECT non-SYNTH-UBOQ-TEST-* project IDs!
+          // 2. Unverified 1-arg cleanup call MUST fail closed even for oserp_maint_login (R1-H03)!
           await maintClient.query('BEGIN');
           await assert.rejects(
-            () => maintClient.query(`SELECT uboq_execute_verified_synthetic_cleanup('SYNTH-LEGACY-PREMIG-001')`),
-            /UBOQ_CLEANUP_PREFIX_REJECTED/i
+            () => maintClient.query(`SELECT uboq_execute_verified_synthetic_cleanup('SYNTH-UBOQ-TEST-001')`),
+            /UBOQ_CLEANUP_MANIFEST_REQUIRED/i
           );
           await maintClient.query('ROLLBACK');
 
-          // 3. Create disposable SYNTH-UBOQ-TEST-CLEANUP-999 (first with isSyntheticTestFixture=false to prove dual-gate, then true) & purge via oserp_maint_login!
+          // 3. Non-SYNTH-UBOQ-TEST-* project MUST be disqualified in dry-run AND rejected in execute!
+          const legDryRun = (await buildSyntheticCleanupDryRunManifest(provisioned.maintDbUrl, 'SYNTH-LEGACY-PREMIG-001')) as any;
+          assert.equal(legDryRun.eligible, false);
+          assert.equal(
+            (legDryRun.disqualifiers as string[]).some((d) => d.includes('DISQUALIFIED_NON_SYNTHETIC_PREFIX')),
+            true
+          );
+          await assert.rejects(
+            () =>
+              executeManifestVerifiedSyntheticCleanup(
+                provisioned.maintDbUrl,
+                'SYNTH-LEGACY-PREMIG-001',
+                String(legDryRun.manifestSha256)
+              ),
+            /UBOQ_CLEANUP_PREFIX_REJECTED|UBOQ_CLEANUP_DISQUALIFIED_RECORDS/i
+          );
+
+          // 4. Paid AP / Posted Expense disqualification (R1-H03): SYNTH-UBOQ-TEST-001 has PAID AP + APPROVED Expense from SAFEGUARD-I-02!
+          const paidGraphManifest = (await buildSyntheticCleanupDryRunManifest(provisioned.maintDbUrl, 'SYNTH-UBOQ-TEST-001')) as any;
+          assert.equal(paidGraphManifest.eligible, false, 'Project with paid AP & posted Expense must be ineligible for cleanup');
+          assert.equal(
+            (paidGraphManifest.disqualifiers as string[]).some((d) => d.includes('DISQUALIFIED_PAID_OR_POSTED_ACCOUNTS_PAYABLE')),
+            true
+          );
+          assert.equal(
+            (paidGraphManifest.disqualifiers as string[]).some((d) => d.includes('DISQUALIFIED_POSTED_EXPENSE_RECORDS')),
+            true
+          );
+          await assert.rejects(
+            () =>
+              executeManifestVerifiedSyntheticCleanup(
+                provisioned.maintDbUrl,
+                'SYNTH-UBOQ-TEST-001',
+                String(paidGraphManifest.manifestSha256)
+              ),
+            /UBOQ_CLEANUP_DISQUALIFIED_RECORDS/i
+          );
+          const stillIntact001 = await adminSetupPrisma.project.findUnique({ where: { id: 'SYNTH-UBOQ-TEST-001' } });
+          assert.ok(stillIntact001, 'SYNTH-UBOQ-TEST-001 must remain untouched when disqualified by paid financial records');
+
+          // 5. Disposable SYNTH-UBOQ-TEST-CLEANUP-999: prove isSyntheticTestFixture=false block, cross-project descendant block, stale manifest block, then clean manifest-verified purge!
           await adminSetupPrisma.project.create({
             data: {
               id: 'SYNTH-UBOQ-TEST-CLEANUP-999',
@@ -2435,12 +3062,17 @@ async function main() {
               isSyntheticTestFixture: false,
             },
           });
-          await maintClient.query('BEGIN');
+          const unflaggedManifest = (await buildSyntheticCleanupDryRunManifest(provisioned.maintDbUrl, 'SYNTH-UBOQ-TEST-CLEANUP-999')) as any;
+          assert.equal(unflaggedManifest.eligible, false);
           await assert.rejects(
-            () => maintClient.query(`SELECT uboq_execute_verified_synthetic_cleanup('SYNTH-UBOQ-TEST-CLEANUP-999')`),
-            /UBOQ_CLEANUP_NOT_SYNTHETIC/i
+            () =>
+              executeManifestVerifiedSyntheticCleanup(
+                provisioned.maintDbUrl,
+                'SYNTH-UBOQ-TEST-CLEANUP-999',
+                String(unflaggedManifest.manifestSha256)
+              ),
+            /UBOQ_CLEANUP_NOT_SYNTHETIC|UBOQ_CLEANUP_DISQUALIFIED_RECORDS/i
           );
-          await maintClient.query('ROLLBACK');
 
           await adminSetupPrisma.project.update({
             where: { id: 'SYNTH-UBOQ-TEST-CLEANUP-999' },
@@ -2473,17 +3105,133 @@ async function main() {
             },
           });
 
-          await maintClient.query('BEGIN');
-          const purgeRes = await maintClient.query(
-            `SELECT uboq_execute_verified_synthetic_cleanup('SYNTH-UBOQ-TEST-CLEANUP-999') AS res`
+          // 5a-i. Cross-project link disqualification: attach a PO under SYNTH-UBOQ-TEST-CLEANUP-999 MRF referencing foreign ConsolidatedBOQItem on SYNTH-LEGACY-PREMIG-001!
+          const foreignLegCons = await adminSetupPrisma.consolidatedBOQItem.findFirstOrThrow({
+            where: { projectId: 'SYNTH-LEGACY-PREMIG-001' },
+          });
+          const dispMrCross = await adminSetupPrisma.materialRequest.create({
+            data: {
+              mrNumber: `MR-CROSS-LINK-${Date.now()}`,
+              projectId: 'SYNTH-UBOQ-TEST-CLEANUP-999',
+              requesterId: makerUser.id,
+              status: 'DRAFT',
+            },
+          });
+          const crossPo = await adminSetupPrisma.purchaseOrder.create({
+            data: {
+              poNumber: `PO-CROSS-LINK-${Date.now()}`,
+              supplierId: supplier.id,
+              mrId: dispMrCross.id,
+              totalAmount: 1000,
+              status: 'DRAFT',
+              items: {
+                create: [{ consolidatedBoqItemId: foreignLegCons.id, quantity: 1, unitCost: 1000 }],
+              },
+            },
+          });
+          const crossLinkedManifest = (await buildSyntheticCleanupDryRunManifest(provisioned.maintDbUrl, 'SYNTH-UBOQ-TEST-CLEANUP-999')) as any;
+          assert.equal(crossLinkedManifest.eligible, false);
+          assert.equal(
+            (crossLinkedManifest.disqualifiers as string[]).some((d) => d.includes('DISQUALIFIED_CROSS_PROJECT_PROCUREMENT_REFERENCE')),
+            true
           );
-          await maintClient.query('COMMIT');
-          assert.equal(purgeRes.rows[0].res.cleanedProjectId, 'SYNTH-UBOQ-TEST-CLEANUP-999');
+          await assert.rejects(
+            () =>
+              executeManifestVerifiedSyntheticCleanup(
+                provisioned.maintDbUrl,
+                'SYNTH-UBOQ-TEST-CLEANUP-999',
+                String(crossLinkedManifest.manifestSha256)
+              ),
+            /UBOQ_CLEANUP_DISQUALIFIED_RECORDS/i
+          );
+          await adminSetupPrisma.purchaseOrderItem.deleteMany({ where: { poId: crossPo.id } });
+          await adminSetupPrisma.purchaseOrder.delete({ where: { id: crossPo.id } });
 
-          const gone = await adminSetupPrisma.project.findUnique({ where: { id: 'SYNTH-UBOQ-TEST-CLEANUP-999' } });
-          assert.equal(gone, null);
+          // 5a-ii. Out-of-scope descendant disqualification: attach a Billing record on SYNTH-UBOQ-TEST-CLEANUP-999!
+          const outOfScopeBilling = await adminSetupPrisma.billing.create({
+            data: {
+              billingNumber: `BIL-OOS-${Date.now()}`,
+              billingPeriodFrom: new Date('2026-01-01T00:00:00Z'),
+              billingPeriodTo: new Date('2026-01-31T00:00:00Z'),
+              billingDate: new Date('2026-02-01T00:00:00Z'),
+              billingType: 'PROGRESS',
+              contractAmount: 10000,
+              revisedContractAmount: 10000,
+              projectId: 'SYNTH-UBOQ-TEST-CLEANUP-999',
+            },
+          });
+          const oosManifest = (await buildSyntheticCleanupDryRunManifest(provisioned.maintDbUrl, 'SYNTH-UBOQ-TEST-CLEANUP-999')) as any;
+          assert.equal(oosManifest.eligible, false);
+          assert.equal(
+            (oosManifest.disqualifiers as string[]).some((d) => d.includes('DISQUALIFIED_OUT_OF_SCOPE_DESCENDANT:Billing(1)')),
+            true
+          );
+          await assert.rejects(
+            () =>
+              executeManifestVerifiedSyntheticCleanup(
+                provisioned.maintDbUrl,
+                'SYNTH-UBOQ-TEST-CLEANUP-999',
+                String(oosManifest.manifestSha256)
+              ),
+            /UBOQ_CLEANUP_DISQUALIFIED_RECORDS/i
+          );
+          await adminSetupPrisma.billing.delete({ where: { id: outOfScopeBilling.id } });
 
-          return 'oserp_compat_login GUC forgery blocked; oserp_maint_login enforced dual-gate & cleanly purged SYNTH-UBOQ-TEST-CLEANUP-999';
+          // 5b. Stale-manifest denial: generate eligible manifest, mutate descendant graph, verify execution rolls back on hash mismatch!
+          const eligibleStaleCandidate = (await buildSyntheticCleanupDryRunManifest(provisioned.maintDbUrl, 'SYNTH-UBOQ-TEST-CLEANUP-999')) as any;
+          assert.equal(eligibleStaleCandidate.eligible, true);
+
+          await adminSetupPrisma.materialRequest.create({
+            data: {
+              mrNumber: `MR-STALE-DRIFT-${Date.now()}`,
+              projectId: 'SYNTH-UBOQ-TEST-CLEANUP-999',
+              requesterId: makerUser.id,
+              status: 'DRAFT',
+            },
+          });
+
+          await assert.rejects(
+            () =>
+              executeManifestVerifiedSyntheticCleanup(
+                provisioned.maintDbUrl,
+                'SYNTH-UBOQ-TEST-CLEANUP-999',
+                String(eligibleStaleCandidate.manifestSha256)
+              ),
+            /UBOQ_CLEANUP_STALE_MANIFEST_MISMATCH/i
+          );
+          const stillThereAfterStale = await adminSetupPrisma.project.findUnique({
+            where: { id: 'SYNTH-UBOQ-TEST-CLEANUP-999' },
+          });
+          assert.ok(stillThereAfterStale, 'Stale manifest mismatch must roll back without deleting project');
+
+          // 5c. Fresh manifest generation & verified atomic purge of SYNTH-UBOQ-TEST-CLEANUP-999 and SYNTH-UBOQ-TEST-OCR-002 ( preserving shared Supplier & Users!)
+          const freshManifest999 = (await buildSyntheticCleanupDryRunManifest(provisioned.maintDbUrl, 'SYNTH-UBOQ-TEST-CLEANUP-999')) as any;
+          assert.equal(freshManifest999.eligible, true);
+          const purgeRes999 = (await executeManifestVerifiedSyntheticCleanup(
+            provisioned.maintDbUrl,
+            'SYNTH-UBOQ-TEST-CLEANUP-999',
+            String(freshManifest999.manifestSha256)
+          )) as any;
+          assert.equal(purgeRes999.cleanedProjectId, 'SYNTH-UBOQ-TEST-CLEANUP-999');
+          assert.equal(purgeRes999.verifiedManifestSha256, freshManifest999.manifestSha256);
+
+          const freshManifestOcr = (await buildSyntheticCleanupDryRunManifest(provisioned.maintDbUrl, 'SYNTH-UBOQ-TEST-OCR-002')) as any;
+          assert.equal(freshManifestOcr.eligible, true);
+          const purgeResOcr = (await executeManifestVerifiedSyntheticCleanup(
+            provisioned.maintDbUrl,
+            'SYNTH-UBOQ-TEST-OCR-002',
+            String(freshManifestOcr.manifestSha256)
+          )) as any;
+          assert.equal(purgeResOcr.cleanedProjectId, 'SYNTH-UBOQ-TEST-OCR-002');
+
+          const gone999 = await adminSetupPrisma.project.findUnique({ where: { id: 'SYNTH-UBOQ-TEST-CLEANUP-999' } });
+          const goneOcr = await adminSetupPrisma.project.findUnique({ where: { id: 'SYNTH-UBOQ-TEST-OCR-002' } });
+          const sharedSupplierStillExists = await adminSetupPrisma.supplier.findUnique({ where: { id: supplier.id } });
+          assert.equal(gone999, null);
+          assert.equal(goneOcr, null);
+          assert.ok(sharedSupplierStillExists, 'Shared Supplier master record must never be deleted by synthetic project cleanup');
+
+          return 'Blocked unverified 1-arg cleanup, paid AP/posted Expense graph, cross-project PO->MRF link, & stale manifest; purged eligible synthetic fixtures with verified SHA-256 closure manifest';
         } finally {
           await compatClient.end();
           await maintClient.end();

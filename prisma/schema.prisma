@@ -5310,8 +5310,9 @@ model UboqExtractionCandidate {
   reviewNotes         String?
   createdAt           DateTime  @default(now())
 
-  sourceDocument UboqSourceDocument   @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
-  section        UboqDocumentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  sourceDocument UboqSourceDocument     @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  section        UboqDocumentSection?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  phaseLines     UboqAwardedPhaseLine[]
 
   @@index([sourceDocumentId, requiresHumanReview])
 }
@@ -5409,36 +5410,38 @@ model UboqOperationalSnapshot {
 }
 
 model UboqAwardedPhaseLine {
-  id                  String                 @id @default(cuid())
-  projectId           String
-  snapshotId          String?
-  awardedBoqItemId    String?
-  sourceDocumentId    String?
-  sourceSheetName     String?
-  sourceCellRef       String?
-  itemCode            String
-  phaseCode           String
-  sectionCode         String?
-  workDescription     String
-  specification       String?
-  specSignatureHash   String
-  unitRaw             String
-  unitNormalized      String
-  uomDimensionFamily  UboqUomDimensionFamily
-  pricingType         String                 @default("UNIT_PRICE")
-  originalQty         Decimal                @db.Decimal(18, 4)
-  approvedQty         Decimal                @db.Decimal(18, 4)
-  contractUnitRate    Decimal                @db.Decimal(18, 4)
-  contractLineAmount   Decimal                @db.Decimal(18, 2)
-  contractAmountExVat  Decimal                @default(0) @db.Decimal(18, 2)
-  agencyEstimateStatus String                 @default("SOURCE_NOT_PROVIDED")
-  createdAt            DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  id                    String                 @id @default(cuid())
+  projectId             String
+  snapshotId            String?
+  awardedBoqItemId      String?
+  sourceDocumentId      String?
+  extractionCandidateId String?
+  sourceSheetName       String?
+  sourceCellRef         String?
+  itemCode              String
+  phaseCode             String
+  sectionCode           String?
+  workDescription       String
+  specification         String?
+  specSignatureHash     String
+  unitRaw               String
+  unitNormalized        String
+  uomDimensionFamily    UboqUomDimensionFamily
+  pricingType           String                 @default("UNIT_PRICE")
+  originalQty           Decimal                @db.Decimal(18, 4)
+  approvedQty           Decimal                @db.Decimal(18, 4)
+  contractUnitRate      Decimal                @db.Decimal(18, 4)
+  contractLineAmount    Decimal                @db.Decimal(18, 2)
+  contractAmountExVat   Decimal                @default(0) @db.Decimal(18, 2)
+  agencyEstimateStatus  String                 @default("SOURCE_NOT_PROVIDED")
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   project             Project                          @relation(fields: [projectId], references: [id], onDelete: Restrict)
   snapshot            UboqOperationalSnapshot?         @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
   awardedBoqItem      AwardedBOQItem?                  @relation(fields: [awardedBoqItemId], references: [id], onDelete: Restrict)
   sourceDocument      UboqSourceDocument?              @relation(fields: [sourceDocumentId], references: [id], onDelete: Restrict)
+  extractionCandidate UboqExtractionCandidate?         @relation(fields: [extractionCandidateId], references: [id], onDelete: SetNull)
   consolidationLinks  UboqConsolidationLink[]
   agencyEstimates     UboqAgencyEstimateBaseline[]
   targetBudgets       UboqContractorTargetBudget[]
@@ -5447,6 +5450,7 @@ model UboqAwardedPhaseLine {
 
   @@index([projectId, phaseCode, itemCode])
   @@index([projectId, specSignatureHash])
+  @@index([extractionCandidateId])
 }
 
 model UboqConsolidationGroup {
@@ -5491,8 +5495,8 @@ model UboqAgencyEstimateBaseline {
   id                     String   @id @default(cuid())
   projectId              String
   phaseLineId            String?
-  agencyEdcAmt           Decimal  @default(0) @db.Decimal(18, 2)
-  agencyAbcAmt           Decimal  @default(0) @db.Decimal(18, 2)
+  agencyEdcAmt           Decimal? @db.Decimal(18, 2)
+  agencyAbcAmt           Decimal? @db.Decimal(18, 2)
   estimateMaterialCost   Decimal  @default(0) @db.Decimal(18, 2)
   estimateLaborCost      Decimal  @default(0) @db.Decimal(18, 2)
   estimateEquipmentCost  Decimal  @default(0) @db.Decimal(18, 2)

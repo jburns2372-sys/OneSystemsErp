@@ -9,7 +9,9 @@ import { redactUboqPayloadForRole } from '@/lib/uboq/security/redact-payload';
 import {
   approveOperationalSnapshotAndPrrs,
   ingestAndStageProjectUboqPackage,
+  regenerateDraftSnapshotFromVerifiedDocument,
   resolveExtractionCandidateHumanReview,
+  type ResourceTakeoffSpecInput,
 } from '@/lib/uboq/adapters/snapshot-orchestrator';
 import { allocateVerifiedOpeningStockAtomically } from '@/lib/uboq/resource-ledger';
 import type { UboqSectorType } from '@prisma/client';
@@ -132,6 +134,8 @@ export async function resolveUboqExtractionCandidateAction(input: {
   candidateId: string;
   decision: 'HUMAN_VERIFIED' | 'HUMAN_EXCLUDED';
   reviewNotes: string;
+  canonicalFieldRemap?: Record<string, string>;
+  correctedMappedFields?: Record<string, string | number | null>;
 }) {
   const actor = await verifyOperationalSession();
   if (!actor) {
@@ -147,10 +151,46 @@ export async function resolveUboqExtractionCandidateAction(input: {
         reviewerUserId: actor.userId,
         decision: input.decision,
         reviewNotes: input.reviewNotes,
+        canonicalFieldRemap: input.canonicalFieldRemap,
+        correctedMappedFields: input.correctedMappedFields,
       })
   );
 
   revalidatePath(`/projects/${input.projectId}/uboq`);
+  return redactUboqPayloadForRole(res, actor.role);
+}
+
+export async function regenerateUboqDraftSnapshotAction(input: {
+  projectId: string;
+  sourceDocumentId: string;
+  sectorType?: UboqSectorType;
+  clientName?: string;
+  contractRef?: string;
+  taxProfileCode?: string;
+  resourceTakeoffs?: ResourceTakeoffSpecInput[];
+}) {
+  const actor = await verifyOperationalSession();
+  if (!actor) {
+    throw new Error('UBOQ_UNAUTHORIZED: Active operational session required');
+  }
+
+  const res = await withUboqRlsContext(
+    { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId: input.projectId },
+    async () =>
+      regenerateDraftSnapshotFromVerifiedDocument(prisma as never, {
+        projectId: input.projectId,
+        sourceDocumentId: input.sourceDocumentId,
+        preparedByUserId: actor.userId,
+        sectorType: input.sectorType,
+        clientName: input.clientName,
+        contractRef: input.contractRef,
+        taxProfileCode: input.taxProfileCode,
+        resourceTakeoffs: input.resourceTakeoffs,
+      })
+  );
+
+  revalidatePath(`/projects/${input.projectId}/uboq`);
+  revalidatePath(`/projects/${input.projectId}`);
   return redactUboqPayloadForRole(res, actor.role);
 }
 

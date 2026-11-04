@@ -176,10 +176,25 @@ class S3PrivateVaultProvider implements UboqVaultStorageProvider {
   async listProjectObjectHashes(projectId: string): Promise<string[]> {
     const p = sanitizeSegment(projectId, 'PROJECT_ID');
     const prefix = `uboq-private-vault/${p}/`;
-    const resp = await this.client.send(new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix }));
-    return (resp.Contents ?? [])
-      .map((obj) => path.basename(obj.Key || '', '.bin'))
-      .filter((h) => /^[a-f0-9]{64}$/.test(h));
+    const hashes: string[] = [];
+    let continuationToken: string | undefined;
+    do {
+      const resp = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        })
+      );
+      for (const obj of resp.Contents ?? []) {
+        const h = path.basename(obj.Key || '', '.bin');
+        if (/^[a-f0-9]{64}$/.test(h)) {
+          hashes.push(h);
+        }
+      }
+      continuationToken = resp.IsTruncated ? resp.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return hashes;
   }
 }
 
@@ -303,14 +318,16 @@ class LocalDurableVaultProvider implements UboqVaultStorageProvider {
 
 export function resolveUboqVaultStorageProvider(): UboqVaultStorageProvider {
   const mode = (process.env.UBOQ_VAULT_BACKEND || '').trim().toLowerCase();
-  const isProd = process.env.NODE_ENV === 'production' && process.env.UBOQ_ALLOW_LOCAL_TEST_VAULT !== 'true';
+  const isProd = process.env.NODE_ENV === 'production';
+
+  // R1-M01: Unconditional production fail-closed guard — NO environment variable override can enable local_durable in production!
+  if (isProd && (mode === 'local_durable' || Boolean((process.env.UBOQ_ALLOW_LOCAL_TEST_VAULT || '').trim()))) {
+    throw new Error(
+      'UBOQ_PROD_EPHEMERAL_STORAGE_FORBIDDEN: local_durable vault adapter and test vault overrides are strictly prohibited in production; bind private S3 storage'
+    );
+  }
 
   if (mode === 'local_durable') {
-    if (isProd) {
-      throw new Error(
-        'UBOQ_PROD_EPHEMERAL_STORAGE_FORBIDDEN: local_durable vault adapter is prohibited in production; bind private S3 storage'
-      );
-    }
     const vaultDir = (process.env.UBOQ_LOCAL_VAULT_DIR || '').trim();
     if (!vaultDir) {
       throw new Error('UBOQ_LOCAL_VAULT_DIR_REQUIRED: UBOQ_LOCAL_VAULT_DIR must be explicitly configured for local_durable vault mode');

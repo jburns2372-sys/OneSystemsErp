@@ -28,6 +28,7 @@ export interface PhaseBoqInputLine {
   readonly agencyAbc?: number | null;
   readonly sourceSheetName?: string | null;
   readonly sourceCellRef?: string | null;
+  readonly extractionCandidateId?: string | null;
 }
 
 export interface ConsolidatedGroupPreview {

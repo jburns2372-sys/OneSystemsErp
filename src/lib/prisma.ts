@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { prismaBase } from './prisma-base';
-import { applyProjectRlsSessionVars, uboqRlsStorage } from './uboq/project-ownership';
+import { applyProjectRlsSessionVars, mintSignedRlsProof, uboqRlsStorage } from './uboq/project-ownership';
 
 const globalForALS = globalThis as unknown as { transactionContext: AsyncLocalStorage<{ sourceProvenance?: string }> | undefined };
 export const transactionContext = globalForALS.transactionContext ?? new AsyncLocalStorage<{ sourceProvenance?: string }>();
@@ -65,11 +65,17 @@ function createPrismaClient() {
     }
     if (Array.isArray(arg)) {
       const svText = rlsCtx.sessionVersion !== undefined ? String(rlsCtx.sessionVersion) : '';
+      const rlsProof = mintSignedRlsProof({
+        projectId: rlsCtx.projectId,
+        userId: rlsCtx.userId,
+        sessionVersion: svText,
+      });
       const setCfgPromise = prismaBase.$executeRaw`SELECT
         set_config('app.enforce_project_rls', 'on', true),
         set_config('app.current_project_id', ${rlsCtx.projectId}, true),
         set_config('app.current_user_id', ${rlsCtx.userId}, true),
-        set_config('app.current_session_version', ${svText}, true)`;
+        set_config('app.current_session_version', ${svText}, true),
+        set_config('app.current_rls_proof', ${rlsProof}, true)`;
       return uboqRlsStorage.run({ ...rlsCtx, inInteractiveTx: true }, async () => {
         const res = (await (rawTransaction([setCfgPromise, ...arg], options) as Promise<unknown[]>)) as unknown[];
         return res.slice(1);

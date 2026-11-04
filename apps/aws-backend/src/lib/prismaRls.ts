@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import crypto from 'node:crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { Request } from 'express';
 
@@ -13,16 +14,35 @@ export const backendRlsStorage = new AsyncLocalStorage<BackendRlsContext>();
 
 export const backendPrismaRaw = new PrismaClient();
 
+export function mintBackendSignedRlsProof(ctx: {
+  projectId: string;
+  userId: string;
+  sessionVersion: number;
+}): string {
+  const secretHex = (process.env.UBOQ_RLS_CONTEXT_SECRET || '').trim();
+  if (!secretHex || secretHex.length < 64) {
+    return '';
+  }
+  const issuedSec = String(Math.floor(Date.now() / 1000));
+  const nonceHex = crypto.randomBytes(12).toString('hex');
+  const svText = String(ctx.sessionVersion ?? 0);
+  const payload = `${secretHex}|UBOQ_RLS_V1|${ctx.projectId}|${ctx.userId}|${svText}|${issuedSec}|${nonceHex}`;
+  const macHex = crypto.createHash('sha256').update(payload, 'utf8').digest('hex');
+  return `${issuedSec}.${nonceHex}.${macHex}`;
+}
+
 export async function applyBackendRlsSessionVars(
   tx: Prisma.TransactionClient,
   ctx: { projectId: string; userId: string; sessionVersion: number }
 ): Promise<void> {
   const svText = String(ctx.sessionVersion ?? 0);
+  const rlsProof = mintBackendSignedRlsProof(ctx);
   await tx.$executeRaw`SELECT
     set_config('app.enforce_project_rls', 'on', true),
     set_config('app.current_project_id', ${ctx.projectId}, true),
     set_config('app.current_user_id', ${ctx.userId}, true),
-    set_config('app.current_session_version', ${svText}, true)`;
+    set_config('app.current_session_version', ${svText}, true),
+    set_config('app.current_rls_proof', ${rlsProof}, true)`;
 }
 
 function createRlsAwareBackendPrisma(): PrismaClient {
@@ -32,8 +52,8 @@ function createRlsAwareBackendPrisma(): PrismaClient {
         async $allOperations({ model, operation, args, query }) {
           const rlsCtx = backendRlsStorage.getStore();
           if (rlsCtx && rlsCtx.projectId && !rlsCtx.inInteractiveTx && model) {
-            return backendRlsStorage.run({ ...rlsCtx, inInteractiveTx: true }, () =>
-              backendPrismaRaw.$transaction(async (tx) => {
+            return backendRlsStorage.run({ ...rlsCtx, inInteractiveTx: true }, async () =>
+              await backendPrismaRaw.$transaction(async (tx) => {
                 await applyBackendRlsSessionVars(tx, rlsCtx);
                 const delegateKey = model.charAt(0).toLowerCase() + model.slice(1);
                 return (
@@ -57,8 +77,8 @@ function createRlsAwareBackendPrisma(): PrismaClient {
             return (target.$transaction as (...a: unknown[]) => unknown)(arg, options);
           }
           if (typeof arg === 'function') {
-            return backendRlsStorage.run({ ...rlsCtx, inInteractiveTx: true }, () =>
-              (target.$transaction as (...a: unknown[]) => unknown)(async (tx: unknown) => {
+            return backendRlsStorage.run({ ...rlsCtx, inInteractiveTx: true }, async () =>
+              await (target.$transaction as (...a: unknown[]) => Promise<unknown>)(async (tx: unknown) => {
                 await applyBackendRlsSessionVars(tx as Prisma.TransactionClient, rlsCtx);
                 return (arg as (t: unknown) => unknown)(tx);
               }, options)
@@ -66,11 +86,13 @@ function createRlsAwareBackendPrisma(): PrismaClient {
           }
           if (Array.isArray(arg)) {
             const svText = String(rlsCtx.sessionVersion ?? 0);
+            const rlsProof = mintBackendSignedRlsProof(rlsCtx);
             const setCfgPromise = backendPrismaRaw.$executeRaw`SELECT
               set_config('app.enforce_project_rls', 'on', true),
               set_config('app.current_project_id', ${rlsCtx.projectId}, true),
               set_config('app.current_user_id', ${rlsCtx.userId}, true),
-              set_config('app.current_session_version', ${svText}, true)`;
+              set_config('app.current_session_version', ${svText}, true),
+              set_config('app.current_rls_proof', ${rlsProof}, true)`;
             return backendRlsStorage.run({ ...rlsCtx, inInteractiveTx: true }, async () => {
               const res = (await (target.$transaction as (...a: unknown[]) => Promise<unknown[]>)(
                 [setCfgPromise, ...arg],

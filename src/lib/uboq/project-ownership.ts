@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import crypto from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 export type AnyPrismaDb = PrismaClient | Prisma.TransactionClient | { readonly project: unknown };
@@ -172,18 +173,48 @@ export async function assertProjectGraphOwnership(
 }
 
 /**
- * Binds transaction-local PostgreSQL RLS GUC context (I-03, Remediation H03/H07).
- * Never sets any global-admin bypass GUC; PostgreSQL uboq_verify_bound_actor_for_project
- * validates User, sessionVersion, Project, and ProjectUserAssignment directly in DB.
+ * Mints a short-lived cryptographic DB session proof (`<issuedEpochSec>.<nonceHex>.<sha256Hex>`)
+ * verified inside PostgreSQL `uboq_verify_signed_rls_proof` against owner-private `_uboq_rls_trust_anchor`.
+ * Prevents raw SQL connections under `oserp_compat_login` from impersonating valid actors via mutable GUCs (R1-H02).
+ */
+export function mintSignedRlsProof(params: {
+  projectId: string;
+  userId: string;
+  sessionVersion: string | number;
+  issuedEpochSec?: number;
+  secretHexOverride?: string;
+}): string {
+  const secretHex = (params.secretHexOverride ?? process.env.UBOQ_RLS_CONTEXT_SECRET ?? '').trim();
+  if (!secretHex || secretHex.length < 64) {
+    return '';
+  }
+  const issuedSec = String(params.issuedEpochSec ?? Math.floor(Date.now() / 1000));
+  const nonceHex = crypto.randomBytes(12).toString('hex');
+  const svText = String(params.sessionVersion ?? '');
+  const payload = `${secretHex}|UBOQ_RLS_V1|${params.projectId}|${params.userId}|${svText}|${issuedSec}|${nonceHex}`;
+  const macHex = crypto.createHash('sha256').update(payload, 'utf8').digest('hex');
+  return `${issuedSec}.${nonceHex}.${macHex}`;
+}
+
+/**
+ * Binds transaction-local PostgreSQL RLS GUC context + cryptographic proof (I-03, R1-H02).
+ * PostgreSQL `uboq_check_tenant_rls` verifies BOTH `uboq_verify_signed_rls_proof` AND
+ * `uboq_verify_bound_actor_for_project` directly in DB, defeating mutable-GUC impersonation.
  */
 export async function applyProjectRlsSessionVars(
   tx: Prisma.TransactionClient,
   params: { projectId: string; userId: string; sessionVersion?: number; isGlobalAdmin?: boolean }
 ): Promise<void> {
   const svText = params.sessionVersion !== undefined ? String(params.sessionVersion) : '';
+  const rlsProof = mintSignedRlsProof({
+    projectId: params.projectId,
+    userId: params.userId,
+    sessionVersion: svText,
+  });
   await tx.$executeRaw`SELECT
     set_config('app.enforce_project_rls', 'on', true),
     set_config('app.current_project_id', ${params.projectId}, true),
     set_config('app.current_user_id', ${params.userId}, true),
-    set_config('app.current_session_version', ${svText}, true)`;
+    set_config('app.current_session_version', ${svText}, true),
+    set_config('app.current_rls_proof', ${rlsProof}, true)`;
 }

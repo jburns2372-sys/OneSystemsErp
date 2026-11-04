@@ -1,9 +1,11 @@
 /**
- * Ephemeral Local Restricted PostgreSQL Login Provisioner (Remediation H03 & H08)
+ * Ephemeral Local Restricted PostgreSQL Login & Cryptographic RLS Trust Anchor Provisioner
+ * (Remediation H03, H08, R1-H02)
  *
- * Provisions non-superuser, NOBYPASSRLS runtime login roles in the isolated local verification DB
- * using crypto.randomBytes(24) in-memory ephemeral credentials ONLY.
- * Zero static passwords are stored in migrations, source files, or Git history.
+ * Provisions non-superuser, NOBYPASSRLS runtime login roles AND an owner-private 256-bit
+ * cryptographic RLS session signing anchor (`_uboq_rls_trust_anchor`) in the isolated local
+ * verification DB using `crypto.randomBytes(...)` in-memory ephemeral credentials ONLY.
+ * Zero static passwords or signing keys are stored in migrations, source files, or Git history.
  */
 import crypto from 'node:crypto';
 import pg from 'pg';
@@ -12,6 +14,7 @@ export interface EphemeralRestrictedDbUrls {
   readonly compatDbUrl: string;
   readonly legacyDbUrl: string;
   readonly maintDbUrl: string;
+  readonly rlsContextSecretHex: string;
   revokeEphemeralLogins(): Promise<void>;
 }
 
@@ -36,6 +39,7 @@ export async function provisionEphemeralRestrictedLogins(
   const compatPw = crypto.randomBytes(24).toString('hex');
   const legacyPw = crypto.randomBytes(24).toString('hex');
   const maintPw = crypto.randomBytes(24).toString('hex');
+  const rlsContextSecretHex = crypto.randomBytes(32).toString('hex');
 
   const client = new pg.Client({ connectionString: adminDbUrl });
   await client.connect();
@@ -57,7 +61,6 @@ export async function provisionEphemeralRestrictedLogins(
           `ALTER ROLE ${r.login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS INHERIT`
         );
       }
-      // Set random ephemeral password via parameterized format() without embedding literals in source
       await client.query(`SELECT set_config('uboq.ephemeral_pw', $1, true)`, [r.pw]);
       await client.query(`
         DO $$
@@ -68,6 +71,14 @@ export async function provisionEphemeralRestrictedLogins(
       await client.query(`GRANT ${r.group} TO ${r.login}`);
       await client.query(`GRANT CONNECT ON DATABASE "${dbName}" TO ${r.login}`);
     }
+
+    // Seed ephemeral 256-bit cryptographic trust anchor for non-forgeable RLS session proofs (R1-H02)
+    await client.query(
+      `INSERT INTO "_uboq_rls_trust_anchor" ("anchorId", "secretHex", "rotatedAt")
+       VALUES ('PRIMARY', $1, NOW())
+       ON CONFLICT ("anchorId") DO UPDATE SET "secretHex" = EXCLUDED."secretHex", "rotatedAt" = NOW()`,
+      [rlsContextSecretHex]
+    );
   } finally {
     await client.end();
   }
@@ -76,6 +87,7 @@ export async function provisionEphemeralRestrictedLogins(
     compatDbUrl: buildUrlWithCredentials(adminDbUrl, 'oserp_compat_login', compatPw),
     legacyDbUrl: buildUrlWithCredentials(adminDbUrl, 'oserp_legacy_login', legacyPw),
     maintDbUrl: buildUrlWithCredentials(adminDbUrl, 'oserp_maint_login', maintPw),
+    rlsContextSecretHex,
     async revokeEphemeralLogins() {
       const cleanupClient = new pg.Client({ connectionString: adminDbUrl });
       await cleanupClient.connect();
@@ -83,6 +95,7 @@ export async function provisionEphemeralRestrictedLogins(
         for (const login of ['oserp_compat_login', 'oserp_legacy_login', 'oserp_maint_login']) {
           await cleanupClient.query(`ALTER ROLE ${login} NOLOGIN PASSWORD NULL`);
         }
+        await cleanupClient.query(`DELETE FROM "_uboq_rls_trust_anchor" WHERE "anchorId" = 'PRIMARY'`);
       } finally {
         await cleanupClient.end();
       }

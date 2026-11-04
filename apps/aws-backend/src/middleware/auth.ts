@@ -106,6 +106,16 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
 
     const user = await backendPrismaRaw.user.findUnique({
       where: { id: claims.uid },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        lockedUntil: true,
+        mustChangePassword: true,
+        sessionVersion: true,
+      },
     });
 
     if (!user || user.status !== 'ACTIVE') {
@@ -186,17 +196,12 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
       `;
       let hasAccess = Boolean(accessCheck[0]?.ok);
 
-      // If a global admin is simulating a non-admin role, verify explicit project assignment for simulated role
+      // If a global admin is simulating a non-admin role, verify explicit project assignment via SECURITY DEFINER helper
       if (hasAccess && verifiedSimRole && ADMIN_GLOBAL_ROLES.has((user.role || '').toUpperCase())) {
-        const simAssign = await backendPrismaRaw.projectUserAssignment.findFirst({
-          where: {
-            userId: user.id,
-            projectId: targetPid,
-            assignmentStatus: { in: ['active', 'ACTIVE'] },
-          },
-          select: { id: true },
-        });
-        hasAccess = Boolean(simAssign);
+        const simAssignCheck = await backendPrismaRaw.$queryRaw<Array<{ ok: boolean }>>`
+          SELECT uboq_has_active_project_assignment(${targetPid}::text, ${user.id}::text) AS ok
+        `;
+        hasAccess = Boolean(simAssignCheck[0]?.ok);
       }
 
       if (!hasAccess) {
