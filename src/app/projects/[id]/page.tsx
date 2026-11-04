@@ -220,7 +220,24 @@ export default async function ProjectDetailsPage({
     <div className={styles.pageContainer}>
       <header className={styles.header}>
         <div className={styles.headerTitle}>
-          <Link href="/projects" style={{ color: 'var(--accent-color)', textDecoration: 'none', marginBottom: '10px', display: 'inline-block' }}>&larr; Back to Projects</Link>
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '10px' }}>
+            <Link href="/projects" style={{ color: 'var(--accent-color)', textDecoration: 'none', display: 'inline-block' }}>&larr; Back to Projects</Link>
+            <Link
+              href={`/projects/${project.id}/uboq`}
+              style={{
+                padding: '4px 12px',
+                borderRadius: '14px',
+                background: 'rgba(56, 189, 248, 0.14)',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                color: 'var(--accent-color)',
+                textDecoration: 'none',
+                fontSize: '0.8rem',
+                fontWeight: 'bold',
+              }}
+            >
+              Universal BOQ Workbench &rarr;
+            </Link>
+          </div>
           <h1>{project.name}</h1>
           <p style={{ whiteSpace: 'pre-wrap' }}>{project.description?.replace(/BOQ File Uploaded: .*/, '') || 'No description provided.'}</p>
           

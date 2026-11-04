@@ -16,6 +16,9 @@ import {
   CommitmentLedger
 } from '@prisma/client';
 
+import { assertBackendProjectAccess } from '../lib/uboq/backendResourceGuard';
+import { normalizeBackendUom } from '../lib/uboq/backendResourceGuard';
+
 const router = Router();
 
 async function recalculateVariationOrderTotals(voId: string) {
@@ -659,13 +662,86 @@ router.post('/approveVariationOrderStage', async (req, res) => {
 
 router.post('/createMRFFromVO', async (req, res) => {
   try {
-    const { voId, itemIds, userId } = req.body;
+    const { voId, itemIds, userId, resourceSelections } = req.body;
+    const actorUserId = (req as any).user?.id || userId;
+    const actorRole = (req as any).user?.role || '';
     const vo = await prisma.variationOrder.findUnique({
       where: { id: voId },
       include: { items: true, project: true }
     });
-    if (!vo) throw new Error('VO not found');
-    if (!vo.approvedForProcurement) throw new Error('VO is not approved for procurement');
+    if (!vo) return res.status(404).json({ success: false, error: 'VO not found' });
+
+    await assertBackendProjectAccess(prisma, actorUserId, actorRole, vo.projectId);
+    if (!vo.approvedForProcurement) {
+      return res.status(400).json({ success: false, error: 'VO is not approved for procurement' });
+    }
+
+    const selectedVoItems = vo.items.filter((i: any) => Array.isArray(itemIds) && itemIds.includes(i.id));
+    if (selectedVoItems.length === 0) {
+      return res.status(400).json({ success: false, error: 'No Variation Order items selected' });
+    }
+
+    const createLines: any[] = [];
+    if (vo.project?.uboqGovernanceEnabled) {
+      if (!Array.isArray(resourceSelections) || resourceSelections.length === 0) {
+        return res.status(409).json({
+          success: false,
+          code: 'UBOQ_VO_REQUIRES_APPROVED_PRR',
+          error: 'UBOQ-governed Variation Order MRF origination requires resourceSelections bound to an active APPROVED PRR (cannot request raw work-item quantities).'
+        });
+      }
+      for (const sel of resourceSelections) {
+        const acct = await prisma.uboqCanonicalResourceAccount.findUnique({
+          where: { id: sel.canonicalResourceId },
+          include: { activeApprovedPr: true }
+        });
+        if (!acct || acct.projectId !== vo.projectId) {
+          return res.status(400).json({ success: false, code: 'UBOQ_INVALID_VO_RESOURCE', error: 'Invalid canonicalResourceId for project' });
+        }
+        const prrId = sel.uboqResourceRequirementId || acct.activeApprovedPrId;
+        if (!prrId || !acct.activeApprovedPr || acct.activeApprovedPrId !== prrId || acct.activeApprovedPr.status !== 'APPROVED') {
+          return res.status(409).json({
+            success: false,
+            code: 'UBOQ_INACTIVE_PRR_FOR_NEW_COMMITMENT',
+            error: `VO MRF origination requires active APPROVED PRR on resource ${acct.resourceCode}`
+          });
+        }
+        const normUom = normalizeBackendUom(sel.resourceUnit || acct.resourceUomNormalized);
+        if (normUom !== acct.resourceUomNormalized) {
+          return res.status(400).json({ success: false, code: 'UBOQ_UOM_MISMATCH', error: `Resource unit mismatch on ${acct.resourceCode}` });
+        }
+        const reqQty = Number(sel.quantity);
+        if (!(reqQty > 0) || reqQty > Number(acct.remainingProcurementQty) + 0.0001) {
+          return res.status(409).json({
+            success: false,
+            code: 'UBOQ_CEILING_EXCEEDED',
+            error: `Requested VO resource qty (${reqQty}) exceeds remainingProcurementQty (${acct.remainingProcurementQty})`
+          });
+        }
+        createLines.push({
+          consolidatedBoqItemId: acct.consolidatedBoqItemId,
+          canonicalResourceId: acct.id,
+          uboqResourceRequirementId: prrId,
+          resourceUnit: acct.resourceUomNormalized,
+          quantity: reqQty
+        });
+      }
+    } else {
+      for (const item of selectedVoItems) {
+        let consId = item.originalBoqItemId || '';
+        if (consId) {
+          const directCons = await prisma.consolidatedBOQItem.findUnique({ where: { id: consId } });
+          if (!directCons) {
+            const mapping = await prisma.bOQMapping.findFirst({ where: { awardedBoqItemId: consId } });
+            if (mapping) consId = mapping.consolidatedBoqItemId;
+          }
+        }
+        createLines.push({
+          quantity: item.revisedQuantity,
+          consolidatedBoqItemId: consId
+        });
+      }
+    }
 
     const count = await prisma.materialRequest.count();
     const mrNumber = `MRF-${vo.project.contractNumber || 'PROJ'}-${String(count + 1).padStart(4, '0')}`;
@@ -674,20 +750,18 @@ router.post('/createMRFFromVO', async (req, res) => {
       data: {
         mrNumber,
         projectId: vo.projectId,
-        requesterId: userId,
+        requesterId: actorUserId,
+        status: 'DRAFT',
         purpose: `Materials for Variation Order: ${vo.voNumber}`,
         remarks: 'Auto-generated from Approved Variation Order',
-        items: {
-          create: vo.items.filter(i => itemIds.includes(i.id)).map(item => ({
-            quantity: item.revisedQuantity,
-            consolidatedBoqItemId: item.originalBoqItemId || ''
-          }))
-        }
-      }
+        items: { create: createLines }
+      },
+      include: { items: true }
     });
     res.json({ success: true, data: mr });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    const status = String(error.message || '').includes('UBOQ_PBAC') ? 403 : 500;
+    res.status(status).json({ success: false, error: error.message });
   }
 });
 
@@ -721,9 +795,18 @@ router.post('/deleteVariationOrder', async (req, res) => {
     const { id } = req.body;
     const vo = await prisma.variationOrder.findUnique({
       where: { id },
-      include: { items: true }
+      include: { items: true, project: { select: { id: true, uboqGovernanceEnabled: true } } }
     });
-    if (!vo) throw new Error('Variation Order not found');
+    if (!vo) return res.status(404).json({ success: false, error: 'Variation Order not found' });
+
+    await assertBackendProjectAccess(prisma, (req as any).user?.id, (req as any).user?.role, vo.projectId);
+    if (vo.project?.uboqGovernanceEnabled && vo.currentStatus === 'APPROVED') {
+      return res.status(409).json({
+        success: false,
+        code: 'UBOQ_VO_DELETE_BLOCKED',
+        error: 'Approved Variation Orders on UBOQ-governed projects cannot be destructively deleted; issue a deductive Variation Order instead.'
+      });
+    }
 
     if (vo.currentStatus === 'APPROVED') {
       if (vo.variationCategory === 'SUBCONTRACTOR' && vo.subcontractPackageId) {

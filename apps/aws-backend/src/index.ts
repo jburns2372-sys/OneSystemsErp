@@ -69,6 +69,7 @@ import templateActionsRoutes from './routes/templateActions';
 import userRolesRoutes from './routes/user-roles';
 import userRoutes from './routes/user';
 import variationOrderActionsRoutes from './routes/variationOrderActions';
+import uboqRoutes from './routes/uboq';
 
 dotenv.config();
 
@@ -168,6 +169,7 @@ app.use('/api/templateActions', templateActionsRoutes);
 app.use('/api/user-roles', userRolesRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/variationOrderActions', variationOrderActionsRoutes);
+app.use('/api/uboq', uboqRoutes);
 
 app.use('/api/projects', projectsRoutes);
 app.use('/api/procurement', procurementRoutes);

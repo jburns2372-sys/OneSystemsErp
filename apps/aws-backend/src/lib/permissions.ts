@@ -11,7 +11,7 @@ const MASTER_ADMIN_MODULES = [
 ];
 
 export async function getUserPermissions(userId: string, simulatedRole?: string) {
-  let [user, userRoles] = await Promise.all([
+  const [user, userRoles] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
     prisma.userRole.findMany({
       where: { userId },
@@ -26,23 +26,7 @@ export async function getUserPermissions(userId: string, simulatedRole?: string)
   ]);
 
   if (!user) {
-    const demoUser = await prisma.user.findFirst({
-      where: { email: 'J.BURNS2372@GMAIL.COM' },
-      select: { id: true, role: true }
-    });
-    if (demoUser) {
-      user = demoUser;
-      userRoles = await prisma.userRole.findMany({
-        where: { userId: demoUser.id },
-        include: {
-          role: {
-            include: {
-              rolePermissions: true
-            }
-          }
-        }
-      });
-    }
+    return {};
   }
 
   const isActualAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN' || user?.role === 'PROJECT_DIRECTOR' || user?.role === 'DIRECTORS';

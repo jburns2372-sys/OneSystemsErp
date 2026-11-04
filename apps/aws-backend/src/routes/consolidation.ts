@@ -17,8 +17,25 @@ router.post('/:projectId/auto-consolidate', async (req, res) => {
     // Full auto-consolidation logic migrated from Next.js Server Actions
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      select: { procurementBenchmarkLocked: true }
+      select: { procurementBenchmarkLocked: true, uboqGovernanceEnabled: true }
     });
+
+    if (project?.uboqGovernanceEnabled) {
+      return res.status(409).json({
+        success: false,
+        error: 'UBOQ_PROTECTED_CONSOLIDATED_BOQ: Project is governed by Universal BOQ Engine; legacy force re-consolidation is blocked',
+      });
+    }
+
+    const govItemsCount = await prisma.consolidatedBOQItem.count({
+      where: { projectId, isUboqResourceGoverned: true },
+    });
+    if (govItemsCount > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'UBOQ_PROTECTED_CONSOLIDATED_BOQ: Governed ConsolidatedBOQItem records exist on this project',
+      });
+    }
 
     if (!project?.procurementBenchmarkLocked) {
       throw new Error('Procurement Benchmark is not locked. Lock it first before consolidating.');
@@ -67,7 +84,6 @@ router.post('/:projectId/auto-consolidate', async (req, res) => {
       
       // Attempt to find an existing fuzzy-matched group
       let matchedKey: string | null = null;
-      let globalIsMatch = false;
 
       for (const [existingKey, group] of groups.entries()) {
         const existDescClean = group.description.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -84,7 +100,6 @@ router.post('/:projectId/auto-consolidate', async (req, res) => {
 
         if (localIsMatch) {
           matchedKey = existingKey;
-          globalIsMatch = true;
           break;
         }
       }
@@ -179,6 +194,20 @@ router.post('/:projectId/auto-consolidate', async (req, res) => {
 router.post('/:projectId/upload', async (req, res) => {
   try {
     const { projectId } = req.params;
+    const govProj = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { uboqGovernanceEnabled: true },
+    });
+    const govItems = await prisma.consolidatedBOQItem.count({
+      where: { projectId, isUboqResourceGoverned: true },
+    });
+    if (govProj?.uboqGovernanceEnabled || govItems > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'UBOQ_PROTECTED_CONSOLIDATED_BOQ: Destructive Master Materials overwrite is blocked on UBOQ-governed projects',
+      });
+    }
+
     // The Next.js Server Action preprocesses the file and sends documentData and parsedItems.
     const { documentData, parsedItems } = req.body;
 
@@ -229,7 +258,6 @@ router.post('/:projectId/upload', async (req, res) => {
         unitCost: item.unitCost,
         totalCost: item.totalCost,
         status: item.status,
-        documentId: documentRecord.id, // Link items to the newly created/updated document
       })),
     });
 
@@ -269,6 +297,20 @@ router.post('/items', async (req, res) => {
 router.delete('/:projectId', async (req, res) => {
   try {
     const { projectId } = req.params;
+
+    const govProj = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { uboqGovernanceEnabled: true },
+    });
+    const govItems = await prisma.consolidatedBOQItem.count({
+      where: { projectId, isUboqResourceGoverned: true },
+    });
+    if (govProj?.uboqGovernanceEnabled || govItems > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'UBOQ_PROTECTED_CONSOLIDATED_DELETE: Cannot delete UBOQ-governed ConsolidatedBOQItem records',
+      });
+    }
 
     // Delete all consolidated items associated with the project first
     await prisma.consolidatedBOQItem.deleteMany({

@@ -1,5 +1,12 @@
 'use server';
 import { verifySession } from '@/lib/dal/auth';
+import { assertProjectGraphOwnership, isGlobalTenantAdminRole } from '@/lib/uboq/project-ownership';
+import {
+  isProjectOrItemsUboqGoverned,
+  validateAndNormalizeGovernedMrfLines,
+  computeMrfValidationPassHash,
+  transitionGovernedMrfStatusAtomically,
+} from '@/lib/uboq/adapters/procurement-adapter';
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
@@ -784,10 +791,17 @@ export async function uploadProcurementBenchmark(formData: FormData) {
 }
 
 export async function createMaterialRequest(formData: FormData) {
+  const actor = await verifySession();
+  if (!actor) throw new Error('UBOQ_UNAUTHORIZED: Active authenticated session required');
+
   const projectId = formData.get('projectId') as string;
-  const requestedById = formData.get('requestedById') as string;
   const description = formData.get('description') as string;
-  
+  await assertProjectGraphOwnership(prisma, {
+    userId: actor.id,
+    userRole: actor.role,
+    projectId,
+  });
+
   // Create an MR, generating an automatic mrNumber
   const count = await prisma.materialRequest.count();
   const mrNumber = `MR-${new Date().getFullYear()}-${(count + 1).toString().padStart(4, '0')}`;
@@ -796,7 +810,7 @@ export async function createMaterialRequest(formData: FormData) {
     data: {
       mrNumber,
       projectId,
-      requesterId: requestedById,
+      requesterId: actor.id,
       status: 'DRAFT',
       remarks: description,
     }
@@ -806,7 +820,7 @@ export async function createMaterialRequest(formData: FormData) {
   revalidatePath('/');
 }
 
-// Generate an MRF from selected Consolidated BOQ items
+// Generate an MRF from selected Consolidated BOQ items (supports both Legacy & UBOQ Resource-Governed PRRs)
 export async function generateMRFFromConsolidated(data: {
   projectId: string;
   requesterId: string;
@@ -815,13 +829,47 @@ export async function generateMRFFromConsolidated(data: {
   locationOfUse: string;
   dateNeeded: string;
   remarks: string;
-  items: { consolidatedBoqItemId: string; quantity: number; breakdownData?: any }[];
+  items: {
+    consolidatedBoqItemId: string;
+    quantity: number;
+    canonicalResourceId?: string | null;
+    uboqResourceRequirementId?: string | null;
+    resourceUnit?: string | null;
+    breakdownData?: any;
+  }[];
 }) {
-  const { projectId, requesterId, purpose, priority, locationOfUse, dateNeeded, remarks, items } = data;
+  const actor = await verifySession();
+  if (!actor) throw new Error('UBOQ_UNAUTHORIZED: Active authenticated session required');
+
+  const { projectId, purpose, priority, locationOfUse, dateNeeded, remarks, items } = data;
 
   if (!items || items.length === 0) {
     throw new Error('No items selected for the material request.');
   }
+
+  const consolidatedIds = items.map((i) => i.consolidatedBoqItemId);
+  await assertProjectGraphOwnership(prisma, {
+    userId: actor.id,
+    userRole: actor.role,
+    projectId,
+    consolidatedBoqItemIds: consolidatedIds,
+  });
+
+  const isGoverned = await isProjectOrItemsUboqGoverned(prisma, projectId, consolidatedIds);
+  const createItemsPayload = isGoverned
+    ? (await validateAndNormalizeGovernedMrfLines(prisma, projectId, items)).map((ln) => ({
+        consolidatedBoqItemId: ln.consolidatedBoqItemId,
+        canonicalResourceId: ln.canonicalResourceId,
+        uboqResourceRequirementId: ln.uboqResourceRequirementId,
+        resourceUnit: ln.resourceUnit,
+        quantity: ln.quantity,
+        breakdownData: (ln.breakdownData as any) || null,
+      }))
+    : items.map((item) => ({
+        consolidatedBoqItemId: item.consolidatedBoqItemId,
+        quantity: item.quantity,
+        breakdownData: item.breakdownData || null,
+      }));
 
   // Assign a temporary Draft ID until it passes AI Validation
   const mrNumber = `DRAFT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -830,7 +878,7 @@ export async function generateMRFFromConsolidated(data: {
     data: {
       mrNumber,
       projectId,
-      requesterId,
+      requesterId: actor.id,
       status: 'DRAFT',
       purpose,
       priority,
@@ -838,11 +886,7 @@ export async function generateMRFFromConsolidated(data: {
       remarks,
       dateNeeded: dateNeeded ? new Date(dateNeeded) : null,
       items: {
-        create: items.map(item => ({
-          consolidatedBoqItemId: item.consolidatedBoqItemId,
-          quantity: item.quantity,
-          breakdownData: item.breakdownData || null,
-        })),
+        create: createItemsPayload,
       },
     },
   });
@@ -852,14 +896,19 @@ export async function generateMRFFromConsolidated(data: {
   return mr.id;
 }
 
-// AI Validation for MRF (deterministic checks)
+// AI Validation for MRF (deterministic checks — PRR resource ceiling for UBOQ, BOQ balance for Legacy)
 export async function runMRFAIValidation(mrId: string) {
+  const actor = await verifySession();
+  if (!actor) throw new Error('UBOQ_UNAUTHORIZED: Active authenticated session required');
+
   const mr = await prisma.materialRequest.findUnique({
     where: { id: mrId },
     include: {
       items: {
         include: {
           consolidatedBoqItem: true,
+          canonicalResource: true,
+          uboqResourceRequirement: true,
         },
       },
       project: true,
@@ -867,11 +916,16 @@ export async function runMRFAIValidation(mrId: string) {
   });
 
   if (!mr) throw new Error('Material Request not found');
+  await assertProjectGraphOwnership(prisma, {
+    userId: actor.id,
+    userRole: actor.role,
+    projectId: mr.projectId,
+    mrId: mr.id,
+  });
 
   const findings: string[] = [];
   let riskLevel = 'LOW';
 
-  // Optimization: Fetch all duplicate items across other MRs in one query to prevent Vercel timeouts (N+1 query fix)
   const consolidatedBoqItemIds = mr.items
     .map(i => i.consolidatedBoqItemId)
     .filter((id): id is string => id !== null);
@@ -888,6 +942,33 @@ export async function runMRFAIValidation(mrId: string) {
   });
 
   for (const item of mr.items) {
+    if (item.canonicalResourceId || mr.project.uboqGovernanceEnabled || item.consolidatedBoqItem?.isUboqResourceGoverned) {
+      const acct = item.canonicalResource;
+      if (!acct || !item.uboqResourceRequirementId || !item.resourceUnit) {
+        findings.push(`🚨 MISSING PRR BINDING: Line ${item.id} on UBOQ-governed project lacks canonicalResourceId / PRR binding.`);
+        riskLevel = 'CRITICAL';
+        continue;
+      }
+      if (acct.activeApprovedPrId !== item.uboqResourceRequirementId) {
+        findings.push(`🚨 SUPERSEDED PRR: "${acct.resourceDescription}" references non-active PRR ${item.uboqResourceRequirementId}; active PRR is ${acct.activeApprovedPrId ?? 'NONE'}.`);
+        riskLevel = 'CRITICAL';
+      }
+      if (item.resourceUnit !== acct.resourceUomNormalized) {
+        findings.push(`🚨 UOM MISMATCH: Requested in ${item.resourceUnit}, resource account requires ${acct.resourceUomNormalized}.`);
+        riskLevel = 'CRITICAL';
+      }
+      if (item.quantity <= 0) {
+        findings.push(`❌ INVALID QTY: "${acct.resourceDescription}" — Requested quantity is ${item.quantity}.`);
+        riskLevel = 'CRITICAL';
+      } else if (item.quantity > Number(acct.remainingProcurementQty) + 0.0001) {
+        findings.push(
+          `🚨 EXCEEDS RESOURCE CEILING: "${acct.resourceDescription}" — Requested ${item.quantity} ${acct.resourceUomNormalized} exceeds remaining procurement ceiling of ${Number(acct.remainingProcurementQty).toFixed(4)} ${acct.resourceUomNormalized}.`
+        );
+        riskLevel = 'CRITICAL';
+      }
+      continue;
+    }
+
     if (!item.consolidatedBoqItem) continue;
     const boqItem = item.consolidatedBoqItem;
     const boqBalance = boqItem.revisedQuantity - boqItem.deliveredQty;
@@ -931,7 +1012,7 @@ export async function runMRFAIValidation(mrId: string) {
   }
 
   if (findings.length === 0) {
-    findings.push('✅ All items passed validation. Quantities are within BOQ balance. No duplicates detected.');
+    findings.push('✅ All items passed validation. Quantities are within approved ceiling. No blocking issues detected.');
     riskLevel = 'LOW';
   }
 
@@ -958,6 +1039,21 @@ export async function runMRFAIValidation(mrId: string) {
     officialMrNumber = `${prefix}${nextNumber.toString().padStart(4, '0')}`;
   }
 
+  const activeSnap = await prisma.uboqOperationalSnapshot.findFirst({
+    where: { projectId: mr.projectId, status: 'APPROVED' },
+    orderBy: { versionNumber: 'desc' },
+    select: { versionNumber: true },
+  });
+  const snapVer = activeSnap?.versionNumber ?? 1;
+  const passHash =
+    riskLevel !== 'CRITICAL'
+      ? computeMrfValidationPassHash(
+          mr.id,
+          snapVer,
+          mr.items.map((i) => ({ id: i.id, quantity: i.quantity, canonicalResourceId: i.canonicalResourceId }))
+        )
+      : null;
+
   // Update the MR with AI validation results
   await prisma.materialRequest.update({
     where: { id: mrId },
@@ -966,32 +1062,55 @@ export async function runMRFAIValidation(mrId: string) {
       aiValidationRisk: riskLevel,
       aiValidationNotes: findings.join('\n'),
       mrNumber: officialMrNumber,
+      validatedSnapshotVersion: passHash ? snapVer : null,
+      validationPassHash: passHash,
     },
   });
 
   revalidatePath(`/material-requests/${mrId}`);
   revalidatePath('/material-requests');
-  return { riskLevel, findings };
+  return { riskLevel, findings, validationPassHash: passHash };
 }
 
 // Update MR status (workflow transitions)
-export async function updateMRStatus(mrId: string, newStatus: string, userId?: string) {
-  const updateData: any = { status: newStatus };
-  
-  if (newStatus === 'APPROVED' && userId) {
-    updateData.approverId = userId;
-  }
-  if (newStatus === 'FOR_REVIEW' && userId) {
-    updateData.checkerId = userId;
-  }
-  if (newStatus === 'SUBMITTED' && userId) {
-    updateData.preparerId = userId;
+export async function updateMRStatus(mrId: string, newStatus: string, _userId?: string) {
+  const actor = await verifySession();
+  if (!actor) throw new Error('UBOQ_UNAUTHORIZED: Active authenticated session required');
+
+  const mrCheck = await prisma.materialRequest.findUnique({
+    where: { id: mrId },
+    select: { id: true, projectId: true, aiValidationRisk: true, validationPassHash: true, project: { select: { uboqGovernanceEnabled: true } } },
+  });
+  if (!mrCheck) throw new Error('Material Request not found');
+
+  await assertProjectGraphOwnership(prisma, {
+    userId: actor.id,
+    userRole: actor.role,
+    projectId: mrCheck.projectId,
+    mrId: mrCheck.id,
+  });
+
+  if (mrCheck.project.uboqGovernanceEnabled && newStatus === 'APPROVED' && mrCheck.aiValidationRisk === 'CRITICAL') {
+    throw new Error('UBOQ_MRF_VALIDATION_FAILED: Cannot approve MaterialRequest with CRITICAL validation findings');
   }
 
-  await prisma.materialRequest.update({
-    where: { id: mrId },
-    data: updateData,
+  const governedResult = await transitionGovernedMrfStatusAtomically(prisma, {
+    mrId,
+    newStatus,
+    actorUserId: actor.id,
   });
+
+  if (!governedResult) {
+    const updateData: any = { status: newStatus };
+    if (newStatus === 'APPROVED') updateData.approverId = actor.id;
+    if (newStatus === 'FOR_REVIEW') updateData.checkerId = actor.id;
+    if (newStatus === 'SUBMITTED') updateData.preparerId = actor.id;
+
+    await prisma.materialRequest.update({
+      where: { id: mrId },
+      data: updateData,
+    });
+  }
 
   revalidatePath(`/material-requests/${mrId}`);
   revalidatePath('/material-requests');
@@ -999,22 +1118,27 @@ export async function updateMRStatus(mrId: string, newStatus: string, userId?: s
 
 
 export async function deleteProcurementBenchmark(projectId: string) {
-  // Only allow if not locked
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { procurementBenchmarkLocked: true }
+  const actor = await verifySession();
+  if (!actor) throw new Error('UBOQ_UNAUTHORIZED: Active authenticated session required');
+  await assertProjectGraphOwnership(prisma, {
+    userId: actor.id,
+    userRole: actor.role,
+    projectId,
   });
 
-  // Allow deletion even if locked, but maybe warn in the UI
-  // if (project.procurementBenchmarkLocked) {
-  //   throw new Error('Cannot delete a locked Procurement Benchmark.');
-  // }
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { procurementBenchmarkLocked: true, uboqGovernanceEnabled: true }
+  });
+  if (!project) throw new Error('Project not found');
+  if (project.uboqGovernanceEnabled) {
+    throw new Error('UBOQ_BENCHMARK_DELETE_BLOCKED: Cannot delete benchmark on a UBOQ-governed project');
+  }
 
   await prisma.procurementBenchmarkItem.deleteMany({
     where: { projectId }
   });
 
-  // Reset the locked status so the user can upload a new benchmark
   await prisma.project.update({
     where: { id: projectId },
     data: { procurementBenchmarkLocked: false }
@@ -1050,11 +1174,32 @@ export async function lockProcurementBenchmark(projectId: string) {
 }
 
 export async function deleteProject(projectId: string) {
+  const actor = await verifySession();
+  if (!actor) throw new Error('UBOQ_UNAUTHORIZED: Active authenticated session required');
+  if (!isGlobalTenantAdminRole(actor.role)) {
+    throw new Error('UBOQ_FORBIDDEN: Only global system administrators may delete projects');
+  }
+
   const project = await prisma.project.findUnique({
-    where: { id: projectId }
+    where: { id: projectId },
+    include: {
+      _count: {
+        select: {
+          uboqCanonicalResourceAccounts: true,
+          uboqResourceLedgerEntries: true,
+        },
+      },
+    },
   });
 
   if (!project) throw new Error('Project not found');
+  if (
+    project.uboqGovernanceEnabled ||
+    project._count.uboqCanonicalResourceAccounts > 0 ||
+    project._count.uboqResourceLedgerEntries > 0
+  ) {
+    throw new Error('UBOQ_PROJECT_DELETE_BLOCKED: UBOQ-governed projects with canonical resource accounts or ledger history cannot be deleted');
+  }
 
   // 1. Delete the physical file if it exists in description
   const match = project.description?.match(/BOQ File Uploaded: (.*)/);

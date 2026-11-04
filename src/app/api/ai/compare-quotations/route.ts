@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { verifyOperationalSession } from '@/lib/dal/auth';
+import { assertProjectGraphOwnership } from '@/lib/uboq/project-ownership';
 
 export async function POST(req: Request) {
   try {
+    const actor = await verifyOperationalSession();
+    if (!actor) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { canvassId } = await req.json();
 
     if (!canvassId) {
@@ -13,6 +20,12 @@ export async function POST(req: Request) {
     const canvass = await prisma.canvassForm.findUnique({
       where: { id: canvassId },
       include: {
+        items: {
+          include: {
+            canonicalResource: { select: { id: true, activeApprovedPrId: true, resourceCode: true } },
+            uboqResourceRequirement: { select: { id: true, status: true } }
+          }
+        },
         quotations: {
           include: { supplier: true }
         }
@@ -23,12 +36,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Canvass not found' }, { status: 404 });
     }
 
+    await assertProjectGraphOwnership(prisma, {
+      userId: actor.userId,
+      userRole: actor.role,
+      projectId: canvass.projectId,
+      canvassFormId: canvass.id,
+    });
+
+    for (const ci of canvass.items) {
+      if (ci.canonicalResourceId) {
+        if (
+          !ci.uboqResourceRequirement ||
+          ci.uboqResourceRequirement.status !== 'APPROVED' ||
+          ci.canonicalResource?.activeApprovedPrId !== ci.uboqResourceRequirementId
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `UBOQ_INACTIVE_PRR_ON_CANVASS: Canvass item ${ci.id} references non-active PRR ${ci.uboqResourceRequirementId}`,
+            },
+            { status: 409 }
+          );
+        }
+      }
+    }
+
     if (canvass.quotations.length === 0) {
       return NextResponse.json({ success: false, error: 'No quotations found to compare' }, { status: 400 });
     }
-
-    // Simulate AI Processing Time
-    await new Promise(resolve => setTimeout(resolve, 3500));
 
     // Find the cheapest quotation
     // Helper functions for scoring
@@ -126,6 +161,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, summary });
   } catch (error: any) {
     console.error('Error comparing quotations:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Failed to analyze quotations' }, { status: 500 });
+    const msg = error.message || 'Failed to analyze quotations';
+    const status = msg.includes('UBOQ_PBAC') ? 403 : 500;
+    return NextResponse.json({ success: false, error: msg }, { status });
   }
 }

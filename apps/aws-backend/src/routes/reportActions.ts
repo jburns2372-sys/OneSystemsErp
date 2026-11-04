@@ -30,7 +30,6 @@ function getProjectFilter(isSuperAdmin: boolean, sessionId: string | null, activ
 // AWS Express endpoint for getFinancialReport
 router.post('/getFinancialReport', async (req, res) => {
   try {
-    // Extract arguments (sessionId, activeProjectId) from req.body
     const { sessionId, activeProjectId } = req.body;
 
     const { isSuperAdmin } = await getUserAuthDetails(sessionId);
@@ -49,7 +48,6 @@ router.post('/getFinancialReport', async (req, res) => {
       }
     });
 
-    // Calculate outstanding payables globally for now
     const unpaidPOs = await prisma.purchaseOrder.aggregate({
       where: { status: { not: 'PAID' } },
       _sum: { totalAmount: true }
@@ -124,53 +122,71 @@ router.post('/getProjectReport', async (req, res) => {
   }
 });
 
-// AWS Express endpoint for getInventoryReport
+// AWS Express endpoint for getInventoryReport (STK-UI-01: reconciles resource-governed opening + delivered - issued stock!)
 router.post('/getInventoryReport', async (req, res) => {
   try {
     const { sessionId, activeProjectId } = req.body;
+    const effectiveSessionId = req.user?.id || sessionId;
+    const { isSuperAdmin } = await getUserAuthDetails(effectiveSessionId);
 
-    const { isSuperAdmin } = await getUserAuthDetails(sessionId);
-
-    const inventoryFilter: any = {
-      deliveredQty: {
-        gt: prisma.consolidatedBOQItem.fields.consumedQty // Assuming this direct field comparison is valid in your Prisma setup
-      }
-    };
-
-    // Apply user assignment filter for related project if not super admin
-    if (!isSuperAdmin && sessionId) {
-      inventoryFilter.project = {
-        userAssignments: { some: { userId: sessionId, assignmentStatus: 'active' } }
+    const baseWhere: any = {};
+    if (!isSuperAdmin && effectiveSessionId) {
+      baseWhere.project = {
+        userAssignments: { some: { userId: effectiveSessionId, assignmentStatus: { in: ['active', 'ACTIVE'] } } }
       };
     }
-    // Apply active project ID filter directly on the ConsolidatedBOQItem table
     if (activeProjectId) {
-      inventoryFilter.projectId = activeProjectId;
+      baseWhere.projectId = activeProjectId;
     }
 
     const items = await prisma.consolidatedBOQItem.findMany({
-      where: inventoryFilter,
-      select: {
-        id: true,
-        category: true,
-        description: true,
-        unitCost: true,
-        deliveredQty: true,
-        consumedQty: true
-      }
+      where: baseWhere,
+      include: {
+        uboqCanonicalAccounts: true,
+      },
     });
 
-    const report = items.map(item => {
-      const qoh = item.deliveredQty - item.consumedQty;
-      return {
-        stockId: item.id,
-        category: item.category || 'Uncategorized',
-        description: item.description,
-        quantityOnHand: qoh,
-        estimatedUnitCost: item.unitCost,
-        totalEstimatedValue: qoh * item.unitCost
-      };
-    });
+    const report: any[] = [];
+    for (const item of items) {
+      if (item.isUboqResourceGoverned || item.uboqCanonicalAccounts.length > 0) {
+        for (const acct of item.uboqCanonicalAccounts) {
+          const qoh = Number(acct.availablePhysicalStockQty);
+          if (qoh > 0 || Number(acct.damagedReturnedQty) > 0) {
+            const unitCost = Number(acct.targetResourceUnitCost);
+            report.push({
+              stockId: acct.id,
+              consolidatedBoqItemId: item.id,
+              isUboqResourceGoverned: true,
+              category: item.category || 'UBOQ_RESOURCE',
+              resourceCode: acct.resourceCode,
+              description: `${acct.resourceDescription} (${acct.resourceSpec})`,
+              unit: acct.resourceUomNormalized,
+              allocatedUsableStockQty: Number(acct.allocatedUsableStockQty),
+              deliveredReceivedQty: Number(acct.deliveredReceivedQty),
+              consumedIssuedQty: Number(acct.consumedIssuedQty),
+              damagedQuarantinedQty: Number(acct.damagedReturnedQty),
+              quantityOnHand: qoh,
+              estimatedUnitCost: unitCost,
+              totalEstimatedValue: Number((qoh * unitCost).toFixed(2)),
+            });
+          }
+        }
+      } else {
+        const qoh = item.deliveredQty - item.consumedQty;
+        if (qoh > 0) {
+          report.push({
+            stockId: item.id,
+            isUboqResourceGoverned: false,
+            category: item.category || 'Uncategorized',
+            description: item.description,
+            unit: item.unit,
+            quantityOnHand: qoh,
+            estimatedUnitCost: item.unitCost,
+            totalEstimatedValue: Number((qoh * item.unitCost).toFixed(2)),
+          });
+        }
+      }
+    }
 
     res.json({ success: true, data: report });
   } catch (error: any) {
