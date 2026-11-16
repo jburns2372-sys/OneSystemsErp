@@ -1,39 +1,97 @@
 'use server';
-import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
+import { prisma } from '@/lib/prisma';
 import { verifySession } from '@/lib/dal/auth';
-
 import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
+const ADMIN_PERMISSION_ROLES = new Set(['SUPER_ADMIN', 'SYSTEM_ADMIN', 'PROJECT_DIRECTOR', 'ADMIN']);
 
-async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetchAuthenticatedBackend(endpoint, options);
+const ALLOWED_PERMISSION_FIELDS = new Set([
+  'canView',
+  'canCreate',
+  'canEditDraft',
+  'canSubmit',
+  'canReview',
+  'canRecommend',
+  'canApprove',
+  'canReject',
+  'canReturnForCorrection',
+  'canCancel',
+  'canRevise',
+  'canLock',
+  'canUnlockWithAuthorization',
+  'canReleasePayment',
+  'canMarkAsPaid',
+  'canUploadAttachment',
+  'canDownloadAttachment',
+  'canPrint',
+  'canExport',
+  'canDeleteDraft',
+  'canVoidRecord',
+  'canViewAuditLogs',
+]);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    let errorMessage = errorText;
-    try {
-      const parsed = JSON.parse(errorText);
-      errorMessage = parsed.error || parsed.message || errorText;
-    } catch {
-      // non-JSON error body
-    }
-    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
+async function requireVerifiedAdminSession() {
+  const actor = await verifySession();
+  if (!actor?.id) {
+    redirect('/login');
   }
-
-  return response.json();
+  if (!ADMIN_PERMISSION_ROLES.has(actor.role)) {
+    throw new Error('Forbidden: Verified administrative authority required.');
+  }
+  return actor;
 }
 
 export async function getRolesAndModules() {
-  return await fetchWithAuth('/api/permissions/roles-modules');
+  await requireVerifiedAdminSession();
+  const [roles, modules, rolePermissions] = await Promise.all([
+    prisma.role.findMany({ orderBy: { roleName: 'asc' } }),
+    prisma.module.findMany({ orderBy: { moduleName: 'asc' } }),
+    prisma.rolePermission.findMany(),
+  ]);
+  return { roles, modules, rolePermissions };
 }
 
 export async function saveRolePermission(roleId: string, moduleId: string, field: string, value: boolean) {
-  await fetchWithAuth('/api/permissions/role-permission', {
-    method: 'POST',
-    body: JSON.stringify({ roleId, moduleId, field, value })
+  const actor = await requireVerifiedAdminSession();
+  if (!roleId || !moduleId || !ALLOWED_PERMISSION_FIELDS.has(field)) {
+    throw new Error('Invalid permission update parameters.');
+  }
+
+  const targetRole = await prisma.role.findUnique({ where: { id: roleId } });
+  if (!targetRole) {
+    throw new Error('Role not found.');
+  }
+  if (
+    (targetRole.roleCode === 'SUPER_ADMIN' || targetRole.roleName === 'SUPER_ADMIN') &&
+    actor.role !== 'SUPER_ADMIN'
+  ) {
+    throw new Error('Only a SUPER_ADMIN may modify SUPER_ADMIN permissions.');
+  }
+
+  const moduleInfo = await prisma.module.findUnique({ where: { id: moduleId } });
+  if (!moduleInfo) {
+    throw new Error('Module not found.');
+  }
+
+  await prisma.rolePermission.upsert({
+    where: {
+      roleId_moduleId: {
+        roleId,
+        moduleId,
+      },
+    },
+    update: {
+      [field]: Boolean(value),
+    },
+    create: {
+      roleId,
+      moduleId,
+      moduleName: moduleInfo.moduleName,
+      [field]: Boolean(value),
+    },
   });
 
   revalidatePath('/admin/permissions');
@@ -46,24 +104,27 @@ const google = createGoogleGenerativeAI({
 
 export async function summarizeRolePermissions(roleName: string, permissions: any[]) {
   try {
-    const activePerms = permissions.map(p => {
-      const perms = [];
-      if (p.canView) perms.push('View');
-      if (p.canCreate) perms.push('Create');
-      if (p.canEditDraft) perms.push('Edit Draft');
-      if (p.canSubmit) perms.push('Submit');
-      if (p.canReview) perms.push('Review');
-      if (p.canRecommend) perms.push('Recommend');
-      if (p.canApprove) perms.push('Approve');
-      if (p.canReleasePayment) perms.push('Release Payment');
-      if (p.canViewAuditLogs) perms.push('View Audit Logs');
-      if (p.canLock) perms.push('Lock');
-      
-      return perms.length > 0 ? `${p.moduleName}: ${perms.join(', ')}` : null;
-    }).filter(Boolean).join('\n');
+    const activePerms = permissions
+      .map((p) => {
+        const perms = [];
+        if (p.canView) perms.push('View');
+        if (p.canCreate) perms.push('Create');
+        if (p.canEditDraft) perms.push('Edit Draft');
+        if (p.canSubmit) perms.push('Submit');
+        if (p.canReview) perms.push('Review');
+        if (p.canRecommend) perms.push('Recommend');
+        if (p.canApprove) perms.push('Approve');
+        if (p.canReleasePayment) perms.push('Release Payment');
+        if (p.canViewAuditLogs) perms.push('View Audit Logs');
+        if (p.canLock) perms.push('Lock');
+
+        return perms.length > 0 ? `${p.moduleName}: ${perms.join(', ')}` : null;
+      })
+      .filter(Boolean)
+      .join('\n');
 
     if (!activePerms) {
-      return { success: true, summary: "This role currently has no active permissions." };
+      return { success: true, summary: 'This role currently has no active permissions.' };
     }
 
     const systemPrompt = `
