@@ -35,7 +35,7 @@ export default function LoginPage() {
       <div style={{ backgroundColor: '#1e293b', padding: '40px', borderRadius: '12px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
         
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <h1 style={{ color: '#f8fafc', margin: '0 0 10px 0', fontSize: '24px' }}>JEJORS CONSTRUCTION</h1>
+          <h1 style={{ color: '#f8fafc', margin: '0 0 10px 0', fontSize: '24px' }}>OneSystemsERP</h1>
           <p style={{ color: '#94a3b8', margin: 0, fontSize: '14px' }}>Project Management System</p>
         </div>
 
