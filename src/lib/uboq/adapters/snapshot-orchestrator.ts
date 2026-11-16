@@ -1364,23 +1364,12 @@ export async function approveOperationalSnapshotAndPrrs(
         data: { status: 'SUPERSEDED' },
       });
 
-      // Mark current snapshot APPROVED inside tx (required before calling uboq_promote_approved_consolidated_group)
-      const approvedSnap = await tx.uboqOperationalSnapshot.update({
-        where: { id: snap.id },
-        data: {
-          status: 'APPROVED',
-          reviewedById: params.approverUserId,
-          reviewedAt: now,
-          approvedById: params.approverUserId,
-          approvedAt: now,
-        },
-      });
-
-      // Promote ContractAuthority & TaxPricingProfile and enable Project UBOQ governance
+      // Promote ContractAuthority & TaxPricingProfile FIRST so approved snapshot links to APPROVED authority
       const draftAuthority = await tx.uboqContractAuthority.findFirst({
         where: { projectId: snap.projectId, status: 'DRAFT' },
         orderBy: { createdAt: 'desc' },
       });
+      let resolvedContractAuthorityId: string | null = snap.contractAuthorityId ?? null;
       if (draftAuthority) {
         await tx.uboqContractAuthority.update({
           where: { id: draftAuthority.id },
@@ -1390,6 +1379,7 @@ export async function approveOperationalSnapshotAndPrrs(
             approvedAt: now,
           },
         });
+        resolvedContractAuthorityId = draftAuthority.id;
         if (draftAuthority.taxProfileId) {
           await tx.uboqTaxPricingProfile.update({
             where: { id: draftAuthority.taxProfileId },
@@ -1400,7 +1390,27 @@ export async function approveOperationalSnapshotAndPrrs(
             },
           });
         }
+      } else if (!resolvedContractAuthorityId) {
+        const latestApprovedAuth = await tx.uboqContractAuthority.findFirst({
+          where: { projectId: snap.projectId, status: 'APPROVED' },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        });
+        resolvedContractAuthorityId = latestApprovedAuth?.id ?? null;
       }
+
+      // Mark current snapshot APPROVED inside tx (required before calling uboq_promote_approved_consolidated_group)
+      const approvedSnap = await tx.uboqOperationalSnapshot.update({
+        where: { id: snap.id },
+        data: {
+          status: 'APPROVED',
+          ...(resolvedContractAuthorityId ? { contractAuthorityId: resolvedContractAuthorityId } : {}),
+          reviewedById: params.approverUserId,
+          reviewedAt: now,
+          approvedById: params.approverUserId,
+          approvedAt: now,
+        },
+      });
 
       await tx.project.update({
         where: { id: snap.projectId },
