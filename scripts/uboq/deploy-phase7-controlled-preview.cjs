@@ -226,21 +226,23 @@ async function vercelApi(token, method, apiPath, bodyObj) {
       assert.equal(entry.type, 'sensitive');
     }
 
-    // Ensure Preview-only `NEXTAUTH_URL` points to Preview branch alias (never redirecting Preview logins to Production)
-    const existingPreviewOnlyNextAuthUrl = envs.find(
+    // Ensure branch-scoped Preview-only `NEXTAUTH_URL` points to Preview branch alias
+    // without modifying any shared/Production env entry.
+    const existingBranchPreviewNextAuthUrl = envs.find(
       (e) =>
         e.key === 'NEXTAUTH_URL' &&
         Array.isArray(e.target) &&
         e.target.length === 1 &&
         e.target[0] === 'preview' &&
-        !e.gitBranch
+        e.gitBranch === RELEASE_BRANCH
     );
-    if (!existingPreviewOnlyNextAuthUrl) {
+    if (!existingBranchPreviewNextAuthUrl) {
       await vercelApi(vercelToken, 'POST', `/v10/projects/${PROJECT_ID}/env?teamId=${TEAM_ID}`, {
         key: 'NEXTAUTH_URL',
         value: PREVIEW_BRANCH_ALIAS_ORIGIN,
-        type: 'sensitive',
+        type: 'encrypted',
         target: ['preview'],
+        gitBranch: RELEASE_BRANCH,
       });
     }
 
