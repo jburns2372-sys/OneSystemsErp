@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { backendPrisma } from '../lib/prismaRls';
+import { invokeH02ProjectMutation } from '../lib/h02ProjectMutation';
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient(); // Adjust path as per your project structure
@@ -31,7 +33,7 @@ router.post('/getProjectTeamMembers', async (req: Request, res: Response) => {
     if (!projectId) {
       return res.status(400).json({ success: false, error: 'Project ID is required.' });
     }
-    const members = await prisma.projectUserAssignment.findMany({
+    const members = await backendPrisma.projectUserAssignment.findMany({
       where: { projectId },
       include: {
         user: { select: { name: true, email: true, role: true, id: true, lastLoginAt: true } }
@@ -52,30 +54,8 @@ router.post('/addProjectAssignment', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Missing required assignment data.' });
     }
 
-    const existing = await prisma.projectUserAssignment.findUnique({
-      where: {
-        userId_projectId: {
-          userId: data.userId,
-          projectId: data.projectId
-        }
-      }
-    });
-
-    if (existing) {
-      return res.json({ success: false, error: 'User is already assigned to this project.' });
-    }
-
-    await prisma.projectUserAssignment.create({
-      data: {
-        userId: data.userId,
-        projectId: data.projectId,
-        projectRole: data.projectRole,
-        accessLevel: data.accessLevel,
-        remarks: data.remarks || null,
-        assignmentStatus: 'active'
-      }
-    });
-    res.json({ success: true });
+    const result = await invokeH02ProjectMutation(req, 'ASSIGNMENT_CREATE', null, data);
+    res.json(result);
   } catch (error: any) {
     console.error('Error in addProjectAssignment:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -89,10 +69,7 @@ router.post('/updateProjectAssignment', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Assignment ID and update data are required.' });
     }
 
-    await prisma.projectUserAssignment.update({
-      where: { id: assignmentId },
-      data
-    });
+    await invokeH02ProjectMutation(req, 'ASSIGNMENT_UPDATE', assignmentId, data);
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error in updateProjectAssignment:', error);
@@ -106,9 +83,7 @@ router.post('/deleteProjectAssignment', async (req: Request, res: Response) => {
     if (!assignmentId) {
       return res.status(400).json({ success: false, error: 'Assignment ID is required.' });
     }
-    await prisma.projectUserAssignment.delete({
-      where: { id: assignmentId }
-    });
+    await invokeH02ProjectMutation(req, 'ASSIGNMENT_DELETE', assignmentId);
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error in deleteProjectAssignment:', error);

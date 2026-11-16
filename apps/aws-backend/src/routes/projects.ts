@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { invokeH02ProjectMutation } from '../lib/h02ProjectMutation';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 
@@ -229,10 +230,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Unauthorized: Only SUPER_ADMIN can delete projects' });
     }
 
-    await prisma.$transaction([
-      prisma.projectUserAssignment.deleteMany({ where: { projectId: id } }),
-      prisma.project.delete({ where: { id } })
-    ]);
+    await invokeH02ProjectMutation(req, 'DELETE_EMPTY_PROJECT', id);
 
     res.json({ success: true });
   } catch (error: any) {

@@ -1,4 +1,9 @@
-import { CANONICAL_FIELD_MAP, resolveCanonicalFieldId, type UboqFieldVisibility } from '../field-catalog';
+import {
+  CANONICAL_FIELD_MAP,
+  resolveCanonicalFieldId,
+  T12_SAFE_DERIVED_VARIANCE_SPECS,
+  type UboqFieldVisibility,
+} from '../field-catalog';
 
 const EXECUTIVE_FINANCE_ROLES = new Set([
   'SUPER_ADMIN',
@@ -54,6 +59,25 @@ const SENSITIVE_DTO_KEYS = new Set([
   'liquidityGapAmt',
   'targetBudgets',
   'uboqContractorTargetBudgets',
+  'vo_subcon_commitment_delta_amt',
+  'subconCommitmentDeltaTotal',
+  'total_forecast_cash_out_amt',
+  'totalForecastCashOutTotal',
+  'disbursement_variance_amt',
+  'disbursementVarianceTotal',
+  'endingForecastClosingCash',
+  'endingActualTreasuryClosingCash',
+  'peakForecastLiquidityGap',
+  'peakActualLiquidityGap',
+  'peakActualTreasuryLiquidityGap',
+  'openingTreasuryCashAmt',
+  'bankStatementEvidenceRef',
+  'endingCumulativeNetCashMovementZeroBasis',
+  'peakCumulativeNetCashDeficitZeroBasis',
+  'actual_treasury_closing_cash',
+  'actual_treasury_liquidity_gap',
+  'cumulative_net_cash_movement_zero_basis',
+  'cumulative_net_cash_deficit_zero_basis',
 ]);
 
 const RESTRICTED_DTO_KEYS = new Set([
@@ -79,6 +103,10 @@ const RESTRICTED_DTO_KEYS = new Set([
   'agency_abc',
   'agencyAbcAmt',
   'agencyEstimates',
+  'vo_client_revenue_delta_amt',
+  'clientRevenueDeltaTotal',
+  'receipts_variance_amt',
+  'receiptsVarianceTotal',
 ]);
 
 export function getPermittedVisibilityTiers(userRole: string): ReadonlySet<UboqFieldVisibility> {
@@ -97,11 +125,20 @@ export function getPermittedVisibilityTiers(userRole: string): ReadonlySet<UboqF
 }
 
 export function canRoleAccessField(userRole: string, fieldIdOrAlias: string): boolean {
+  const normalized = (fieldIdOrAlias || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const tiers = getPermittedVisibilityTiers(userRole);
+  const derivedSpec = T12_SAFE_DERIVED_VARIANCE_SPECS.get(normalized);
+  if (derivedSpec) {
+    return tiers.has(derivedSpec.visibility);
+  }
   const canonicalId = resolveCanonicalFieldId(fieldIdOrAlias);
   if (!canonicalId) return false;
   const spec = CANONICAL_FIELD_MAP.get(canonicalId);
   if (!spec) return false;
-  const tiers = getPermittedVisibilityTiers(userRole);
   return tiers.has(spec.visibility);
 }
 
@@ -138,6 +175,10 @@ export function redactUboqPayloadForRole<T>(payload: T, userRole: string): T {
         }
         const canonical = CANONICAL_FIELD_MAP.get(k);
         if (canonical && !tiers.has(canonical.visibility)) {
+          continue;
+        }
+        const derived = T12_SAFE_DERIVED_VARIANCE_SPECS.get(k);
+        if (derived && !tiers.has(derived.visibility)) {
           continue;
         }
         out[k] = scrubValue(v);

@@ -1,4 +1,7 @@
 // @ts-nocheck
+import companyPayrollRouter from './companyPayroll';
+import { requireH02DeletePermission } from '../lib/h02ProjectMutation';
+import { backendPrisma, backendRlsStorage } from '../lib/prismaRls';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requirePermission } from '../lib/permissions';
@@ -6,6 +9,7 @@ import { validateTransactionWithAI } from '../lib/aiValidation';
 import { logAudit } from '../lib/workflow';
 
 const router = Router();
+router.use('/company', companyPayrollRouter);
 const prisma = new PrismaClient();
 
 function getPbacContext(req: any) {
@@ -19,18 +23,25 @@ function getPbacContext(req: any) {
 /**
  * AI-Assisted Payroll Computation Engine
  */
-async function computePayrollForPeriod(payrollPeriodId: string) {
-  const period = await prisma.payrollPeriod.findUnique({
+export async function computePayrollForPeriod(payrollPeriodId: string, clients?: { payrollDb: any; dependencyDb: any }) {
+  const payrollDb = clients?.payrollDb ?? backendPrisma;
+  const dependencyDb = clients?.dependencyDb ?? prisma;
+  const period = await payrollDb.payrollPeriod.findUnique({
     where: { id: payrollPeriodId },
     include: {
-      dtrs: { include: { worker: true } },
+      dtrs: clients ? true : { include: { worker: true } },
       payrolls: true
     }
   });
 
   if (!period) throw new Error('Payroll period not found');
+  if (clients) {
+    const workers = await dependencyDb.worker.findMany({});
+    const byId = new Map(workers.map((w: any) => [w.id, w]));
+    for (const dtr of period.dtrs) { dtr.worker = byId.get(dtr.workerId); if (!dtr.worker) throw new Error('COMPANY_PAYROLL_WORKER_DENIED'); }
+  }
 
-  const govSettings = await prisma.governmentSettings.findFirst() || {
+  const govSettings = await dependencyDb.governmentSettings.findFirst() || {
     phEmployeeRate: 2.5,
     pagibigEmployeeRate: 2.0,
     deductionSchedule: 'SPLIT'
@@ -45,7 +56,7 @@ async function computePayrollForPeriod(payrollPeriodId: string) {
   // const allowedCategory = categoryMap[period.calendarRule];
 
   // Filter out workers that shouldn't be in this cutoff
-  const dtrsToProcess = period.dtrs.filter(dtr => {
+  const dtrsToProcess = period.dtrs.filter((dtr: any) => {
     if (!dtr.worker.subjectToPayrollCutoff) return false;
     return true;
   });
@@ -156,7 +167,7 @@ async function computePayrollForPeriod(payrollPeriodId: string) {
     }
 
     // 4. Ledger Deductions (Loans & Cash Advances)
-    const activeLedgers = await prisma.deductionLedger.findMany({
+    const activeLedgers = await dependencyDb.deductionLedger.findMany({
       where: { workerId: worker.id, status: 'ACTIVE' }
     });
 
@@ -227,9 +238,9 @@ async function computePayrollForPeriod(payrollPeriodId: string) {
     };
 
     if (existingPayroll) {
-      await prisma.payroll.update({ where: { id: existingPayroll.id }, data: payrollData });
+      await payrollDb.payroll.update({ where: { id: existingPayroll.id }, data: payrollData });
     } else {
-      await prisma.payroll.create({ data: payrollData });
+      await payrollDb.payroll.create({ data: payrollData });
     }
 
     payrollResults.push(payrollData);
@@ -237,7 +248,7 @@ async function computePayrollForPeriod(payrollPeriodId: string) {
 
   // Clean up payroll records for workers with no attendance
   const computedWorkerIds = Array.from(workerMap.keys());
-  await prisma.payroll.deleteMany({
+  await payrollDb.payroll.deleteMany({
     where: {
       payrollPeriodId: period.id,
       workerId: { notIn: computedWorkerIds }
@@ -267,19 +278,17 @@ router.post('/engine/compute', async (req, res) => {
 router.post('/period/create', async (req, res) => {
   try {
     const { userId, simulatedRole } = getPbacContext(req);
-    await requirePermission(userId!, 'PAYROLL', 'canCreate', simulatedRole);
+    const actor = req.user;
+    const context = backendRlsStorage.getStore();
+    if (!actor?.id || !context?.projectId || context.userId !== actor.id ||
+        !Number.isSafeInteger(actor.sessionVersion) || context.sessionVersion !== actor.sessionVersion ||
+        userId !== actor.id || req.body.projectId !== context.projectId) {
+      return res.status(403).json({ error: 'H02_REAL_PROJECT_CONTEXT_REQUIRED' });
+    }
+    await requirePermission(actor.id, 'PAYROLL', 'canCreate');
+    if (simulatedRole) await requirePermission(actor.id, 'PAYROLL', 'canCreate', simulatedRole);
     
     const { month, year, calendarRule, periodType, startDate, endDate, payrollDate, projectId, notes } = req.body;
-
-    const existing = await prisma.payrollPeriod.findFirst({
-      where: { 
-        month: Number(month), 
-        year: Number(year), 
-        calendarRule, periodType, 
-        projectId: projectId || null 
-      }
-    });
-    if (existing) throw new Error(`A payroll period for ${periodType} of ${month}/${year} already exists.`);
 
     const validation = await validateTransactionWithAI(
       'Payroll Generation',
@@ -300,44 +309,42 @@ router.post('/period/create', async (req, res) => {
     const projCode = projectId ? '-PROJ' : '';
     const batchNumber = `PAY-${year}-${String(month).padStart(2, '0')}-${typeCode}${projCode}-${Math.floor(Math.random() * 1000)}`;
 
-    const period = await prisma.payrollPeriod.create({
-      data: {
-        payrollBatchNumber: batchNumber,
-        month: Number(month), year: Number(year),
-        calendarRule, periodType,
-        startDate: new Date(startDate), endDate: new Date(endDate), payrollDate: new Date(payrollDate),
-        projectId: projectId || null, notes: notes || null,
-        status: 'DRAFT', createdById: userId!
-      }
-    });
-
     const categoryMap: Record<string, string> = {
       'WEEKLY': 'Weekly Salaried', 'SEMI_MONTHLY': 'Semi-Monthly', 'MONTHLY': 'Monthly'
     };
-    const workerFilter: any = {};
-    if (projectId) workerFilter.assignedProjectId = projectId;
-    if (categoryMap[calendarRule]) workerFilter.payrollCategory = categoryMap[calendarRule];
+    const category = categoryMap[calendarRule] || '*';
+    const period = await backendPrisma.$transaction(async tx => {
+      // Existing transaction wrapper supplies signed project context.
+      // Lock Project before duplicate detection, and lock scoped eligible Workers.
+      const rows = await tx.$queryRaw`SELECT public.uboq_h02_project_payroll_workers(${projectId}::text,${category}::text) AS workers`;
+      const workers = rows[0]?.workers;
+      if (!Array.isArray(workers)) throw new Error('H02_SCOPED_WORKERS_REQUIRED');
+    const existing = await tx.payrollPeriod.findFirst({
+      where: { 
+        month: Number(month), 
+        year: Number(year), 
+        calendarRule, periodType, 
+        projectId: projectId || null 
+      }
+    });
+    if (existing) throw new Error(`A payroll period for ${periodType} of ${month}/${year} already exists.`);
 
-    const workers = await prisma.worker.findMany({ where: workerFilter });
-    if (workers.length > 0) {
-      const payrollEntries = workers.map(w => ({
-        workerId: w.id, payrollPeriodId: period.id, projectId: projectId || null,
+      const created = await tx.payrollPeriod.create({ data: {
+        payrollBatchNumber: batchNumber, month: Number(month), year: Number(year), calendarRule, periodType,
+        startDate: new Date(startDate), endDate: new Date(endDate), payrollDate: new Date(payrollDate),
+        projectId, notes: notes || null, status: 'DRAFT', createdById: actor.id
+      }});
+      if (workers.length) await tx.payroll.createMany({ data: workers.map(w => ({
+        workerId: w.id, payrollPeriodId: created.id, projectId,
         compensationType: w.employmentType === 'REGULAR' ? 'MONTHLY' : w.employmentType === 'PROJECT_BASED' ? 'PROJECT_BASED' : 'DAILY',
         rate: w.dailyRate || 0, basicPay: 0, netPay: 0
-      }));
-      await prisma.payroll.createMany({ data: payrollEntries });
-    }
-
-    await logAudit(
-      userId!,
-      simulatedRole || 'HR_OFFICER',
-      'PAYROLL',
-      period.id,
-      'CREATE_PAYROLL_PERIOD',
-      undefined,
-      'DRAFT',
-      `Created ${periodType} payroll period for ${month}/${year}`
-    );
+      })) });
+      await tx.auditLog.create({ data: {
+        userId: actor.id, userRole: actor.role, moduleName: 'PAYROLL', transactionId: created.id,
+        actionType: 'CREATE_PAYROLL_PERIOD', newValue: 'DRAFT', remarks: JSON.stringify({ message: `Created ${periodType} payroll period for ${month}/${year}`, simulatedRole: simulatedRole || null })
+      }});
+      return created;
+    });
 
     res.json({ success: true, data: period });
   } catch (error: any) { res.status(500).json({ error: error.message }); }
@@ -345,17 +352,21 @@ router.post('/period/create', async (req, res) => {
 
 router.delete('/period/:id', async (req, res) => {
   try {
-    const { userId, simulatedRole } = getPbacContext(req);
-    await requirePermission(userId!, 'PAYROLL', 'canDelete', simulatedRole);
+    await requireH02DeletePermission(req, 'PAYROLL');
     const { id } = req.params;
 
-    const period = await prisma.payrollPeriod.findUnique({ where: { id } });
-    if (!period) throw new Error('Period not found');
-    if (period.status !== 'DRAFT') throw new Error('Only DRAFT periods can be deleted');
-
-    await prisma.dailyTimeRecord.deleteMany({ where: { payrollPeriodId: id } });
-    await prisma.payroll.deleteMany({ where: { payrollPeriodId: id } });
-    await prisma.payrollPeriod.delete({ where: { id } });
+    await backendPrisma.$transaction(async tx => {
+      // Lock the authority row before checking state or deleting any descendants.
+      const rows = await tx.$queryRaw<Array<{ id: string; status: string; isLocked: boolean }>>`
+        SELECT id, status, "isLocked" FROM "PayrollPeriod" WHERE id = ${id} FOR UPDATE
+      `;
+      const period = rows[0];
+      if (!period) throw new Error('Period not found');
+      if (period.status !== 'DRAFT' || period.isLocked) throw new Error('Only unlocked DRAFT periods can be deleted');
+      await tx.dailyTimeRecord.deleteMany({ where: { payrollPeriodId: id } });
+      await tx.payroll.deleteMany({ where: { payrollPeriodId: id } });
+      await tx.payrollPeriod.delete({ where: { id } });
+    });
     res.json({ success: true });
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
@@ -388,17 +399,17 @@ router.post('/dtr/save-manual', async (req, res) => {
       if (parsedTimeIn && parsedTimeOut < parsedTimeIn) parsedTimeOut.setDate(parsedTimeOut.getDate() + 1);
     }
     
-    const existing = await prisma.dailyTimeRecord.findUnique({
+    const existing = await backendPrisma.dailyTimeRecord.findUnique({
       where: { workerId_date: { workerId, date: parsedDate } }
     });
 
     if (existing) {
-      await prisma.dailyTimeRecord.update({
+      await backendPrisma.dailyTimeRecord.update({
         where: { id: existing.id },
         data: { timeIn: parsedTimeIn, timeOut: parsedTimeOut, regularHours: Number(regularHours), overtimeHours: Number(overtimeHours), payrollPeriodId }
       });
     } else {
-      await prisma.dailyTimeRecord.create({
+      await backendPrisma.dailyTimeRecord.create({
         data: { workerId, date: parsedDate, timeIn: parsedTimeIn, timeOut: parsedTimeOut, regularHours: Number(regularHours), overtimeHours: Number(overtimeHours), payrollPeriodId }
       });
     }
@@ -429,17 +440,17 @@ router.post('/dtr/save-bulk', async (req, res) => {
         if (parsedTimeIn && parsedTimeOut < parsedTimeIn) parsedTimeOut.setDate(parsedTimeOut.getDate() + 1);
       }
       
-      const existing = await prisma.dailyTimeRecord.findUnique({
+      const existing = await backendPrisma.dailyTimeRecord.findUnique({
         where: { workerId_date: { workerId, date: parsedDate } }
       });
 
       if (existing) {
-        await prisma.dailyTimeRecord.update({
+        await backendPrisma.dailyTimeRecord.update({
           where: { id: existing.id },
           data: { timeIn: parsedTimeIn, timeOut: parsedTimeOut, regularHours: Number(entry.regularHours), overtimeHours: Number(entry.overtimeHours), payrollPeriodId }
         });
       } else {
-        await prisma.dailyTimeRecord.create({
+        await backendPrisma.dailyTimeRecord.create({
           data: { workerId, date: parsedDate, timeIn: parsedTimeIn, timeOut: parsedTimeOut, regularHours: Number(entry.regularHours), overtimeHours: Number(entry.overtimeHours), payrollPeriodId }
         });
       }
@@ -458,7 +469,7 @@ router.post('/dtr/biometrics-sync', async (req, res) => {
     
     const { rows, payrollPeriodId, fileUrl } = req.body;
 
-    const period = await prisma.payrollPeriod.findUnique({ where: { id: payrollPeriodId } });
+    const period = await backendPrisma.payrollPeriod.findUnique({ where: { id: payrollPeriodId } });
     const workers = await prisma.worker.findMany();
     if (!period || workers.length === 0) throw new Error('No workers found');
 
@@ -506,7 +517,7 @@ router.post('/dtr/biometrics-sync', async (req, res) => {
         if (isNaN(overtimeHours)) overtimeHours = 0;
       }
 
-      await prisma.dailyTimeRecord.upsert({
+      await backendPrisma.dailyTimeRecord.upsert({
         where: { workerId_date: { workerId: workerDbId, date } },
         update: { regularHours, overtimeHours, payrollPeriodId, sourceFile: fileUrl },
         create: { workerId: workerDbId, date, regularHours, overtimeHours, payrollPeriodId, sourceFile: fileUrl }

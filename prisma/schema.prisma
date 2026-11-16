@@ -107,6 +107,9 @@ model User {
   scheduleRevisionReasonsCreated ScheduleRevisionReason[]     @relation("ScheduleRevisionReasonCreatedBy")
   scheduleWorkflowTransitions    ScheduleWorkflowTransition[]
   passwordRecoveryTokens         PasswordRecoveryToken[]
+  employerPayrollAuthorities EmployerPayrollAuthority[]
+  uboqRoundTripPackagesIssued UboqSignedRoundTripPackage[] @relation("UboqRoundTripPackagesIssued")
+  uboqRoundTripSubmissions    UboqRoundTripImportSubmission[] @relation("UboqRoundTripSubmissionsByActor")
 }
 
 model SystemRole {
@@ -220,6 +223,18 @@ model Project {
   uboqTemplateDefinitions         UboqTemplateDefinition[]
   uboqCashFlowPeriods             UboqCashFlowPeriod[]
   uboqValidationExceptions        UboqValidationException[]
+  uboqClientReceipts              UboqClientReceipt[]
+  uboqClientReceiptAllocations    UboqClientReceiptAllocation[]
+  uboqSignedRoundTripPackages     UboqSignedRoundTripPackage[]
+  uboqRoundTripImportSubmissions  UboqRoundTripImportSubmission[]
+  uboqTreasuryOpeningBalances     UboqTreasuryOpeningBalance[]
+
+  employerId                     String?
+  employerOwnershipEvidenceRef    String?
+  employerOwnershipVerifiedAt     DateTime?
+  employer                       Employer? @relation(fields: [employerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([employerId])
 }
 
 model ProjectUserAssignment {
@@ -835,6 +850,13 @@ model Worker {
   payrolls                        Payroll[]
   project                         Project?                        @relation("ProjectWorkers", fields: [projectId], references: [id], onDelete: Cascade)
   documents                       WorkerDocument[]
+
+  employerId                     String?
+  employerOwnershipEvidenceRef    String?
+  employerOwnershipVerifiedAt     DateTime?
+  employer                       Employer? @relation(fields: [employerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([employerId])
 }
 
 model AIWorkerValidationResult {
@@ -935,6 +957,13 @@ model PayrollPeriod {
   approvedBy          User?                   @relation("PayrollApprover", fields: [approvedById], references: [id], onDelete: Cascade)
   createdBy           User?                   @relation("PayrollCreator", fields: [createdById], references: [id], onDelete: Cascade)
   project             Project?                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  employerId                     String?
+  employerOwnershipEvidenceRef    String?
+  employerOwnershipVerifiedAt     DateTime?
+  employer                       Employer? @relation(fields: [employerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([employerId])
 }
 
 model Payroll {
@@ -1435,6 +1464,7 @@ model Billing {
   deductions            BillingDeduction[]
   items                 BillingItem[]
   payments              Payment[]
+  uboqReceiptAllocations UboqClientReceiptAllocation[]
 }
 
 model BillingItem {
@@ -1492,6 +1522,7 @@ model Payment {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   billing                 Billing  @relation(fields: [billingId], references: [id], onDelete: Cascade)
+  uboqReceiptAllocation   UboqClientReceiptAllocation?
 }
 
 model VariationOrder {
@@ -5374,13 +5405,16 @@ model UboqContractAuthority {
 
   project    Project                @relation(fields: [projectId], references: [id], onDelete: Restrict)
   taxProfile UboqTaxPricingProfile? @relation(fields: [taxProfileId], references: [id], onDelete: Restrict)
+  snapshots  UboqOperationalSnapshot[]
 
   @@index([projectId, status])
 }
 
 model UboqOperationalSnapshot {
+  sourceEvidenceHash      String?
   id                      String             @id @default(cuid())
   projectId               String
+  contractAuthorityId     String?
   sourceDocumentId        String?
   versionNumber           Int
   versionLabel            String
@@ -5398,15 +5432,19 @@ model UboqOperationalSnapshot {
   createdAt               DateTime           @default(now())
 
   project            Project                              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  contractAuthority  UboqContractAuthority?               @relation(fields: [contractAuthorityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sourceDocument     UboqSourceDocument?                  @relation(fields: [sourceDocumentId], references: [id], onDelete: Restrict)
   supersedesSnapshot UboqOperationalSnapshot?             @relation("UboqSnapshotLineage", fields: [supersedesSnapshotId], references: [id], onDelete: Restrict)
   supersededBy       UboqOperationalSnapshot[]            @relation("UboqSnapshotLineage")
   phaseLines         UboqAwardedPhaseLine[]
   requirements       UboqProcurementResourceRequirement[]
   cashFlowPeriods    UboqCashFlowPeriod[]
+  targetBudgets            UboqContractorTargetBudget[]
+  treasuryOpeningBalances  UboqTreasuryOpeningBalance[]
 
   @@unique([projectId, versionNumber])
   @@index([projectId, status])
+  @@index([projectId, contractAuthorityId])
 }
 
 model UboqAwardedPhaseLine {
@@ -5517,26 +5555,71 @@ model UboqAgencyEstimateBaseline {
 }
 
 model UboqContractorTargetBudget {
-  id                  String   @id @default(cuid())
+  id                  String    @id @default(cuid())
   projectId           String
+  snapshotId          String?
   phaseLineId         String?
-  targetDirectCostAmt Decimal  @default(0) @db.Decimal(18, 2)
-  targetTotalCost     Decimal  @default(0) @db.Decimal(18, 2)
-  targetProfit        Decimal  @default(0) @db.Decimal(18, 2)
-  targetMarginPct     Decimal  @default(0) @db.Decimal(9, 6)
-  commitmentOpenAmt   Decimal  @default(0) @db.Decimal(18, 2)
-  etcUncommitted      Decimal  @default(0) @db.Decimal(18, 2)
-  forecastEac         Decimal  @default(0) @db.Decimal(18, 2)
-  forecastProfit      Decimal  @default(0) @db.Decimal(18, 2)
+  revisionNumber      Int       @default(1)
+  supersedesId        String?
+  targetDirectCostAmt Decimal   @default(0) @db.Decimal(18, 2)
+  targetTotalCost     Decimal   @default(0) @db.Decimal(18, 2)
+  targetProfit        Decimal   @default(0) @db.Decimal(18, 2)
+  targetMarginPct     Decimal   @default(0) @db.Decimal(9, 6)
+  commitmentOpenAmt   Decimal   @default(0) @db.Decimal(18, 2)
+  etcUncommitted      Decimal   @default(0) @db.Decimal(18, 2)
+  forecastEac         Decimal   @default(0) @db.Decimal(18, 2)
+  forecastProfit      Decimal   @default(0) @db.Decimal(18, 2)
   approvedById        String?
   approvedAt          DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  project   Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  phaseLine UboqAwardedPhaseLine? @relation(fields: [phaseLineId], references: [id], onDelete: Restrict)
+  project      Project                      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  snapshot     UboqOperationalSnapshot?     @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  phaseLine    UboqAwardedPhaseLine?        @relation(fields: [phaseLineId], references: [id], onDelete: Restrict)
+  supersedes   UboqContractorTargetBudget?  @relation("UboqTargetBudgetLineage", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy UboqContractorTargetBudget[] @relation("UboqTargetBudgetLineage")
 
   @@index([projectId])
+  @@index([projectId, snapshotId])
+}
+
+model UboqClientReceipt {
+  id                 String                        @id @default(cuid())
+  projectId          String
+  receiptReference   String
+  receiptDate        DateTime
+  totalReceiptAmount Decimal                       @db.Decimal(18, 2)
+  status             String                        @default("DRAFT")
+  verifiedById       String?
+  verifiedAt         DateTime?
+  remarks            String?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  project     Project                       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  allocations UboqClientReceiptAllocation[]
+
+  @@unique([projectId, receiptReference])
+  @@index([projectId])
+}
+
+model UboqClientReceiptAllocation {
+  id              String            @id @default(cuid())
+  projectId       String
+  receiptId       String
+  billingId       String
+  paymentId       String            @unique
+  allocatedAmount Decimal           @db.Decimal(18, 2)
+  createdAt       DateTime          @default(now())
+
+  project Project           @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  receipt UboqClientReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  billing Billing           @relation(fields: [billingId], references: [id], onDelete: Restrict)
+  payment Payment           @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@unique([receiptId, billingId])
+  @@index([projectId, receiptId])
 }
 
 model UboqCanonicalResourceAccount {
@@ -5716,6 +5799,12 @@ model UboqResourceLedgerEntry {
 model UboqTemplateDefinition {
   id                 String   @id @default(cuid())
   projectId          String?
+  layoutGroupId      String?
+  supersedesId       String?
+  duplicatedFromId   String?
+  sharingScope       String   @default("PRIVATE")
+  definitionHash     String?
+  changeSummary      String?
   templateCode       String
   templateName       String
   rowGrain           String
@@ -5729,9 +5818,40 @@ model UboqTemplateDefinition {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project          Project?                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supersedes       UboqTemplateDefinition?  @relation("UboqTemplateVersionLineage", fields: [projectId, supersedesId], references: [projectId, id], onDelete: Cascade, onUpdate: Restrict)
+  supersededBy     UboqTemplateDefinition[] @relation("UboqTemplateVersionLineage")
+  duplicatedFrom   UboqTemplateDefinition?  @relation("UboqTemplateDuplicateLineage", fields: [projectId, duplicatedFromId], references: [projectId, id], onDelete: Cascade, onUpdate: Restrict)
+  duplicatedCopies UboqTemplateDefinition[] @relation("UboqTemplateDuplicateLineage")
 
+  @@unique([projectId, id])
+  @@unique([projectId, layoutGroupId, versionNumber])
   @@index([projectId, templateCode])
+  @@index([projectId, templateCode, layoutGroupId, versionNumber])
+}
+
+model UboqTemplateAuditEvent {
+  id                  String   @id @default(cuid())
+  projectId           String
+  layoutGroupId       String?
+  layoutDefinitionId  String?
+  layoutVersionNumber Int?
+  layoutOwnerId       String?
+  sharingScope        String   @default("PRIVATE")
+  templateCode        String
+  eventType           String
+  actorUserId         String
+  actorRole           String
+  sourceId            String?
+  sourceVersion       String?
+  contractCode        String?
+  exportFormat        String?
+  outputSha256        String?
+  detailsJson         Json?
+  createdAt           DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([projectId, layoutGroupId, createdAt])
 }
 
 model UboqScheduleActivityLink {
@@ -5797,4 +5917,147 @@ model UboqValidationException {
   project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
 
   @@index([projectId, status, severity])
+}
+
+// H02-B verified employer ownership; no seeded business identities.
+
+enum EmployerVerificationState {
+  UNVERIFIED
+  VERIFIED
+  REVOKED
+}
+
+enum EmployerPayrollOperation {
+  VIEW
+  CREATE_PERIOD
+  EDIT_DRAFT
+  COMPUTE_DRAFT
+  IMPORT_DTR
+  DELETE_DRAFT
+}
+
+model Employer {
+  id                       String                    @id
+  legalName                String
+  verificationEvidenceRef  String
+  verificationState        EmployerVerificationState @default(UNVERIFIED)
+  verifiedAt               DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  payrollAuthorities       EmployerPayrollAuthority[]
+  workers                  Worker[]
+  projects                 Project[]
+  payrollPeriods           PayrollPeriod[]
+}
+
+model EmployerPayrollAuthority {
+  employerId               String
+  userId                   String
+  operation                EmployerPayrollOperation
+  enabled                  Boolean                  @default(false)
+  verificationEvidenceRef  String
+  verifiedAt               DateTime?
+  revokedAt                DateTime?
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  employer                 Employer                 @relation(fields: [employerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user                     User                     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([employerId, userId, operation])
+  @@index([userId])
+}
+
+model UboqSignedRoundTripPackage {
+  id                      String    @id @default(cuid())
+  projectId               String
+  templateCode            String
+  sourceType              String
+  sourceId                String
+  sourceVersion           String
+  sourceCanonicalHash     String
+  layoutMode              String
+  layoutGroupId           String?
+  layoutDefinitionId      String?
+  layoutVersionNumber     Int?
+  layoutDefinitionHash    String
+  selectedFieldsJson      Json
+  headingAliasesJson      Json?
+  rowCount                Int
+  rowIdentityDigest       String
+  financialFieldsIncluded Boolean   @default(false)
+  exportFormat            String
+  packageNonce            String    @unique
+  baselinePayloadSha256   String
+  manifestSignature       String
+  issuedById              String
+  issuedByRole            String
+  issuedAt                DateTime  @default(now())
+  expiresAt               DateTime
+  consumedByImportId      String?   @unique
+  consumedAt              DateTime?
+
+  project     Project                         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  issuedBy    User                            @relation("UboqRoundTripPackagesIssued", fields: [issuedById], references: [id], onDelete: Restrict)
+  submissions UboqRoundTripImportSubmission[]
+
+  @@unique([projectId, id])
+  @@index([projectId, templateCode, sourceId])
+  @@index([projectId, issuedAt])
+}
+
+model UboqRoundTripImportSubmission {
+  id                      String   @id @default(cuid())
+  projectId               String
+  packageId               String?
+  idempotencyKey          String
+  uploadedFileSha256      String
+  importFormat            String
+  templateCode            String
+  sourceId                String?
+  sourceVersion           String?
+  layoutDefinitionId      String?
+  layoutVersionNumber     Int?
+  layoutDefinitionHash    String?
+  conflictResolutionMode  String
+  actorUserId             String
+  actorRole               String
+  verificationStatus      String
+  failureCode             String?
+  totalRowCount           Int      @default(0)
+  changedRowCount         Int      @default(0)
+  nonFinancialChangeCount Int      @default(0)
+  financialChangeCount    Int      @default(0)
+  proposedChangesJson     Json?
+  diagnosticsJson         Json?
+  createdAt               DateTime @default(now())
+
+  project Project                     @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  pkg     UboqSignedRoundTripPackage? @relation(fields: [projectId, packageId], references: [projectId, id], onDelete: Restrict)
+  actor   User                        @relation("UboqRoundTripSubmissionsByActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, idempotencyKey])
+  @@index([projectId, createdAt])
+  @@index([projectId, verificationStatus, createdAt])
+}
+
+model UboqTreasuryOpeningBalance {
+  id                       String    @id @default(cuid())
+  projectId                String
+  snapshotId               String
+  openingEffectiveDate     DateTime
+  openingCashAmt           Decimal   @db.Decimal(18, 2)
+  bankStatementEvidenceRef String
+  verificationStatus       String    @default("DRAFT")
+  preparedById             String
+  verifiedById             String?
+  verifiedAt               DateTime?
+  remarks                  String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  project  Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  snapshot UboqOperationalSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, snapshotId])
+  @@index([projectId, verificationStatus])
 }

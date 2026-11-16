@@ -125,6 +125,7 @@ export default async function ProjectUboqWorkbenchPage({
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <Link href={`/projects/${project.id}/uboq/templates`}>Build T0 / T1 template</Link>
           {Object.values(SYSTEM_TEMPLATE_PRESETS)
             .slice(0, 5)
             .map((preset) => (

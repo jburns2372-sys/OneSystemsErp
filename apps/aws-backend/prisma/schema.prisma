@@ -89,6 +89,7 @@ model User {
   chatbotFeedbacks             ChatbotFeedback[]             @relation("UserChatbotFeedbacks")
   chatSessions                 AiChatSession[]               @relation("UserAiChatSessions")
   chatMessages                 AiChatMessage[]               @relation("UserAiChatMessages")
+  employerPayrollAuthorities EmployerPayrollAuthority[]
 }
 
 model SystemRole {
@@ -182,6 +183,13 @@ model Project {
   valueEngineeringRecords         ValueEngineeringRecord[]         @relation("ProjectVERecords")
   projectSchedule                 ProjectSchedule?
   userAssignments                 ProjectUserAssignment[]
+
+  employerId                     String?
+  employerOwnershipEvidenceRef    String?
+  employerOwnershipVerifiedAt     DateTime?
+  employer                       Employer? @relation(fields: [employerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([employerId])
 }
 
 model ProjectUserAssignment {
@@ -749,6 +757,13 @@ model Worker {
   payrolls                        Payroll[]
   project                         Project?                        @relation("ProjectWorkers", fields: [projectId], references: [id], onDelete: Cascade)
   documents                       WorkerDocument[]
+
+  employerId                     String?
+  employerOwnershipEvidenceRef    String?
+  employerOwnershipVerifiedAt     DateTime?
+  employer                       Employer? @relation(fields: [employerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([employerId])
 }
 
 model AIWorkerValidationResult {
@@ -849,6 +864,13 @@ model PayrollPeriod {
   approvedBy          User?                   @relation("PayrollApprover", fields: [approvedById], references: [id], onDelete: Cascade)
   createdBy           User?                   @relation("PayrollCreator", fields: [createdById], references: [id], onDelete: Cascade)
   project             Project?                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  employerId                     String?
+  employerOwnershipEvidenceRef    String?
+  employerOwnershipVerifiedAt     DateTime?
+  employer                       Employer? @relation(fields: [employerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([employerId])
 }
 
 model Payroll {
@@ -4609,3 +4631,51 @@ model WorkbookExtractionAudit {
   project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
+
+// H02-B verified employer ownership; no seeded business identities.
+
+enum EmployerVerificationState {
+  UNVERIFIED
+  VERIFIED
+  REVOKED
+}
+
+enum EmployerPayrollOperation {
+  VIEW
+  CREATE_PERIOD
+  EDIT_DRAFT
+  COMPUTE_DRAFT
+  IMPORT_DTR
+  DELETE_DRAFT
+}
+
+model Employer {
+  id                       String                    @id
+  legalName                String
+  verificationEvidenceRef  String
+  verificationState        EmployerVerificationState @default(UNVERIFIED)
+  verifiedAt               DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  payrollAuthorities       EmployerPayrollAuthority[]
+  workers                  Worker[]
+  projects                 Project[]
+  payrollPeriods           PayrollPeriod[]
+}
+
+model EmployerPayrollAuthority {
+  employerId               String
+  userId                   String
+  operation                EmployerPayrollOperation
+  enabled                  Boolean                  @default(false)
+  verificationEvidenceRef  String
+  verifiedAt               DateTime?
+  revokedAt                DateTime?
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  employer                 Employer                 @relation(fields: [employerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user                     User                     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([employerId, userId, operation])
+  @@index([userId])
+}

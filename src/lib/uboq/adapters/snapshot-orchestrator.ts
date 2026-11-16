@@ -902,6 +902,11 @@ export async function resolveExtractionCandidateHumanReview(
     throw new Error('UBOQ_CANDIDATE_NOT_FOUND_FOR_PROJECT');
   }
 
+  if (await prisma.uboqOperationalSnapshot.count({ where: {
+    approvedAt: { not: null },
+    OR: [{ sourceDocumentId: existing.sourceDocumentId }, { phaseLines: { some: { sourceDocumentId: existing.sourceDocumentId } } }],
+  } })) throw new Error('UBOQ_APPROVED_EVIDENCE_IMMUTABLE: use a new source revision');
+
   const prevJson =
     existing.parsedJson && typeof existing.parsedJson === 'object'
       ? (existing.parsedJson as Record<string, unknown>)
@@ -1237,6 +1242,16 @@ export async function approveOperationalSnapshotAndPrrs(
   if (snapPre.preparedById === params.approverUserId) {
     throw new Error('UBOQ_SOD_VIOLATION: Operational Snapshot preparer cannot self-approve snapshot (VAL-20)');
   }
+
+  // G02-R3: Verify the immutable source bytes again at the approval boundary.
+  if (!snapPre.sourceDocumentId) throw new Error('UBOQ_SOURCE_REQUIRED');
+  const approvalSource = await prisma.uboqSourceDocument.findUnique({ where: { id: snapPre.sourceDocumentId } });
+  if (!approvalSource || approvalSource.projectId !== snapPre.projectId) throw new Error('UBOQ_SOURCE_DOCUMENT_NOT_FOUND_FOR_PROJECT');
+  await resolveUboqVaultStorageProvider().getAndVerify({
+    storageUri: approvalSource.storageUri,
+    expectedProjectId: snapPre.projectId,
+    expectedSha256Hash: approvalSource.sha256Hash,
+  });
 
   // H09: Single all-or-nothing PostgreSQL transaction for snapshot + BOQ promotion + PRR approval
   return prisma.$transaction(
@@ -1793,4 +1808,47 @@ export async function approveOperationalSnapshotAndPrrs(
     },
     { maxWait: 5000, timeout: 30000 }
   );
+}
+
+/** Fork a review revision while retaining the original approved evidence and vault binary. */
+export async function forkApprovedSourceReviewRevision(
+  prismaInput: PrismaClient | { readonly project: unknown },
+  params: { projectId: string; sourceDocumentId: string; preparedByUserId: string }
+) {
+  const prisma = prismaInput as PrismaClient;
+  await assertUboqStageAuthorization(prisma, { userId: params.preparedByUserId, projectId: params.projectId, capability: 'UBOQ_INTAKE_STAGE' });
+  const source = await prisma.uboqSourceDocument.findUnique({ where: { id: params.sourceDocumentId }, include: { sections: true, candidates: true } });
+  if (!source || source.projectId !== params.projectId) throw new Error('UBOQ_SOURCE_DOCUMENT_NOT_FOUND_FOR_PROJECT');
+  const approved = await prisma.uboqOperationalSnapshot.count({ where: { sourceDocumentId: source.id, approvedAt: { not: null } } });
+  if (!approved) throw new Error('UBOQ_REVIEW_REVISION_REQUIRES_APPROVED_SOURCE');
+  await resolveUboqVaultStorageProvider().getAndVerify({ storageUri: source.storageUri, expectedProjectId: params.projectId, expectedSha256Hash: source.sha256Hash });
+  return prisma.$transaction(async tx => {
+    const ctx = uboqRlsStorage.getStore();
+    if (ctx && !ctx.inInteractiveTx) await applyProjectRlsSessionVars(tx, ctx);
+    const metadata = source.metadataJson && typeof source.metadataJson === 'object' ? source.metadataJson as Record<string, unknown> : {};
+    const revision = await tx.uboqSourceDocument.create({ data: {
+      projectId: source.projectId, fileName: source.fileName, mimeType: source.mimeType,
+      byteSize: source.byteSize, sha256Hash: source.sha256Hash, magicSignature: source.magicSignature,
+      storageUri: source.storageUri, uploadedById: params.preparedByUserId, isLockedImmutable: true,
+      documentRole: source.documentRole.split(':REVIEW_REVISION:')[0] + ':REVIEW_REVISION:' + crypto.randomUUID(),
+      metadataJson: { ...metadata, reviewRevisionOf: source.id } as Prisma.InputJsonValue,
+    } });
+    const sections = new Map<string, string>();
+    for (const section of source.sections) {
+      const { id, sourceDocumentId: _doc, ...data } = section;
+      const copy = await tx.uboqDocumentSection.create({ data: { ...data, layoutMetaJson: data.layoutMetaJson === null ? undefined : data.layoutMetaJson as Prisma.InputJsonValue, sourceDocumentId: revision.id } });
+      sections.set(id, copy.id);
+    }
+    for (const candidate of source.candidates) {
+      const { id: _id, sourceDocumentId: _doc, sectionId, createdAt: _created, parsedJson, ...data } = candidate;
+      const parsed = parsedJson && typeof parsedJson === 'object' ? parsedJson as Record<string, unknown> : {};
+      const { effectiveCanonicalFields: _effective, humanCorrectedFields: _corrected, canonicalFieldRemap: _remap, ...raw } = parsed;
+      await tx.uboqExtractionCandidate.create({ data: {
+        ...data, sourceDocumentId: revision.id, sectionId: sectionId ? sections.get(sectionId) : null,
+        parsedJson: raw as Prisma.InputJsonValue, requiresHumanReview: true, reviewDecision: 'PENDING_HUMAN_REVIEW',
+        reviewedById: null, reviewedAt: null, reviewNotes: null,
+      } });
+    }
+    return revision;
+  });
 }

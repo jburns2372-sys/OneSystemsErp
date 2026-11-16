@@ -18,9 +18,12 @@ export function getBackendUrl(): string {
     process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
 
   if (!configuredUrl) {
+    if (process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}`.replace(/\/+$/, '');
+    }
     if (isVercelDeployment) {
       throw new Error(
-        'BACKEND_URL_RESOLUTION_FAILED: AWS_BACKEND_URL is required in Vercel Preview/Production.'
+        'BACKEND_URL_RESOLUTION_FAILED: AWS_BACKEND_URL is required in Vercel Production.'
       );
     }
     return LOCAL_BACKEND_URL;

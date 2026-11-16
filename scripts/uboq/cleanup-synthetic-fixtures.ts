@@ -88,8 +88,8 @@ async function main() {
   if (!projectIdArg || (dryRun === execute)) {
     console.error(
       'Usage:\n' +
-        '  Dry-Run Closure Proof: npx tsx scripts/uboq/cleanup-synthetic-fixtures.ts <SYNTH-UBOQ-TEST-...> --dry-run\n' +
-        '  Verified Execution:    npx tsx scripts/uboq/cleanup-synthetic-fixtures.ts <SYNTH-UBOQ-TEST-...> --execute --manifest-sha256=<64-hex>'
+      '  Dry-Run Closure Proof: npx tsx scripts/uboq/cleanup-synthetic-fixtures.ts <SYNTH-UBOQ-TEST-...> --dry-run\n' +
+      '  Verified Execution:    npx tsx scripts/uboq/cleanup-synthetic-fixtures.ts <SYNTH-UBOQ-TEST-...> --execute --manifest-sha256=<64-hex>'
     );
     process.exit(1);
   }

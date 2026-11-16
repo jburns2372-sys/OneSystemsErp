@@ -11,6 +11,7 @@ import { withUboqRlsContext } from '../../../../src/lib/uboq/project-ownership';
 import { resolveUboqVaultStorageProvider } from '../../../../src/lib/uboq/storage/vault-storage';
 import {
   approveOperationalSnapshotAndPrrs,
+  forkApprovedSourceReviewRevision,
   ingestAndStageProjectUboqPackage,
   regenerateDraftSnapshotFromVerifiedDocument,
   resolveExtractionCandidateHumanReview,
@@ -692,3 +693,17 @@ router.post('/mrf/:mrId/status', async (req, res) => {
 });
 
 export default router;
+
+router.post('/project/:projectId/documents/:documentId/review-revision', async (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const { projectId, documentId } = req.params;
+    await assertUboqStageAuthorization(prisma, { userId: actor.id, projectId, capability: 'UBOQ_INTAKE_STAGE', simulatedRole: (req as any).pbacContext?.simulatedRole || null });
+    const revision = await withUboqRlsContext({ userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId }, () =>
+      forkApprovedSourceReviewRevision(prisma, { projectId, sourceDocumentId: documentId, preparedByUserId: actor.id }));
+    return res.status(201).json(redactBackendObject(revision, (req as any).pbacContext?.simulatedRole || actor.role));
+  } catch (err: any) {
+    const message = String(err.message || '');
+    return res.status(mapUboqHttpErrorStatus(message)).json({ error: message });
+  }
+});

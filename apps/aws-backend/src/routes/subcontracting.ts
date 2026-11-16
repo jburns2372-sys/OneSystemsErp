@@ -1,6 +1,8 @@
 // @ts-nocheck
+import { invokeH02ProjectMutation } from '../lib/h02ProjectMutation';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { backendPrisma } from '../lib/prismaRls';
 import { requirePermission } from '../lib/permissions';
 
 const router = Router();
@@ -25,7 +27,7 @@ router.post('/job-orders', async (req, res) => {
     const data = req.body;
 
     if (!data.jobNumber) data.jobNumber = 'JO-' + Date.now();
-    const existing = await prisma.jobOrder.findUnique({ where: { jobNumber: data.jobNumber } });
+    const existing = await backendPrisma.jobOrder.findUnique({ where: { jobNumber: data.jobNumber } });
     if (existing) throw new Error(`A Job Order with number "${data.jobNumber}" already exists.`);
     
     if (data.startDate) data.startDate = new Date(data.startDate);
@@ -47,7 +49,7 @@ router.post('/job-orders', async (req, res) => {
       }
     }
 
-    const existingJOs = await prisma.jobOrder.findMany({
+    const existingJOs = await backendPrisma.jobOrder.findMany({
       where: { projectId: data.projectId, subcontractorId: data.subcontractorId }
     });
 
@@ -66,7 +68,7 @@ router.post('/job-orders', async (req, res) => {
     const { durationDays, boqReferenceIds: _, jobOrderType, ...prismaData } = data;
     prismaData.boqReferenceId = boqReferenceIds;
 
-    const result = await prisma.jobOrder.create({ data: prismaData });
+    const result = await backendPrisma.jobOrder.create({ data: prismaData });
     res.json({ success: true, data: result });
   } catch (error: any) { res.status(500).json({ success: false, error: error.message }); }
 });
@@ -89,7 +91,7 @@ router.put('/job-orders/:id', async (req, res) => {
       data.thresholdWarning = null;
     }
 
-    const existing = await prisma.jobOrder.findUnique({
+    const existing = await backendPrisma.jobOrder.findUnique({
       where: { id },
       include: { subcontractAccomplishments: true, subcontractBillings: true }
     });
@@ -104,7 +106,7 @@ router.put('/job-orders/:id', async (req, res) => {
     const { durationDays, project, subcontractor, subcontractAccomplishments, subcontractBillings, boqReferenceIds: _, jobOrderType, ...prismaData } = data;
     prismaData.boqReferenceId = boqReferenceId;
 
-    const result = await prisma.jobOrder.update({ where: { id }, data: prismaData });
+    const result = await backendPrisma.jobOrder.update({ where: { id }, data: prismaData });
     res.json({ success: true, data: result });
   } catch (error: any) { res.status(500).json({ success: false, error: error.message }); }
 });
@@ -113,7 +115,7 @@ router.delete('/job-orders/:id', async (req, res) => {
   try {
     const { userId, simulatedRole } = getPbacContext(req);
     await requirePermission(userId!, 'SUBCONTRACTING', 'canDelete', simulatedRole);
-    await prisma.jobOrder.delete({ where: { id: req.params.id } });
+    await invokeH02ProjectMutation(req, 'DELETE_JOB_ORDER', req.params.id);
     res.json({ success: true });
   } catch (error: any) { res.status(500).json({ success: false, error: error.message }); }
 });
@@ -125,10 +127,10 @@ router.put('/job-orders/:id/status', async (req, res) => {
     const { id } = req.params;
     const { newStatus } = req.body;
 
-    const jo = await prisma.jobOrder.findUnique({ where: { id }, include: { project: true, subcontractor: true } });
+    const jo = await backendPrisma.jobOrder.findUnique({ where: { id }, include: { project: true, subcontractor: true } });
     if (!jo) throw new Error("Job order not found");
 
-    const result = await prisma.jobOrder.update({ where: { id }, data: { status: newStatus } });
+    const result = await backendPrisma.jobOrder.update({ where: { id }, data: { status: newStatus } });
 
     const isApproved = newStatus === 'APPROVED';
     if (isApproved && jo.status !== 'APPROVED' && jo.consolidatedBoqItemId) {
@@ -157,7 +159,7 @@ router.put('/job-orders/:id/unlock', async (req, res) => {
   try {
     const { userId, simulatedRole } = getPbacContext(req);
     await requirePermission(userId!, 'SUBCONTRACTING', 'canEdit', simulatedRole);
-    const result = await prisma.jobOrder.update({ where: { id: req.params.id }, data: { status: 'FOR_FINANCIAL_REVIEW' } });
+    const result = await backendPrisma.jobOrder.update({ where: { id: req.params.id }, data: { status: 'FOR_FINANCIAL_REVIEW' } });
     res.json({ success: true, data: result });
   } catch (error: any) { res.status(500).json({ success: false, error: error.message }); }
 });
@@ -199,7 +201,7 @@ router.post('/packages', async (req, res) => {
     await requirePermission(userId!, 'SUBCONTRACTING', 'canCreate', simulatedRole);
     const data = req.body;
     if (!data.packageNumber) data.packageNumber = 'SP-' + Date.now();
-    const result = await prisma.subcontractPackage.create({ data });
+    const result = await backendPrisma.subcontractPackage.create({ data });
     res.json({ success: true, data: result });
   } catch (error: any) { res.status(500).json({ success: false, error: error.message }); }
 });
@@ -208,7 +210,7 @@ router.put('/packages/:id', async (req, res) => {
   try {
     const { userId, simulatedRole } = getPbacContext(req);
     await requirePermission(userId!, 'SUBCONTRACTING', 'canEdit', simulatedRole);
-    const result = await prisma.subcontractPackage.update({ where: { id: req.params.id }, data: req.body });
+    const result = await backendPrisma.subcontractPackage.update({ where: { id: req.params.id }, data: req.body });
     res.json({ success: true, data: result });
   } catch (error: any) { res.status(500).json({ success: false, error: error.message }); }
 });
@@ -243,13 +245,13 @@ router.post('/packages/full', async (req, res) => {
 
     if (boqItems && boqItems.length > 0) {
       const awardedBoqIds = boqItems.map((item: any) => item.id);
-      const conflictingJO = await prisma.jobOrder.findFirst({
+      const conflictingJO = await backendPrisma.jobOrder.findFirst({
         where: { boqReferenceId: { in: awardedBoqIds } }
       });
       if (conflictingJO) throw new Error(`Conflict Error: BOQ item is already assigned to active Job Order (${conflictingJO.jobNumber}).`);
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await backendPrisma.$transaction(async (tx) => {
       if (packageData.startDate) packageData.startDate = new Date(packageData.startDate);
       if (packageData.targetCompletion) packageData.targetCompletion = new Date(packageData.targetCompletion);
       if (!packageData.packageNumber) packageData.packageNumber = 'SP-' + Date.now();
@@ -287,7 +289,7 @@ router.put('/packages/full/:id', async (req, res) => {
     let { packageData, boqItems, powData } = req.body;
     const { id } = req.params;
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await backendPrisma.$transaction(async (tx) => {
       if (packageData.startDate) packageData.startDate = new Date(packageData.startDate);
       if (packageData.targetCompletion) packageData.targetCompletion = new Date(packageData.targetCompletion);
 
@@ -318,8 +320,7 @@ router.delete('/packages/:id', async (req, res) => {
     const { userId, simulatedRole } = getPbacContext(req);
     await requirePermission(userId!, 'SUBCONTRACTING', 'canDelete', simulatedRole);
     const { id } = req.params;
-    await prisma.programOfWorks.deleteMany({ where: { packageId: id } });
-    await prisma.subcontractPackage.delete({ where: { id } });
+    await invokeH02ProjectMutation(req, 'DELETE_PACKAGE', id);
     res.json({ success: true });
   } catch (error: any) { res.status(500).json({ success: false, error: error.message }); }
 });
@@ -332,10 +333,10 @@ router.put('/packages/:id/status', async (req, res) => {
     const { status } = req.body;
     const isApproved = status === 'APPROVED';
     
-    const pkg = await prisma.subcontractPackage.findUnique({ where: { id }, include: { project: true, subcontractor: true } });
+    const pkg = await backendPrisma.subcontractPackage.findUnique({ where: { id }, include: { project: true, subcontractor: true } });
     if (!pkg) throw new Error("Package not found");
 
-    const result = await prisma.subcontractPackage.update({
+    const result = await backendPrisma.subcontractPackage.update({
       where: { id },
       data: { status: status as any, isLocked: isApproved ? true : undefined }
     });
@@ -390,7 +391,7 @@ router.put('/packages/:id/unlock', async (req, res) => {
       return res.status(403).json({ success: false, error: hasCompletedPayments ? 'Unauthorized: Since payment has been approved/completed, only the Project Director can unlock this package.' : 'Unauthorized: Only Project Managers or Project Directors can unlock packages.' });
     }
 
-    const result = await prisma.subcontractPackage.update({ where: { id }, data: { isLocked: false } });
+    const result = await backendPrisma.subcontractPackage.update({ where: { id }, data: { isLocked: false } });
     res.json({ success: true, data: result });
   } catch (error: any) { res.status(500).json({ success: false, error: error.message }); }
 });

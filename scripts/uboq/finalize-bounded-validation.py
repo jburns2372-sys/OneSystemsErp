@@ -1,0 +1,8 @@
+﻿from pathlib import Path
+import subprocess,json,datetime
+out=Path('artifacts/uboq/g02-r3/bounded-blocker-correction');attempt=out/'attempts';attempt.mkdir(exist_ok=True)
+p=Path('scripts/uboq/verify-bounded-validation.py');s=p.read_text(encoding='utf-8-sig').replace('apps/aws-backend/node_modules/typescript/bin/tsc','node_modules/typescript/bin/tsc');p.write_text(s)
+(attempt/'validation-first-run.json').write_bytes((out/'validation.json').read_bytes());(attempt/'backend-typescript-missing-path.log').write_bytes((out/'backend-typescript.log').read_bytes())
+cmd=['node','node_modules/typescript/bin/tsc','--noEmit','-p','apps/aws-backend/tsconfig.json'];r=subprocess.run(cmd,capture_output=True,text=True);(out/'backend-typescript.log').write_text(r.stdout+r.stderr);report=json.loads((out/'validation.json').read_text());report['checks']=[c if c['name']!='backend-typescript' else {'name':c['name'],'result':'PASS' if r.returncode==0 else 'FAIL','exit_code':r.returncode,'command':cmd,'log':'backend-typescript.log'} for c in report['checks']];report['test_harness_correction']='First harness used absent nested TypeScript CLI path; corrected to installed workspace CLI. Prior npm backend typecheck and final actual tsc both pass. No application TypeScript diagnostic failure.';(out/'validation.json').write_text(json.dumps(report,indent=2));print('backend TypeScript:',r.returncode,r.stdout,r.stderr);assert r.returncode==0
+for name in ['build-bounded-correction.py','edit-bounded-route.py','prepare-bounded-tests.py','compat-bounded-cutoff.py','fix-bounded-test-fixture.py']:
+ p=Path('scripts/uboq')/name;assert p.resolve().parent==Path('scripts/uboq').resolve();p.unlink()

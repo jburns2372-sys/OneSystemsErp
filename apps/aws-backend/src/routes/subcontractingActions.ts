@@ -1,6 +1,8 @@
 // @ts-nocheck
+import { invokeH02ProjectMutation } from '../lib/h02ProjectMutation';
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { backendPrisma } from '../lib/prismaRls';
 const prisma = new PrismaClient(); // Assuming prisma is accessible like this in an AWS context
 
 const router = Router();
@@ -49,7 +51,7 @@ router.post('/getSubcontractPackages', async (req: Request, res: Response) => {
     const pkgFilter: any = {};
     if (projectId) pkgFilter.projectId = projectId;
   
-    const packages = await prisma.subcontractPackage.findMany({
+    const packages = await backendPrisma.subcontractPackage.findMany({
       where: pkgFilter,
       include: {
         subcontractor: {
@@ -123,7 +125,7 @@ router.post('/getSubcontractPackageById', async (req: Request, res: Response) =>
   try {
     const { id } = req.body;
     if (!id) return res.status(400).json({ success: false, error: 'Subcontract Package ID is required' });
-    const pkg = await prisma.subcontractPackage.findUnique({
+    const pkg = await backendPrisma.subcontractPackage.findUnique({
       where: { id },
       include: {
         project: true,
@@ -179,7 +181,7 @@ router.post('/deleteSubcontractor', async (req: Request, res: Response) => {
 router.post('/createSubcontractPackage', async (req: Request, res: Response) => {
   try {
     const { data } = req.body;
-    const result = await prisma.subcontractPackage.create({ data });
+    const result = await backendPrisma.subcontractPackage.create({ data });
     res.json({ success: true, data: result });
   } catch (error: any) {
     handleError(res, error, 'Prisma Error in createSubcontractPackage:');
@@ -190,7 +192,7 @@ router.post('/updateSubcontractPackage', async (req: Request, res: Response) => 
   try {
     const { id, data } = req.body;
     if (!id) return res.status(400).json({ success: false, error: 'Subcontract Package ID is required' });
-    const result = await prisma.subcontractPackage.update({ where: { id }, data });
+    const result = await backendPrisma.subcontractPackage.update({ where: { id }, data });
     res.json({ success: true, data: result });
   } catch (error: any) {
     handleError(res, error, 'Prisma Error in updateSubcontractPackage:');
@@ -220,7 +222,7 @@ router.post('/createBilling', async (req: Request, res: Response) => {
 router.post('/createFullSubcontractPackage', async (req: Request, res: Response) => {
   try {
     const { packageData, boqItems, powData } = req.body;
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await backendPrisma.$transaction(async (tx) => {
       if (packageData.startDate) packageData.startDate = new Date(packageData.startDate);
       if (packageData.targetCompletion) packageData.targetCompletion = new Date(packageData.targetCompletion);
       if (!packageData.packageNumber) packageData.packageNumber = 'SP-' + Date.now();
@@ -256,7 +258,7 @@ router.post('/deleteSubcontractPackage', async (req: Request, res: Response) => 
   try {
     const { id } = req.body;
     if (!id) return res.status(400).json({ success: false, error: 'Subcontract Package ID is required' });
-    await prisma.subcontractPackage.delete({ where: { id } });
+    await invokeH02ProjectMutation(req, 'DELETE_PACKAGE', id);
     res.json({ success: true, message: 'Subcontract package deleted successfully' });
   } catch (error: any) {
     handleError(res, error, 'Prisma Error in deleteSubcontractPackage:');
@@ -267,7 +269,7 @@ router.post('/updateFullSubcontractPackage', async (req: Request, res: Response)
   try {
     const { id, packageData, boqItems, powData } = req.body;
     if (!id) return res.status(400).json({ success: false, error: 'Subcontract Package ID is required' });
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await backendPrisma.$transaction(async (tx) => {
       if (packageData.startDate) packageData.startDate = new Date(packageData.startDate);
       if (packageData.targetCompletion) packageData.targetCompletion = new Date(packageData.targetCompletion);
 
@@ -322,7 +324,7 @@ router.post('/updateSubcontractPackageStatus', async (req: Request, res: Respons
     const { id, status } = req.body;
     if (!id) return res.status(400).json({ success: false, error: 'Subcontract Package ID is required' });
     if (!status) return res.status(400).json({ success: false, error: 'Status is required' });
-    const result = await prisma.subcontractPackage.update({ where: { id }, data: { status } });
+    const result = await backendPrisma.subcontractPackage.update({ where: { id }, data: { status } });
     res.json({ success: true, data: result });
   } catch (error: any) {
     handleError(res, error, 'Prisma Error in updateSubcontractPackageStatus:');
@@ -333,7 +335,7 @@ router.post('/unlockSubcontractPackage', async (req: Request, res: Response) => 
   try {
     const { id } = req.body;
     if (!id) return res.status(400).json({ success: false, error: 'Subcontract Package ID is required' });
-    const result = await prisma.subcontractPackage.update({ where: { id }, data: { isLocked: false } }); // Assuming 'isLocked' field exists
+    const result = await backendPrisma.subcontractPackage.update({ where: { id }, data: { isLocked: false } }); // Assuming 'isLocked' field exists
     res.json({ success: true, data: result });
   } catch (error: any) {
     handleError(res, error, 'Prisma Error in unlockSubcontractPackage:');

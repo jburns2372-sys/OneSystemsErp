@@ -2,18 +2,20 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  DeleteObjectCommand,
-  ListObjectsV2Command,
-} from '@aws-sdk/client-s3';
+  BlobNotFoundError,
+  del,
+  get,
+  head,
+  list,
+  put,
+} from '@vercel/blob';
 import type { PrismaClient } from '@prisma/client';
+
+export type UboqVaultBackendType = 'VERCEL_BLOB_PRIVATE' | 'LOCAL_DURABLE_TEST';
 
 export interface VaultStoredObjectReceipt {
   readonly storageUri: string;
-  readonly backend: 'S3_PRIVATE' | 'LOCAL_DURABLE_TEST';
+  readonly backend: UboqVaultBackendType;
   readonly sha256Hash: string;
   readonly verifiedReadBackSha256: string;
   readonly byteSize: number;
@@ -21,7 +23,8 @@ export interface VaultStoredObjectReceipt {
 }
 
 export interface UboqVaultStorageProvider {
-  readonly backendName: 'S3_PRIVATE' | 'LOCAL_DURABLE_TEST';
+  readonly backendName: UboqVaultBackendType;
+  buildCanonicalStorageUri(projectId: string, sha256Hash: string): string;
   putImmutableAndVerify(params: {
     projectId: string;
     sha256Hash: string;
@@ -38,6 +41,11 @@ export interface UboqVaultStorageProvider {
   listProjectObjectHashes(projectId: string): Promise<string[]>;
 }
 
+const ENVELOPE_MAGIC = Buffer.from('UBOQBV1\0', 'ascii'); // 8-byte header
+const IV_BYTES = 12;
+const AUTH_TAG_BYTES = 16;
+const MIN_ENVELOPE_BYTES = ENVELOPE_MAGIC.length + IV_BYTES + AUTH_TAG_BYTES;
+
 function sanitizeSegment(seg: string, label: string): string {
   const clean = String(seg ?? '').trim();
   if (!clean || !/^[a-zA-Z0-9._-]+$/.test(clean) || clean.includes('..')) {
@@ -50,48 +58,168 @@ function computeSha256Hex(buf: Buffer): string {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
 
-async function streamToBuffer(body: unknown): Promise<Buffer> {
-  if (!body) return Buffer.alloc(0);
-  if (Buffer.isBuffer(body)) return body;
-  if (body instanceof Uint8Array) return Buffer.from(body);
-  if (typeof (body as { transformToByteArray?: () => Promise<Uint8Array> }).transformToByteArray === 'function') {
-    const arr = await (body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray();
-    return Buffer.from(arr);
-  }
+async function readableStreamToBuffer(stream: ReadableStream<Uint8Array> | null): Promise<Buffer> {
+  if (!stream) return Buffer.alloc(0);
   const chunks: Buffer[] = [];
-  for await (const chunk of body as AsyncIterable<Uint8Array>) {
-    chunks.push(Buffer.from(chunk));
+  const reader = stream.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(Buffer.from(value));
   }
   return Buffer.concat(chunks);
 }
 
-class S3PrivateVaultProvider implements UboqVaultStorageProvider {
-  public readonly backendName = 'S3_PRIVATE' as const;
-  private readonly client: S3Client;
-  private readonly bucket: string;
+function parseStoreIdFromRwToken(rwToken: string): string | null {
+  const m = /^vercel_blob_rw_([a-zA-Z0-9]+)_/.exec(rwToken);
+  if (!m) return null;
+  return `store_${m[1].toLowerCase()}`;
+}
+
+function normalizeStoreId(rawStoreId: string): string {
+  const trimmed = rawStoreId.trim();
+  if (!/^store_[a-zA-Z0-9]+$/i.test(trimmed)) {
+    throw new Error(`UBOQ_VAULT_INVALID_STORE_ID: Invalid Vercel Blob store identifier "${trimmed}"`);
+  }
+  return `store_${trimmed.slice(6).toLowerCase()}`;
+}
+
+export class VercelBlobPrivateVaultProvider implements UboqVaultStorageProvider {
+  public readonly backendName = 'VERCEL_BLOB_PRIVATE' as const;
+  private readonly token: string | undefined;
+  private readonly oidcToken: string | undefined;
+  private readonly storeId: string;
+  private readonly rawStoreIdForOidc: string | undefined;
+  private readonly envNamespace: string;
+  private readonly derivedAesKey: Buffer;
 
   constructor() {
-    const bucket = (process.env.UBOQ_VAULT_S3_BUCKET || process.env.S3_BUCKET_NAME || '').trim();
-    const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || '').trim();
-    const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || '').trim();
-    if (!bucket || !accessKeyId || !secretAccessKey) {
+    const rwToken = (
+      process.env.UBOQ_VAULT_BLOB_READ_WRITE_TOKEN ||
+      process.env.BLOB_READ_WRITE_TOKEN ||
+      ''
+    ).trim();
+    const oidc = (process.env.VERCEL_OIDC_TOKEN || '').trim();
+    const rawStoreEnv = (
+      process.env.UBOQ_VAULT_BLOB_STORE_ID ||
+      process.env.BLOB_STORE_ID ||
+      ''
+    ).trim();
+
+    const parsedTokenStoreId = rwToken ? parseStoreIdFromRwToken(rwToken) : null;
+    if (rwToken && !parsedTokenStoreId) {
       throw new Error(
-        'UBOQ_PROD_PRIVATE_OBJECT_STORAGE_REQUIRED: Verified private S3 bucket and credentials are required for UBOQ immutable document vault'
+        'UBOQ_PRIVATE_BLOB_INVALID_TOKEN_FORMAT: BLOB_READ_WRITE_TOKEN is not a valid Vercel Blob read-write token'
       );
     }
-    this.bucket = bucket;
-    this.client = new S3Client({
-      region: process.env.AWS_REGION || 'ap-southeast-1',
-      endpoint: process.env.UBOQ_VAULT_S3_ENDPOINT || undefined,
-      forcePathStyle: process.env.UBOQ_VAULT_S3_FORCE_PATH_STYLE === 'true',
-      credentials: { accessKeyId, secretAccessKey },
-    });
+
+    const normalizedEnvStoreId = rawStoreEnv ? normalizeStoreId(rawStoreEnv) : null;
+    if (parsedTokenStoreId && normalizedEnvStoreId && parsedTokenStoreId !== normalizedEnvStoreId) {
+      throw new Error(
+        'UBOQ_VAULT_STORE_ID_MISMATCH: Configured BLOB_STORE_ID does not match BLOB_READ_WRITE_TOKEN store'
+      );
+    }
+
+    const effectiveStoreId = parsedTokenStoreId || normalizedEnvStoreId;
+    if (!effectiveStoreId || (!rwToken && !oidc)) {
+      throw new Error(
+        'UBOQ_PRIVATE_BLOB_STORAGE_REQUIRED: Dedicated Vercel Blob Private Storage credentials (BLOB_READ_WRITE_TOKEN or VERCEL_OIDC_TOKEN + BLOB_STORE_ID) are required for UBOQ immutable document vault'
+      );
+    }
+
+    const keyHex = (process.env.UBOQ_VAULT_ENCRYPTION_KEY || '').trim();
+    if (!/^[0-9a-fA-F]{64}$/.test(keyHex)) {
+      throw new Error(
+        'UBOQ_VAULT_ENCRYPTION_KEY_REQUIRED: A 256-bit (64-hex) UBOQ_VAULT_ENCRYPTION_KEY is required for authenticated vault encryption'
+      );
+    }
+
+    const rawNamespace = (
+      process.env.UBOQ_VAULT_ENV_NAMESPACE ||
+      process.env.VERCEL_ENV ||
+      'preview'
+    )
+      .trim()
+      .toLowerCase();
+    this.envNamespace = sanitizeSegment(rawNamespace, 'ENV_NAMESPACE');
+    this.storeId = effectiveStoreId;
+    this.rawStoreIdForOidc = rawStoreEnv || undefined;
+    this.token = rwToken || undefined;
+    this.oidcToken = !rwToken && oidc ? oidc : undefined;
+
+    this.derivedAesKey = Buffer.from(
+      crypto.hkdfSync(
+        'sha256',
+        Buffer.from(keyHex, 'hex'),
+        Buffer.from(this.storeId, 'utf8'),
+        Buffer.from(`UBOQ_BLOB_VAULT_KEY_V1|${this.envNamespace}`, 'utf8'),
+        32
+      )
+    );
   }
 
-  private buildKey(projectId: string, sha256Hash: string): string {
+  private authOptions(): { token?: string; oidcToken?: string; storeId?: string } {
+    if (this.token) {
+      return { token: this.token };
+    }
+    return { oidcToken: this.oidcToken, storeId: this.rawStoreIdForOidc };
+  }
+
+  private buildPathname(projectId: string, sha256Hash: string): string {
     const p = sanitizeSegment(projectId, 'PROJECT_ID');
     const h = sanitizeSegment(sha256Hash.toLowerCase(), 'SHA256');
-    return `uboq-private-vault/${p}/${h}.bin`;
+    return `uboq-private-vault/${this.envNamespace}/${p}/${h}.bin`;
+  }
+
+  public buildCanonicalStorageUri(projectId: string, sha256Hash: string): string {
+    const pathname = this.buildPathname(projectId, sha256Hash);
+    return `uboq-vercel-blob://${this.storeId}/${pathname}`;
+  }
+
+  private buildAad(projectId: string, sha256Hash: string): Buffer {
+    return Buffer.from(
+      `UBOQ_BLOB_VAULT_AAD_V1|${this.storeId}|${this.envNamespace}|${projectId}|${sha256Hash.toLowerCase()}`,
+      'utf8'
+    );
+  }
+
+  private encryptPayload(plaintext: Buffer, projectId: string, sha256Hash: string): Buffer {
+    const iv = crypto.randomBytes(IV_BYTES);
+    const cipher = crypto.createCipheriv('aes-256-gcm', this.derivedAesKey, iv, {
+      authTagLength: AUTH_TAG_BYTES,
+    });
+    cipher.setAAD(this.buildAad(projectId, sha256Hash));
+    const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    return Buffer.concat([ENVELOPE_MAGIC, iv, authTag, encrypted]);
+  }
+
+  private decryptPayload(envelope: Buffer, projectId: string, sha256Hash: string): Buffer {
+    if (
+      envelope.length < MIN_ENVELOPE_BYTES ||
+      !envelope.subarray(0, ENVELOPE_MAGIC.length).equals(ENVELOPE_MAGIC)
+    ) {
+      throw new Error('UBOQ_VAULT_ENVELOPE_INVALID: Stored object is missing valid UBOQBV1 header');
+    }
+    const ivStart = ENVELOPE_MAGIC.length;
+    const tagStart = ivStart + IV_BYTES;
+    const dataStart = tagStart + AUTH_TAG_BYTES;
+    const iv = envelope.subarray(ivStart, tagStart);
+    const authTag = envelope.subarray(tagStart, dataStart);
+    const ciphertext = envelope.subarray(dataStart);
+
+    try {
+      const decipher = crypto.createDecipheriv('aes-256-gcm', this.derivedAesKey, iv, {
+        authTagLength: AUTH_TAG_BYTES,
+      });
+      decipher.setAAD(this.buildAad(projectId, sha256Hash));
+      decipher.setAuthTag(authTag);
+      return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    } catch {
+      throw new Error(
+        'UBOQ_VAULT_ENCRYPTION_AUTH_FAILED: Authenticated AES-256-GCM decryption failed (key, environment, project, or ciphertext mismatch)'
+      );
+    }
   }
 
   async putImmutableAndVerify(params: {
@@ -103,31 +231,35 @@ class S3PrivateVaultProvider implements UboqVaultStorageProvider {
   }): Promise<VaultStoredObjectReceipt> {
     const computed = computeSha256Hex(params.buffer);
     if (computed !== params.sha256Hash.toLowerCase()) {
-      throw new Error(`UBOQ_VAULT_INPUT_HASH_MISMATCH: Computed ${computed} !== declared ${params.sha256Hash}`);
+      throw new Error(
+        `UBOQ_VAULT_INPUT_HASH_MISMATCH: Computed ${computed} !== declared ${params.sha256Hash}`
+      );
     }
-    const key = this.buildKey(params.projectId, computed);
-    const storageUri = `uboq-s3://${this.bucket}/${key}`;
+
+    const pathname = this.buildPathname(params.projectId, computed);
+    const storageUri = this.buildCanonicalStorageUri(params.projectId, computed);
 
     let newlyCreated = false;
+    let alreadyExists = false;
     try {
-      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
-    } catch {
+      await head(pathname, this.authOptions());
+      alreadyExists = true;
+    } catch (err: unknown) {
+      if (!(err instanceof BlobNotFoundError)) {
+        throw err;
+      }
+    }
+
+    if (!alreadyExists) {
+      const encryptedEnvelope = this.encryptPayload(params.buffer, params.projectId, computed);
+      await put(pathname, encryptedEnvelope, {
+        access: 'private',
+        addRandomSuffix: false,
+        allowOverwrite: false,
+        contentType: 'application/octet-stream',
+        ...this.authOptions(),
+      });
       newlyCreated = true;
-      await this.client.send(
-        new PutObjectCommand({
-          Bucket: this.bucket,
-          Key: key,
-          Body: params.buffer,
-          ContentType: params.mimeType || 'application/octet-stream',
-          ServerSideEncryption: 'AES256',
-          IfNoneMatch: '*',
-          Metadata: {
-            projectid: params.projectId,
-            sha256: computed,
-            originalname: encodeURIComponent(params.fileName),
-          },
-        })
-      );
     }
 
     const readBack = await this.getAndVerify({
@@ -138,7 +270,7 @@ class S3PrivateVaultProvider implements UboqVaultStorageProvider {
 
     return {
       storageUri,
-      backend: 'S3_PRIVATE',
+      backend: 'VERCEL_BLOB_PRIVATE',
       sha256Hash: computed,
       verifiedReadBackSha256: readBack.verifiedSha256,
       byteSize: readBack.buffer.length,
@@ -151,49 +283,69 @@ class S3PrivateVaultProvider implements UboqVaultStorageProvider {
     expectedProjectId: string;
     expectedSha256Hash: string;
   }): Promise<{ buffer: Buffer; verifiedSha256: string }> {
-    const expectedKey = this.buildKey(params.expectedProjectId, params.expectedSha256Hash);
-    const expectedUri = `uboq-s3://${this.bucket}/${expectedKey}`;
+    const normalizedHash = params.expectedSha256Hash.toLowerCase();
+    const expectedPathname = this.buildPathname(params.expectedProjectId, normalizedHash);
+    const expectedUri = this.buildCanonicalStorageUri(params.expectedProjectId, normalizedHash);
+
     if (params.storageUri !== expectedUri) {
-      throw new Error('UBOQ_VAULT_CROSS_PROJECT_URI_DENIED: Storage URI does not match authorized project/hash');
+      throw new Error(
+        'UBOQ_VAULT_CROSS_PROJECT_URI_DENIED: Storage URI does not match authorized store/environment/project/hash'
+      );
     }
 
-    const resp = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: expectedKey }));
-    const buf = await streamToBuffer(resp.Body);
-    const actualSha = computeSha256Hex(buf);
-    if (actualSha !== params.expectedSha256Hash.toLowerCase()) {
-      throw new Error(`UBOQ_VAULT_INTEGRITY_CORRUPTION: Stored object SHA-256 (${actualSha}) !== expected (${params.expectedSha256Hash})`);
+    const res = await get(expectedPathname, {
+      access: 'private',
+      useCache: false,
+      ...this.authOptions(),
+    });
+    if (!res || res.statusCode !== 200 || !res.stream) {
+      throw new Error(
+        `UBOQ_VAULT_OBJECT_MISSING: Private blob object not found in vault for ${normalizedHash}`
+      );
     }
-    return { buffer: buf, verifiedSha256: actualSha };
+    if (res.blob.pathname !== expectedPathname) {
+      throw new Error('UBOQ_VAULT_PATHNAME_MISMATCH: Returned blob pathname mismatch');
+    }
+
+    const encryptedEnvelope = await readableStreamToBuffer(res.stream);
+    const plaintext = this.decryptPayload(encryptedEnvelope, params.expectedProjectId, normalizedHash);
+    const actualSha = computeSha256Hex(plaintext);
+    if (actualSha !== normalizedHash) {
+      throw new Error(
+        `UBOQ_VAULT_INTEGRITY_CORRUPTION: Decrypted object SHA-256 (${actualSha}) !== expected (${normalizedHash})`
+      );
+    }
+
+    return { buffer: plaintext, verifiedSha256: actualSha };
   }
 
   async deleteOrphanIfCreated(storageUri: string): Promise<void> {
-    const prefix = `uboq-s3://${this.bucket}/`;
+    const prefix = `uboq-vercel-blob://${this.storeId}/uboq-private-vault/${this.envNamespace}/`;
     if (!storageUri.startsWith(prefix)) return;
-    const key = storageUri.slice(prefix.length);
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+    const pathname = storageUri.slice(`uboq-vercel-blob://${this.storeId}/`.length);
+    if (pathname.includes('..')) return;
+    await del(pathname, this.authOptions());
   }
 
   async listProjectObjectHashes(projectId: string): Promise<string[]> {
     const p = sanitizeSegment(projectId, 'PROJECT_ID');
-    const prefix = `uboq-private-vault/${p}/`;
+    const prefix = `uboq-private-vault/${this.envNamespace}/${p}/`;
     const hashes: string[] = [];
-    let continuationToken: string | undefined;
+    let cursor: string | undefined;
     do {
-      const resp = await this.client.send(
-        new ListObjectsV2Command({
-          Bucket: this.bucket,
-          Prefix: prefix,
-          ContinuationToken: continuationToken,
-        })
-      );
-      for (const obj of resp.Contents ?? []) {
-        const h = path.basename(obj.Key || '', '.bin');
-        if (/^[a-f0-9]{64}$/.test(h)) {
-          hashes.push(h);
+      const page = await list({
+        prefix,
+        cursor,
+        ...this.authOptions(),
+      });
+      for (const b of page.blobs) {
+        const base = path.posix.basename(b.pathname || '', '.bin');
+        if (/^[a-f0-9]{64}$/.test(base)) {
+          hashes.push(base);
         }
       }
-      continuationToken = resp.IsTruncated ? resp.NextContinuationToken : undefined;
-    } while (continuationToken);
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
     return hashes;
   }
 }
@@ -206,7 +358,10 @@ class LocalDurableVaultProvider implements UboqVaultStorageProvider {
     this.rootDir = path.resolve(rootDir);
   }
 
-  private resolveObjectPath(projectId: string, sha256Hash: string): { filePath: string; storageUri: string } {
+  private resolveObjectPath(
+    projectId: string,
+    sha256Hash: string
+  ): { filePath: string; storageUri: string } {
     const p = sanitizeSegment(projectId, 'PROJECT_ID');
     const h = sanitizeSegment(sha256Hash.toLowerCase(), 'SHA256');
     const filePath = path.resolve(this.rootDir, p, `${h}.bin`);
@@ -219,6 +374,10 @@ class LocalDurableVaultProvider implements UboqVaultStorageProvider {
     };
   }
 
+  public buildCanonicalStorageUri(projectId: string, sha256Hash: string): string {
+    return this.resolveObjectPath(projectId, sha256Hash).storageUri;
+  }
+
   async putImmutableAndVerify(params: {
     projectId: string;
     sha256Hash: string;
@@ -228,7 +387,9 @@ class LocalDurableVaultProvider implements UboqVaultStorageProvider {
   }): Promise<VaultStoredObjectReceipt> {
     const computed = computeSha256Hex(params.buffer);
     if (computed !== params.sha256Hash.toLowerCase()) {
-      throw new Error(`UBOQ_VAULT_INPUT_HASH_MISMATCH: Computed ${computed} !== declared ${params.sha256Hash}`);
+      throw new Error(
+        `UBOQ_VAULT_INPUT_HASH_MISMATCH: Computed ${computed} !== declared ${params.sha256Hash}`
+      );
     }
     const { filePath, storageUri } = this.resolveObjectPath(params.projectId, computed);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -270,14 +431,18 @@ class LocalDurableVaultProvider implements UboqVaultStorageProvider {
       params.expectedSha256Hash
     );
     if (params.storageUri !== expectedUri) {
-      throw new Error('UBOQ_VAULT_CROSS_PROJECT_URI_DENIED: Storage URI does not match authorized project/hash');
+      throw new Error(
+        'UBOQ_VAULT_CROSS_PROJECT_URI_DENIED: Storage URI does not match authorized project/hash'
+      );
     }
 
     let buf: Buffer;
     try {
       buf = await fs.readFile(filePath);
     } catch {
-      throw new Error(`UBOQ_VAULT_OBJECT_MISSING: Original binary not found in vault for ${params.expectedSha256Hash}`);
+      throw new Error(
+        `UBOQ_VAULT_OBJECT_MISSING: Original binary not found in vault for ${params.expectedSha256Hash}`
+      );
     }
 
     const actualSha = computeSha256Hex(buf);
@@ -321,21 +486,32 @@ export function resolveUboqVaultStorageProvider(): UboqVaultStorageProvider {
   const isProd = process.env.NODE_ENV === 'production';
 
   // R1-M01: Unconditional production fail-closed guard — NO environment variable override can enable local_durable in production!
-  if (isProd && (mode === 'local_durable' || Boolean((process.env.UBOQ_ALLOW_LOCAL_TEST_VAULT || '').trim()))) {
+  if (
+    isProd &&
+    (mode === 'local_durable' || Boolean((process.env.UBOQ_ALLOW_LOCAL_TEST_VAULT || '').trim()))
+  ) {
     throw new Error(
-      'UBOQ_PROD_EPHEMERAL_STORAGE_FORBIDDEN: local_durable vault adapter and test vault overrides are strictly prohibited in production; bind private S3 storage'
+      'UBOQ_PROD_EPHEMERAL_STORAGE_FORBIDDEN: local_durable vault adapter and test vault overrides are strictly prohibited in production; bind Vercel Blob Private Storage'
     );
   }
 
   if (mode === 'local_durable') {
     const vaultDir = (process.env.UBOQ_LOCAL_VAULT_DIR || '').trim();
     if (!vaultDir) {
-      throw new Error('UBOQ_LOCAL_VAULT_DIR_REQUIRED: UBOQ_LOCAL_VAULT_DIR must be explicitly configured for local_durable vault mode');
+      throw new Error(
+        'UBOQ_LOCAL_VAULT_DIR_REQUIRED: UBOQ_LOCAL_VAULT_DIR must be explicitly configured for local_durable vault mode'
+      );
     }
     return new LocalDurableVaultProvider(vaultDir);
   }
 
-  return new S3PrivateVaultProvider();
+  if (mode && mode !== 'vercel_blob_private') {
+    throw new Error(
+      `UBOQ_VAULT_UNSUPPORTED_BACKEND: Unsupported UBOQ_VAULT_BACKEND "${mode}"; expected "vercel_blob_private"`
+    );
+  }
+
+  return new VercelBlobPrivateVaultProvider();
 }
 
 /**
@@ -365,10 +541,7 @@ export async function reconcileProjectVaultOrphans(
 
   if (purgeOrphans) {
     for (const h of orphanHashesFound) {
-      const uri =
-        provider.backendName === 'LOCAL_DURABLE_TEST'
-          ? `uboq-local-vault://${projectId}/${h}.bin`
-          : `uboq-s3://${process.env.UBOQ_VAULT_S3_BUCKET || process.env.S3_BUCKET_NAME}/uboq-private-vault/${projectId}/${h}.bin`;
+      const uri = provider.buildCanonicalStorageUri(projectId, h);
       await provider.deleteOrphanIfCreated(uri);
       orphanHashesPurged.push(h);
     }

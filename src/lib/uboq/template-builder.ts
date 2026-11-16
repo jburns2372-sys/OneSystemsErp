@@ -1,5 +1,9 @@
 import ExcelJS from 'exceljs';
-import { CANONICAL_FIELD_MAP, resolveCanonicalFieldId } from './field-catalog';
+import {
+  CANONICAL_FIELD_MAP,
+  resolveCanonicalFieldId,
+  T12_SAFE_DERIVED_VARIANCE_SPECS,
+} from './field-catalog';
 import { canRoleAccessField, redactUboqPayloadForRole } from './security/redact-payload';
 import { inspectCellSecurity, neutralizeSpreadsheetFormulaForCsv } from './intake/security-guard';
 
@@ -10,7 +14,8 @@ export type UboqTemplateGrain =
   | 'CANONICAL_RESOURCE'
   | 'SCHEDULE_ACTIVITY'
   | 'CASH_FLOW_PERIOD'
-  | 'CASH_FLOW_QUARTER';
+  | 'CASH_FLOW_QUARTER'
+  | 'VARIATION_ORDER_ITEM';
 
 export interface TemplatePresetSpec {
   readonly templateCode: string;
@@ -125,12 +130,217 @@ export const SYSTEM_TEMPLATE_PRESETS: Readonly<Record<string, TemplatePresetSpec
     mandatorySystemFields: ['project_id', 'boq_line_id', 'snapshot_version'],
     isFormalComplianceOutput: false,
   },
+  T11_VARIATION_ORDER_REGISTER: {
+    templateCode: 'T11_VARIATION_ORDER_REGISTER',
+    templateName: 'Approved Variation Order & Contract / Commitment Revision Register',
+    rowGrain: 'VARIATION_ORDER_ITEM',
+    defaultFields: [
+      'vo_number',
+      'vo_classification',
+      'phase_code',
+      'item_code',
+      'work_description',
+      'unit',
+      'original_qty',
+      'vo_approved_qty_delta',
+      'approved_qty',
+      'contract_unit_rate',
+      'vo_client_revenue_delta_amt',
+      'vo_subcon_commitment_delta_amt',
+    ],
+    mandatorySystemFields: ['project_id', 'boq_line_id', 'snapshot_version'],
+    isFormalComplianceOutput: true,
+  },
+  T12_CASHFLOW_VARIANCE_TREASURY: {
+    templateCode: 'T12_CASHFLOW_VARIANCE_TREASURY',
+    templateName: 'Treasury Cash-Flow Variance & Cash Movement / Liquidity Reconciliation',
+    rowGrain: 'CASH_FLOW_PERIOD',
+    defaultFields: [
+      'cash_quarter_label',
+      'cash_period_start',
+      'cash_period_end',
+      'planned_value_weight_amt',
+      'expected_billings_amt',
+      'forecast_receipts_amt',
+      'actual_cash_receipts_amt',
+      'receipts_variance_amt',
+      'procurement_cash_out_amt',
+      'payroll_subcon_cash_out_amt',
+      'other_cash_out_amt',
+      'total_forecast_cash_out_amt',
+      'actual_cash_paid_amt',
+      'disbursement_variance_amt',
+      'quarterly_closing_cash',
+      'quarterly_liquidity_gap',
+    ],
+    mandatorySystemFields: ['project_id'],
+    isFormalComplianceOutput: false,
+  },
 };
+
+export const T11_ORIGINAL_BOQ_QTY_HEADING =
+  'Baseline Awarded BOQ Qty (NO_SUM)';
+export const T11_VO_ITEM_QTY_DELTA_HEADING =
+  'Approved VO Item Qty Delta (NO_SUM)';
+export const T11_CLIENT_REVISED_BOQ_QTY_HEADING =
+  'Client Contract Revised BOQ Qty (Excl. Subcon VOs, NO_SUM)';
+
+export function resolveT11QuantityDefaultHeading(fieldId: string): string | undefined {
+  if (fieldId === 'original_qty') {
+    return T11_ORIGINAL_BOQ_QTY_HEADING;
+  }
+  if (fieldId === 'vo_approved_qty_delta') {
+    return T11_VO_ITEM_QTY_DELTA_HEADING;
+  }
+  if (fieldId === 'approved_qty') {
+    return T11_CLIENT_REVISED_BOQ_QTY_HEADING;
+  }
+  return undefined;
+}
+
+export function isMisleadingT11RevisedQuantityHeadingAlias(
+  fieldId: string,
+  heading: string
+): boolean {
+  const norm = (heading || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!norm) return false;
+
+  if (fieldId === 'approved_qty') {
+    if (
+      /\b(item\s*post|post[- ]?vo|post\s*(qty|quantity)|delta)\b/i.test(norm)
+    ) {
+      return true;
+    }
+    const explicitlyExcludesSubcon =
+      norm.includes('excl. subcon') ||
+      norm.includes('excl subcon') ||
+      norm.includes('excluding subcon');
+    if (!explicitlyExcludesSubcon && /\bsubcon(tract(or)?)?\b/i.test(norm)) {
+      return true;
+    }
+    const explicitlyClientQualified =
+      /\bclient\b/i.test(norm) || explicitlyExcludesSubcon;
+    if (
+      !explicitlyClientQualified &&
+      /\b(revised|approved|post|final|current)\b.*\b(qty|quantity)\b/i.test(norm)
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  if (fieldId === 'vo_approved_qty_delta') {
+    const hasDeltaQualifier = /\b(delta|change|diff|variance|addition|deduction|net\s*qty)\b/i.test(
+      norm
+    );
+    if (
+      !hasDeltaQualifier &&
+      /\b(revised|cumulative|total\s*contract|final)\b.*\b(qty|quantity)\b/i.test(norm)
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  if (fieldId === 'original_qty') {
+    return /\b(revised|delta|post)\b/i.test(norm);
+  }
+
+  return false;
+}
+
+export const T12_VERIFIED_CLOSING_CASH_HEADING =
+  'Actual Treasury Closing Cash (Verified Opening Basis, NO_SUM)';
+export const T12_VERIFIED_LIQUIDITY_GAP_HEADING =
+  'Actual Treasury Liquidity Gap (Verified Opening Basis, NO_SUM)';
+export const T12_ZERO_BASIS_CLOSING_MOVEMENT_HEADING =
+  'Cumulative Net Project Cash Movement (Zero Opening Basis — Not Available Liquidity, NO_SUM)';
+export const T12_ZERO_BASIS_LIQUIDITY_DEFICIT_HEADING =
+  'Cumulative Net Cash Outflow Deficit (Zero Opening Basis — Not Available Liquidity, NO_SUM)';
+
+export function resolveT12PeriodBalanceDefaultHeading(
+  fieldId: string,
+  actualTreasuryLiquidityVerified = false
+): string | undefined {
+  if (fieldId === 'quarterly_closing_cash') {
+    return actualTreasuryLiquidityVerified
+      ? T12_VERIFIED_CLOSING_CASH_HEADING
+      : T12_ZERO_BASIS_CLOSING_MOVEMENT_HEADING;
+  }
+  if (fieldId === 'quarterly_liquidity_gap') {
+    return actualTreasuryLiquidityVerified
+      ? T12_VERIFIED_LIQUIDITY_GAP_HEADING
+      : T12_ZERO_BASIS_LIQUIDITY_DEFICIT_HEADING;
+  }
+  return undefined;
+}
+
+export function isMisleadingActualTreasuryHeadingAlias(heading: string): boolean {
+  const norm = (heading || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!norm) return false;
+  if (
+    norm.includes('zero opening basis') ||
+    norm.includes('zero basis') ||
+    norm.includes('zero-basis') ||
+    norm.includes('not available liquidity') ||
+    norm.includes('not actual')
+  ) {
+    return false;
+  }
+  return (
+    /\bactual\b.*\b(closing\s*cash|treasury\s*cash|treasury\s*balance|cash\s*balance|liquidity|available\s*cash)\b/i.test(
+      norm
+    ) ||
+    /\bavailable\b.*\b(treasury|liquidity|cash|balance)\b/i.test(norm) ||
+    /\b(cash\s*on\s*hand|bank\s*balance|actual\s*closing\s*balance|closing\s*treasury\s*cash)\b/i.test(
+      norm
+    )
+  );
+}
 
 export type SafeFormulaNode =
   | { op: 'FIELD'; fieldId: string }
   | { op: 'CONST'; value: number }
   | { op: 'ADD' | 'SUB' | 'MUL' | 'DIV'; left: SafeFormulaNode; right: SafeFormulaNode };
+
+export const T12_SAFE_DERIVED_FORMULAS: Readonly<Record<string, SafeFormulaNode>> = {
+  receipts_variance_amt: {
+    op: 'SUB',
+    left: { op: 'FIELD', fieldId: 'actual_cash_receipts_amt' },
+    right: { op: 'FIELD', fieldId: 'forecast_receipts_amt' },
+  },
+  total_forecast_cash_out_amt: {
+    op: 'ADD',
+    left: {
+      op: 'ADD',
+      left: { op: 'FIELD', fieldId: 'procurement_cash_out_amt' },
+      right: { op: 'FIELD', fieldId: 'payroll_subcon_cash_out_amt' },
+    },
+    right: { op: 'FIELD', fieldId: 'other_cash_out_amt' },
+  },
+  disbursement_variance_amt: {
+    op: 'SUB',
+    left: { op: 'FIELD', fieldId: 'actual_cash_paid_amt' },
+    right: {
+      op: 'ADD',
+      left: {
+        op: 'ADD',
+        left: { op: 'FIELD', fieldId: 'procurement_cash_out_amt' },
+        right: { op: 'FIELD', fieldId: 'payroll_subcon_cash_out_amt' },
+      },
+      right: { op: 'FIELD', fieldId: 'other_cash_out_amt' },
+    },
+  },
+};
+
+export function canRoleAccessFormulaAst(userRole: string, node: SafeFormulaNode): boolean {
+  if (!node || typeof node !== 'object') return false;
+  if (node.op === 'CONST') return true;
+  if (node.op === 'FIELD') {
+    return canRoleAccessField(userRole, node.fieldId);
+  }
+  return canRoleAccessFormulaAst(userRole, node.left) && canRoleAccessFormulaAst(userRole, node.right);
+}
 
 const ALLOWED_AST_OPS = new Set(['CONST', 'FIELD', 'ADD', 'SUB', 'MUL', 'DIV']);
 
@@ -167,6 +377,7 @@ export interface TemplateProjectionOptions {
   readonly computedColumns?: Record<string, SafeFormulaNode>;
   readonly isFormalSubmission?: boolean;
   readonly hasOpenBlockingExceptions?: boolean;
+  readonly t12ActualTreasuryLiquidityVerified?: boolean;
 }
 
 /**
@@ -203,18 +414,47 @@ export function buildTemplateProjection(
     }
   }
 
+  const effectiveComputedColumns: Record<string, SafeFormulaNode> = {
+    ...(options.templateCode === 'T12_CASHFLOW_VARIANCE_TREASURY' ? T12_SAFE_DERIVED_FORMULAS : {}),
+    ...(options.computedColumns ?? {}),
+  };
+
   // Filter out fields unauthorized for the user's role BEFORE projection/export (VAL-18, SEC-03)
   const authorizedFieldIds = requestedIds.filter((fId) => {
-    if (options.computedColumns && options.computedColumns[fId]) return true;
+    const formulaNode = effectiveComputedColumns[fId];
+    if (formulaNode) {
+      if (T12_SAFE_DERIVED_VARIANCE_SPECS.has(fId) && !canRoleAccessField(options.userRole, fId)) {
+        return false;
+      }
+      return canRoleAccessFormulaAst(options.userRole, formulaNode);
+    }
     return canRoleAccessField(options.userRole, fId);
   });
 
   const visibleColumns = authorizedFieldIds.map((fId) => {
     const spec = CANONICAL_FIELD_MAP.get(fId);
+    const derivedSpec = T12_SAFE_DERIVED_VARIANCE_SPECS.get(fId);
+    const t11QuantityDefaultHeading =
+      options.templateCode === 'T11_VARIATION_ORDER_REGISTER'
+        ? resolveT11QuantityDefaultHeading(fId)
+        : undefined;
+    const t12PeriodBalanceDefaultHeading =
+      options.templateCode === 'T12_CASHFLOW_VARIANCE_TREASURY'
+        ? resolveT12PeriodBalanceDefaultHeading(
+            fId,
+            options.t12ActualTreasuryLiquidityVerified === true
+          )
+        : undefined;
     const customHeading = options.headingAliases?.[fId];
     return {
       fieldId: fId,
-      heading: customHeading || spec?.suggestedHeading || fId,
+      heading:
+        customHeading ||
+        t11QuantityDefaultHeading ||
+        t12PeriodBalanceDefaultHeading ||
+        spec?.suggestedHeading ||
+        derivedSpec?.suggestedHeading ||
+        fId,
     };
   });
 
@@ -223,8 +463,11 @@ export function buildTemplateProjection(
   const projectedRows = redactedInput.map((row) => {
     const visible: Record<string, unknown> = {};
     for (const col of visibleColumns) {
-      if (options.computedColumns && options.computedColumns[col.fieldId]) {
-        visible[col.fieldId] = evaluateSafeFormulaAst(options.computedColumns[col.fieldId], row);
+      if (effectiveComputedColumns[col.fieldId]) {
+        const computedVal = evaluateSafeFormulaAst(effectiveComputedColumns[col.fieldId], row);
+        visible[col.fieldId] = T12_SAFE_DERIVED_VARIANCE_SPECS.has(col.fieldId)
+          ? computedVal.toFixed(2)
+          : computedVal;
       } else {
         const val = row[col.fieldId];
         visible[col.fieldId] = typeof val === 'string' ? inspectCellSecurity(val).sanitizedText : (val ?? null);

@@ -17,12 +17,13 @@ export interface CanonicalFieldSpec {
   readonly aggregation: string;
   readonly visibility: UboqFieldVisibility;
   readonly typicalSource: string;
-  readonly origin: 'BLUEPRINT_12_FIELD_CATALOG' | 'V2_1_R3_EXTENSION';
+  readonly origin: 'BLUEPRINT_12_FIELD_CATALOG' | 'V2_1_R3_EXTENSION' | 'V2_1_R4_VO_EXTENSION';
 }
 
-// Verbatim 119 fields from Blueprint v2.1 Sheet 12_Field_Catalog (rows 5-123) + 10 v2.1-R3 extensions = 129 unique fields
+// Verbatim 119 fields from Blueprint v2.1 Sheet 12_Field_Catalog (rows 5-123)
+// + 10 v2.1-R3 extensions + 5 Owner-ratified v2.1-R4 VO extensions (2026-11-15) = 134 unique fields
 const RAW_CATALOG_ROWS: ReadonlyArray<
-  readonly [string, string, string, string, UboqOutputRequirement, string, UboqFieldVisibility, string, 'B' | 'E']
+  readonly [string, string, string, string, UboqOutputRequirement, string, UboqFieldVisibility, string, 'B' | 'E' | 'R4']
 > = [
   ['Contract / Award', 'project_id', 'Project ID', 'UUID', 'HIDDEN', 'NONE', 'internal', 'Project Master', 'B'],
   ['Contract / Award', 'contract_id', 'Contract ID', 'UUID', 'HIDDEN', 'NONE', 'internal', 'Contract Master', 'B'],
@@ -154,6 +155,12 @@ const RAW_CATALOG_ROWS: ReadonlyArray<
   ['Profitability / Governance', 'supersedes_id', 'Superseded Baseline / PRR ID', 'UUID', 'HIDDEN', 'NONE', 'internal', 'Immutable Lineage', 'E'],
   ['Profitability / Governance', 'is_synthetic_test_fixture', 'Synthetic Test Fixture Flag', 'BOOLEAN', 'HIDDEN', 'NONE', 'internal', 'Test Provenance Guard', 'E'],
   ['Resource / Procurement', 'allocated_usable_stock_qty', 'Allocated Usable Opening Stock Qty', 'DECIMAL', 'OPTIONAL', 'SUM_DEDUPED', 'internal', 'Verified Stock Lot Evidence', 'E'],
+  // 5 Owner-Ratified v2.1-R4 Variation Order Register Extensions (#130 - #134; ratified 2026-11-15)
+  ['Contract / Award', 'vo_number', 'Variation Order Number', 'TEXT', 'YES', 'NONE', 'internal', 'Approved VO / SVO', 'R4'],
+  ['Contract / Award', 'vo_classification', 'Variation Classification', 'ENUM', 'YES', 'NONE', 'internal', 'Approved VO / SVO', 'R4'],
+  ['BOQ / Contract Lines', 'vo_approved_qty_delta', 'Approved VO Quantity Delta', 'DECIMAL', 'YES', 'SUM_COMPATIBLE', 'internal', 'Approved VO Item / SVO', 'R4'],
+  ['Contract / Award', 'vo_client_revenue_delta_amt', 'Approved Client VO Revenue Delta', 'CURRENCY', 'YES', 'SUM_ONCE', 'restricted', 'Approved Client VO', 'R4'],
+  ['Profitability / Governance', 'vo_subcon_commitment_delta_amt', 'Approved Subcontract VO Commitment Delta', 'CURRENCY', 'OPTIONAL', 'SUM_ONCE', 'sensitive', 'Approved Subcontract VO', 'R4'],
 ];
 
 export const CANONICAL_FIELD_CATALOG: ReadonlyArray<CanonicalFieldSpec> = RAW_CATALOG_ROWS.map((r, i) => ({
@@ -166,7 +173,12 @@ export const CANONICAL_FIELD_CATALOG: ReadonlyArray<CanonicalFieldSpec> = RAW_CA
   aggregation: r[5],
   visibility: r[6],
   typicalSource: r[7],
-  origin: r[8] === 'B' ? 'BLUEPRINT_12_FIELD_CATALOG' : 'V2_1_R3_EXTENSION',
+  origin:
+    r[8] === 'B'
+      ? 'BLUEPRINT_12_FIELD_CATALOG'
+      : r[8] === 'E'
+        ? 'V2_1_R3_EXTENSION'
+        : 'V2_1_R4_VO_EXTENSION',
 }));
 
 export const CANONICAL_FIELD_MAP: ReadonlyMap<string, CanonicalFieldSpec> = new Map(
@@ -213,13 +225,56 @@ export function resolveCanonicalFieldId(idOrAlias: string): string | null {
   return null;
 }
 
+export interface SafeDerivedVarianceSpec {
+  readonly fieldId: string;
+  readonly suggestedHeading: string;
+  readonly dataType: 'CURRENCY';
+  readonly aggregation: 'SUM_DATED';
+  readonly visibility: UboqFieldVisibility;
+}
+
+export const T12_SAFE_DERIVED_VARIANCE_SPECS: ReadonlyMap<string, SafeDerivedVarianceSpec> = new Map([
+  [
+    'receipts_variance_amt',
+    {
+      fieldId: 'receipts_variance_amt',
+      suggestedHeading: 'Receipts Variance (Actual - Forecast)',
+      dataType: 'CURRENCY',
+      aggregation: 'SUM_DATED',
+      visibility: 'restricted',
+    },
+  ],
+  [
+    'total_forecast_cash_out_amt',
+    {
+      fieldId: 'total_forecast_cash_out_amt',
+      suggestedHeading: 'Forecast Total Cash Outflow',
+      dataType: 'CURRENCY',
+      aggregation: 'SUM_DATED',
+      visibility: 'sensitive',
+    },
+  ],
+  [
+    'disbursement_variance_amt',
+    {
+      fieldId: 'disbursement_variance_amt',
+      suggestedHeading: 'Cash Outflow Variance (Actual Paid - Forecast Outflow)',
+      dataType: 'CURRENCY',
+      aggregation: 'SUM_DATED',
+      visibility: 'sensitive',
+    },
+  ],
+]);
+
 export function getCanonicalCatalogStats() {
   const blueprintCount = CANONICAL_FIELD_CATALOG.filter((f) => f.origin === 'BLUEPRINT_12_FIELD_CATALOG').length;
   const extensionCount = CANONICAL_FIELD_CATALOG.filter((f) => f.origin === 'V2_1_R3_EXTENSION').length;
+  const v21R4VoExtensionCount = CANONICAL_FIELD_CATALOG.filter((f) => f.origin === 'V2_1_R4_VO_EXTENSION').length;
   const uniqueIds = new Set(CANONICAL_FIELD_CATALOG.map((f) => f.fieldId));
   return {
     blueprintCount,
     extensionCount,
+    v21R4VoExtensionCount,
     totalCount: CANONICAL_FIELD_CATALOG.length,
     uniqueCount: uniqueIds.size,
   };

@@ -225,6 +225,40 @@ export async function resolveBackendRequestProjectContext(
     );
   }
 
+  // H02: derive the real project for payroll deletion; never invent a global scope.
+  const payrollDelete = relPath.match(/^payroll\/period\/([^/?#]+)$/i);
+  if (req.method === 'DELETE' && payrollDelete) {
+    addCandidate(await querySingleProjectResolver(Prisma.sql`SELECT uboq_resolve_payroll_period_project(${decodeURIComponent(payrollDelete[1])}::text) AS proj`));
+  }
+
+  // Controlled H02: ID-only lookup supplies a real project; conflicting claims remain rejected by requireAuth.
+  let h02Kind: string | null = null;
+  let h02Id: string | null = null;
+  if (req.method === 'DELETE' && (m = relPath.match(/^projects\/([^/?#]+)$/i))) addCandidate(decodeURIComponent(m[1]));
+  if (req.method === 'DELETE' && (m = relPath.match(/^subcontracting\/(packages|job-orders)\/([^/?#]+)$/i))) {
+    h02Kind = m[1].toLowerCase() === 'packages' ? 'PACKAGE' : 'JOB_ORDER'; h02Id = decodeURIComponent(m[2]);
+  }
+  if (relPath === 'subcontractingActions/deleteSubcontractPackage') { h02Kind = 'PACKAGE'; h02Id = req.body?.id; }
+  if (relPath === 'jobOrderActions/deleteJobOrder') { h02Kind = 'JOB_ORDER'; h02Id = req.body?.id; }
+  if (relPath === 'projectUserAssignment/addProjectAssignment') addCandidate(req.body?.data?.projectId);
+  if (['projectUserAssignment/updateProjectAssignment','projectUserAssignment/deleteProjectAssignment'].includes(relPath)) { h02Kind = 'ASSIGNMENT'; h02Id = req.body?.assignmentId; }
+  if (h02Kind && typeof h02Id === 'string' && h02Id) addCandidate(await querySingleProjectResolver(Prisma.sql`SELECT uboq_h02_record_project(${h02Kind}::text,${h02Id}::text) AS proj`));
+
+  // H02-A/B ordinary target resolution: preserve conflicts; never invent a NULL/global project.
+  if (/^(subcontractingActions|jobOrderActions)\//.test(relPath)) {
+    addCandidate(req.body?.data?.projectId);
+    addCandidate(req.body?.packageData?.projectId);
+  }
+  let ordinaryKind: string | null = null;
+  let ordinaryId: unknown = null;
+  if (req.method !== 'DELETE' && (m = relPath.match(/^subcontracting\/(packages|job-orders)\/([^/?#]+)(?:\/.*)?$/i))) {
+    ordinaryKind = m[1].toLowerCase() === 'packages' ? 'PACKAGE' : 'JOB_ORDER'; ordinaryId = decodeURIComponent(m[2]);
+  }
+  if (['subcontractingActions/getSubcontractPackageById','subcontractingActions/updateSubcontractPackage','subcontractingActions/updateFullSubcontractPackage'].includes(relPath)) { ordinaryKind = 'PACKAGE'; ordinaryId = req.body?.id; }
+  if (['jobOrderActions/getJobOrderById','jobOrderActions/updateJobOrder'].includes(relPath)) { ordinaryKind = 'JOB_ORDER'; ordinaryId = req.body?.id; }
+  if (ordinaryKind && typeof ordinaryId === 'string' && ordinaryId) addCandidate(await querySingleProjectResolver(Prisma.sql`SELECT public.uboq_h02_record_project(${ordinaryKind}::text,${ordinaryId}::text) AS proj`));
+  if (relPath.startsWith('payroll/') && typeof req.body?.payrollPeriodId === 'string') addCandidate(await querySingleProjectResolver(Prisma.sql`SELECT public.uboq_resolve_payroll_period_project(${req.body.payrollPeriodId}::text) AS proj`));
+
   const allCandidateProjectIds = Array.from(candidates);
   const primaryProjectId = allCandidateProjectIds[0] ?? null;
   return { allCandidateProjectIds, primaryProjectId };

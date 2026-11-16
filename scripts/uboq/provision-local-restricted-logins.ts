@@ -25,6 +25,17 @@ function buildUrlWithCredentials(baseDbUrl: string, username: string, password: 
   return parsed.toString();
 }
 
+export function createEphemeralScramVerifier(password: string): string {
+  if (!/^[0-9a-f]{48}$/.test(password)) throw new Error('UBOQ_EPHEMERAL_PASSWORD_FORMAT');
+  const salt = crypto.randomBytes(16);
+  const salted = crypto.pbkdf2Sync(password, salt, 4096, 32, 'sha256');
+  const clientKey = crypto.createHmac('sha256', salted).update('Client Key').digest();
+  const storedKey = crypto.createHash('sha256').update(clientKey).digest('base64');
+  const serverKey = crypto.createHmac('sha256', salted).update('Server Key').digest('base64');
+  const verifier = 'SCRAM-SHA-256$4096:' + salt.toString('base64') + '$' + storedKey + ':' + serverKey;
+  return verifier;
+}
+
 export async function provisionEphemeralRestrictedLogins(
   adminDbUrl: string
 ): Promise<EphemeralRestrictedDbUrls> {
@@ -50,6 +61,8 @@ export async function provisionEphemeralRestrictedLogins(
       { login: 'oserp_maint_login', group: 'oserp_maint_cleanup_role', pw: maintPw },
     ];
 
+    await client.query('BEGIN');
+    await client.query("SET LOCAL password_encryption = 'scram-sha-256'");
     for (const r of roles) {
       const exists = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = $1`, [r.login]);
       if (exists.rowCount === 0) {
@@ -61,15 +74,11 @@ export async function provisionEphemeralRestrictedLogins(
           `ALTER ROLE ${r.login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS INHERIT`
         );
       }
-      await client.query(`SELECT set_config('uboq.ephemeral_pw', $1, true)`, [r.pw]);
-      await client.query(`
-        DO $$
-        BEGIN
-          EXECUTE format('ALTER ROLE %I PASSWORD %L', '${r.login}', current_setting('uboq.ephemeral_pw', true));
-        END $$;
-      `);
+      // Encode a SCRAM verifier locally; plaintext never enters a SQL statement or GUC.
+      const verifier = createEphemeralScramVerifier(r.pw);
+      await client.query(`ALTER ROLE ${r.login} PASSWORD '${verifier}'`);
       await client.query(`GRANT ${r.group} TO ${r.login}`);
-      await client.query(`GRANT CONNECT ON DATABASE "${dbName}" TO ${r.login}`);
+      await client.query(`GRANT CONNECT ON DATABASE "${dbName.replace(/"/g, '""')}" TO ${r.login}`);
     }
 
     // Seed ephemeral 256-bit cryptographic trust anchor for non-forgeable RLS session proofs (R1-H02)
@@ -79,6 +88,10 @@ export async function provisionEphemeralRestrictedLogins(
        ON CONFLICT ("anchorId") DO UPDATE SET "secretHex" = EXCLUDED."secretHex", "rotatedAt" = NOW()`,
       [rlsContextSecretHex]
     );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
   } finally {
     await client.end();
   }

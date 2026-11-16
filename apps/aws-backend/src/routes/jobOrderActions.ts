@@ -1,7 +1,9 @@
 // @ts-nocheck
+import { invokeH02ProjectMutation } from '../lib/h02ProjectMutation';
 import { Router } from 'express';
 import * as express from 'express'; // Required for express.json()
 import { PrismaClient } from '@prisma/client';
+import { backendPrisma } from '../lib/prismaRls';
 const prisma = new PrismaClient();
 
 const router = Router();
@@ -13,7 +15,7 @@ router.use(express.json());
 router.post('/getJobOrders', async (req, res) => {
   try {
     const { projectId } = req.body;
-    const jobOrders = await prisma.jobOrder.findMany({
+    const jobOrders = await backendPrisma.jobOrder.findMany({
       where: projectId ? { projectId } : undefined,
       include: {
         subcontractor: true,
@@ -31,7 +33,7 @@ router.post('/getJobOrders', async (req, res) => {
 router.post('/getJobOrderById', async (req, res) => {
   try {
     const { id } = req.body;
-    const jobOrder = await prisma.jobOrder.findUnique({
+    const jobOrder = await backendPrisma.jobOrder.findUnique({
       where: { id },
       include: {
         subcontractor: true,
@@ -69,7 +71,7 @@ router.post('/getConsolidatedBoqItemsByProjectId', async (req, res) => {
 router.post('/createJobOrder', async (req, res) => {
   try {
     const data = req.body;
-    const jobOrder = await prisma.jobOrder.create({ data });
+    const jobOrder = await backendPrisma.jobOrder.create({ data });
     res.json({ success: true, data: jobOrder });
   } catch (error: any) {
     console.error("Error creating job order:", error);
@@ -80,7 +82,7 @@ router.post('/createJobOrder', async (req, res) => {
 router.post('/updateJobOrder', async (req, res) => {
   try {
     const { id, data } = req.body;
-    const jobOrder = await prisma.jobOrder.update({
+    const jobOrder = await backendPrisma.jobOrder.update({
       where: { id },
       data,
     });
@@ -94,9 +96,7 @@ router.post('/updateJobOrder', async (req, res) => {
 router.post('/deleteJobOrder', async (req, res) => {
   try {
     const { id } = req.body;
-    await prisma.jobOrder.delete({
-      where: { id },
-    });
+    await invokeH02ProjectMutation(req, 'DELETE_JOB_ORDER', id);
     res.json({ success: true });
   } catch (error: any) {
     console.error("Error deleting job order:", error);
@@ -107,7 +107,7 @@ router.post('/deleteJobOrder', async (req, res) => {
 router.post('/updateJobOrderStatus', async (req, res) => {
   try {
     const { id, newStatus } = req.body;
-    const jobOrder = await prisma.jobOrder.update({
+    const jobOrder = await backendPrisma.jobOrder.update({
       where: { id },
       data: { status: newStatus },
     });
@@ -122,7 +122,7 @@ router.post('/unlockJobOrder', async (req, res) => {
   try {
     const { id } = req.body;
     // Assuming a 'locked' field in your JobOrder schema that can be set to false to unlock.
-    const jobOrder = await prisma.jobOrder.update({
+    const jobOrder = await backendPrisma.jobOrder.update({
       where: { id },
       data: { locked: false }, // Placeholder: adjust field name based on your schema
     });

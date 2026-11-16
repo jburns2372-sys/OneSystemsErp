@@ -32,6 +32,7 @@ export default function PayrollSubNav() {
       >
         Payroll Payments
       </Link>
+      <Link href="/payroll/company" aria-current={(pathname || "").startsWith("/payroll/company") ? "page" : undefined} style={{ padding: "10px 24px", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>Company Payroll</Link>
     </div>
   );
 }
