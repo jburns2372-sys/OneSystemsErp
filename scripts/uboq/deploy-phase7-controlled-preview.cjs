@@ -317,6 +317,7 @@ async function vercelApi(token, method, apiPath, bodyObj) {
     }
 
     if (!deployment) {
+      // In Vercel REST API /v13/deployments, omitting `target` creates a Preview deployment (`target: null`).
       const created = await vercelApi(
         vercelToken,
         'POST',
@@ -324,7 +325,6 @@ async function vercelApi(token, method, apiPath, bodyObj) {
         {
           name: PROJECT_NAME,
           project: PROJECT_ID,
-          target: 'preview',
           gitSource: {
             type: 'github',
             repoId: LINKED_GITHUB_REPO_ID,
