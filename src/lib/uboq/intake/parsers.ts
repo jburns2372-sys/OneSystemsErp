@@ -1,11 +1,38 @@
 import zlib from 'node:zlib';
 import ExcelJS from 'exceljs';
 import * as XLSX from 'xlsx';
-import { PDFParse } from 'pdf-parse';
 import { parse as parseCsvSync } from 'csv-parse/sync';
 import { resolveCanonicalFieldId } from '../field-catalog';
 import { inspectCellSecurity, scanUploadedDocumentSecurity, type FileSecurityScanResult } from './security-guard';
-import { runRasterImageOcr } from './ocr-engine';
+
+function ensureServerlessPdfGlobals() {
+  const g = globalThis as Record<string, unknown>;
+  if (typeof g.DOMMatrix === 'undefined') {
+    g.DOMMatrix = class DOMMatrix {
+      a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
+      constructor(init?: number[]) {
+        if (Array.isArray(init) && init.length >= 6) {
+          [this.a, this.b, this.c, this.d, this.e, this.f] = init;
+        }
+      }
+    };
+  }
+  if (typeof g.Path2D === 'undefined') {
+    g.Path2D = class Path2D {};
+  }
+  if (typeof g.ImageData === 'undefined') {
+    g.ImageData = class ImageData {
+      data: Uint8ClampedArray;
+      width: number;
+      height: number;
+      constructor(width: number, height: number) {
+        this.width = width;
+        this.height = height;
+        this.data = new Uint8ClampedArray(width * height * 4);
+      }
+    };
+  }
+}
 
 export interface CellBoundingBox {
   readonly x0: number;
@@ -639,6 +666,8 @@ export async function extractUniversalDocumentPackage(
     blockingErrors.push(...parsed.blockingErrors);
   } else if (security.detectedFormat === 'PDF') {
     // H01: Genuine multi-page PDF binary parsing via pdfjs-backed PDFParse + automatic raster OCR fallback for scanned PDF pages
+    ensureServerlessPdfGlobals();
+    const { PDFParse } = await import('pdf-parse');
     const pdfParser = new PDFParse({ data: new Uint8Array(buffer) });
     try {
       const textResult = await pdfParser.getText();
@@ -703,6 +732,7 @@ export async function extractUniversalDocumentPackage(
             const isEncodedImg =
               imgBuf.subarray(0, 4).toString('hex') === '89504e47' ||
               imgBuf.subarray(0, 3).toString('hex') === 'ffd8ff';
+            const { runRasterImageOcr } = await import('./ocr-engine');
             const ocrPage = isEncodedImg
               ? await runRasterImageOcr(imgBuf, pageNum)
               : await runRasterImageOcr(
@@ -769,6 +799,7 @@ export async function extractUniversalDocumentPackage(
     }
   } else if (security.detectedFormat === 'IMAGE') {
     // H01: Genuine pixel OCR on PNG / JPG / JPEG raster scans with word bounding boxes & real OCR confidence
+    const { runRasterImageOcr } = await import('./ocr-engine');
     const ocrPage = await runRasterImageOcr(buffer, 1);
     const ocrGrid: Array<Array<InternalGridCell>> = ocrPage.rows.map((r) =>
       r.cells.map((c, cIdx) => ({

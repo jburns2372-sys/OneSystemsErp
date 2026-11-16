@@ -13,6 +13,7 @@ import {
   type ResourceTakeoffSpecInput,
 } from '@/lib/uboq/adapters/snapshot-orchestrator';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {

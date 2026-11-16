@@ -88,9 +88,9 @@ async function vercelApi(token, method, apiPath, bodyObj) {
 
 (async () => {
   const hardDeadline = setTimeout(() => {
-    console.error(JSON.stringify({ fatal: 'PHASE7_DEPLOY_DEADLINE_EXCEEDED_420S' }));
+    console.error(JSON.stringify({ fatal: 'PHASE7_DEPLOY_DEADLINE_EXCEEDED_540S' }));
     process.exit(124);
-  }, 420000);
+  }, 540000);
   hardDeadline.unref();
 
   try {
@@ -295,19 +295,6 @@ async function vercelApi(token, method, apiPath, bodyObj) {
         gitBranch: RELEASE_BRANCH,
       });
       createdBranchNextAuthNow = true;
-    } else {
-      await vercelApi(
-        vercelToken,
-        'PATCH',
-        `/v9/projects/${PROJECT_ID}/env/${existingBranchPreviewNextAuthUrl.id}?teamId=${TEAM_ID}`,
-        {
-          value: PREVIEW_BRANCH_ALIAS_ORIGIN,
-          type: 'encrypted',
-          target: ['preview'],
-          gitBranch: RELEASE_BRANCH,
-        }
-      );
-      createdBranchNextAuthNow = true;
     }
 
     let deployment = null;
@@ -366,7 +353,7 @@ async function vercelApi(token, method, apiPath, bodyObj) {
     // STEP 6: Poll Deployment Until `READY` & Verify UAT-00.1 Access Gate
     // =========================================================================
     let finalDep = null;
-    for (let poll = 0; poll < 70; poll += 1) {
+    for (let poll = 0; poll < 115; poll += 1) {
       const cur = await vercelApi(
         vercelToken,
         'GET',
