@@ -226,26 +226,6 @@ async function vercelApi(token, method, apiPath, bodyObj) {
       assert.equal(entry.type, 'sensitive');
     }
 
-    // Ensure branch-scoped Preview-only `NEXTAUTH_URL` points to Preview branch alias
-    // without modifying any shared/Production env entry.
-    const existingBranchPreviewNextAuthUrl = envs.find(
-      (e) =>
-        e.key === 'NEXTAUTH_URL' &&
-        Array.isArray(e.target) &&
-        e.target.length === 1 &&
-        e.target[0] === 'preview' &&
-        e.gitBranch === RELEASE_BRANCH
-    );
-    if (!existingBranchPreviewNextAuthUrl) {
-      await vercelApi(vercelToken, 'POST', `/v10/projects/${PROJECT_ID}/env?teamId=${TEAM_ID}`, {
-        key: 'NEXTAUTH_URL',
-        value: PREVIEW_BRANCH_ALIAS_ORIGIN,
-        type: 'encrypted',
-        target: ['preview'],
-        gitBranch: RELEASE_BRANCH,
-      });
-    }
-
     const requiredVaultAndRlsKeys = [
       'BLOB_READ_WRITE_TOKEN',
       'UBOQ_VAULT_BLOB_READ_WRITE_TOKEN',
@@ -269,17 +249,17 @@ async function vercelApi(token, method, apiPath, bodyObj) {
       dedicatedNeonProjectId: DEDICATED_NEON_PROJECT_ID,
       dedicatedPreviewDatabase: DEDICATED_PREVIEW_DB,
       privateBlobStoreId: PRIVATE_BLOB_STORE_ID,
-      verifiedPreviewKeysCount: previewOnlyDbKeys.length + requiredVaultAndRlsKeys.length + 1,
+      verifiedPreviewKeysCount: previewOnlyDbKeys.length + requiredVaultAndRlsKeys.length,
       productionReferencedOrModified: false,
     });
 
     // =========================================================================
-    // STEP 5: Push ONLY `release/oserp-proj-uboq-001` & Trigger Preview Build
+    // STEP 5: Push ONLY `release/oserp-proj-uboq-001`, Bind Branch Preview NEXTAUTH_URL & Deploy
     // =========================================================================
     execFileSync(
       'git',
       ['push', 'origin', `refs/heads/${RELEASE_BRANCH}:refs/heads/${RELEASE_BRANCH}`],
-      { stdio: 'inherit', timeout: 60000 }
+      { stdio: 'inherit', timeout: 90000 }
     );
     // Double-check `origin/main` did NOT move
     const remoteMainAfterPush = execFileSync('git', ['ls-remote', 'origin', 'refs/heads/main'], {
@@ -294,21 +274,45 @@ async function vercelApi(token, method, apiPath, bodyObj) {
       reviewedCommitSha,
     });
 
-    // Wait up to 20s for GitHub webhook deployment, or create explicit Preview-only git deployment via Vercel API
+    // Now that `release/oserp-proj-uboq-001` exists on GitHub, ensure branch-scoped Preview `NEXTAUTH_URL`
+    // is bound without touching Production. If newly created right now, trigger a fresh Preview deployment
+    // so its runtime env snapshot includes the branch-scoped `NEXTAUTH_URL`.
+    const existingBranchPreviewNextAuthUrl = envs.find(
+      (e) =>
+        e.key === 'NEXTAUTH_URL' &&
+        Array.isArray(e.target) &&
+        e.target.length === 1 &&
+        e.target[0] === 'preview' &&
+        e.gitBranch === RELEASE_BRANCH
+    );
+    let createdBranchNextAuthNow = false;
+    if (!existingBranchPreviewNextAuthUrl) {
+      await vercelApi(vercelToken, 'POST', `/v10/projects/${PROJECT_ID}/env?teamId=${TEAM_ID}`, {
+        key: 'NEXTAUTH_URL',
+        value: PREVIEW_BRANCH_ALIAS_ORIGIN,
+        type: 'encrypted',
+        target: ['preview'],
+        gitBranch: RELEASE_BRANCH,
+      });
+      createdBranchNextAuthNow = true;
+    }
+
     let deployment = null;
-    for (let i = 0; i < 5; i += 1) {
-      await new Promise((r) => setTimeout(r, 3500));
-      const dList = await vercelApi(
-        vercelToken,
-        'GET',
-        `/v6/deployments?projectId=${PROJECT_ID}&teamId=${TEAM_ID}&sha=${reviewedCommitSha}&limit=5`
-      );
-      const found = (dList.deployments || []).find(
-        (d) => d.target === 'preview' || d.target === null
-      );
-      if (found) {
-        deployment = found;
-        break;
+    if (!createdBranchNextAuthNow) {
+      for (let i = 0; i < 5; i += 1) {
+        await new Promise((r) => setTimeout(r, 3500));
+        const dList = await vercelApi(
+          vercelToken,
+          'GET',
+          `/v6/deployments?projectId=${PROJECT_ID}&teamId=${TEAM_ID}&sha=${reviewedCommitSha}&limit=5`
+        );
+        const found = (dList.deployments || []).find(
+          (d) => d.target === 'preview' || d.target === null
+        );
+        if (found) {
+          deployment = found;
+          break;
+        }
       }
     }
 
