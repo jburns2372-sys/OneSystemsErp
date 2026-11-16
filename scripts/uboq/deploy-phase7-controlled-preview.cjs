@@ -33,7 +33,7 @@ const PROJECT_NAME = 'one-systems-erp';
 const LINKED_GITHUB_REPO_ID = 1264605590;
 const RELEASE_BRANCH = 'release/oserp-proj-uboq-001';
 const PREVIEW_BRANCH_ALIAS_ORIGIN =
-  'https://one-systems-erp-git-release-oserp-proj-uboq-001-jburns2372-sys-projects.vercel.app';
+  'https://one-systems-erp-git-release-oser-f0dd68-jburns2372-sys-projects.vercel.app';
 const DEDICATED_NEON_PROJECT_ID = 'long-recipe-20782583';
 const DEDICATED_PREVIEW_DB = 'oserp_uboq_preview';
 const PRIVATE_BLOB_STORE_ID = 'store_XuH1XvlM7GKo3wX9';
@@ -295,6 +295,19 @@ async function vercelApi(token, method, apiPath, bodyObj) {
         gitBranch: RELEASE_BRANCH,
       });
       createdBranchNextAuthNow = true;
+    } else {
+      await vercelApi(
+        vercelToken,
+        'PATCH',
+        `/v9/projects/${PROJECT_ID}/env/${existingBranchPreviewNextAuthUrl.id}?teamId=${TEAM_ID}`,
+        {
+          value: PREVIEW_BRANCH_ALIAS_ORIGIN,
+          type: 'encrypted',
+          target: ['preview'],
+          gitBranch: RELEASE_BRANCH,
+        }
+      );
+      createdBranchNextAuthNow = true;
     }
 
     let deployment = null;
@@ -389,17 +402,22 @@ async function vercelApi(token, method, apiPath, bodyObj) {
       ? finalDep.alias.map((a) => `https://${a}`)
       : [];
 
-    // Verify UAT-00.1: Unauthenticated external HTTP request is gated by Vercel Authentication (`401`)
+    // Verify UAT-00.1: Unauthenticated external HTTP request is gated by Vercel Authentication (401/403/307 or 302 -> vercel.com/sso-api)
     const unauthRes = await fetch(deploymentUrl, {
       method: 'GET',
       redirect: 'manual',
       signal: AbortSignal.timeout(15000),
     });
-    const uat001Protected = unauthRes.status === 401 || unauthRes.status === 403 || unauthRes.status === 307;
+    const unauthLocation = unauthRes.headers.get('location') || '';
+    const uat001Protected =
+      unauthRes.status === 401 ||
+      unauthRes.status === 403 ||
+      unauthRes.status === 307 ||
+      (unauthRes.status === 302 && unauthLocation.startsWith('https://vercel.com/sso-api'));
     assert.equal(
       uat001Protected,
       true,
-      `UAT-00.1 FAILED: Expected unauthenticated Preview URL to be protected (401/307), got ${unauthRes.status}`
+      `UAT-00.1 FAILED: Expected unauthenticated Preview URL to be protected by Vercel SSO, got ${unauthRes.status} (${unauthLocation})`
     );
 
     const receipt = {
