@@ -6,6 +6,7 @@ import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { withUboqRlsContext, applyProjectRlsSessionVars } from '@/lib/uboq/project-ownership';
 import { scanUploadedDocumentSecurity } from '@/lib/uboq/intake/security-guard';
 import { resolveUboqVaultStorageProvider } from '@/lib/uboq/storage/vault-storage';
+import { requireProjectDocumentPermission } from '@/lib/uboq/security/document-permissions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           projectId, userId: actor.userId, capability: 'UBOQ_INTAKE_STAGE',
         });
 
+        await requireProjectDocumentPermission(actor.role, 'canUploadAttachment');
         const buffer = Buffer.from(await file.arrayBuffer());
         const scan = scanUploadedDocumentSecurity(file.name, buffer, file.type);
         if (!scan.safe || scan.findings.length > 0) {
