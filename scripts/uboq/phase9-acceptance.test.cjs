@@ -168,32 +168,35 @@ test('BOQ unresolved human-review candidate cannot create financial snapshot',as
 });
 
 function projectFixture({grant=true,failAssignment=false,session=actor}={}) {
-  const rows={projects:[],assignments:[]};
-  const tx={project:{create:async({data})=>{rows.projects.push(data);return{id:'new-project'};}},
-    projectUserAssignment:{create:async({data})=>{if(failAssignment)throw Error('fixture assignment failure');rows.assignments.push(data);}}};
-  const db={rolePermission:{findFirst:async()=>grant?{id:'grant'}:null},$transaction:async fn=>{
-    try{return await fn(tx);}catch(e){rows.projects.length=0;rows.assignments.length=0;throw e;}
+  const rows={commands:[],contexts:[]};
+  const tx={$queryRaw:async(strings,...values)=>{
+    if(failAssignment)throw Error('fixture assignment failure');
+    rows.commands.push({sql:strings.join('?'),values});
   }};
-  const action=load('src/app/actions/project-intake.ts',{'@/lib/prisma':{prisma:db},'@/lib/dal/auth':{verifyOperationalSession:async()=>session}}).createProjectProfile;
+  const db={rolePermission:{findFirst:async()=>grant?{id:'grant'}:null},$transaction:async fn=>fn(tx)};
+  const action=load('src/app/actions/project-intake.ts',{'@/lib/prisma':{prisma:db},'@/lib/dal/auth':{verifyOperationalSession:async()=>session},
+    'node:crypto':{randomUUID:()=> 'new-project'},
+    '@/lib/uboq/project-ownership':{applyProjectRlsSessionVars:async(client,ctx)=>{assert.equal(client,tx);rows.contexts.push(ctx);}},
+  }).createProjectProfile;
   const form=()=>{const f=new FormData();f.set('name','Synthetic project');f.set('sector','CORPORATE');return f;};
   return {action,form,rows};
 }
-test('project creation inserts only zero-value planning profile and creator assignment',async()=>{
+test('project creation binds authenticated context and invokes bounded bootstrap command',async()=>{
   const f=projectFixture();const r=await f.action(f.form());assert.equal(r.projectId,'new-project');
-  assert.equal(f.rows.projects[0].status,'PLANNING');assert.equal(f.rows.projects[0].contractAmount,0);
-  assert.equal(f.rows.projects[0].uboqGovernanceEnabled,false);
-  assert.equal(f.rows.assignments.length,1);assert.equal(f.rows.assignments[0].userId,actor.userId);
-  assert.equal(f.rows.assignments[0].accessLevel,'FULL');
+  assert.equal(f.rows.contexts.length,1);assert.equal(f.rows.contexts[0].userId,actor.userId);
+  assert.equal(f.rows.contexts[0].sessionVersion,actor.sessionVersion);assert.equal(f.rows.contexts[0].projectId,'new-project');
+  assert.equal(f.rows.commands.length,1);assert.match(f.rows.commands[0].sql,/SELECT public.phase9_create_project_profile/);
+  assert.deepEqual(Array.from(f.rows.commands[0].values),['new-project','Synthetic project',null,null,null,'CORPORATE',null]);
 });
-test('project creator assignment failure rolls back profile transaction',async()=>{
+test('project command failure propagates without returning success',async()=>{
   const f=projectFixture({failAssignment:true});await assert.rejects(f.action(f.form()),/assignment failure/);
-  assert.equal(f.rows.projects.length,0);assert.equal(f.rows.assignments.length,0);
+  assert.equal(f.rows.commands.length,0);
 });
 for(const opts of [{grant:false},{session:null}])test('project creation requires session and create grant '+JSON.stringify(opts),async()=>{
-  const f=projectFixture(opts);assert.ok((await f.action(f.form())).error);assert.equal(f.rows.projects.length,0);
+  const f=projectFixture(opts);assert.ok((await f.action(f.form())).error);assert.equal(f.rows.commands.length,0);
 });
 for(const [key,value] of [['name','ab'],['sector','UNKNOWN'],['description','x'.repeat(2001)]])test('project rejects invalid '+key,async()=>{
-  const f=projectFixture();const form=f.form();form.set(key,value);assert.ok((await f.action(form)).error);assert.equal(f.rows.projects.length,0);
+  const f=projectFixture();const form=f.form();form.set(key,value);assert.ok((await f.action(form)).error);assert.equal(f.rows.commands.length,0);
 });
 for(const condition of ['stage','document','corrupt'])test('evidence rejects '+condition+' denial before persistence',async()=>{
   const f=evidenceFixture();

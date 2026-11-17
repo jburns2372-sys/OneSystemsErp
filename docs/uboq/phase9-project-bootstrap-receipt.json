@@ -1,0 +1,114 @@
+{
+  "recordedAt": "2026-11-17T16:15:43.168Z",
+  "issue": "https://github.com/jburns2372-sys/OneSystemsErp/issues/4",
+  "baseSha": "08d2a43e631ee3d2ee7cd08d00b8e600e35f110c",
+  "branch": "feat/oserp-unified-project-intake-p9",
+  "sourceLfSha256": {
+    "src/app/actions/project-intake.ts": "6ec3b7e6def1faeae6139757537d5d0098b077874761208e25652fdb0aebc16a",
+    "prisma/migrations/20261118090000_phase9_project_creator_bootstrap/migration.sql": "89ad5e8bcbbaf33564d0f4a77ffd39874ec2496b85d3140b52c30e82733f27df",
+    "scripts/uboq/phase9-acceptance.test.cjs": "e278d603bbca6e82c56662566db237f8a31eb996afc8323daf833c2295110b10",
+    "scripts/uboq/phase9-bootstrap-fixture.cjs": "a114337a66c5ca323a2647fbb47a5604492870de6e70408e6af0a1dc17b188b5",
+    "docs/uboq/phase9-project-bootstrap.md": "b3cef8a45015ad5da326e526c5983bd6b27f2d3a058fc3bcba6306fb972a8cd8"
+  },
+  "postgres": {
+    "base": "08d2a43e631ee3d2ee7cd08d00b8e600e35f110c",
+    "environment": "Disposable PostgreSQL 18.4, loopback only",
+    "checks": [
+      {
+        "name": "original nested creation blocked by Project RLS / PUA ACL",
+        "result": "PASS"
+      },
+      {
+        "name": "existing runtime ACL and FORCE RLS policies unchanged",
+        "result": "PASS"
+      },
+      {
+        "name": "unsigned / forged / expired / wrong-project context denied",
+        "result": "PASS"
+      },
+      {
+        "name": "nonmember and legacy logins cannot execute bootstrap",
+        "result": "PASS"
+      },
+      {
+        "name": "stale / inactive / locked / password-change actors denied",
+        "result": "PASS"
+      },
+      {
+        "name": "database permission revocation and inactive role deny even with valid proof",
+        "result": "PASS"
+      },
+      {
+        "name": "database validates profile independently",
+        "result": "PASS"
+      },
+      {
+        "name": "actual action + Prisma transaction creates planning project and only authenticated creator",
+        "result": "PASS"
+      },
+      {
+        "name": "new non-global creator can read workspace; peer and unbound sessions cannot",
+        "result": "PASS"
+      },
+      {
+        "name": "existing project replay cannot add a second creator",
+        "result": "PASS"
+      },
+      {
+        "name": "assignment failure rolls back actual action project insert",
+        "result": "PASS"
+      },
+      {
+        "name": "action rejects absent session and invalid fields without writes",
+        "result": "PASS"
+      },
+      {
+        "name": "direct PUA mutations and trusted function-owner assumption remain denied",
+        "result": "PASS"
+      }
+    ],
+    "identity": {
+      "database": "phase9_disposable",
+      "host": "127.0.0.1",
+      "version": "PostgreSQL 18.4 on x86_64-windows, compiled by msvc-19.44.35227, 64-bit"
+    },
+    "status": "PASS",
+    "clusterStopped": true,
+    "sources": {
+      "prisma/migrations/20261118090000_phase9_project_creator_bootstrap/migration.sql": "89ad5e8bcbbaf33564d0f4a77ffd39874ec2496b85d3140b52c30e82733f27df",
+      "src/app/actions/project-intake.ts": "6ec3b7e6def1faeae6139757537d5d0098b077874761208e25652fdb0aebc16a",
+      "src/lib/uboq/project-ownership.ts": "323d5b45f9ae825b2eeb5fcda1d0d0fc3703bb43fece5233d85815a3506402cd",
+      "scripts/uboq/phase9-bootstrap-fixture.cjs": "a114337a66c5ca323a2647fbb47a5604492870de6e70408e6af0a1dc17b188b5"
+    }
+  },
+  "focusedActionTests": {
+    "command": "node --test --test-name-pattern '^project' scripts/uboq/phase9-acceptance.test.cjs",
+    "passed": 7,
+    "failed": 0,
+    "log": "artifacts/phase9-bootstrap/action-tests.tap",
+    "rawSha256": "27ff087a3632c8deda23693b1afd0f235e5a3cc940b9997104f388188ee38a4c"
+  },
+  "staticChecks": {
+    "eslintAction": "PASS",
+    "fixtureSyntax": "PASS",
+    "diffWhitespace": "PASS"
+  },
+  "reused": {
+    "historical38of38": "PRESERVED; seven affected creation checks superseded by new focused evidence; other 31 unchanged",
+    "historicalTapRawSha256": "930959b302518604ec545f61633dfc2384e042aa2d5b08079edce4372ea0f1a2",
+    "historicalReceiptLfSha256": "3f5cd2b5e69e282b66aae234faf77427f7a2c9f468610f1e5e085aca4951e938",
+    "acceptedBaselineSourceDigestsMatched": 13,
+    "unchangedNonProjectTestSource": true
+  },
+  "limits": [
+    "Fixture supplies operational actor; does not validate live authentication",
+    "Six-table fixture; not full migration-chain replay",
+    "Legacy-only governed-project predicate stub is fail-closed",
+    "No exact-new-commit full build/type claim",
+    "Independent review and exact-SHA disposable Preview UAT remain open"
+  ],
+  "remoteDatabaseWrites": false,
+  "productionActions": false,
+  "securityPr3Changes": false,
+  "mergeOrDeploy": false
+}

@@ -2,6 +2,8 @@
 
 import { prisma } from '@/lib/prisma';
 import { verifyOperationalSession } from '@/lib/dal/auth';
+import { randomUUID } from 'node:crypto';
+import { applyProjectRlsSessionVars } from '@/lib/uboq/project-ownership';
 
 export type ProjectCreateResult = { error: string } | { error?: never; projectId: string };
 
@@ -36,36 +38,18 @@ export async function createProjectProfile(formData: FormData): Promise<ProjectC
 
   // Creating the project never writes BOQ, contract-authority, tax, or cost baselines.
   // Sector is captured here; a tax profile must be explicitly selected at BOQ intake.
-  const project = await prisma.$transaction(async tx => {
-    const created = await tx.project.create({
-      data: {
-        name,
-        client: client || null,
-        location: location || null,
-        contractNumber: contractNumber || null,
-        projectCategory: sector,
-        description: description || null,
-        status: 'PLANNING',
-        contractAmount: 0,
-        uboqGovernanceEnabled: false,
-      },
-      select: { id: true },
+  const projectId = randomUUID();
+  await prisma.$transaction(async tx => {
+    await applyProjectRlsSessionVars(tx, {
+      projectId, userId: actor.userId, sessionVersion: actor.sessionVersion,
     });
-    // Project creators must be able to access the new workspace without a
-    // global-admin bypass. This creates no other user assignments.
-    await tx.projectUserAssignment.create({
-      data: {
-        projectId: created.id,
-        userId: actor.userId,
-        projectRole: actor.role,
-        accessLevel: 'FULL',
-        assignedBy: actor.userId,
-        assignmentStatus: 'active',
-      },
-    });
-    return created;
+    // The bounded command rechecks the DB actor/session/RBAC and creates only
+    // this new project + its creator. Runtime PUA write privileges stay denied.
+    await tx.$queryRaw`SELECT public.phase9_create_project_profile(
+      ${projectId}, ${name}, ${client || null}, ${location || null},
+      ${contractNumber || null}, ${sector}, ${description || null})`;
   });
 
   // No approval, sample project, or synthetic BOQ is created.
-  return { projectId: project.id };
+  return { projectId };
 }
