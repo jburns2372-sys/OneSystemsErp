@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { verifyOperationalSession } from '@/lib/dal/auth';
-import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
+import { assertUboqStageAuthorization, isRolePermittedForUboqStage } from '@/lib/uboq/security/stage-rbac';
 import { withUboqRlsContext, applyProjectRlsSessionVars } from '@/lib/uboq/project-ownership';
 import ProjectDocumentIntakeClient from './ProjectDocumentIntakeClient';
 import { requireProjectDocumentPermission } from '@/lib/uboq/security/document-permissions';
@@ -68,6 +68,11 @@ export default async function ProjectDocumentsPage({
 
   if (!data.project) return <main style={{padding:32}}>Project not found.</main>;
 
+  const uploadGrant = await prisma.rolePermission.findFirst({
+    where: { moduleName: 'DOCUMENTS', canUploadAttachment: true, role: { roleCode: actor.role, isActive: true } },
+    select: { id: true },
+  });
+
   return (
     <main style={{padding:'28px',maxWidth:1400,margin:'0 auto',color:'#f8fafc'}}>
       <div style={{marginBottom:20}}>
@@ -86,6 +91,8 @@ export default async function ProjectDocumentsPage({
       <ProjectDocumentIntakeClient
         projectId={projectId}
         sector={data.project.projectCategory || ''}
+        canStageBoq={isRolePermittedForUboqStage(actor.role, 'UBOQ_INTAKE_STAGE')}
+        canUploadEvidence={Boolean(uploadGrant) && isRolePermittedForUboqStage(actor.role, 'UBOQ_INTAKE_STAGE')}
         files={data.files.map(f => ({
           id: f.id, fileName: f.fileName, documentRole: f.documentRole,
           byteSize: f.byteSize, createdAt: f.createdAt.toISOString(),
