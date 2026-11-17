@@ -1,20 +1,23 @@
 'use server';
 
-import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { verifyOperationalSession } from '@/lib/dal/auth';
-
-const PROJECT_CREATORS = new Set([
-  'SUPER_ADMIN', 'SYSTEM_ADMIN', 'ADMIN', 'PROJECT_DIRECTOR',
-  'DIRECTORS', 'PROJECT_MANAGER',
-]);
 
 export type ProjectCreateResult = { error: string } | { error?: never; projectId: string };
 
 export async function createProjectProfile(formData: FormData): Promise<ProjectCreateResult> {
   const actor = await verifyOperationalSession();
   if (!actor) return { error: 'Please sign in again.' };
-  if (!PROJECT_CREATORS.has(actor.role)) return { error: 'Your role cannot create projects.' };
+  // Enforce the restored DB permission matrix instead of a new hardcoded role list.
+  const mayCreate = await prisma.rolePermission.findFirst({
+    where: {
+      moduleName: 'PROJECT_MANAGEMENT',
+      canCreate: true,
+      role: { roleCode: actor.role, isActive: true },
+    },
+    select: { id: true },
+  });
+  if (!mayCreate) return { error: 'Your role cannot create projects.' };
 
   const name = String(formData.get('name') ?? '').trim();
   const client = String(formData.get('client') ?? '').trim();
