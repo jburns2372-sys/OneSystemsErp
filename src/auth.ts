@@ -54,19 +54,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { email: { equals: email, mode: 'insensitive' } },
         });
 
-        console.log("LOGIN ATTEMPT:", email, "Found user:", !!user);
-
         if (!user) {
           return null;
         }
 
         if (user.status !== 'ACTIVE') {
-          console.log("LOGIN FAILED: NOT ACTIVE");
           return null;
         }
 
         if (user.lockedUntil && user.lockedUntil > new Date()) {
-          console.log("LOGIN FAILED: LOCKED");
           return null;
         }
 
@@ -77,7 +73,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const isValid = await bcrypt.compare(password, user.passwordHash);
-        console.log("LOGIN FAILED? Password valid:", isValid);
         if (!isValid) {
           // Increment failed login attempts
           await prisma.user.update({
