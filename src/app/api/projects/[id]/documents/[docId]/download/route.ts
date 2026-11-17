@@ -4,6 +4,7 @@ import { verifyOperationalSession } from '@/lib/dal/auth';
 import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { withUboqRlsContext, applyProjectRlsSessionVars } from '@/lib/uboq/project-ownership';
 import { resolveUboqVaultStorageProvider } from '@/lib/uboq/storage/vault-storage';
+import { requireProjectDocumentPermission } from '@/lib/uboq/security/document-permissions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,7 @@ export async function GET(
         await assertUboqStageAuthorization(prisma, {
           userId: actor.userId, projectId, capability: 'UBOQ_VIEW',
         });
+        await requireProjectDocumentPermission(actor.role, 'canDownloadAttachment');
         const doc = await prisma.$transaction(async tx => {
           await applyProjectRlsSessionVars(tx, {
             userId: actor.userId, projectId, sessionVersion: actor.sessionVersion,
