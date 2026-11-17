@@ -223,6 +223,21 @@ export default async function ProjectDetailsPage({
           <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '10px' }}>
             <Link href="/projects" style={{ color: 'var(--accent-color)', textDecoration: 'none', display: 'inline-block' }}>&larr; Back to Projects</Link>
             <Link
+              href={`/projects/${project.id}/documents`}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '14px',
+                background: 'rgba(34, 211, 238, 0.15)',
+                border: '1px solid rgba(34, 211, 238, 0.45)',
+                color: 'var(--accent-color)',
+                textDecoration: 'none',
+                fontSize: '0.85rem',
+                fontWeight: 'bold',
+              }}
+            >
+              Documents &amp; Intake
+            </Link>
+            <Link
               href={`/projects/${project.id}/uboq`}
               style={{
                 padding: '4px 12px',
