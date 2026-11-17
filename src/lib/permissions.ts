@@ -114,6 +114,12 @@ export async function getUserPermissions(userId: string) {
                       userRoles.some((ur: { role: { roleCode?: string; roleName?: string } }) => ur.role.roleCode === 'GUEST_USER' || ur.role.roleName === 'GUEST USER');
 
   if (isGuestUser) {
+    // An explicit deny is authoritative, including modules awaiting approval.
+    // Keep the legacy guest defaults only where no deny row was configured.
+    const explicitDenials = Object.fromEntries(Object.entries(aggregatedPermissions)
+      .filter(([, permission]) => permission && typeof permission === 'object'
+        && permission.canView === false
+        && !Object.values(permission).some(value => value === true)));
     aggregatedPermissions['IS_ADMIN'] = false;
     aggregatedPermissions['IS_GUEST_USER'] = true;
     
@@ -172,6 +178,7 @@ export async function getUserPermissions(userId: string) {
         };
       }
     });
+    Object.assign(aggregatedPermissions, explicitDenials);
   }
 
   return aggregatedPermissions;
@@ -207,6 +214,10 @@ export async function getPermissionsForRole(roleCode: string) {
 
   // >>> GUEST USER OVERRIDE <<<
   if (effectiveRoleCode === 'GUEST_USER' || effectiveRoleCode === 'GUEST USER') {
+    const explicitDenials = Object.fromEntries(Object.entries(aggregatedPermissions)
+      .filter(([, permission]) => permission && typeof permission === 'object'
+        && permission.canView === false
+        && !Object.values(permission).some(value => value === true)));
     aggregatedPermissions['IS_ADMIN'] = false;
     aggregatedPermissions['IS_GUEST_USER'] = true;
     
@@ -263,6 +274,7 @@ export async function getPermissionsForRole(roleCode: string) {
         };
       }
     });
+    Object.assign(aggregatedPermissions, explicitDenials);
   }
 
   return aggregatedPermissions;
