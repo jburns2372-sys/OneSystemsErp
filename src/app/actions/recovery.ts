@@ -96,7 +96,8 @@ export async function requestPasswordReset(email: string) {
              remarks: 'Failed to generate token because email provider is not configured.',
          }
       });
-      return { success: false, code: 'SUPER_ADMIN_RECOVERY_EMAIL_PROVIDER_CONFIGURATION_REQUIRED' };
+      // Never expose account existence through provider configuration status.
+      return genericResponse;
     }
 
     // 4. Revoke existing tokens
@@ -161,7 +162,7 @@ export async function requestPasswordReset(email: string) {
         error: 'Password recovery service is unavailable until pending database migrations are applied.',
       };
     }
-    console.error('Error in requestPasswordReset:', error);
+    console.error('PASSWORD_RECOVERY_REQUEST_FAILED', { code: error?.code || 'UNKNOWN' });
     return genericResponse; // fail closed
   }
 }
@@ -272,7 +273,7 @@ export async function executePasswordReset(token: string, newPasswordRaw: string
         error: 'Password recovery service is unavailable until pending database migrations are applied.',
       };
     }
-    console.error('Password reset transaction failed:', error);
+    console.error('PASSWORD_RECOVERY_RESET_FAILED', { code: error?.code || 'UNKNOWN' });
     return { success: false, error: 'An error occurred during password reset.' };
   }
 }
