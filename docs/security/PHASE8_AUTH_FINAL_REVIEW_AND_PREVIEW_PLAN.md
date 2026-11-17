@@ -1,5 +1,11 @@
 # Phase 8 final local security review and Preview acceptance
 
+**Ownership gate update:** This review records commit `9d8669d`. Subsequent
+restored-branch checks found a migration-owner authorization blocker. The
+[ownership correction and exact administrator procedure](PHASE8_MIGRATION_OWNERSHIP_UNBLOCK.md)
+supersede this document's original migration execution instructions. Its SQL DDL
+correction requires privileged isolated validation before live Preview execution.
+
 Local security review: **PASS**; no material auth defect found. Ready to request
 controlled Preview acceptance. Migration/deployment/Owner acceptance remain gates;
 PR #3 stays draft and unmerged. No Production change is authorized.

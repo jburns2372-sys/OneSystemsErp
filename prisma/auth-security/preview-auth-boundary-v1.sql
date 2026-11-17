@@ -13,16 +13,23 @@ CREATE ROLE oserp_preview_delivery_service NOLOGIN NOSUPERUSER NOCREATEDB NOCREA
 -- membership is not inherited and is never granted to the ERP/auth login roles.
 GRANT oserp_auth_owner TO CURRENT_USER WITH INHERIT FALSE, SET TRUE;
 CREATE SCHEMA oserp_auth_private AUTHORIZATION oserp_auth_owner;
-REVOKE ALL ON SCHEMA oserp_auth_private FROM PUBLIC;
-GRANT USAGE ON SCHEMA public TO oserp_auth_owner;
-GRANT USAGE ON SCHEMA oserp_auth_private TO oserp_preview_auth_service;
-GRANT USAGE ON SCHEMA oserp_auth_private TO oserp_preview_delivery_service;
+-- Existing-object grants must be issued with the table owner's authority.
+-- The privileged bootstrap supplies this only for the migration transaction.
 GRANT SELECT (id,email,role,status,"passwordHash","failedLoginAttempts","lockedUntil","sessionVersion","mustChangePassword")
   ON public."User" TO oserp_auth_owner;
 GRANT UPDATE ("failedLoginAttempts","lockedUntil","sessionVersion","passwordHash",password,"passwordChangedAt","mustChangePassword","updatedAt")
   ON public."User" TO oserp_auth_owner;
 GRANT SELECT,INSERT,UPDATE ON public."PasswordRecoveryToken" TO oserp_auth_owner;
+GRANT REFERENCES ("tokenHash") ON public."PasswordRecoveryToken" TO oserp_auth_owner;
 GRANT INSERT ON public."AuditLog" TO oserp_auth_owner;
+GRANT USAGE ON SCHEMA public TO oserp_auth_owner;
+
+-- SET permission alone does not inherit schema-owner rights. Create/restrict
+-- private objects explicitly as their NOLOGIN owner, never as the runtime user.
+SET LOCAL ROLE oserp_auth_owner;
+REVOKE ALL ON SCHEMA oserp_auth_private FROM PUBLIC;
+GRANT USAGE ON SCHEMA oserp_auth_private TO oserp_preview_auth_service;
+GRANT USAGE ON SCHEMA oserp_auth_private TO oserp_preview_delivery_service;
 
 CREATE TABLE oserp_auth_private.recovery_budget (
   bucket text PRIMARY KEY, attempts integer NOT NULL CHECK(attempts BETWEEN 1 AND 5),
@@ -224,6 +231,8 @@ ALTER FUNCTION oserp_auth_private.recovery_reset(text,text) OWNER TO oserp_auth_
 REVOKE ALL ON FUNCTION oserp_auth_private.recovery_reset(text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION oserp_auth_private.recovery_reset(text,text) TO oserp_preview_auth_service;
 
+-- Role administration belongs to the authorized migration login, not the definer.
+RESET ROLE;
 ALTER ROLE oserp_preview_auth_service SET statement_timeout='10s';
 ALTER ROLE oserp_preview_auth_service SET lock_timeout='3s';
 ALTER ROLE oserp_preview_auth_service SET idle_in_transaction_session_timeout='10s';
