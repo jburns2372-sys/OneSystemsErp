@@ -4,7 +4,9 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const ts=require('typescript');
-const fields=require('../../artifacts/uboq/phase8/rbac-restoration-input.json').permissionFields;
+const permissionModel=fs.readFileSync('prisma/managed-pg18-rc-v1/schema.prisma','utf8').match(/model RolePermission \{([\s\S]*?)\n\}/)[1];
+const fields=Array.from(permissionModel.matchAll(/^\s+(can\w+)\s+Boolean/gm),match=>match[1]);
+assert.equal(fields.length,22);
 const modules=['PAYMENT_ISSUANCE','PROJECT_SCHEDULING','Scheduling'];
 function load(primary,assignedGuest=false){
   const denied=modules.map(moduleName=>({moduleName,...Object.fromEntries(fields.map(f=>[f,false]))}));
