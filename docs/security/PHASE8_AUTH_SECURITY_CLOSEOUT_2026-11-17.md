@@ -1,6 +1,10 @@
 # Phase 8 authentication security closeout — Preview only
 
-Status: **NO-GO** until authentication operations are repaired and verified.
+Historical baseline findings below are superseded by the completed implementation
+and [final local review / Preview acceptance plan](PHASE8_AUTH_FINAL_REVIEW_AND_PREVIEW_PLAN.md).
+Local security review: **PASS**. Live Preview acceptance and merge remain **NO-GO**
+until the documented gates pass. The implementation-required checklist below is
+retained as historical context, not a request to repeat completed work.
 Baseline release branch: `release/oserp-proj-uboq-001`, exact pre-change SHA `a850708f003798fbc237b8908330a0552beed7ec`.
 Independent RBAC: 71/71 tests and 6/6 Preview checks were reported PASS on baseline; not rerun here.
 Unrelated Project Intake redesign in Draft PR #2 is paused.

@@ -14,6 +14,9 @@ concurrency:
 jobs:
   setup:
     name: Setup
+    # This security PR uses an explicitly approved, existing Preview database.
+    # Its pushes and closure must not create or delete Neon branches.
+    if: github.head_ref != 'fix/oserp-p8-auth-security-closeout'
     outputs:
       branch: ${{ steps.branch_name.outputs.current_branch }}
     runs-on: ubuntu-latest

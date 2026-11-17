@@ -4,7 +4,9 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "github": {
-    "enabled": true
+  "git": {
+    "deploymentEnabled": {
+      "fix/oserp-p8-auth-security-closeout": false
+    }
   }
 }

@@ -1,9 +1,6 @@
 'use server';
 import { signIn, signOut } from '@/auth';
-import { AuthError } from 'next-auth';
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-import { prisma } from '@/lib/prisma';
 
 export async function login(formData: FormData) {
   const email = formData.get('email') as string;
@@ -14,31 +11,17 @@ export async function login(formData: FormData) {
   }
 
   try {
-    const user = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
-      select: { role: true },
-    });
-
     await signIn('credentials', {
       email,
       password,
       redirect: false,
     });
 
-    const role = user?.role;
-    let redirectPath = role === 'DIRECTORS' ? '/executive/home' : '/';
-    return { redirect: redirectPath };
+    // Home performs the existing authoritative role-specific redirect.
+    return { redirect: '/' };
 
   } catch (error: any) {
-    if (error instanceof AuthError) {
-      switch (error.type) {
-        case 'CredentialsSignin':
-          return { error: 'Invalid email or password' };
-        default:
-          return { error: 'Authentication error: Unknown error' };
-      }
-    }
-    throw error;
+    return { error: 'Invalid email or password' };
   }
 }
 
