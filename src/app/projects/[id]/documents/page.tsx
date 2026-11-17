@@ -5,6 +5,7 @@ import { verifyOperationalSession } from '@/lib/dal/auth';
 import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { withUboqRlsContext, applyProjectRlsSessionVars } from '@/lib/uboq/project-ownership';
 import ProjectDocumentIntakeClient from './ProjectDocumentIntakeClient';
+import { requireProjectDocumentPermission } from '@/lib/uboq/security/document-permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +32,7 @@ export default async function ProjectDocumentsPage({
         await assertUboqStageAuthorization(prisma, {
           userId: actor.userId, projectId, capability: 'UBOQ_VIEW',
         });
+        await requireProjectDocumentPermission(actor.role, 'canView');
         return prisma.$transaction(async (tx) => {
           await applyProjectRlsSessionVars(tx, {
             projectId, userId: actor.userId, sessionVersion: actor.sessionVersion,
