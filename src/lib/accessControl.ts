@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getUserPermissions } from "@/lib/permissions";
-import { revalidatePath } from "next/cache";
+import { isSystemAdminRole, resolveAuthorizationAction } from './authorizationActions';
 
 export type AccessCheckResult = {
   allowed: boolean;
@@ -22,47 +22,48 @@ export async function checkUserAccess(
   deviceInfo: string = "unknown"
 ): Promise<AccessCheckResult> {
   try {
+    const actionKey = resolveAuthorizationAction(action);
+    if (!actionKey) return { allowed: false, denialReason: 'Unsupported authorization action' };
     // 1. Check if user exists and is active
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, status: true, name: true }
+      select: { id: true, role: true, status: true, name: true, lockedUntil: true }
     });
 
     if (!user) {
       return logAndReturnDenial(userId, "System", projectId, moduleName, action, "User does not exist", requestIp, deviceInfo);
     }
-    if (user.status !== "ACTIVE") {
+    if (user.status !== "ACTIVE" || (user.lockedUntil && user.lockedUntil > new Date())) {
       return logAndReturnDenial(userId, user.role, projectId, moduleName, action, "User account is inactive", requestIp, deviceInfo);
     }
 
     // 2. Check existing RBAC permissions
     const permissions = await getUserPermissions(userId);
-    const modulePermissions = permissions[moduleName] || permissions["ALL"];
+    const modulePermissions = Object.hasOwn(permissions, moduleName) ? permissions[moduleName] : null;
 
     if (!modulePermissions) {
       return logAndReturnDenial(userId, user.role, projectId, moduleName, action, `Access Denied: Your role does not allow access to this module.`, requestIp, deviceInfo);
     }
     
-    // Map action string to the existing DB permission fields (canView, canCreate, etc.)
-    let actionKey = "canView"; // Default mapped property
-    if (action === "CREATE") actionKey = "canCreate";
-    else if (action === "EDIT" || action === "UPDATE") actionKey = "canEdit";
-    else if (action === "DELETE") actionKey = "canDelete";
-    else if (action === "APPROVE") actionKey = "canApprove";
-    else if (action === "SUBMIT") actionKey = "canSubmit";
-    else if (action === "EXPORT") actionKey = "canExport";
-
     const hasActionAccess = modulePermissions[actionKey] === true;
 
     if (!hasActionAccess) {
       return logAndReturnDenial(userId, user.role, projectId, moduleName, action, `Access Denied: Your role does not allow this action.`, requestIp, deviceInfo);
     }
 
+    // The current database is the tenant boundary. Even a system admin cannot
+    // authorize a project that is absent from this tenant's database.
+    if (projectId && !await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } })) {
+      return logAndReturnDenial(userId, user.role, projectId, moduleName, action, 'Project does not exist in this tenant', requestIp, deviceInfo);
+    }
+
     // 3. Admin / Executive Override Logic (if applicable)
     // If the user is SUPER_ADMIN, they still need a project ID to avoid cross-project pollution, 
     // but they bypass the strict `ProjectUserAssignment` database check.
-    if (user.role === "SUPER_ADMIN" || user.role === "SYSTEM_ADMIN") {
-      if (!projectId && !["Projects", "Users", "Settings", "Roles", "Executive Dashboard"].includes(moduleName)) {
+    const globalModules = ['Projects', 'Users', 'Settings', 'Roles', 'Executive Dashboard',
+      'DASHBOARD', 'PROJECT_MANAGEMENT', 'SYSTEM_ROLES', 'SYSTEM_SETTINGS', 'USERS'];
+    if (isSystemAdminRole(user.role) && permissions.IS_ADMIN === true) {
+      if (!projectId && !globalModules.includes(moduleName)) {
          return logAndReturnDenial(userId, user.role, projectId, moduleName, action, "Access Denied: Admins must select an active project before continuing.", requestIp, deviceInfo);
       }
       await logAccessAllowed(user, null, null, projectId, moduleName, action, transactionId, "Admin Override", requestIp, deviceInfo);
@@ -77,7 +78,7 @@ export async function checkUserAccess(
     if (!projectId) {
       // If the module itself doesn't require a project (e.g. general settings), we can allow it if RBAC passed.
       // But for project modules, it MUST be denied.
-      if (["Projects", "Users", "Settings", "Roles"].includes(moduleName)) {
+      if (globalModules.includes(moduleName)) {
         await logAccessAllowed(user, null, null, null, moduleName, action, transactionId, "Global Module Access", requestIp, deviceInfo);
         return { allowed: true, userRole: user.role };
       }
@@ -103,7 +104,7 @@ export async function checkUserAccess(
     }
 
     // 6. Check Access Level constraints
-    if (assignment.accessLevel === "view_only" && action !== "READ") {
+    if (assignment.accessLevel === "view_only" && actionKey !== 'canView') {
       return logAndReturnDenial(userId, user.role, projectId, moduleName, action, "Access Denied: Guest users have view-only access.", requestIp, deviceInfo);
     }
 

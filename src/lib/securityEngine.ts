@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/permissions';
+import { resolveAuthorizationAction } from './authorizationActions';
 
 export type ActionType = 'view' | 'create' | 'edit' | 'delete' | 'approve' | 'submit' | 'lock' | 'export' | 'read' | 'write' | 'upload' | 'download';
 
@@ -18,6 +19,9 @@ export interface SecurityContext {
 
 export async function canAccess(context: SecurityContext): Promise<boolean> {
   const { userId, projectId, module, action } = context;
+  const actionKey = resolveAuthorizationAction(action);
+  if (!actionKey) return false;
+  if (!projectId && ['PAYROLL', 'FINANCE', 'PAYMENT_ISSUANCE', 'Scheduling', 'PROJECT_SCHEDULING'].includes(module)) return false;
 
   if (!userId) {
     await logSecurityEvent({ ...context, status: 'BLOCKED', threatType: 'UNAUTHENTICATED_ACCESS', severity: 'HIGH', message: 'User is not authenticated' });
@@ -33,19 +37,14 @@ export async function canAccess(context: SecurityContext): Promise<boolean> {
 
   // 2. Check Module-Level RBAC Permissions
   const permissions = await getUserPermissions(userId);
-  if (!permissions.IS_ADMIN) {
-    const modulePerms = permissions[module];
+  {
+    const modulePerms = Object.hasOwn(permissions, module) ? permissions[module] : null;
     if (!modulePerms) {
       await logSecurityEvent({ ...context, status: 'BLOCKED', threatType: 'UNAUTHORIZED_MODULE_ACCESS', severity: 'MEDIUM', message: `No access to module ${module}` });
       return false;
     }
     
-    // Check specific action (mapping simple actions to permission keys)
-    let actionKey = `can${action.charAt(0).toUpperCase() + action.slice(1)}`;
-    if (action === 'read') actionKey = 'canView';
-    if (action === 'write') actionKey = 'canEdit';
-
-    if (modulePerms[actionKey] === false) {
+    if (modulePerms[actionKey] !== true) {
       await logSecurityEvent({ ...context, status: 'BLOCKED', threatType: 'UNAUTHORIZED_ACTION', severity: 'MEDIUM', message: `No permission to ${action} in ${module}` });
       return false;
     }
@@ -70,6 +69,7 @@ export async function canAccess(context: SecurityContext): Promise<boolean> {
 
   // 3. Check Project-Level PBAC (If project context is provided)
   if (projectId) {
+    if (!await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } })) return false;
     if (!permissions.IS_ADMIN) { // Admins have global access
       const assignment = await prisma.projectUserAssignment.findUnique({
         where: {
@@ -80,7 +80,8 @@ export async function canAccess(context: SecurityContext): Promise<boolean> {
         }
       });
 
-      if (!assignment || assignment.assignmentStatus !== 'active') {
+      if (!assignment || assignment.assignmentStatus !== 'active'
+        || (assignment.accessLevel === 'view_only' && actionKey !== 'canView')) {
         await logSecurityEvent({ ...context, status: 'BLOCKED', threatType: 'CROSS_PROJECT_ACCESS_ATTEMPT', severity: 'CRITICAL', message: `User attempted to access unassigned project ${projectId}` });
         return false;
       }
