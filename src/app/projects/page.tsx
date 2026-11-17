@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import PermissionGuard from '@/components/PermissionGuard';
 import { getUserPermissions } from '@/lib/permissions';
-import NewProjectButton from './NewProjectButton';
+import ProjectStartButton from './ProjectStartButton';
 import ManagerAssigner from './ManagerAssigner';
 import DeleteProjectButton from './DeleteProjectButton';
 
@@ -24,13 +24,6 @@ export default async function ProjectsPage() {
     : (user?.role || 'GUEST_USER');
   const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
 
-  console.log('--- PROJECTS PAGE DEBUG ---');
-  console.log('userId:', userId);
-  console.log('user.role:', user?.role);
-  console.log('simulatedRole:', simulatedRole);
-  console.log('effectiveRole:', effectiveRole);
-  console.log('isSuperAdmin:', isSuperAdmin);
-
 
   const projects = await prisma.project.findMany({
     where: isSuperAdmin ? {} : {
@@ -44,7 +37,8 @@ export default async function ProjectsPage() {
     orderBy: { createdAt: 'desc' },
     include: { 
       manager: true,
-      consolidatedBoqItems: { select: { totalCost: true } }
+      consolidatedBoqItems: { select: { totalCost: true } },
+      _count: { select: { uboqSourceDocuments: true } }
     }
   });
 
@@ -62,28 +56,11 @@ export default async function ProjectsPage() {
       <header className={styles.header}>
         <div>
           <h1>Projects</h1>
-          <p>Manage and monitor all active construction projects.</p>
+          <p>Create project profiles, upload documents and validate Universal BOQ baselines.</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <Link
-            href="/boq-template"
-            style={{ 
-              padding: '10px 18px', 
-              borderRadius: '8px', 
-              background: 'rgba(0, 240, 255, 0.1)', 
-              color: 'var(--accent-color)', 
-              textDecoration: 'none', 
-              fontWeight: 'bold',
-              fontSize: '0.9rem', 
-              border: '1px solid rgba(0, 240, 255, 0.3)',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            📄 BOQ Template Center
-          </Link>
           <PermissionGuard permissions={permissions} moduleName="PROJECT_MANAGEMENT" action="canCreate">
-            <NewProjectButton users={users} />
+            <ProjectStartButton />
           </PermissionGuard>
         </div>
       </header>
@@ -93,6 +70,7 @@ export default async function ProjectsPage() {
           <thead>
             <tr>
               <th>Project Name</th>
+              <th>Documents</th>
               <th>Status</th>
               <th>Contract Amounts</th>
               <th>Timeline</th>
@@ -103,7 +81,7 @@ export default async function ProjectsPage() {
           <tbody>
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={6} className={styles.emptyState}>No projects found.</td>
+                <td colSpan={7} className={styles.emptyState}>No projects yet. Create a project first, then add its contract, BOQ and supporting documents.</td>
               </tr>
             ) : projects.map(project => {
               const formatDate = (d: any) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBA';
@@ -119,8 +97,13 @@ export default async function ProjectsPage() {
                     {project.status}
                   </span>
                 </td>
+                <td>
+                  <Link href={`/projects/${project.id}/documents`} className={styles.actionLink}>
+                    {project._count.uboqSourceDocuments} files · Open Intake
+                  </Link>
+                </td>
                 <td className={styles.amount}>
-                  <div><strong>Awarded:</strong> ₱ {project.contractAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                  <div><strong>Awarded:</strong> {project.contractAmount > 0 ? `₱ ${project.contractAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Pending BOQ approval'}</div>
                   <div style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '4px' }}><strong>Materials:</strong> ₱ {consolidatedCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 </td>
                 <td style={{ fontSize: '0.85rem', color: '#4b5563', whiteSpace: 'nowrap' }}>
