@@ -34,6 +34,8 @@ The sandboxed build failed at the existing Google Fonts Inter download. A networ
 
 ## Remaining acceptance
 
-Type/build results and final source digests are recorded in the accompanying batch receipt after execution. `scripts/uboq/phase9-local-checks.cjs` supplies only synthetic credentials and a closed loopback database endpoint for generation/type/build commands.
+Final source commit: `8b67e74e05bc0e6894a548f06c5d9e324add50a5`. Standalone TypeScript and `npm run build` both passed (exit 0). The build compiled in 45 seconds, completed Next.js type checking and generated its route output. During prerender it logged expected failed reads against the closed loopback database and unrelated dynamic-rendering messages. These do not establish database-backed acceptance. The existing Serwist/Turbopack warning remains.
+
+Final source/log digests and result limits are frozen in `phase9-acceptance-batch-receipt.json`. `scripts/uboq/phase9-local-checks.cjs` supplies only synthetic credentials and a closed loopback database endpoint for generation/type/build commands. A subsequent documentation-only commit preserves the tested application-source identities; do not rerun accepted checks solely for that receipt commit.
 
 Required before acceptance: independent review; real disposable PostgreSQL concurrency/RLS checks; exact-commit disposable Preview UAT for create/assign/register/upload/download/stage; private-blob transport checks; Owner sign-off. This batch does not merge PR #2 or work on Security PR #3. Failed-upload orphan reclamation must use reviewed reference-aware reconciliation, never blind inline deletion.
