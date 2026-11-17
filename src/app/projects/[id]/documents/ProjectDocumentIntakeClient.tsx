@@ -42,6 +42,8 @@ const TAX_PROFILES: Record<string, Array<[string, string]>> = {
 export default function ProjectDocumentIntakeClient(props: {
   projectId: string;
   sector: string;
+  canStageBoq: boolean;
+  canUploadEvidence: boolean;
   files: DocumentRow[];
 }) {
   const router = useRouter();
@@ -53,8 +55,10 @@ export default function ProjectDocumentIntakeClient(props: {
   const taxes = TAX_PROFILES[props.sector] || [];
   const activeTax = taxes.some(([code]) => code === tax) ? tax : '';
   const isBoq = role === 'CONTRACT_BOQ';
+  const canUpload = isBoq ? props.canStageBoq : props.canUploadEvidence;
 
   async function upload() {
+    if (!canUpload) { setResults(['Your role cannot upload this document category.']); return; }
     const files = Array.from(input.current?.files || []);
     if (!files.length) { setResults(['Select one or more files.']); return; }
     if (isBoq && !activeTax) {
@@ -122,14 +126,16 @@ export default function ProjectDocumentIntakeClient(props: {
             </select>
           </label>}
         </div>
+        {!canUpload && <p role="status" style={{color:'#fbbf24'}}>Your role has view access but not permission to upload this document category.</p>}
         <input ref={input} type="file" multiple
+          disabled={!canUpload || busy}
           accept=".xlsx,.xls,.csv,.pdf,.docx,.png,.jpg,.jpeg,.json,.xml,.html"
           aria-label="Select project files"
           style={{padding:16,border:'2px dashed #475569',width:'100%',maxWidth:'100%',boxSizing:'border-box',borderRadius:10}}/>
         <p style={{fontSize:12,color:'#94a3b8'}}>
           Files upload individually using the existing secure intake. Up to 25 MB per file at the application layer; your hosting platform may impose a smaller request limit. Files must pass content security checks.
         </p>
-        <button type="button" onClick={upload} disabled={busy}
+        <button type="button" onClick={upload} disabled={busy || !canUpload}
           style={{background:'#22d3ee',color:'#042f2e',padding:'11px 18px',border:0,borderRadius:8,fontWeight:700,cursor:'pointer'}}>
           {busy ? 'Uploading and validating...' : 'Upload Selected Documents'}
         </button>
