@@ -1,0 +1,150 @@
+-- Run with psql -X, using an approved administrator service credential.
+-- Isolated restored branch ONLY. Default: rehearse and ROLLBACK.
+-- No passwords or runtime LOGIN activation belong in this file.
+\set ON_ERROR_STOP on
+\set VERBOSITY terse
+\if :{?commit_boundary}
+\else
+  \set commit_boundary false
+\endif
+
+BEGIN;
+SET LOCAL lock_timeout = '3s';
+SET LOCAL statement_timeout = '30s';
+
+DO $guard$
+BEGIN
+  IF current_database() <> 'oserp_uboq_preview'
+     OR current_setting('neon.project_id', true) IS DISTINCT FROM 'long-recipe-20782583'
+     OR current_setting('neon.branch_id', true) IS DISTINCT FROM 'br-shy-thunder-bchgx7m8'
+     OR current_setting('neon.endpoint_id', true) IS DISTINCT FROM 'ep-dry-meadow-bc7x6os3'
+  THEN RAISE EXCEPTION 'ISOLATED_RESTORE_TARGET_REQUIRED'; END IF;
+  IF current_user <> session_user OR session_user = 'neondb_owner'
+     OR NOT pg_has_role(session_user, 'neondb_owner', 'SET')
+  THEN RAISE EXCEPTION 'AUTHORIZED_ADMIN_SESSION_REQUIRED'; END IF;
+  IF NOT (SELECT rolsuper FROM pg_roles WHERE rolname=session_user)
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.roleid
+       WHERE r.rolname='oserp_preview_migrate_admin' AND m.admin_option
+         AND pg_has_role(session_user,m.member,'USAGE')
+     )
+  THEN RAISE EXCEPTION 'OWNER_ROLE_ADMIN_OPTION_REQUIRED'; END IF;
+  IF pg_has_role('neondb_owner','oserp_preview_migrate_admin','MEMBER')
+  THEN RAISE EXCEPTION 'PREEXISTING_MIGRATION_MEMBERSHIP_REVIEW_REQUIRED'; END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname IN
+     ('oserp_auth_owner','oserp_preview_auth_service','oserp_preview_delivery_service'))
+     OR to_regnamespace('oserp_auth_private') IS NOT NULL
+  THEN RAISE EXCEPTION 'AUTH_OBJECTS_ALREADY_EXIST'; END IF;
+  IF (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relname IN ('User','PasswordRecoveryToken','AuditLog')
+      AND pg_get_userbyid(c.relowner)='oserp_preview_migrate_admin') <> 3
+  THEN RAISE EXCEPTION 'TABLE_OWNER_MISMATCH'; END IF;
+  IF (SELECT count(*) FROM public."Role") <> 32
+     OR (SELECT count(*) FROM public."RolePermission") <> 470
+     OR (SELECT count(*) FROM public._prisma_migrations) <> 39
+  THEN RAISE EXCEPTION 'RESTORED_BASELINE_MISMATCH'; END IF;
+END $guard$;
+
+-- Capture protected rows and runtime ACLs, not merely row counts. Temp data is
+-- session-local and never printed. PostgreSQL transactional DCL prevents other
+-- sessions observing the temporary membership before it is removed.
+CREATE TEMP TABLE p8_ownership_baseline ON COMMIT DROP AS
+SELECT 'data'::text AS kind, c AS object_name, md5(rows::text) AS fingerprint
+FROM (SELECT 'Role' AS c,jsonb_agg(to_jsonb(t) ORDER BY id) AS rows FROM public."Role" t
+ UNION ALL SELECT 'SystemRole',jsonb_agg(to_jsonb(t) ORDER BY id) FROM public."SystemRole" t
+ UNION ALL SELECT 'Module',jsonb_agg(to_jsonb(t) ORDER BY id) FROM public."Module" t
+ UNION ALL SELECT 'RolePermission',jsonb_agg(to_jsonb(t) ORDER BY id) FROM public."RolePermission" t
+ UNION ALL SELECT 'User',jsonb_agg(to_jsonb(t) ORDER BY id) FROM public."User" t
+ UNION ALL SELECT 'UserRole',jsonb_agg(to_jsonb(t) ORDER BY id) FROM public."UserRole" t
+ UNION ALL SELECT '_prisma_migrations',jsonb_agg(to_jsonb(t) ORDER BY id) FROM public._prisma_migrations t) q;
+
+CREATE TEMP TABLE p8_runtime_memberships ON COMMIT DROP AS
+SELECT * FROM pg_auth_members WHERE member IN (
+ SELECT oid FROM pg_roles WHERE rolname IN ('oserp_preview_runtime_app',
+ 'oserp_preview_direct_app','oserp_compat_app','oserp_legacy_app'));
+
+CREATE TEMP VIEW p8_current_runtime_acl AS
+SELECT c.relname,''::text AS column_name,a.grantor,a.grantee,a.privilege_type,a.is_grantable
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+CROSS JOIN LATERAL aclexplode(c.relacl) a
+WHERE n.nspname='public' AND c.relname IN ('User','PasswordRecoveryToken','AuditLog')
+AND (a.grantee=0 OR a.grantee IN (SELECT oid FROM pg_roles WHERE rolname IN
+ ('oserp_preview_runtime_app','oserp_preview_direct_app','oserp_compat_app','oserp_legacy_app')))
+UNION ALL
+SELECT c.relname,col.attname,a.grantor,a.grantee,a.privilege_type,a.is_grantable
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+JOIN pg_attribute col ON col.attrelid=c.oid AND col.attnum>0 AND NOT col.attisdropped
+CROSS JOIN LATERAL aclexplode(col.attacl) a
+WHERE n.nspname='public' AND c.relname IN ('User','PasswordRecoveryToken','AuditLog')
+AND (a.grantee=0 OR a.grantee IN (SELECT oid FROM pg_roles WHERE rolname IN
+ ('oserp_preview_runtime_app','oserp_preview_direct_app','oserp_compat_app','oserp_legacy_app')));
+CREATE TEMP TABLE p8_runtime_acl ON COMMIT DROP AS SELECT * FROM p8_current_runtime_acl;
+
+-- INHERIT TRUE is needed only for the existing-table grant statements:
+-- their grantor is the owning role, so grants survive membership cleanup.
+-- No ADMIN delegation or SET ROLE to the table-owner role is given to neondb_owner.
+GRANT oserp_preview_migrate_admin TO neondb_owner
+  WITH ADMIN FALSE, INHERIT TRUE, SET FALSE;
+SET LOCAL ROLE neondb_owner;
+
+DO $references$
+BEGIN
+  IF NOT has_column_privilege(current_user,'public."PasswordRecoveryToken"',
+                              'tokenHash','REFERENCES')
+  THEN RAISE EXCEPTION 'RECOVERY_TOKEN_REFERENCES_REQUIRED'; END IF;
+END $references$;
+
+-- The security routine bodies are unchanged; DDL now explicitly SETs the
+-- NOLOGIN owner for private-object creation and grants it tokenHash REFERENCES.
+\ir ../../prisma/auth-security/preview-auth-boundary-v1.sql
+
+RESET ROLE;
+\ir isolated-ownership-cleanup.sql
+
+DO $verify$
+DECLARE r record; actual text;
+BEGIN
+  IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='oserp_auth_private') <> 6
+     OR EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+                WHERE n.nspname='oserp_auth_private'
+                  AND (pg_get_userbyid(p.proowner)<>'oserp_auth_owner'
+                       OR NOT ('search_path=pg_catalog'=ANY(p.proconfig))
+                       OR (p.proname<>'audit' AND NOT p.prosecdef)))
+  THEN RAISE EXCEPTION 'AUTH_ROUTINE_OWNERSHIP_FAILED'; END IF;
+  IF NOT has_column_privilege('oserp_auth_owner','public."PasswordRecoveryToken"',
+                              'tokenHash','REFERENCES')
+     OR has_column_privilege('neondb_owner','public."PasswordRecoveryToken"',
+                              'tokenHash','REFERENCES')
+  THEN RAISE EXCEPTION 'REFERENCES_CLEANUP_FAILED'; END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname IN ('oserp_auth_owner',
+      'oserp_preview_auth_service','oserp_preview_delivery_service')
+      AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls))
+  THEN RAISE EXCEPTION 'AUTH_ROLE_FLAGS_FAILED'; END IF;
+  IF EXISTS ((SELECT * FROM pg_auth_members WHERE member IN (
+       SELECT oid FROM pg_roles WHERE rolname IN ('oserp_preview_runtime_app',
+       'oserp_preview_direct_app','oserp_compat_app','oserp_legacy_app'))
+       EXCEPT SELECT * FROM p8_runtime_memberships)
+       UNION ALL (SELECT * FROM p8_runtime_memberships EXCEPT
+       SELECT * FROM pg_auth_members WHERE member IN (
+       SELECT oid FROM pg_roles WHERE rolname IN ('oserp_preview_runtime_app',
+       'oserp_preview_direct_app','oserp_compat_app','oserp_legacy_app'))))
+  THEN RAISE EXCEPTION 'ERP_ROLE_MEMBERSHIP_CHANGED'; END IF;
+  IF EXISTS ((SELECT * FROM p8_current_runtime_acl EXCEPT SELECT * FROM p8_runtime_acl)
+       UNION ALL (SELECT * FROM p8_runtime_acl EXCEPT SELECT * FROM p8_current_runtime_acl))
+  THEN RAISE EXCEPTION 'ERP_OR_PUBLIC_TABLE_ACL_CHANGED'; END IF;
+  FOR r IN SELECT * FROM p8_ownership_baseline LOOP
+    EXECUTE format('SELECT md5(jsonb_agg(to_jsonb(t) ORDER BY id)::text) FROM public.%I t',r.object_name) INTO actual;
+    IF actual IS DISTINCT FROM r.fingerprint THEN
+      RAISE EXCEPTION 'PROTECTED_DATA_CHANGED: %',r.object_name;
+    END IF;
+  END LOOP;
+END $verify$;
+
+\if :commit_boundary
+  COMMIT;
+  \echo ISOLATED_OWNERSHIP_BOUNDARY_COMMITTED_RUNTIME_NOLOGIN
+\else
+  ROLLBACK;
+  \echo ISOLATED_OWNERSHIP_REHEARSAL_ROLLED_BACK
+\endif

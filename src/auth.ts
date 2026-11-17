@@ -1,7 +1,6 @@
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import bcrypt from 'bcryptjs';
-import { prisma } from '@/lib/prisma';
+import { authenticateCredentials } from '@/lib/auth-security/login';
 import { authConfig } from './auth.config';
 
 // Module augmentation to add custom fields to NextAuth Session
@@ -43,65 +42,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
-
-        const email = (credentials.email as string).trim();
-        const password = credentials.password as string;
-
-        const user = await prisma.user.findFirst({
-          where: { email: { equals: email, mode: 'insensitive' } },
-        });
-
-        console.log("LOGIN ATTEMPT:", email, "Found user:", !!user);
-
-        if (!user) {
-          return null;
-        }
-
-        if (user.status !== 'ACTIVE') {
-          console.log("LOGIN FAILED: NOT ACTIVE");
-          return null;
-        }
-
-        if (user.lockedUntil && user.lockedUntil > new Date()) {
-          console.log("LOGIN FAILED: LOCKED");
-          return null;
-        }
-
-        // An account awaiting password activation cannot authenticate. Reject it
-        // before attempting failed-login writes with the restricted runtime role.
-        if (!user.passwordHash) {
-          return null;
-        }
-
-        const isValid = await bcrypt.compare(password, user.passwordHash);
-        console.log("LOGIN FAILED? Password valid:", isValid);
-        if (!isValid) {
-          // Increment failed login attempts
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { failedLoginAttempts: { increment: 1 } },
-          });
-          return null;
-        }
-
-        // On success, reset failed login attempts
-        if ((user.failedLoginAttempts || 0) > 0) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { failedLoginAttempts: 0 },
-          });
-        }
-
-        // Return minimal safe object
-        return {
-          id: user.id,
-          role: user.role,
-          sessionVersion: user.sessionVersion || 0,
-          mustChangePassword: user.mustChangePassword || false,
-        };
+        return authenticateCredentials(credentials?.email, credentials?.password);
       },
     }),
   ],
