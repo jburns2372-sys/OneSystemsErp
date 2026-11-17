@@ -70,7 +70,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const isValid = await bcrypt.compare(password, user.passwordHash || '');
+        // An account awaiting password activation cannot authenticate. Reject it
+        // before attempting failed-login writes with the restricted runtime role.
+        if (!user.passwordHash) {
+          return null;
+        }
+
+        const isValid = await bcrypt.compare(password, user.passwordHash);
         console.log("LOGIN FAILED? Password valid:", isValid);
         if (!isValid) {
           // Increment failed login attempts
