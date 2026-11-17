@@ -103,8 +103,29 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             headers: { 'Cache-Control': 'private, no-store' },
           });
         } catch (err) {
-          // Only newly written orphan objects can be removed; immutable reused data is untouched.
-          if (stored.newlyCreated) await vault.deleteOrphanIfCreated(stored.storageUri);
+          // Another request may have committed the same document after our lookup.
+          if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
+            const winner = await prisma.$transaction(async tx => {
+              await applyProjectRlsSessionVars(tx, {
+                projectId, userId: actor.userId, sessionVersion: actor.sessionVersion,
+              });
+              return tx.uboqSourceDocument.findUnique({
+                where: { projectId_sha256Hash_documentRole: {
+                  projectId, sha256Hash: scan.sha256Hash, documentRole,
+                } },
+                select: { id: true, storageUri: true, sha256Hash: true },
+              });
+            });
+            if (winner) {
+              await vault.getAndVerify({ storageUri: winner.storageUri,
+                expectedProjectId: projectId, expectedSha256Hash: winner.sha256Hash });
+              return NextResponse.json({ id: winner.id, duplicate: true, status: 'PRESERVED_EVIDENCE' }, {
+                headers: { 'Cache-Control': 'private, no-store' },
+              });
+            }
+          }
+          // Content-addressed objects can be shared by concurrent requests/categories.
+          // Retain failures for reference-aware reconciliation; never delete inline.
           throw err;
         }
       }

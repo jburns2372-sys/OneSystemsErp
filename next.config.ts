@@ -12,7 +12,8 @@ const nextConfig: NextConfig = {
     // TODO: Remove this after fixing all migration-generated TypeScript errors
     // ignoreBuildErrors: true,
   },
-  turbopack: {},
+  // Nested Git worktrees must not inherit the parent checkout's lockfile root.
+  turbopack: { root: __dirname },
   serverExternalPackages: ['pdf-parse', 'pdfjs-dist', 'tesseract.js', 'sharp'],
   // Allow Playwright to connect from 127.0.0.1
   ...({ allowedDevOrigins: ['127.0.0.1'] } as any),

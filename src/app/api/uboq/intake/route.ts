@@ -5,6 +5,8 @@ import { verifyOperationalSession } from '@/lib/dal/auth';
 import { withUboqRlsContext } from '@/lib/uboq/project-ownership';
 import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { redactUboqPayloadForRole } from '@/lib/uboq/security/redact-payload';
+import { STANDARD_TAX_PROFILES } from '@/lib/uboq/tax-engine';
+import { scanUploadedDocumentSecurity } from '@/lib/uboq/intake/security-guard';
 import {
   approveOperationalSnapshotAndPrrs,
   ingestAndStageProjectUboqPackage,
@@ -28,13 +30,17 @@ export async function POST(request: NextRequest) {
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
       const projectId = String(formData.get('projectId') || '').trim();
-      const file = formData.get('file') as File | null;
-      if (!projectId || !file || file.size === 0) {
+      const file = formData.get('file');
+      if (!projectId || !(file instanceof File) || file.size === 0 || file.size > 25 * 1024 * 1024) {
         return NextResponse.json({ error: 'UBOQ_INVALID_INTAKE_PAYLOAD' }, { status: 400 });
       }
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const sectorType = String(formData.get('sectorType') || 'CORPORATE') as UboqSectorType;
-      const taxProfileCode = String(formData.get('taxProfileCode') || 'CORP_PH_VAT_EXCL_12');
+      const sectorType = String(formData.get('sectorType') || '').trim() as UboqSectorType;
+      const taxProfileCode = String(formData.get('taxProfileCode') || '').trim();
+      const profile = Object.hasOwn(STANDARD_TAX_PROFILES, taxProfileCode)
+        ? STANDARD_TAX_PROFILES[taxProfileCode] : undefined;
+      if (!['GOVERNMENT', 'CORPORATE', 'PRIVATE'].includes(sectorType) || profile?.sectorType !== sectorType) {
+        return NextResponse.json({ error: 'UBOQ_EXPLICIT_COMPATIBLE_TAX_PROFILE_REQUIRED' }, { status: 400 });
+      }
       const documentRole = String(formData.get('documentRole') || 'CONTRACT_BOQ');
       const allowDuplicateNewRevision = String(formData.get('allowDuplicateNewRevision') || '') === 'true';
 
@@ -46,6 +52,17 @@ export async function POST(request: NextRequest) {
             projectId,
             capability: 'UBOQ_INTAKE_STAGE',
           });
+          const project = await prisma.project.findUnique({
+            where: { id: projectId }, select: { projectCategory: true },
+          });
+          if (!project || project.projectCategory !== sectorType) {
+            throw new Error('UBOQ_PROJECT_SECTOR_CONFIRMATION_REQUIRED');
+          }
+          const buffer = Buffer.from(await file.arrayBuffer());
+          const scan = scanUploadedDocumentSecurity(file.name, buffer, file.type);
+          if (!scan.safe || scan.findings.length > 0) {
+            throw new Error('UBOQ_INTAKE_SECURITY_BLOCKED');
+          }
           return ingestAndStageProjectUboqPackage(prisma as never, {
             projectId,
             uploadedByUserId: actor.userId,
@@ -94,17 +111,38 @@ export async function POST(request: NextRequest) {
     if (action === 'REGENERATE_DRAFT_SNAPSHOT') {
       const regenerated = await withUboqRlsContext(
         { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId },
-        async () =>
-          regenerateDraftSnapshotFromVerifiedDocument(prisma as never, {
+        async () => {
+          await assertUboqStageAuthorization(prisma, {
+            userId: actor.userId, projectId, capability: 'UBOQ_INTAKE_STAGE',
+          });
+          const source = await prisma.uboqSourceDocument.findFirst({
+            where: { id: String(body.sourceDocumentId || ''), projectId },
+            select: { metadataJson: true },
+          });
+          const metadata = source?.metadataJson as { stagedIntakeOptions?: {
+            sectorType?: string; taxProfileCode?: string;
+          } } | null;
+          const sectorType = String(body.sectorType ?? metadata?.stagedIntakeOptions?.sectorType ?? '').trim() as UboqSectorType;
+          const taxProfileCode = String(body.taxProfileCode ?? metadata?.stagedIntakeOptions?.taxProfileCode ?? '').trim();
+          const profile = Object.hasOwn(STANDARD_TAX_PROFILES, taxProfileCode)
+            ? STANDARD_TAX_PROFILES[taxProfileCode] : undefined;
+          const project = await prisma.project.findUnique({
+            where: { id: projectId }, select: { projectCategory: true },
+          });
+          if (!source || !profile || profile.sectorType !== sectorType || project?.projectCategory !== sectorType) {
+            throw new Error('UBOQ_EXPLICIT_COMPATIBLE_TAX_PROFILE_REQUIRED');
+          }
+          return regenerateDraftSnapshotFromVerifiedDocument(prisma as never, {
             projectId,
             sourceDocumentId: String(body.sourceDocumentId || ''),
             preparedByUserId: actor.userId,
-            sectorType: body.sectorType as UboqSectorType | undefined,
+            sectorType,
             clientName: body.clientName,
             contractRef: body.contractRef,
-            taxProfileCode: body.taxProfileCode,
+            taxProfileCode,
             resourceTakeoffs: body.resourceTakeoffs as ResourceTakeoffSpecInput[] | undefined,
-          })
+          });
+        }
       );
       return NextResponse.json(redactUboqPayloadForRole(regenerated, actor.role), {
         headers: { 'Cache-Control': 'private, no-store' },

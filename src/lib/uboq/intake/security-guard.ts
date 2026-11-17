@@ -210,6 +210,19 @@ export function scanUploadedDocumentSecurity(
     }
   }
 
+  // Empty/generic MIME is common for browser uploads. A specific declaration
+  // must agree with detected content; preserve established CSV/XML aliases.
+  const declared = declaredMimeType?.split(';', 1)[0].trim().toLowerCase();
+  const aliases: Record<string, string[]> = {
+    'text/csv': ['application/csv', 'application/vnd.ms-excel'],
+    'application/xml': ['text/xml'],
+    'image/jpeg': ['image/jpg'],
+  };
+  if (declared && declared !== 'application/octet-stream' && declared !== canonicalMimeType &&
+      !aliases[canonicalMimeType]?.includes(declared)) {
+    throw new Error('UBOQ_SEC_MIME_MISMATCH: Declared MIME does not match verified document content');
+  }
+
   return {
     safe: findings.length === 0,
     sha256Hash,

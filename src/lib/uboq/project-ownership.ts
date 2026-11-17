@@ -202,7 +202,7 @@ export function mintSignedRlsProof(params: {
  * `uboq_verify_bound_actor_for_project` directly in DB, defeating mutable-GUC impersonation.
  */
 export async function applyProjectRlsSessionVars(
-  tx: Prisma.TransactionClient,
+  tx: Pick<Prisma.TransactionClient, '$executeRaw'>,
   params: { projectId: string; userId: string; sessionVersion?: number; isGlobalAdmin?: boolean }
 ): Promise<void> {
   const svText = params.sessionVersion !== undefined ? String(params.sessionVersion) : '';

@@ -594,7 +594,7 @@ export async function ingestAndStageProjectUboqPackage(
   const vaultProvider = resolveUboqVaultStorageProvider();
 
   // M01 & R1-H01: Idempotent duplicate source upload check BEFORE writing duplicate sections/candidates/snapshots
-  const existingDoc = await prisma.uboqSourceDocument.findUnique({
+  const findExistingDocument = () => prisma.uboqSourceDocument.findUnique({
     where: {
       projectId_sha256Hash_documentRole: {
         projectId: params.projectId,
@@ -615,7 +615,7 @@ export async function ingestAndStageProjectUboqPackage(
     },
   });
 
-  if (existingDoc && !params.allowDuplicateNewRevision) {
+  const replayDocument = async (existingDoc: NonNullable<Awaited<ReturnType<typeof findExistingDocument>>>) => {
     // Verify immutable vault integrity on replay
     await vaultProvider.getAndVerify({
       storageUri: existingDoc.storageUri,
@@ -637,6 +637,11 @@ export async function ingestAndStageProjectUboqPackage(
       createdAccounts: [],
       createdPrrs: [],
     };
+  };
+
+  const existingDoc = await findExistingDocument();
+  if (existingDoc && !params.allowDuplicateNewRevision) {
+    return replayDocument(existingDoc);
   }
 
   // H02: Persist binary to private immutable vault with immediate SHA-256 read-back verification
@@ -856,10 +861,14 @@ export async function ingestAndStageProjectUboqPackage(
       createdPrrs: [],
     };
   } catch (err) {
-    // H02: Clean up newly written vault object ONLY if L0 UboqSourceDocument was NOT persisted in DB
-    if (vaultReceipt.newlyCreated && !sourceDocIdForOrphanGuard) {
-      await vaultProvider.deleteOrphanIfCreated(vaultReceipt.storageUri);
+    if (!sourceDocIdForOrphanGuard && err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
+      // The unique source constraint arbitrates concurrent initial uploads. The loser
+      // must not stage a second financial snapshot or delete the winner's object.
+      const winner = await findExistingDocument();
+      if (winner) return replayDocument(winner);
     }
+    // A concurrent category/request may reference this content-addressed object.
+    // Leave possible orphans to reference-aware reconciliation, never inline deletion.
     throw err;
   }
 }

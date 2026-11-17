@@ -252,14 +252,25 @@ export class VercelBlobPrivateVaultProvider implements UboqVaultStorageProvider 
 
     if (!alreadyExists) {
       const encryptedEnvelope = this.encryptPayload(params.buffer, params.projectId, computed);
-      await put(pathname, encryptedEnvelope, {
-        access: 'private',
-        addRandomSuffix: false,
-        allowOverwrite: false,
-        contentType: 'application/octet-stream',
-        ...this.authOptions(),
-      });
-      newlyCreated = true;
+      try {
+        await put(pathname, encryptedEnvelope, {
+          access: 'private',
+          addRandomSuffix: false,
+          allowOverwrite: false,
+          contentType: 'application/octet-stream',
+          ...this.authOptions(),
+        });
+        newlyCreated = true;
+      } catch (writeError) {
+        // A competing writer can win after head() reported absence. Reuse only
+        // an authenticated, project-bound, hash-verified object; never overwrite.
+        try {
+          await this.getAndVerify({ storageUri, expectedProjectId: params.projectId,
+            expectedSha256Hash: computed });
+        } catch {
+          throw writeError;
+        }
+      }
     }
 
     const readBack = await this.getAndVerify({
