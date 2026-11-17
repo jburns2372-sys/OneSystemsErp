@@ -70,8 +70,8 @@ export default async function ProjectsPage() {
           <thead>
             <tr>
               <th>Project Name</th>
-              <th>Documents</th>
               <th>Status</th>
+              <th>Documents</th>
               <th>Contract Amounts</th>
               <th>Timeline</th>
               <th>Manager</th>
