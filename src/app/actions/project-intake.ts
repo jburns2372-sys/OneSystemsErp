@@ -33,19 +33,34 @@ export async function createProjectProfile(formData: FormData): Promise<ProjectC
 
   // Creating the project never writes BOQ, contract-authority, tax, or cost baselines.
   // Sector is captured here; a tax profile must be explicitly selected at BOQ intake.
-  const project = await prisma.project.create({
-    data: {
-      name,
-      client: client || null,
-      location: location || null,
-      contractNumber: contractNumber || null,
-      projectCategory: sector,
-      description: description || null,
-      status: 'PLANNING',
-      contractAmount: 0,
-      uboqGovernanceEnabled: false,
-    },
-    select: { id: true },
+  const project = await prisma.$transaction(async tx => {
+    const created = await tx.project.create({
+      data: {
+        name,
+        client: client || null,
+        location: location || null,
+        contractNumber: contractNumber || null,
+        projectCategory: sector,
+        description: description || null,
+        status: 'PLANNING',
+        contractAmount: 0,
+        uboqGovernanceEnabled: false,
+      },
+      select: { id: true },
+    });
+    // Project creators must be able to access the new workspace without a
+    // global-admin bypass. This creates no other user assignments.
+    await tx.projectUserAssignment.create({
+      data: {
+        projectId: created.id,
+        userId: actor.userId,
+        projectRole: actor.role,
+        accessLevel: 'FULL',
+        assignedBy: actor.userId,
+        assignmentStatus: 'active',
+      },
+    });
+    return created;
   });
 
   // No approval, sample project, or synthetic BOQ is created.
