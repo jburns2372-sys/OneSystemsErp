@@ -230,7 +230,7 @@ for(const [opts,status] of [[{denied:true},403],[{documentDenied:true},403],[{mi
   const f=downloadFixture(opts);const res=await f.get();assert.equal(res.status,status);if(!opts.corrupt)assert.equal(f.inspect().read,0);
 });
 test('real scanner rejects empty, oversized and magic/extension mismatches',()=>{
-  const scan=load('src/lib/uboq/intake/security-guard.ts',{'node:crypto':crypto,'node:path':require('node:path'),xlsx:require('xlsx')}).scanUploadedDocumentSecurity;
+  const scan=load('src/lib/uboq/intake/security-guard.ts',{'node:crypto':crypto,'node:path':require('node:path'),'node:zlib':require('node:zlib'),xlsx:require('xlsx')}).scanUploadedDocumentSecurity;
   assert.throws(()=>scan('empty.csv',Buffer.alloc(0)),/EMPTY/);
   assert.throws(()=>scan('large.csv',Buffer.alloc(25*1024*1024+1)),/SIZE_EXCEEDED/);
   assert.throws(()=>scan('fake.csv',Buffer.from('%PDF-1.4 fixture'),'text/csv'),/MISMATCH/);
@@ -240,6 +240,322 @@ test('real scanner rejects empty, oversized and magic/extension mismatches',()=>
     assert.equal(scan('valid.csv',Buffer.from('a,b\n1,2'),mime).safe,true);
   }
 });
+
+
+test('real scanner verifies ZIP central directory, descriptors and bounded inflation',()=>{
+  const zlib=require('node:zlib');
+  const scan=load('src/lib/uboq/intake/security-guard.ts',{
+    'node:crypto':crypto,'node:path':require('node:path'),'node:zlib':zlib,xlsx:require('xlsx'),
+  }).scanUploadedDocumentSecurity;
+  const mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+  // A valid ordinary workbook must remain supported.
+  const XLSX=require('xlsx');
+  const workbook=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([['Item','Qty'],['A',1]]),'BOQ');
+  const ordinary=Buffer.from(XLSX.write(workbook,{bookType:'xlsx',type:'buffer'}));
+  assert.equal(scan('ordinary.xlsx',ordinary,mime).safe,true);
+
+  // With ZIP flag bit 3, local-header sizes are zero; only central sizes count.
+  const descriptorZip=(data,reportedSize=data.length)=>{
+    const name=Buffer.from('xl/workbook.xml');
+    const compressed=zlib.deflateRawSync(data);
+    const local=Buffer.alloc(30+name.length);
+    local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);
+    local.writeUInt16LE(8,6);local.writeUInt16LE(8,8);
+    local.writeUInt16LE(name.length,26);name.copy(local,30);
+    const descriptor=Buffer.alloc(16);
+    descriptor.writeUInt32LE(0x08074b50,0);
+    descriptor.writeUInt32LE(compressed.length,8);
+    descriptor.writeUInt32LE(data.length,12);
+    const central=Buffer.alloc(46+name.length);
+    central.writeUInt32LE(0x02014b50,0);
+    central.writeUInt16LE(20,4);central.writeUInt16LE(20,6);
+    central.writeUInt16LE(8,8);central.writeUInt16LE(8,10);
+    central.writeUInt32LE(compressed.length,20);
+    central.writeUInt32LE(reportedSize,24);
+    central.writeUInt16LE(name.length,28);name.copy(central,46);
+    const eocd=Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50,0);
+    eocd.writeUInt16LE(1,8);eocd.writeUInt16LE(1,10);
+    eocd.writeUInt32LE(central.length,12);
+    eocd.writeUInt32LE(local.length+compressed.length+descriptor.length,16);
+    return Buffer.concat([local,compressed,descriptor,central,eocd]);
+  };
+  assert.equal(scan('descriptor.xlsx',descriptorZip(Buffer.from('<workbook/>')),mime).safe,true);
+  const oversized=descriptorZip(Buffer.alloc(81*1024*1024,32));
+  assert.ok(oversized.length<25*1024*1024);
+  assert.throws(()=>scan('oversized.xlsx',oversized,mime),/ZIP_BOMB_BLOCKED/);
+  const forged=descriptorZip(Buffer.alloc(2*1024*1024,32),1024);
+  assert.throws(()=>scan('forged.xlsx',forged,mime),/ZIP_SIZE_MISMATCH/);
+  const corrupt=Buffer.from(descriptorZip(Buffer.from('<workbook/>')));
+  corrupt.writeUInt32LE(0,corrupt.length-22+16);
+  assert.throws(()=>scan('corrupt.xlsx',corrupt,mime),/ZIP_DIRECTORY_INVALID/);
+});
+
+
+
+function officeZipFixture(entryName, content, { descriptor = false, reportedSize = content.length } = {}) {
+  const zlib = require('node:zlib');
+  const name = Buffer.from(entryName, 'utf8');
+  const compressed = zlib.deflateRawSync(content);
+  const local = Buffer.alloc(30 + name.length);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt16LE(descriptor ? 8 : 0, 6);
+  local.writeUInt16LE(8, 8);
+  if (!descriptor) {
+    local.writeUInt32LE(compressed.length, 18);
+    local.writeUInt32LE(reportedSize, 22);
+  }
+  local.writeUInt16LE(name.length, 26);
+  name.copy(local, 30);
+  const dd = descriptor ? Buffer.alloc(16) : Buffer.alloc(0);
+  if (descriptor) {
+    dd.writeUInt32LE(0x08074b50, 0);
+    dd.writeUInt32LE(compressed.length, 8);
+    dd.writeUInt32LE(content.length, 12);
+  }
+  const central = Buffer.alloc(46 + name.length);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(20, 4);
+  central.writeUInt16LE(20, 6);
+  central.writeUInt16LE(descriptor ? 8 : 0, 8);
+  central.writeUInt16LE(8, 10);
+  central.writeUInt32LE(compressed.length, 20);
+  central.writeUInt32LE(reportedSize, 24);
+  central.writeUInt16LE(name.length, 28);
+  name.copy(central, 46);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(1, 8);
+  eocd.writeUInt16LE(1, 10);
+  eocd.writeUInt32LE(central.length, 12);
+  eocd.writeUInt32LE(local.length + compressed.length + dd.length, 16);
+  return Buffer.concat([local, compressed, dd, central, eocd]);
+}
+
+test('real scanner caps ZIP entry count and preserves old adversarial classifications', () => {
+  const guard = load('src/lib/uboq/intake/security-guard.ts', {
+    'node:crypto': crypto, 'node:path': require('node:path'),
+    'node:zlib': require('node:zlib'), xlsx: require('xlsx'),
+  });
+  const scan = guard.scanUploadedDocumentSecurity;
+  assert.throws(() => scan('nested.xlsx', officeZipFixture('xl/payload.zip', Buffer.from('abc'))), /NESTED_ARCHIVE_BLOCKED/);
+  assert.throws(() => scan('macro.xlsx', officeZipFixture('xl/vbaProject.bin', Buffer.from('abc'))), /MACRO_BLOCKED/);
+  assert.throws(() => scan('bomb.xlsx', officeZipFixture('xl/workbook.xml', Buffer.from('x'), { reportedSize: 95 * 1024 * 1024 })), /ZIP_BOMB_BLOCKED/);
+
+  const localParts = [], centralParts = [];
+  let localOffset = 0;
+  for (let i = 0; i < 2049; i++) {
+    const name = Buffer.from('xl/e' + i + '.xml');
+    const local = Buffer.alloc(30 + name.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(name.length, 26);
+    name.copy(local, 30);
+    const central = Buffer.alloc(46 + name.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(localOffset, 42);
+    name.copy(central, 46);
+    localParts.push(local); centralParts.push(central);
+    localOffset += local.length;
+  }
+  const directory = Buffer.concat(centralParts);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(2049, 8);
+  eocd.writeUInt16LE(2049, 10);
+  eocd.writeUInt32LE(directory.length, 12);
+  eocd.writeUInt32LE(localOffset, 16);
+  const tooMany = Buffer.concat([...localParts, directory, eocd]);
+  assert.ok(tooMany.length < 25 * 1024 * 1024);
+  assert.throws(() => scan('many.xlsx', tooMany), /ZIP_ENTRY_COUNT_EXCEEDED/);
+});
+
+
+test('real scanner rejects duplicate central directory references before inflation', () => {
+  const scan = load('src/lib/uboq/intake/security-guard.ts', {
+    'node:crypto': crypto, 'node:path': require('node:path'),
+    'node:zlib': require('node:zlib'), xlsx: require('xlsx'),
+  }).scanUploadedDocumentSecurity;
+  const original = officeZipFixture('xl/workbook.xml', Buffer.from('<workbook/>'), {descriptor: true});
+  const oldEnd = original.length - 22;
+  const cdStart = original.readUInt32LE(oldEnd + 16);
+  const cd = original.subarray(cdStart, oldEnd);
+  const eocd = Buffer.from(original.subarray(oldEnd));
+  eocd.writeUInt16LE(2, 8);
+  eocd.writeUInt16LE(2, 10);
+  eocd.writeUInt32LE(cd.length * 2, 12);
+  const forged = Buffer.concat([original.subarray(0, oldEnd), cd, eocd]);
+  assert.throws(
+    () => scan('duplicate.xlsx', forged),
+    /UBOQ_SEC_ZIP_DUPLICATE_ENTRY/,
+  );
+});
+
+
+
+
+test('real scanner and XLSX extraction reject central-directory disagreement before ExcelJS', async () => {
+  const zlib = require('node:zlib');
+  const XLSX = require('xlsx');
+  const ExcelJS = require('exceljs');
+  const guard = load('src/lib/uboq/intake/security-guard.ts', {
+    'node:crypto': crypto, 'node:path': require('node:path'),
+    'node:zlib': zlib, xlsx: XLSX,
+  });
+  let workbookConstructed = 0;
+  const observedExcelJS = {
+    Workbook: class extends ExcelJS.Workbook {
+      constructor() { super(); workbookConstructed++; }
+    },
+  };
+  const parser = load('src/lib/uboq/intake/parsers.ts', {
+    exceljs: observedExcelJS, xlsx: XLSX, 'csv-parse/sync': require('csv-parse/sync'),
+    '../field-catalog': { resolveCanonicalFieldId: () => null },
+    './security-guard': guard,
+  });
+
+  // A normal workbook must still reach the REAL ExcelJS parser and produce BOQ data.
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Item Code', 'Work Description', 'Unit', 'Quantity', 'Unit Rate'],
+    ['P1-01', 'Excavation', 'cu.m', 3, 100],
+  ]), 'BOQ');
+  const ordinary = Buffer.from(XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
+  const ordinaryResult = await parser.extractUniversalDocumentPackage('ordinary.xlsx', ordinary);
+  assert.ok(workbookConstructed > 0, 'Ordinary XLSX must use real ExcelJS');
+  assert.ok(ordinaryResult.candidates.some(c => c.mappedFields.item_code === 'P1-01'),
+    'Legitimate BOQ row should remain extractable');
+
+  // The scanner's old EOCD selection chose the outer directory whose ZIP
+  // comment ends exactly at EOF, whereas ExcelJS/JSZip picked the last EOCD
+  // signature within that comment. Only the latter lists this >100:1 entry.
+  const outerEnd = ordinary.length - 22;
+  assert.equal(ordinary.readUInt32LE(outerEnd), 0x06054b50);
+  assert.equal(ordinary.readUInt16LE(outerEnd + 20), 0);
+  const origDirOffset = ordinary.readUInt32LE(outerEnd + 16);
+  const origDirSize = ordinary.readUInt32LE(outerEnd + 12);
+  assert.equal(origDirOffset + origDirSize, outerEnd);
+  const originalDirectory = ordinary.subarray(origDirOffset, outerEnd);
+  const originalCount = ordinary.readUInt16LE(outerEnd + 10);
+
+  const hiddenData = Buffer.alloc(1024 * 1024, 65);
+  const compressed = zlib.deflateRawSync(hiddenData);
+  assert.ok(hiddenData.length / compressed.length > 100);
+  const name = Buffer.from('xl/media/unchecked-media.bin');
+  const local = Buffer.alloc(30 + name.length);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt16LE(8, 8);
+  local.writeUInt32LE(compressed.length, 18);
+  local.writeUInt32LE(hiddenData.length, 22);
+  local.writeUInt16LE(name.length, 26);
+  name.copy(local, 30);
+  const unverifiedRecordOffset = ordinary.length;
+
+  const extraCentral = Buffer.alloc(46 + name.length);
+  extraCentral.writeUInt32LE(0x02014b50, 0);
+  extraCentral.writeUInt16LE(20, 4);
+  extraCentral.writeUInt16LE(20, 6);
+  extraCentral.writeUInt16LE(8, 10);
+  extraCentral.writeUInt32LE(compressed.length, 20);
+  extraCentral.writeUInt32LE(hiddenData.length, 24);
+  extraCentral.writeUInt16LE(name.length, 28);
+  extraCentral.writeUInt32LE(unverifiedRecordOffset, 42);
+  name.copy(extraCentral, 46);
+
+  const alternateDirOffset = ordinary.length + local.length + compressed.length;
+  const alternateDirSize = originalDirectory.length + extraCentral.length;
+  const alternateEnd = Buffer.alloc(22);
+  alternateEnd.writeUInt32LE(0x06054b50, 0);
+  alternateEnd.writeUInt16LE(originalCount + 1, 8);
+  alternateEnd.writeUInt16LE(originalCount + 1, 10);
+  alternateEnd.writeUInt32LE(alternateDirSize, 12);
+  alternateEnd.writeUInt32LE(alternateDirOffset, 16);
+  // The alternate EOCD must NOT itself terminate at EOF. This is the mismatch.
+  const suffix = Buffer.from('AFTER-ALT-EOCD');
+  const zipComment = Buffer.concat([
+    local, compressed, originalDirectory, extraCentral, alternateEnd, suffix,
+  ]);
+  assert.ok(zipComment.length < 65535, 'Reproduction remains bounded');
+  const outerEocd = Buffer.from(ordinary.subarray(outerEnd));
+  outerEocd.writeUInt16LE(zipComment.length, 20);
+  const conflicting = Buffer.concat([ordinary.subarray(0, outerEnd), outerEocd, zipComment]);
+  assert.ok(conflicting.length < 25 * 1024 * 1024);
+  assert.ok(conflicting.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])) > outerEnd);
+
+  const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  assert.throws(() => guard.scanUploadedDocumentSecurity('disagreement.xlsx', conflicting, mime),
+    /UBOQ_SEC_ZIP_AMBIGUOUS_DIRECTORY/);
+  const before = workbookConstructed;
+  await assert.rejects(() => parser.extractUniversalDocumentPackage('disagreement.xlsx', conflicting),
+    /UBOQ_SEC_ZIP_AMBIGUOUS_DIRECTORY/);
+  assert.equal(workbookConstructed, before,
+    'The real XLSX extraction path must reject before constructing ExcelJS, not inflate unverified media');
+});
+
+
+test('real WP2 ZIP fixture helper preserves security classifications', () => {
+  // Exercise the actual WP2 generator in isolation; never invoke WP2 live DB checks.
+  const file = 'scripts/uboq/run-wp2-local-verification.ts';
+  const source = fs.readFileSync(file, 'utf8');
+  const start = source.indexOf('function buildMinimalZipEntry(');
+  const end = source.indexOf('\nasync function generateMultiPageNativePdfBuffer()', start);
+  assert.ok(start >= 0 && end > start, 'WP2 archive fixture helper must exist');
+  const helperSource = "import zlib from 'node:zlib';\n" +
+    source.slice(start, end) + '\nexport { buildMinimalZipEntry };';
+  const helper = load(file, { 'node:zlib': require('node:zlib') }, {}, helperSource);
+  const guard = load('src/lib/uboq/intake/security-guard.ts', {
+    'node:crypto': crypto, 'node:path': require('node:path'),
+    'node:zlib': require('node:zlib'), xlsx: require('xlsx'),
+  });
+  const make = helper.buildMinimalZipEntry;
+  assert.equal(typeof make, 'function');
+  assert.throws(() => guard.scanUploadedDocumentSecurity(
+    'nested.xlsx', make('xl/payload.zip', Buffer.from('nested')),
+  ), /UBOQ_SEC_NESTED_ARCHIVE_BLOCKED/);
+  assert.throws(() => guard.scanUploadedDocumentSecurity(
+    'macro.xlsx', make('xl/vbaProject.bin', Buffer.from('macro')),
+  ), /UBOQ_SEC_MACRO_BLOCKED/);
+  assert.throws(() => guard.scanUploadedDocumentSecurity(
+    'bomb.xlsx', make('xl/workbook.xml', Buffer.from('x'), 95 * 1024 * 1024),
+  ), /UBOQ_SEC_ZIP_BOMB_BLOCKED/);
+  assert.equal(guard.scanUploadedDocumentSecurity(
+    'normal.xlsx', make('xl/workbook.xml', Buffer.from('<workbook/>')),
+  ).detectedFormat, 'XLSX');
+});
+
+
+test('DOCX descriptor entry extraction preserves BOQ table candidates', async () => {
+  const guard = load('src/lib/uboq/intake/security-guard.ts', {
+    'node:crypto': crypto, 'node:path': require('node:path'),
+    'node:zlib': require('node:zlib'), xlsx: require('xlsx'),
+  });
+  const parser = load('src/lib/uboq/intake/parsers.ts', {
+    exceljs: require('exceljs'), xlsx: require('xlsx'),
+    'csv-parse/sync': require('csv-parse/sync'),
+    '../field-catalog': { resolveCanonicalFieldId: () => null },
+    './security-guard': guard,
+  });
+  const xml = Buffer.from('<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>' +
+    '<w:tr><w:tc><w:p><w:t>Item Code</w:t></w:p></w:tc><w:tc><w:p><w:t>Work Description</w:t></w:p></w:tc><w:tc><w:p><w:t>Unit</w:t></w:p></w:tc><w:tc><w:p><w:t>Quantity</w:t></w:p></w:tc><w:tc><w:p><w:t>Unit Rate</w:t></w:p></w:tc></w:tr>' +
+    '<w:tr><w:tc><w:p><w:t>DOC-01</w:t></w:p></w:tc><w:tc><w:p><w:t>Steel Staircase</w:t></w:p></w:tc><w:tc><w:p><w:t>pcs</w:t></w:p></w:tc><w:tc><w:p><w:t>5</w:t></w:p></w:tc><w:tc><w:p><w:t>700</w:t></w:p></w:tc></w:tr>' +
+    '</w:tbl></w:body></w:document>');
+  const zip = officeZipFixture('word/document.xml', xml, { descriptor: true });
+  assert.equal(guard.scanUploadedDocumentSecurity('table.docx', zip).detectedFormat, 'DOCX');
+  const extracted = await parser.extractUniversalDocumentPackage('table.docx', zip);
+  assert.equal(extracted.blockingErrors.length, 0);
+  assert.equal(extracted.candidates.length, 1);
+  assert.equal(extracted.candidates[0].mappedFields.item_code, 'DOC-01');
+  assert.equal(extracted.candidates[0].mappedFields.work_description, 'Steel Staircase');
+  assert.equal(Number(extracted.candidates[0].mappedFields.approved_qty), 5);
+});
+
 
 function vaultModule(env={},blob={}) {
   return load('src/lib/uboq/storage/vault-storage.ts',{'node:crypto':crypto,'node:fs/promises':require('node:fs/promises'),'node:path':require('node:path'),'@vercel/blob':blob},env);

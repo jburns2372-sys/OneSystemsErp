@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
+import { inflateRawSync } from 'node:zlib';
 import * as XLSX from 'xlsx';
 
 export interface FileSecurityScanResult {
@@ -14,6 +15,7 @@ export interface FileSecurityScanResult {
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB ceiling
 const MAX_ZIP_UNCOMPRESSED_BYTES = 80 * 1024 * 1024; // 80 MB ceiling
 const MAX_ZIP_COMPRESSION_RATIO = 100;
+const MAX_ZIP_ENTRIES = 2048; // Bound synchronous per-entry parsing and inflation
 
 const DANGEROUS_FORMULA_PATTERNS = [
   /^\s*[=+\-@]\s*(cmd|powershell|bash|sh|wscript|cscript|mshta|rundll32)\b/i,
@@ -34,43 +36,150 @@ function inspectZipCentralDirectory(buf: Buffer): {
   maxRatio: number;
   hasNestedArchive: boolean;
   entryNames: string[];
+  entries: Array<{ name: string; method: number; compressedSize: number; uncompressedSize: number; dataStart: number }>;
 } {
   let totalUncompressed = 0;
   let maxRatio = 1;
   let hasNestedArchive = false;
   const entryNames: string[] = [];
+  const seenNames = new Set<string>();
+  const seenLocalOffsets = new Set<number>();
+  const occupiedRanges: Array<{ start: number; end: number }> = [];
+  const entries: Array<{ name: string; method: number; compressedSize: number; uncompressedSize: number; dataStart: number }> = [];
 
-  let offset = 0;
-  while (offset + 30 <= buf.length) {
-    const idx = buf.indexOf(Buffer.from([0x50, 0x4b, 0x03, 0x04]), offset);
-    if (idx === -1 || idx + 30 > buf.length) break;
-
-    const compSize = buf.readUInt32LE(idx + 18);
-    const uncompSize = buf.readUInt32LE(idx + 22);
-    const nameLen = buf.readUInt16LE(idx + 26);
-    const extraLen = buf.readUInt16LE(idx + 28);
-
-    if (idx + 30 + nameLen <= buf.length) {
-      const entryName = buf.subarray(idx + 30, idx + 30 + nameLen).toString('utf8');
-      entryNames.push(entryName);
-      if (/\.(zip|rar|7z|tar|gz|bz2|xz|cab|iso)$/i.test(entryName)) {
-        hasNestedArchive = true;
-      }
+  // ZIP local headers may intentionally contain zero sizes when bit 3 indicates
+  // a data descriptor. Only verified central-directory sizes are authoritative.
+  const zipInvalid = () => new Error('UBOQ_SEC_ZIP_DIRECTORY_INVALID: Inconsistent ZIP metadata');
+  let eocd = -1;
+  for (let pos = buf.length - 22; pos >= Math.max(0, buf.length - 22 - 0xffff); pos--) {
+    if (buf.readUInt32LE(pos) === 0x06054b50 &&
+        pos + 22 + buf.readUInt16LE(pos + 20) === buf.length) {
+      eocd = pos;
+      break;
     }
-
-    totalUncompressed += uncompSize;
-    if (compSize > 0) {
-      const ratio = uncompSize / compSize;
-      if (ratio > maxRatio) maxRatio = ratio;
-    } else if (uncompSize > 1024 * 1024) {
-      maxRatio = 999;
-    }
-
-    offset = idx + 30 + nameLen + extraLen + Math.max(compSize, 0);
-    if (offset <= idx) offset = idx + 4;
+  }
+  if (eocd < 0) throw zipInvalid();
+  // ExcelJS 4.4.0 uses JSZip's last EOCD signature, even if the signature
+  // occurs inside a comment. The scanner must never approve one directory
+  // while the downstream reader selects another and expands unchecked files.
+  // A nested EOCD in the accepted comment (or EOCD metadata) is ambiguous.
+  if (buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])) !== eocd) {
+    throw new Error('UBOQ_SEC_ZIP_AMBIGUOUS_DIRECTORY: Conflicting ZIP end-of-central-directory signatures');
   }
 
-  return { totalUncompressed, maxRatio, hasNestedArchive, entryNames };
+  const diskNumber = buf.readUInt16LE(eocd + 4);
+  const directoryDisk = buf.readUInt16LE(eocd + 6);
+  const entriesOnDisk = buf.readUInt16LE(eocd + 8);
+  const entryCount = buf.readUInt16LE(eocd + 10);
+  const dirSize = buf.readUInt32LE(eocd + 12);
+  const dirOffset = buf.readUInt32LE(eocd + 16);
+  // The 25-MB Office upload limit does not require multi-disk or ZIP64 archives.
+  if (diskNumber || directoryDisk || !entryCount || entriesOnDisk !== entryCount ||
+      entryCount === 0xffff || dirSize === 0xffffffff || dirOffset === 0xffffffff ||
+      dirOffset + dirSize !== eocd) throw zipInvalid();
+  if (entryCount > MAX_ZIP_ENTRIES) {
+    throw new Error('UBOQ_SEC_ZIP_ENTRY_COUNT_EXCEEDED: Too many Office ZIP entries');
+  }
+
+  let offset = dirOffset;
+  for (let i = 0; i < entryCount; i++) {
+    if (offset + 46 > eocd || buf.readUInt32LE(offset) !== 0x02014b50) throw zipInvalid();
+    const flags = buf.readUInt16LE(offset + 8);
+    const method = buf.readUInt16LE(offset + 10);
+    const compSize = buf.readUInt32LE(offset + 20);
+    const uncompSize = buf.readUInt32LE(offset + 24);
+    const nameLen = buf.readUInt16LE(offset + 28);
+    const extraLen = buf.readUInt16LE(offset + 30);
+    const commentLen = buf.readUInt16LE(offset + 32);
+    const entryDisk = buf.readUInt16LE(offset + 34);
+    const localOffset = buf.readUInt32LE(offset + 42);
+    const next = offset + 46 + nameLen + extraLen + commentLen;
+    if (next > eocd || !nameLen || entryDisk ||
+        localOffset === 0xffffffff || compSize === 0xffffffff || uncompSize === 0xffffffff ||
+        (flags & (0x1 | 0x40)) !== 0 || (method !== 0 && method !== 8) ||
+        (method === 0 && compSize !== uncompSize)) throw zipInvalid();
+
+    const nameBytes = buf.subarray(offset + 46, offset + 46 + nameLen);
+    const name = nameBytes.toString('utf8');
+    if (seenNames.has(name) || seenLocalOffsets.has(localOffset)) {
+      throw new Error('UBOQ_SEC_ZIP_DUPLICATE_ENTRY: Repeated ZIP name or local record');
+    }
+    seenNames.add(name);
+    seenLocalOffsets.add(localOffset);
+    if (name.includes('\0') || name.startsWith('/') || name.split('/').includes('..')) throw zipInvalid();
+    if (localOffset + 30 > dirOffset || buf.readUInt32LE(localOffset) !== 0x04034b50 ||
+        buf.readUInt16LE(localOffset + 6) !== flags ||
+        buf.readUInt16LE(localOffset + 8) !== method ||
+        buf.readUInt16LE(localOffset + 26) !== nameLen) throw zipInvalid();
+    const localNameLen = buf.readUInt16LE(localOffset + 26);
+    const localExtraLen = buf.readUInt16LE(localOffset + 28);
+    const localDataStart = localOffset + 30 + localNameLen + localExtraLen;
+    if (localDataStart + compSize > dirOffset ||
+        !buf.subarray(localOffset + 30, localOffset + 30 + localNameLen).equals(nameBytes)) {
+      throw zipInvalid();
+    }
+    // Without a data descriptor, local sizes must match the central record.
+    if (!(flags & 0x8) &&
+        (buf.readUInt32LE(localOffset + 18) !== compSize ||
+         buf.readUInt32LE(localOffset + 22) !== uncompSize)) throw zipInvalid();
+
+    totalUncompressed += uncompSize;
+    const ratio = compSize ? uncompSize / compSize : (uncompSize ? Infinity : 1);
+    maxRatio = Math.max(maxRatio, ratio);
+    if (totalUncompressed > MAX_ZIP_UNCOMPRESSED_BYTES || maxRatio > MAX_ZIP_COMPRESSION_RATIO) {
+      throw new Error('UBOQ_SEC_ZIP_BOMB_BLOCKED: ZIP central-directory sizes exceed safety ceiling');
+    }
+    // Do not decompress until ALL central records have been checked for aliases,
+    // repeated local records and overlapping regions.
+    occupiedRanges.push({ start: localOffset, end: localDataStart + compSize });
+    entryNames.push(name);
+    entries.push({ name, method, compressedSize: compSize, uncompressedSize: uncompSize, dataStart: localDataStart });
+    if (/\.(zip|rar|7z|tar|gz|bz2|xz|cab|iso)$/i.test(name)) hasNestedArchive = true;
+    offset = next;
+  }
+  if (offset !== eocd) throw zipInvalid();
+  occupiedRanges.sort((a, b) => a.start - b.start);
+  for (let i = 1; i < occupiedRanges.length; i++) {
+    if (occupiedRanges[i].start < occupiedRanges[i - 1].end) {
+      throw new Error('UBOQ_SEC_ZIP_DUPLICATE_ENTRY: Overlapping local ZIP record ranges');
+    }
+  }
+  // Once the entire central directory is validated, check DEFLATE sizes with
+  // bounded inflation, so forged output-size claims cannot bypass the ceiling.
+  for (const entry of entries) {
+    if (entry.method !== 8) continue;
+    let inflatedSize: number;
+    try {
+      inflatedSize = inflateRawSync(
+        buf.subarray(entry.dataStart, entry.dataStart + entry.compressedSize),
+        { maxOutputLength: entry.uncompressedSize + 1 },
+      ).length;
+    } catch {
+      throw new Error('UBOQ_SEC_ZIP_SIZE_MISMATCH: Declared ZIP size differs from bounded decompression');
+    }
+    if (inflatedSize !== entry.uncompressedSize) {
+      throw new Error('UBOQ_SEC_ZIP_SIZE_MISMATCH: ZIP entry size mismatch');
+    }
+  }
+  return { totalUncompressed, maxRatio, hasNestedArchive, entryNames, entries };
+}
+
+/** Read only a validated, size-bounded Office ZIP entry. Never use unverified local header lengths. */
+export function readVerifiedOfficeZipEntry(buf: Buffer, entryName: string): Buffer {
+  const directory = inspectZipCentralDirectory(buf);
+  const matching = directory.entries.filter(entry => entry.name === entryName);
+  if (matching.length !== 1) {
+    throw new Error('UBOQ_SEC_OFFICE_ENTRY_MISSING_OR_DUPLICATE: Required Office entry is not unique');
+  }
+  const entry = matching[0];
+  const compressed = buf.subarray(entry.dataStart, entry.dataStart + entry.compressedSize);
+  if (entry.method === 0) return Buffer.from(compressed);
+  // inspectZipCentralDirectory already confirmed the bounded expanded size.
+  const inflated = inflateRawSync(compressed, { maxOutputLength: entry.uncompressedSize + 1 });
+  if (inflated.length !== entry.uncompressedSize) {
+    throw new Error('UBOQ_SEC_ZIP_SIZE_MISMATCH: Office entry expanded size changed');
+  }
+  return inflated;
 }
 
 function inspectOle2CompoundContainer(buf: Buffer): {

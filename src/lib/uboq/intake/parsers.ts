@@ -1,9 +1,8 @@
-import zlib from 'node:zlib';
 import ExcelJS from 'exceljs';
 import * as XLSX from 'xlsx';
 import { parse as parseCsvSync } from 'csv-parse/sync';
 import { resolveCanonicalFieldId } from '../field-catalog';
-import { inspectCellSecurity, scanUploadedDocumentSecurity, type FileSecurityScanResult } from './security-guard';
+import { inspectCellSecurity, scanUploadedDocumentSecurity, readVerifiedOfficeZipEntry, type FileSecurityScanResult } from './security-guard';
 
 function ensureServerlessPdfGlobals() {
   const g = globalThis as Record<string, unknown>;
@@ -169,24 +168,10 @@ function extractExcelCellPrimitives(cell: ExcelJS.Cell): {
 }
 
 function unzipDocxDocumentXml(buf: Buffer): string {
-  let offset = 0;
-  while (offset + 30 <= buf.length) {
-    const idx = buf.indexOf(Buffer.from([0x50, 0x4b, 0x03, 0x04]), offset);
-    if (idx === -1 || idx + 30 > buf.length) break;
-    const method = buf.readUInt16LE(idx + 8);
-    const compSize = buf.readUInt32LE(idx + 18);
-    const nameLen = buf.readUInt16LE(idx + 26);
-    const extraLen = buf.readUInt16LE(idx + 28);
-    const name = buf.subarray(idx + 30, idx + 30 + nameLen).toString('utf8');
-    const dataStart = idx + 30 + nameLen + extraLen;
-    if (name === 'word/document.xml' && dataStart + compSize <= buf.length) {
-      const slice = buf.subarray(dataStart, dataStart + compSize);
-      if (method === 0) return slice.toString('utf8');
-      if (method === 8) return zlib.inflateRawSync(slice).toString('utf8');
-    }
-    offset = dataStart + Math.max(compSize, 1);
-  }
-  return '';
+  // Local ZIP headers may carry zero sizes for data-descriptor entries. Use the
+  // same verified central-directory metadata as the upload security scanner;
+  // missing or ambiguous document.xml must fail closed, never return empty data.
+  return readVerifiedOfficeZipEntry(buf, 'word/document.xml').toString('utf8');
 }
 
 function parseGridRowsToCandidates(
