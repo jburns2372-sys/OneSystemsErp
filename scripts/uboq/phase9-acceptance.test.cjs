@@ -48,6 +48,17 @@ test('project listing: simulator cookie never elevates DB scope', () => {
   assert.doesNotMatch(page, /const isSuperAdmin = effectiveRole/);
 });
 
+test('Phase 9 PR CI does not create or delete Neon branches', () => {
+  const workflow = fs.readFileSync('.github/workflows/neon-branch.yml', 'utf8');
+  const create = workflow.split('  create_neon_branch:')[1]?.split('  delete_neon_branch:')[0];
+  const remove = workflow.split('  delete_neon_branch:')[1];
+  assert.ok(create && remove, 'Neon branch lifecycle jobs must remain explicit');
+  for (const job of [create, remove]) {
+    assert.match(job, /github\.event\.pull_request\.base\.ref != 'release\/oserp-proj-uboq-001'/);
+    assert.match(job, /github\.event\.pull_request\.base\.ref != 'feat\/oserp-unified-project-intake-p9'/);
+  }
+});
+
 const actor = { userId: 'synthetic-user', role: 'PROJECT_MANAGER', sessionVersion: 1 };
 const rls = { withUboqRlsContext: (_ctx, fn) => fn(), applyProjectRlsSessionVars: async () => {}, uboqRlsStorage: { getStore: () => undefined } };
 const response = { NextResponse: Response };
