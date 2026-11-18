@@ -48,6 +48,62 @@ test('project listing: simulator cookie never elevates DB scope', () => {
   assert.doesNotMatch(page, /const isSuperAdmin = effectiveRole/);
 });
 
+test('signed backend auth cannot skip PBAC using simulated admin role', async () => {
+  const secret = 'isolated-fixture-hmac-secret';
+  let actualRole = 'PROJECT_DIRECTOR';
+  let assignmentChecks = 0;
+  let routed = 0;
+  const auth = load('apps/aws-backend/src/middleware/auth.ts', {
+    crypto,
+    '../lib/prismaRls': {
+      backendPrismaRaw: {
+        user: { findUnique: async () => ({
+          id: 'u-1', role: actualRole, status: 'ACTIVE',
+          sessionVersion: 7, mustChangePassword: false, lockedUntil: null,
+        }) },
+        $queryRaw: async () => { assignmentChecks++; return [{ ok: false }]; },
+      },
+      backendRlsStorage: { run: (_ctx, fn) => fn() },
+      resolveBackendRequestProjectContext: async () => ({
+        allCandidateProjectIds: ['unassigned-project'],
+        primaryProjectId: 'unassigned-project',
+      }),
+    },
+  }, { AUTH_SECRET: secret });
+  const signedRequest = (simulatedRole) => {
+    const now = Math.floor(Date.now() / 1000);
+    const claims = { uid: 'u-1', role: actualRole, sv: 7,
+      pid: 'unassigned-project', sim: simulatedRole, iat: now, exp: now + 60 };
+    const encoded = Buffer.from(JSON.stringify(claims)).toString('base64url');
+    const sig = crypto.createHmac('sha256', secret).update('v1.' + encoded).digest('hex');
+    return { headers: { 'x-internal-auth': 'v1.' + encoded + '.' + sig,
+      'x-user-session': 'u-1', 'x-simulated-role': simulatedRole }, body: {}, params: {} };
+  };
+  const makeResponse = () => ({
+    code: 200, payload: null, status(n) { this.code = n; return this; },
+    json(x) { this.payload = x; return this; },
+  });
+  let result = makeResponse();
+  await auth.requireAuth(signedRequest('SUPER_ADMIN'), result, () => { routed++; });
+  assert.equal(result.code, 403,
+    'Actual Project Director cannot bypass assignment checks by simulating SUPER_ADMIN');
+  assert.equal(assignmentChecks, 1);
+  assert.equal(routed, 0);
+
+  actualRole = 'SUPER_ADMIN';
+  result = makeResponse();
+  await auth.requireAuth(signedRequest('PROJECT_MANAGER'), result, () => { routed++; });
+  assert.equal(result.code, 403,
+    'Actual global admin simulating PM must be narrowed by assignment checks');
+  assert.equal(assignmentChecks, 2);
+  assert.equal(routed, 0);
+
+  result = makeResponse();
+  await auth.requireAuth(signedRequest('SUPER_ADMIN'), result, () => { routed++; });
+  assert.equal(routed, 1, 'Only actual admin plus admin simulation may skip assignment checks');
+  assert.equal(assignmentChecks, 2);
+});
+
 test('backend project routes reject simulator-based elevation', async () => {
   const backend = load('apps/aws-backend/src/lib/projectVisibility.ts');
   const frontend = load('src/lib/uboq/project-list-visibility.ts');
