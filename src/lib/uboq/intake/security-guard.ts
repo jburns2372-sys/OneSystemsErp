@@ -42,6 +42,9 @@ function inspectZipCentralDirectory(buf: Buffer): {
   let maxRatio = 1;
   let hasNestedArchive = false;
   const entryNames: string[] = [];
+  const seenNames = new Set<string>();
+  const seenLocalOffsets = new Set<number>();
+  const occupiedRanges: Array<{ start: number; end: number }> = [];
   const entries: Array<{ name: string; method: number; compressedSize: number; uncompressedSize: number; dataStart: number }> = [];
 
   // ZIP local headers may intentionally contain zero sizes when bit 3 indicates
@@ -91,6 +94,11 @@ function inspectZipCentralDirectory(buf: Buffer): {
 
     const nameBytes = buf.subarray(offset + 46, offset + 46 + nameLen);
     const name = nameBytes.toString('utf8');
+    if (seenNames.has(name) || seenLocalOffsets.has(localOffset)) {
+      throw new Error('UBOQ_SEC_ZIP_DUPLICATE_ENTRY: Repeated ZIP name or local record');
+    }
+    seenNames.add(name);
+    seenLocalOffsets.add(localOffset);
     if (name.includes('\0') || name.startsWith('/') || name.split('/').includes('..')) throw zipInvalid();
     if (localOffset + 30 > dirOffset || buf.readUInt32LE(localOffset) !== 0x04034b50 ||
         buf.readUInt16LE(localOffset + 6) !== flags ||
@@ -114,27 +122,38 @@ function inspectZipCentralDirectory(buf: Buffer): {
     if (totalUncompressed > MAX_ZIP_UNCOMPRESSED_BYTES || maxRatio > MAX_ZIP_COMPRESSION_RATIO) {
       throw new Error('UBOQ_SEC_ZIP_BOMB_BLOCKED: ZIP central-directory sizes exceed safety ceiling');
     }
-    // Central-directory metadata can itself lie. Bounded inflation verifies the
-    // actual output length without letting a forged size exhaust server memory.
-    if (method === 8) {
-      let inflatedSize: number;
-      try {
-        inflatedSize = inflateRawSync(buf.subarray(localDataStart, localDataStart + compSize),
-          { maxOutputLength: uncompSize + 1 }).length;
-      } catch {
-        throw new Error('UBOQ_SEC_ZIP_SIZE_MISMATCH: Declared ZIP size differs from bounded decompression');
-      }
-      if (inflatedSize !== uncompSize) {
-        throw new Error('UBOQ_SEC_ZIP_SIZE_MISMATCH: ZIP entry size mismatch');
-      }
-    }
-
+    // Do not decompress until ALL central records have been checked for aliases,
+    // repeated local records and overlapping regions.
+    occupiedRanges.push({ start: localOffset, end: localDataStart + compSize });
     entryNames.push(name);
     entries.push({ name, method, compressedSize: compSize, uncompressedSize: uncompSize, dataStart: localDataStart });
     if (/\.(zip|rar|7z|tar|gz|bz2|xz|cab|iso)$/i.test(name)) hasNestedArchive = true;
     offset = next;
   }
   if (offset !== eocd) throw zipInvalid();
+  occupiedRanges.sort((a, b) => a.start - b.start);
+  for (let i = 1; i < occupiedRanges.length; i++) {
+    if (occupiedRanges[i].start < occupiedRanges[i - 1].end) {
+      throw new Error('UBOQ_SEC_ZIP_DUPLICATE_ENTRY: Overlapping local ZIP record ranges');
+    }
+  }
+  // Once the entire central directory is validated, check DEFLATE sizes with
+  // bounded inflation, so forged output-size claims cannot bypass the ceiling.
+  for (const entry of entries) {
+    if (entry.method !== 8) continue;
+    let inflatedSize: number;
+    try {
+      inflatedSize = inflateRawSync(
+        buf.subarray(entry.dataStart, entry.dataStart + entry.compressedSize),
+        { maxOutputLength: entry.uncompressedSize + 1 },
+      ).length;
+    } catch {
+      throw new Error('UBOQ_SEC_ZIP_SIZE_MISMATCH: Declared ZIP size differs from bounded decompression');
+    }
+    if (inflatedSize !== entry.uncompressedSize) {
+      throw new Error('UBOQ_SEC_ZIP_SIZE_MISMATCH: ZIP entry size mismatch');
+    }
+  }
   return { totalUncompressed, maxRatio, hasNestedArchive, entryNames, entries };
 }
 
