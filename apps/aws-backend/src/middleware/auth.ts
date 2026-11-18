@@ -184,8 +184,13 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
       });
     }
 
-    const effectiveRoleForPbac = (verifiedSimRole || user.role || '').trim().toUpperCase();
-    if (allCandidateProjectIds.length > 0 && !ADMIN_GLOBAL_ROLES.has(effectiveRoleForPbac)) {
+    // Only the actual DB user role can confer global scope. Role simulation
+    // is a client-supplied view restriction and must never bypass PBAC.
+    const actualGlobalAdmin = ADMIN_GLOBAL_ROLES.has((user.role || '').trim().toUpperCase());
+    const simulatedGlobalAdmin = !verifiedSimRole ||
+      ADMIN_GLOBAL_ROLES.has(verifiedSimRole.trim().toUpperCase());
+    const mayReadUnassignedProject = actualGlobalAdmin && simulatedGlobalAdmin;
+    if (allCandidateProjectIds.length > 0 && !mayReadUnassignedProject) {
       const targetPid = allCandidateProjectIds[0];
       const accessCheck = await backendPrismaRaw.$queryRaw<Array<{ ok: boolean }>>`
         SELECT uboq_verify_bound_actor_for_project(
