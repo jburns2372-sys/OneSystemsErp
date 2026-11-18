@@ -2,7 +2,6 @@ import { verifySession } from '@/lib/dal/auth';
 import styles from './page.module.css';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import PermissionGuard from '@/components/PermissionGuard';
 import { getUserPermissions } from '@/lib/permissions';
 import ProjectStartButton from './ProjectStartButton';
@@ -12,17 +11,15 @@ import DeleteProjectButton from './DeleteProjectButton';
 export const dynamic = 'force-dynamic';
 
 export default async function ProjectsPage() {
-  const cookieStore = await cookies();
   const __session = await verifySession();
   const userId = __session?.id || '';
   const permissions = await getUserPermissions(userId);
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  const simulatedRole = cookieStore.get('simulatedRole')?.value;
-  const effectiveRole = (simulatedRole && user && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS'))
-    ? simulatedRole
-    : (user?.role || 'GUEST_USER');
-  const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+  // Dashboard role simulation is presentation-only. Never use a mutable cookie
+  // to widen the database query that determines visible project assignments.
+  // These are the authenticated user's authoritative persisted role values.
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
 
 
   const projects = await prisma.project.findMany({
