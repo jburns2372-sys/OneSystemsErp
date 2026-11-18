@@ -399,6 +399,107 @@ test('real scanner rejects duplicate central directory references before inflati
 
 
 
+
+test('real XLSX extraction rejects central-directory disagreement before ExcelJS', async () => {
+  const zlib = require('node:zlib');
+  const XLSX = require('xlsx');
+  const ExcelJS = require('exceljs');
+  const guard = load('src/lib/uboq/intake/security-guard.ts', {
+    'node:crypto': crypto, 'node:path': require('node:path'),
+    'node:zlib': zlib, xlsx: XLSX,
+  });
+  let workbookConstructed = 0;
+  const observedExcelJS = {
+    Workbook: class extends ExcelJS.Workbook {
+      constructor() { super(); workbookConstructed++; }
+    },
+  };
+  const parser = load('src/lib/uboq/intake/parsers.ts', {
+    exceljs: observedExcelJS, xlsx: XLSX, 'csv-parse/sync': require('csv-parse/sync'),
+    '../field-catalog': { resolveCanonicalFieldId: () => null },
+    './security-guard': guard,
+  });
+
+  // A normal workbook must still reach the REAL ExcelJS parser and produce BOQ data.
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Item Code', 'Work Description', 'Unit', 'Quantity', 'Unit Rate'],
+    ['P1-01', 'Excavation', 'cu.m', 3, 100],
+  ]), 'BOQ');
+  const ordinary = Buffer.from(XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
+  const ordinaryResult = await parser.extractUniversalDocumentPackage('ordinary.xlsx', ordinary);
+  assert.ok(workbookConstructed > 0, 'Ordinary XLSX must use real ExcelJS');
+  assert.ok(ordinaryResult.candidates.some(c => c.mappedFields.item_code === 'P1-01'),
+    'Legitimate BOQ row should remain extractable');
+
+  // The scanner's old EOCD selection chose the outer directory whose ZIP
+  // comment ends exactly at EOF, whereas ExcelJS/JSZip picked the last EOCD
+  // signature within that comment. Only the latter lists this >100:1 entry.
+  const outerEnd = ordinary.length - 22;
+  assert.equal(ordinary.readUInt32LE(outerEnd), 0x06054b50);
+  assert.equal(ordinary.readUInt16LE(outerEnd + 20), 0);
+  const origDirOffset = ordinary.readUInt32LE(outerEnd + 16);
+  const origDirSize = ordinary.readUInt32LE(outerEnd + 12);
+  assert.equal(origDirOffset + origDirSize, outerEnd);
+  const originalDirectory = ordinary.subarray(origDirOffset, outerEnd);
+  const originalCount = ordinary.readUInt16LE(outerEnd + 10);
+
+  const hiddenData = Buffer.alloc(1024 * 1024, 65);
+  const compressed = zlib.deflateRawSync(hiddenData);
+  assert.ok(hiddenData.length / compressed.length > 100);
+  const name = Buffer.from('xl/media/unchecked-media.bin');
+  const local = Buffer.alloc(30 + name.length);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt16LE(8, 8);
+  local.writeUInt32LE(compressed.length, 18);
+  local.writeUInt32LE(hiddenData.length, 22);
+  local.writeUInt16LE(name.length, 26);
+  name.copy(local, 30);
+  const unverifiedRecordOffset = ordinary.length;
+
+  const extraCentral = Buffer.alloc(46 + name.length);
+  extraCentral.writeUInt32LE(0x02014b50, 0);
+  extraCentral.writeUInt16LE(20, 4);
+  extraCentral.writeUInt16LE(20, 6);
+  extraCentral.writeUInt16LE(8, 10);
+  extraCentral.writeUInt32LE(compressed.length, 20);
+  extraCentral.writeUInt32LE(hiddenData.length, 24);
+  extraCentral.writeUInt16LE(name.length, 28);
+  extraCentral.writeUInt32LE(unverifiedRecordOffset, 42);
+  name.copy(extraCentral, 46);
+
+  const alternateDirOffset = ordinary.length + local.length + compressed.length;
+  const alternateDirSize = originalDirectory.length + extraCentral.length;
+  const alternateEnd = Buffer.alloc(22);
+  alternateEnd.writeUInt32LE(0x06054b50, 0);
+  alternateEnd.writeUInt16LE(originalCount + 1, 8);
+  alternateEnd.writeUInt16LE(originalCount + 1, 10);
+  alternateEnd.writeUInt32LE(alternateDirSize, 12);
+  alternateEnd.writeUInt32LE(alternateDirOffset, 16);
+  // The alternate EOCD must NOT itself terminate at EOF. This is the mismatch.
+  const suffix = Buffer.from('AFTER-ALT-EOCD');
+  const zipComment = Buffer.concat([
+    local, compressed, originalDirectory, extraCentral, alternateEnd, suffix,
+  ]);
+  assert.ok(zipComment.length < 65535, 'Reproduction remains bounded');
+  const outerEocd = Buffer.from(ordinary.subarray(outerEnd));
+  outerEocd.writeUInt16LE(zipComment.length, 20);
+  const conflicting = Buffer.concat([ordinary.subarray(0, outerEnd), outerEocd, zipComment]);
+  assert.ok(conflicting.length < 25 * 1024 * 1024);
+  assert.ok(conflicting.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])) > outerEnd);
+
+  const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  assert.throws(() => guard.scanUploadedDocumentSecurity('disagreement.xlsx', conflicting, mime),
+    /UBOQ_SEC_ZIP_AMBIGUOUS_DIRECTORY/);
+  const before = workbookConstructed;
+  await assert.rejects(() => parser.extractUniversalDocumentPackage('disagreement.xlsx', conflicting),
+    /UBOQ_SEC_ZIP_AMBIGUOUS_DIRECTORY/);
+  assert.equal(workbookConstructed, before,
+    'The real XLSX extraction path must reject before constructing ExcelJS, not inflate unverified media');
+});
+
+
 test('real WP2 ZIP fixture helper preserves security classifications', () => {
   // Exercise the actual WP2 generator in isolation; never invoke WP2 live DB checks.
   const file = 'scripts/uboq/run-wp2-local-verification.ts';
