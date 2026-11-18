@@ -25,5 +25,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Test the real ZIP scanner
         run: node --test --test-name-pattern='real scanner' scripts/uboq/phase9-acceptance.test.cjs
+      - name: Run complete credential-free Phase 9 acceptance fixture
+        run: node --test scripts/uboq/phase9-acceptance.test.cjs
       - name: Type-check the scanner module
         run: npx tsc --noEmit --pretty false --skipLibCheck --target ES2022 --module commonjs --moduleResolution node --types node --esModuleInterop src/lib/uboq/intake/security-guard.ts
