@@ -8,6 +8,13 @@ export const metadata = {
 
 import { cookies } from 'next/headers';
 
+const ALLOWED_PUBLIC_EXECUTIVE_ERRORS = new Set([
+  'Unauthorized: Session token missing',
+  'Unauthorized: User not found',
+  'Unauthorized: Account inactive',
+  'Unauthorized: Executive access required',
+]);
+
 export default async function ExecutiveHomePage() {
   const cookieStore = await cookies();
   const currentProjectId = cookieStore.get('executive_projectId')?.value || 'ALL';
@@ -18,7 +25,10 @@ export default async function ExecutiveHomePage() {
   try {
     data = await getCompanyOverview(currentProjectId);
   } catch (err: any) {
-    error = err.message || "An unknown error occurred while fetching company overview";
+    const msg = typeof err?.message === 'string' ? err.message : '';
+    error = ALLOWED_PUBLIC_EXECUTIVE_ERRORS.has(msg)
+      ? msg
+      : 'Failed to load company overview data.';
   }
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);

@@ -1,8 +1,10 @@
 'use server';
 import { fetchAuthenticatedBackend } from '@/lib/backendAuth';
-import { verifySession } from '@/lib/dal/auth';
-
-import { cookies } from 'next/headers';
+import {
+  buildUnavailableDashboardStats,
+  classifyDashboardBackendFailure,
+  normalizeLiveDashboardStats,
+} from '@/lib/dashboardStatsState';
 import { revalidatePath } from 'next/cache';
 
 
@@ -18,45 +20,45 @@ async function fetchWithAuth<T = any>(endpoint: string, options: RequestInit = {
     } catch {
       // non-JSON error body
     }
-    throw new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`);
+    const err = new Error(errorMessage || `Backend Error: ${response.status} ${response.statusText}`) as Error & {
+      httpStatus?: number;
+    };
+    err.httpStatus = response.status;
+    throw err;
   }
 
-  return response.json();
+  try {
+    return await response.json();
+  } catch {
+    const parseErr = new Error('Invalid JSON payload from backend') as Error & {
+      isInvalidPayload?: boolean;
+    };
+    parseErr.isInvalidPayload = true;
+    throw parseErr;
+  }
 }
 
 export async function getDashboardStats() {
   try {
-    return await fetchWithAuth('/api/projects/dashboard-stats');
+    const payload = await fetchWithAuth('/api/projects/dashboard-stats');
+    return normalizeLiveDashboardStats(payload);
   } catch (error) {
-    console.error('Failed to fetch dashboard stats from backend:', error);
-    return {
-      pendingAIOverrides: 0,
-      totalProjects: 0,
-      totalBudget: 0,
-      totalPayables: 0,
-      totalAccomplishments: 0,
-      pendingMRFs: 0,
-      pendingPettyCash: 0,
-      activePayrollPeriods: 0,
-      openCanvassing: 0,
-      activePurchaseOrders: 0,
-      expectedDeliveries: 0,
-      totalIssuances: 0,
-      totalSuppliers: 0,
-      totalWorkers: 0,
-      totalUsers: 0,
-      totalAuditLogs: 0,
-      totalDailyLogs: 0,
-      totalJobOrders: 0
-    };
+    const diagnosticCode = classifyDashboardBackendFailure(error);
+    console.error('Failed to fetch dashboard stats from backend');
+    return buildUnavailableDashboardStats(diagnosticCode);
   }
 }
 
 export async function assignProjectManager(projectId: string, managerId: string | null) {
-  return fetchWithAuth(`/api/projects/${projectId}/assign-manager`, {
-    method: 'POST',
-    body: JSON.stringify({ managerId })
-  });
+  try {
+    return await fetchWithAuth(`/api/projects/${projectId}/assign-manager`, {
+      method: 'POST',
+      body: JSON.stringify({ managerId })
+    });
+  } catch {
+    console.error('Error assigning manager');
+    return { success: false, error: 'Failed to assign manager' };
+  }
 }
 
 export async function deleteProject(projectId: string) {
@@ -66,9 +68,9 @@ export async function deleteProject(projectId: string) {
     });
     revalidatePath('/projects');
     return res;
-  } catch (error: any) {
-    console.error('Error deleting project:', error);
-    return { success: false, error: error.message || 'Failed to delete project' };
+  } catch {
+    console.error('Error deleting project');
+    return { success: false, error: 'Failed to delete project' };
   }
 }
 
@@ -78,8 +80,8 @@ export async function updateProjectDates(projectId: string, startDateStr: string
       method: 'POST',
       body: JSON.stringify({ startDateStr, durationDays })
     });
-  } catch (error: any) {
-    console.error('Error updating project dates:', error);
-    return { success: false, error: error.message || 'Failed to update project dates' };
+  } catch {
+    console.error('Error updating project dates');
+    return { success: false, error: 'Failed to update project dates' };
   }
 }

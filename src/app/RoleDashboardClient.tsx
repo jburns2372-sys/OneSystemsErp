@@ -4,6 +4,12 @@ import { useState } from 'react';
 import styles from './page.module.css';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+  formatDashboardCount,
+  formatDashboardCurrency,
+  isDashboardStatsUnavailable,
+  sanitizeDashboardDiagnosticCode,
+} from '@/lib/dashboardStatsState';
 
 const ALL_ROLES = [
   { id: 'SUPER_ADMIN', label: 'System Admin', archetype: 'EXECUTIVE' },
@@ -95,6 +101,13 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
 
   const selectedRoleObj = ALL_ROLES.find(r => r.id === simulatedRole) || ALL_ROLES[1];
   const archetype = selectedRoleObj.archetype;
+  const statsUnavailable = isDashboardStatsUnavailable(stats);
+  const diagnosticCode = sanitizeDashboardDiagnosticCode(
+    stats?.statsDiagnosticCode,
+    'BACKEND_UNREACHABLE'
+  );
+  const countText = (value: unknown, suffix = '') => formatDashboardCount(stats, value, suffix);
+  const currencyText = (value: unknown) => formatDashboardCurrency(stats, value);
 
   return (
     <div className={styles.dashboardContainer}>
@@ -138,27 +151,49 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
         </p>
       </div>
 
+      {/* Explicit Backend Metrics Unavailable Banner */}
+      {statsUnavailable && (
+        <div
+          role="alert"
+          data-testid="dashboard-stats-unavailable-banner"
+          style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.12)',
+            border: '1px solid #f59e0b',
+            borderRadius: '8px',
+            padding: '15px 20px',
+            marginBottom: '25px',
+          }}
+        >
+          <h3 style={{ margin: '0 0 6px 0', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>⚠️</span> Portfolio Metrics Unavailable ({diagnosticCode})
+          </h3>
+          <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.5' }}>
+            Live dashboard aggregates could not be retrieved from the backend statistics service. Placeholder indicators (— / Unavailable) are displayed instead of zero values so an unavailable backend is never mistaken for zero business activity.
+          </p>
+        </div>
+      )}
+
       {/* --- EXECUTIVE / DIRECTOR DASHBOARD --- */}
       {archetype === 'EXECUTIVE' && (
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
             <h3>AI Overrides Pending Approval</h3>
-            <p className={styles.statValue} style={{ color: stats.pendingAIOverrides > 0 ? '#ff6b6b' : '#22c55e' }}>{stats.pendingAIOverrides}</p>
+            <p className={styles.statValue} style={{ color: statsUnavailable ? 'var(--text-secondary)' : stats.pendingAIOverrides > 0 ? '#ff6b6b' : '#22c55e' }}>{countText(stats?.pendingAIOverrides)}</p>
             <Link href="/director-audit" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>View Audit Queue ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Total Active Projects</h3>
-            <p className={styles.statValue}>{stats.totalProjects}</p>
+            <p className={styles.statValue}>{countText(stats?.totalProjects)}</p>
             <Link href="/projects" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>View Projects ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Total Contract Budget</h3>
-            <p className={styles.statValue}>₱ {stats.totalBudget.toLocaleString()}</p>
+            <p className={styles.statValue}>{currencyText(stats?.totalBudget)}</p>
             <Link href="/reports" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Financial Reports ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Outstanding Liabilities</h3>
-            <p className={styles.statValue} style={{ color: '#f97316' }}>₱ {stats.totalPayables.toLocaleString()}</p>
+            <p className={styles.statValue} style={{ color: statsUnavailable ? 'var(--text-secondary)' : '#f97316' }}>{currencyText(stats?.totalPayables)}</p>
             <Link href="/supplier-payables" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>View Liabilities ➔</Link>
           </div>
         </div>
@@ -169,17 +204,17 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
             <h3>Active BOQ & Consolidations</h3>
-            <p className={styles.statValue} style={{ color: '#3498db' }}>{stats.totalProjects}</p>
+            <p className={styles.statValue} style={{ color: '#3498db' }}>{countText(stats?.totalProjects)}</p>
             <Link href="/projects/boq-consolidation" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Manage Consolidations ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Accomplishments Tracked</h3>
-            <p className={styles.statValue}>{stats.totalAccomplishments ?? 0}</p>
+            <p className={styles.statValue}>{countText(stats?.totalAccomplishments)}</p>
             <Link href="/progress-billings" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>View Accomplishments ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Site Requisitions (MRF)</h3>
-            <p className={styles.statValue} style={{ color: '#f97316' }}>{stats.pendingMRFs}</p>
+            <p className={styles.statValue} style={{ color: '#f97316' }}>{countText(stats?.pendingMRFs)}</p>
             <Link href="/material-requests/create" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Request Materials ➔</Link>
           </div>
         </div>
@@ -190,17 +225,17 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
             <h3>Unpaid Payables</h3>
-            <p className={styles.statValue} style={{ color: '#ef4444' }}>₱ {stats.totalPayables.toLocaleString()}</p>
+            <p className={styles.statValue} style={{ color: statsUnavailable ? 'var(--text-secondary)' : '#ef4444' }}>{currencyText(stats?.totalPayables)}</p>
             <Link href="/supplier-payables" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Process Payments ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Petty Cash Low Balance</h3>
-            <p className={styles.statValue} style={{ color: stats.pendingPettyCash > 0 ? '#f97316' : '#22c55e' }}>{stats.pendingPettyCash} Accts</p>
+            <p className={styles.statValue} style={{ color: statsUnavailable ? 'var(--text-secondary)' : stats.pendingPettyCash > 0 ? '#f97316' : '#22c55e' }}>{countText(stats?.pendingPettyCash, ' Accts')}</p>
             <Link href="/petty-cash" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Review Replenishments ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Active Payroll Periods</h3>
-            <p className={styles.statValue}>{stats.activePayrollPeriods}</p>
+            <p className={styles.statValue}>{countText(stats?.activePayrollPeriods)}</p>
             <Link href="/payroll" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Process Payroll ➔</Link>
           </div>
         </div>
@@ -212,22 +247,22 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
           <div className={styles.statsGrid}>
             <div className={styles.statCard}>
               <h3>Pending MRFs to Source</h3>
-              <p className={styles.statValue} style={{ color: '#f97316' }}>{stats.pendingMRFs ?? 0}</p>
+              <p className={styles.statValue} style={{ color: '#f97316' }}>{countText(stats?.pendingMRFs)}</p>
               <Link href="/material-requests" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>View Requests ➔</Link>
             </div>
             <div className={styles.statCard}>
               <h3>Open Canvassing Requests</h3>
-              <p className={styles.statValue}>{stats.openCanvassing ?? 0}</p>
+              <p className={styles.statValue}>{countText(stats?.openCanvassing)}</p>
               <Link href="#" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Manage Canvassing ➔</Link>
             </div>
             <div className={styles.statCard}>
               <h3>Active Purchase Orders</h3>
-              <p className={styles.statValue}>{stats.activePurchaseOrders ?? 0}</p>
+              <p className={styles.statValue}>{countText(stats?.activePurchaseOrders)}</p>
               <Link href="/procurement/purchase-orders" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Manage POs ➔</Link>
             </div>
             <div className={styles.statCard}>
               <h3>Pending Supplier Deliveries</h3>
-              <p className={styles.statValue} style={{ color: '#22c55e' }}>{stats.expectedDeliveries ?? 0}</p>
+              <p className={styles.statValue} style={{ color: statsUnavailable ? 'var(--text-secondary)' : '#22c55e' }}>{countText(stats?.expectedDeliveries)}</p>
               <Link href="/deliveries" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Track Deliveries ➔</Link>
             </div>
           </div>
@@ -261,17 +296,17 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
             <h3>Expected Deliveries</h3>
-            <p className={styles.statValue} style={{ color: '#22c55e' }}>{stats.expectedDeliveries ?? 0} POs</p>
+            <p className={styles.statValue} style={{ color: statsUnavailable ? 'var(--text-secondary)' : '#22c55e' }}>{countText(stats?.expectedDeliveries, ' POs')}</p>
             <Link href="/deliveries/new" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Log New Delivery ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Material Issuances</h3>
-            <p className={styles.statValue}>{stats.totalIssuances ?? 0}</p>
+            <p className={styles.statValue}>{countText(stats?.totalIssuances)}</p>
             <Link href="/material-issuance" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Issue Materials ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Suppliers</h3>
-            <p className={styles.statValue}>{stats.totalSuppliers ?? 0}</p>
+            <p className={styles.statValue}>{countText(stats?.totalSuppliers)}</p>
             <Link href="/inventory" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Check Stocks ➔</Link>
           </div>
         </div>
@@ -282,17 +317,17 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
             <h3>Active Payroll Periods</h3>
-            <p className={styles.statValue} style={{ color: '#3498db' }}>{stats.activePayrollPeriods}</p>
+            <p className={styles.statValue} style={{ color: '#3498db' }}>{countText(stats?.activePayrollPeriods)}</p>
             <Link href="/payroll" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Manage Payrolls ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Workers Database</h3>
-            <p className={styles.statValue}>{stats.totalWorkers ?? 0}</p>
+            <p className={styles.statValue}>{countText(stats?.totalWorkers)}</p>
             <Link href="/workers" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Manage Workers ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>System Users</h3>
-            <p className={styles.statValue}>{stats.totalUsers ?? 0}</p>
+            <p className={styles.statValue}>{countText(stats?.totalUsers)}</p>
             <Link href="/users" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>User Directory ➔</Link>
           </div>
         </div>
@@ -303,12 +338,12 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
             <h3>System Audit Logs</h3>
-            <p className={styles.statValue} style={{ color: '#9b59b6' }}>{stats.totalAuditLogs ?? 0}</p>
+            <p className={styles.statValue} style={{ color: '#9b59b6' }}>{countText(stats?.totalAuditLogs)}</p>
             <Link href="/system-audit" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>View Audit Trail ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>AI Validations</h3>
-            <p className={styles.statValue}>{stats.pendingAIOverrides}</p>
+            <p className={styles.statValue}>{countText(stats?.pendingAIOverrides)}</p>
             <Link href="/director-audit" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Review Anomalies ➔</Link>
           </div>
         </div>
@@ -319,12 +354,12 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
             <h3>Daily Time Records</h3>
-            <p className={styles.statValue} style={{ color: '#27ae60' }}>{stats.totalDailyLogs ?? 0}</p>
+            <p className={styles.statValue} style={{ color: statsUnavailable ? 'var(--text-secondary)' : '#27ae60' }}>{countText(stats?.totalDailyLogs)}</p>
             <Link href="/progress-billings" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Update Accomplishments ➔</Link>
           </div>
           <div className={styles.statCard}>
             <h3>Active Job Orders</h3>
-            <p className={styles.statValue}>{stats.totalJobOrders ?? 0}</p>
+            <p className={styles.statValue}>{countText(stats?.totalJobOrders)}</p>
             <Link href="/reports" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Open Reports ➔</Link>
           </div>
         </div>
