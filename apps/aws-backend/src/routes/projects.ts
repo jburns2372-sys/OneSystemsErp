@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { invokeH02ProjectMutation } from '../lib/h02ProjectMutation';
+import { mayReadAllProjects } from '../lib/projectVisibility';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 
@@ -27,25 +28,26 @@ router.get('/dashboard-stats', async (req, res) => {
       }
     }
 
-    let projectIds: string[] | undefined = undefined;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized: User context required' });
 
-    if (userId) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { projectAssignments: { where: { assignmentStatus: 'active' } } }
-      });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, projectAssignments: { where: { assignmentStatus: 'active' }, select: { projectId: true } } },
+    });
+    if (!user) return res.status(401).json({ error: 'Unauthorized: Active user not found' });
 
-      if (user) {
-        const effectiveRole = (simulatedRole && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS'))
-          ? simulatedRole
-          : (user.role || 'GUEST_USER');
+    // A signed role simulation is only a UI restriction. It cannot elevate
+    // a real PROJECT_DIRECTOR / ADMINISTRATOR into an unrestricted administrator.
+    const isSuperAdmin = mayReadAllProjects(user.role, simulatedRole);
+    const projectIds: string[] | undefined = isSuperAdmin
+      ? undefined
+      : user.projectAssignments.map(pa => pa.projectId);
 
-        const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
-
-        if (!isSuperAdmin) {
-          projectIds = user.projectAssignments.map(pa => pa.projectId);
-        }
-      }
+    // An explicitly requested project must be inside the actor's active scope;
+    // otherwise the relation filters below would bypass the assignment filter.
+    if (activeProjectId && activeProjectId !== 'ALL' &&
+        projectIds !== undefined && !projectIds.includes(activeProjectId)) {
+      return res.status(403).json({ error: 'Forbidden: Project is not assigned to your account.' });
     }
 
     let relationProjectFilter: any = {};
@@ -224,9 +226,8 @@ router.delete('/:id', async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(401).json({ success: false, error: 'Unauthorized: User not found' });
 
-    const effectiveRole = simulatedRole ? simulatedRole : user.role;
-
-    if (effectiveRole !== 'SUPER_ADMIN' && effectiveRole !== 'SYSTEM_ADMIN') {
+    // The simulator may only narrow a real admin; it never authorizes delete.
+    if (!mayReadAllProjects(user.role, simulatedRole)) {
       return res.status(403).json({ success: false, error: 'Unauthorized: Only SUPER_ADMIN can delete projects' });
     }
 

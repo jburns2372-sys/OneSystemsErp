@@ -8,6 +8,7 @@ import { getUserPermissions } from '@/lib/permissions';
 import ProjectStartButton from './ProjectStartButton';
 import ManagerAssigner from './ManagerAssigner';
 import DeleteProjectButton from './DeleteProjectButton';
+import { mayReadAllProjects } from '@/lib/uboq/project-list-visibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,11 +19,10 @@ export default async function ProjectsPage() {
   const permissions = await getUserPermissions(userId);
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
+  // Role simulation is display-only. A mutable client cookie must never
+  // grant cross-project visibility beyond the authenticated database role.
   const simulatedRole = cookieStore.get('simulatedRole')?.value;
-  const effectiveRole = (simulatedRole && user && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS'))
-    ? simulatedRole
-    : (user?.role || 'GUEST_USER');
-  const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+  const isSuperAdmin = mayReadAllProjects(user?.role, simulatedRole);
 
 
   const projects = await prisma.project.findMany({
