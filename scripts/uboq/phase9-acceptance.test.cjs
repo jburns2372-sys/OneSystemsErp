@@ -112,7 +112,7 @@ test('backend project routes reject simulator-based elevation', async () => {
     'Admin simulating Project Manager must not see unassigned project');
 
   const executive = fs.readFileSync('src/app/actions/executiveActions.ts', 'utf8');
-  assert.equal((executive.match(/mayReadAllProjects\\(user\\.role, effectiveRole\\)/g) || []).length, 2,
+  assert.equal(executive.split('mayReadAllProjects(user.role, effectiveRole)').length - 1, 2,
     'Executive portfolio and overview must use authoritative user role and simulated restriction');
 });
 
