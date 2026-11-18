@@ -35,3 +35,10 @@ jobs:
         run: node --test scripts/uboq/phase9-acceptance.test.cjs
       - name: Type-check ZIP security scanner and DOCX parser
         run: npx tsc --noEmit --pretty false --skipLibCheck --target ES2022 --module commonjs --moduleResolution node --types node --esModuleInterop src/lib/uboq/intake/security-guard.ts src/lib/uboq/intake/parsers.ts
+      - name: Generate Prisma client for full-project typecheck
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://noaccess:noaccess@127.0.0.1:65535/typecheck_only
+          DIRECT_URL: postgresql://noaccess:noaccess@127.0.0.1:65535/typecheck_only
+      - name: Full-project TypeScript typecheck without production credentials
+        run: npx tsc --noEmit --pretty false
