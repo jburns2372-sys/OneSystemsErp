@@ -400,7 +400,7 @@ test('real scanner rejects duplicate central directory references before inflati
 
 
 
-test('real XLSX extraction rejects central-directory disagreement before ExcelJS', async () => {
+test('real scanner and XLSX extraction reject central-directory disagreement before ExcelJS', async () => {
   const zlib = require('node:zlib');
   const XLSX = require('xlsx');
   const ExcelJS = require('exceljs');
