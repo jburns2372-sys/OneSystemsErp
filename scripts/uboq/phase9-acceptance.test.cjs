@@ -398,6 +398,38 @@ test('real scanner rejects duplicate central directory references before inflati
 });
 
 
+
+test('real WP2 ZIP fixture helper preserves security classifications', () => {
+  // Exercise the actual WP2 generator in isolation; never invoke WP2 live DB checks.
+  const file = 'scripts/uboq/run-wp2-local-verification.ts';
+  const source = fs.readFileSync(file, 'utf8');
+  const start = source.indexOf('function buildMinimalZipEntry(');
+  const end = source.indexOf('\nasync function generateMultiPageNativePdfBuffer()', start);
+  assert.ok(start >= 0 && end > start, 'WP2 archive fixture helper must exist');
+  const helperSource = "import zlib from 'node:zlib';\n" +
+    source.slice(start, end) + '\nexport { buildMinimalZipEntry };';
+  const helper = load(file, { 'node:zlib': require('node:zlib') }, {}, helperSource);
+  const guard = load('src/lib/uboq/intake/security-guard.ts', {
+    'node:crypto': crypto, 'node:path': require('node:path'),
+    'node:zlib': require('node:zlib'), xlsx: require('xlsx'),
+  });
+  const make = helper.buildMinimalZipEntry;
+  assert.equal(typeof make, 'function');
+  assert.throws(() => guard.scanUploadedDocumentSecurity(
+    'nested.xlsx', make('xl/payload.zip', Buffer.from('nested')),
+  ), /UBOQ_SEC_NESTED_ARCHIVE_BLOCKED/);
+  assert.throws(() => guard.scanUploadedDocumentSecurity(
+    'macro.xlsx', make('xl/vbaProject.bin', Buffer.from('macro')),
+  ), /UBOQ_SEC_MACRO_BLOCKED/);
+  assert.throws(() => guard.scanUploadedDocumentSecurity(
+    'bomb.xlsx', make('xl/workbook.xml', Buffer.from('x'), 95 * 1024 * 1024),
+  ), /UBOQ_SEC_ZIP_BOMB_BLOCKED/);
+  assert.equal(guard.scanUploadedDocumentSecurity(
+    'normal.xlsx', make('xl/workbook.xml', Buffer.from('<workbook/>')),
+  ).detectedFormat, 'XLSX');
+});
+
+
 test('DOCX descriptor entry extraction preserves BOQ table candidates', async () => {
   const guard = load('src/lib/uboq/intake/security-guard.ts', {
     'node:crypto': crypto, 'node:path': require('node:path'),
