@@ -679,7 +679,7 @@ test('real global admin can list projects without simulated cookie escalation', 
   for (const role of ['SUPER_ADMIN', 'SYSTEM_ADMIN']) {
     const f = projectListingFixture(role, 'FINANCE_OFFICER');
     await f.page();
-    assert.deepEqual(f.queries[0].where, {});
+    assert.equal(Object.keys(f.queries[0].where).length, 0, 'global role has no project-assignment query filter');
     assert.equal(f.getCookieReads(), 0);
   }
 });
