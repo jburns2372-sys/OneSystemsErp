@@ -17,7 +17,7 @@ function getPbacContext(req: any) {
 
 router.get('/dashboard-stats', async (req, res) => {
   try {
-    const { userId, simulatedRole } = getPbacContext(req);
+    const { userId } = getPbacContext(req);
     let { activeProjectId } = getPbacContext(req);
 
     if (activeProjectId && activeProjectId !== 'ALL') {
@@ -36,11 +36,9 @@ router.get('/dashboard-stats', async (req, res) => {
       });
 
       if (user) {
-        const effectiveRole = (simulatedRole && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS'))
-          ? simulatedRole
-          : (user.role || 'GUEST_USER');
-
-        const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+        // The simulated role header is presentation-only and must not expand
+        // the set of projects included in server-side portfolio aggregates.
+        const isSuperAdmin = user.role === 'SUPER_ADMIN' || user.role === 'SYSTEM_ADMIN';
 
         if (!isSuperAdmin) {
           projectIds = user.projectAssignments.map(pa => pa.projectId);
@@ -48,6 +46,10 @@ router.get('/dashboard-stats', async (req, res) => {
       }
     }
 
+    // An untrusted active-project selection cannot override assigned project scope.
+    if (projectIds !== undefined && activeProjectId && !projectIds.includes(activeProjectId)) {
+      activeProjectId = undefined;
+    }
     let relationProjectFilter: any = {};
     if (activeProjectId && activeProjectId !== 'ALL') {
       relationProjectFilter = { projectId: activeProjectId };
