@@ -23,6 +23,11 @@ model User {
   defaultRole                  String?
   department                   String?
   lastLoginAt                  DateTime?
+  mustChangePassword           Boolean                       @default(false)
+  sessionVersion               Int                           @default(0)
+  passwordChangedAt            DateTime?
+  failedLoginAttempts          Int                           @default(0)
+  lockedUntil                  DateTime?
   aiExecutiveQueries           AIExecutiveQuery[]            @relation("AIExecutiveQueries")
   aiApprovedReports            AIGeneratedReport[]           @relation("AIApprovedReports")
   aiReviewedReports            AIGeneratedReport[]           @relation("AIReviewedReports")
@@ -89,7 +94,22 @@ model User {
   chatbotFeedbacks             ChatbotFeedback[]             @relation("UserChatbotFeedbacks")
   chatSessions                 AiChatSession[]               @relation("UserAiChatSessions")
   chatMessages                 AiChatMessage[]               @relation("UserAiChatMessages")
+  scheduleGenerationAudits     ScheduleGenerationAudit[]
+
+  generatedSchedules             ProjectSchedule[]            @relation("ScheduleGeneratedBy")
+  activatedSchedules             ProjectSchedule[]            @relation("ScheduleActivatedBy")
+  scheduleApprovalActions        ScheduleApproval[]           @relation("ScheduleApprovalActor")
+  reviewCommentsCreated          ScheduleReviewComment[]      @relation("ScheduleCommentCreatedBy")
+  reviewCommentsResolved         ScheduleReviewComment[]      @relation("ScheduleCommentResolvedBy")
+  baselineActivationActions      BaselineActivation[]         @relation("BaselineActivationActor")
+  financialWaiversRequested      FinancialDataWaiver[]        @relation("FinancialWaiverRequestedBy")
+  financialWaiversApproved       FinancialDataWaiver[]        @relation("FinancialWaiverApprovedBy")
+  scheduleRevisionReasonsCreated ScheduleRevisionReason[]     @relation("ScheduleRevisionReasonCreatedBy")
+  scheduleWorkflowTransitions    ScheduleWorkflowTransition[]
+  passwordRecoveryTokens         PasswordRecoveryToken[]
   employerPayrollAuthorities EmployerPayrollAuthority[]
+  uboqRoundTripPackagesIssued UboqSignedRoundTripPackage[] @relation("UboqRoundTripPackagesIssued")
+  uboqRoundTripSubmissions    UboqRoundTripImportSubmission[] @relation("UboqRoundTripSubmissionsByActor")
 }
 
 model SystemRole {
@@ -133,6 +153,8 @@ model Project {
   revisedCompletionDate           DateTime?
   implementingOffice              String?
   managerId                       String?
+  uboqGovernanceEnabled           Boolean?                         @default(false)
+  isSyntheticTestFixture          Boolean?                         @default(false)
   createdAt                       DateTime                         @default(now())
   updatedAt                       DateTime                         @updatedAt
   projectValidations              AIValidationRecord[]             @relation("ProjectValidations")
@@ -159,6 +181,8 @@ model Project {
   fleetTrips                      FleetTrip[]
   geofences                       Geofence[]
   jobOrders                       JobOrder[]
+  boqAllocations                  ScheduleBOQAllocation[]          @relation("ProjectBOQAllocations")
+  scheduleGenerationAudits        ScheduleGenerationAudit[]
   knowledgeReferences             KnowledgeReference[]
   issuances                       MaterialIssuance[]
   materialRequests                MaterialRequest[]
@@ -181,8 +205,29 @@ model Project {
   subcontractorVariationOrders    SubcontractorVariationOrder[]    @relation("ProjectSubcontractorVOs")
   clientVariationOrders           ClientVariationOrder[]           @relation("ProjectClientVOs")
   valueEngineeringRecords         ValueEngineeringRecord[]         @relation("ProjectVERecords")
-  projectSchedule                 ProjectSchedule?
+  projectSchedule                 ProjectSchedule[]
   userAssignments                 ProjectUserAssignment[]
+  scheduleWorkflowTransitions     ScheduleWorkflowTransition[]
+  uboqSourceDocuments             UboqSourceDocument[]
+  uboqContractAuthorities         UboqContractAuthority[]
+  uboqTaxPricingProfiles          UboqTaxPricingProfile[]
+  uboqOperationalSnapshots        UboqOperationalSnapshot[]
+  uboqAwardedPhaseLines           UboqAwardedPhaseLine[]
+  uboqConsolidationGroups         UboqConsolidationGroup[]
+  uboqAgencyEstimateBaselines     UboqAgencyEstimateBaseline[]
+  uboqContractorTargetBudgets     UboqContractorTargetBudget[]
+  uboqCanonicalResourceAccounts   UboqCanonicalResourceAccount[]
+  uboqResourceRequirements        UboqProcurementResourceRequirement[]
+  uboqStockLotEvidences           UboqStockLotEvidence[]
+  uboqResourceLedgerEntries       UboqResourceLedgerEntry[]
+  uboqTemplateDefinitions         UboqTemplateDefinition[]
+  uboqCashFlowPeriods             UboqCashFlowPeriod[]
+  uboqValidationExceptions        UboqValidationException[]
+  uboqClientReceipts              UboqClientReceipt[]
+  uboqClientReceiptAllocations    UboqClientReceiptAllocation[]
+  uboqSignedRoundTripPackages     UboqSignedRoundTripPackage[]
+  uboqRoundTripImportSubmissions  UboqRoundTripImportSubmission[]
+  uboqTreasuryOpeningBalances     UboqTreasuryOpeningBalance[]
 
   employerId                     String?
   employerOwnershipEvidenceRef    String?
@@ -273,11 +318,13 @@ model AwardedBOQItem {
   subcontractorVariationOrders   SubcontractorVariationOrder[] @relation("AwardedSubcontractorVOs")
   clientVariationOrders          ClientVariationOrder[]        @relation("AwardedClientVOs")
   valueEngineeringRecords        ValueEngineeringRecord[]      @relation("AwardedVERecords")
-  scheduleMappings               ScheduleBOQMapping[]
+  scheduleAllocations            ScheduleBOQAllocation[]
+  uboqPhaseLines                 UboqAwardedPhaseLine[]
+  uboqWorkItemAllocations        UboqResourceWorkItemAllocation[]
 }
 
 model ProcurementBenchmarkItem {
-  id          String  @id @default(cuid())
+  id          String       @id @default(cuid())
   itemCode    String
   category    String?
   description String
@@ -285,9 +332,10 @@ model ProcurementBenchmarkItem {
   quantity    Float
   unitCost    Float
   totalCost   Float
-  status      String  @default("PENDING")
+  status      String       @default("PENDING")
   projectId   String
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  mappings    BOQMapping[]
 }
 
 model ConsolidatedBOQItem {
@@ -311,6 +359,7 @@ model ConsolidatedBOQItem {
   revisedTotalCost             Float                         @default(0)
   wasteAllowance               Float                         @default(0)
   revisedBenchmarkUnitCost     Float                         @default(0)
+  scheduleAllocations          ScheduleBOQAllocation[]
   requestedQuantity            Float                         @default(0)
   purchasedQuantity            Float                         @default(0)
   issuedQuantity               Float                         @default(0)
@@ -328,6 +377,7 @@ model ConsolidatedBOQItem {
   valueEngineeringSavings      Float                         @default(0)
   isVariationItem              Boolean                       @default(false)
   sourceVoNumber               String?
+  isUboqResourceGoverned       Boolean?                      @default(false)
   createdAt                    DateTime                      @default(now())
   updatedAt                    DateTime                      @updatedAt
   mappings                     BOQMapping[]
@@ -347,22 +397,27 @@ model ConsolidatedBOQItem {
   valueEngineeringRecords      ValueEngineeringRecord[]      @relation("ConsolidatedVERecords")
   subcontractPackages          SubcontractPackage[]          @relation("ConsolidatedSubcontractPackages")
   jobOrders                    JobOrder[]                    @relation("ConsolidatedJobOrders")
+  uboqConsolidationGroup       UboqConsolidationGroup?
+  uboqCanonicalAccounts        UboqCanonicalResourceAccount[]
+  uboqResourceRequirements     UboqProcurementResourceRequirement[]
 }
 
 model BOQMapping {
-  id                    String              @id @default(cuid())
-  mappingType           String
-  allocationPercentage  Float?
-  allocationQuantity    Float?
-  remarks               String?
-  aiConfidenceScore     Float?
-  status                String              @default("APPROVED")
-  awardedBoqItemId      String
-  consolidatedBoqItemId String
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
-  awardedBoqItem        AwardedBOQItem      @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  id                         String                    @id @default(cuid())
+  mappingType                String
+  allocationPercentage       Float?
+  allocationQuantity         Float?
+  remarks                    String?
+  aiConfidenceScore          Float?
+  status                     String                    @default("APPROVED")
+  awardedBoqItemId           String?
+  procurementBenchmarkItemId String?
+  consolidatedBoqItemId      String
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  consolidatedBoqItem        ConsolidatedBOQItem       @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+  awardedBoqItem             AwardedBOQItem?           @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  procurementBenchmarkItem   ProcurementBenchmarkItem? @relation(fields: [procurementBenchmarkItemId], references: [id], onDelete: Cascade)
 }
 
 model Supplier {
@@ -398,9 +453,11 @@ model MaterialRequest {
   priority          String                @default("NORMAL")
   locationOfUse     String?
   remarks           String?
-  aiValidationRisk  String?
-  aiValidationNotes String?
-  dateNeeded        DateTime?
+  aiValidationRisk         String?
+  aiValidationNotes        String?
+  validatedSnapshotVersion Int?
+  validationPassHash       String?
+  dateNeeded               DateTime?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
   canvassForms      CanvassForm[]
@@ -414,14 +471,25 @@ model MaterialRequest {
 }
 
 model MaterialRequestItem {
-  id                    String              @id @default(cuid())
-  quantity              Float
-  approvedQuantity      Float?
-  mrId                  String
-  consolidatedBoqItemId String
-  breakdownData         Json?
-  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
-  mr                    MaterialRequest     @relation(fields: [mrId], references: [id], onDelete: Cascade)
+  id                        String                              @id @default(cuid())
+  quantity                  Float
+  approvedQuantity          Float?
+  mrId                      String
+  consolidatedBoqItemId     String
+  breakdownData             Json?
+  canonicalResourceId       String?
+  uboqResourceRequirementId String?
+  resourceUnit              String?
+  poAllocatedQty            Float?                              @default(0)
+  consolidatedBoqItem       ConsolidatedBOQItem                 @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+  mr                        MaterialRequest                     @relation(fields: [mrId], references: [id], onDelete: Cascade)
+  canonicalResource         UboqCanonicalResourceAccount?       @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+  uboqResourceRequirement   UboqProcurementResourceRequirement? @relation(fields: [uboqResourceRequirementId], references: [id], onDelete: Restrict)
+  canvassItems              CanvassItem[]                       @relation("MrItemCanvassItems")
+  poItems                   PurchaseOrderItem[]                 @relation("MrItemPoItems")
+
+  @@index([canonicalResourceId])
+  @@index([uboqResourceRequirementId])
 }
 
 model PurchaseOrder {
@@ -439,6 +507,7 @@ model PurchaseOrder {
   preparerId       String?
   reviewerId       String?
   approverId       String?
+  approvedAt       DateTime?
   aiValidationRisk String?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
@@ -455,13 +524,30 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderItem {
-  id                    String              @id @default(cuid())
-  quantity              Float
-  unitCost              Float
-  poId                  String
-  consolidatedBoqItemId String
-  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
-  po                    PurchaseOrder       @relation(fields: [poId], references: [id], onDelete: Cascade)
+  id                        String                              @id @default(cuid())
+  quantity                  Float
+  unitCost                  Float
+  poId                      String
+  consolidatedBoqItemId     String
+  canonicalResourceId       String?
+  uboqResourceRequirementId String?
+  resourceUnit              String?
+  mrItemId                  String?
+  canvassItemId             String?
+  deliveredApprovedQty      Float?                              @default(0)
+  pendingDeliveryQty        Float?                              @default(0)
+  consolidatedBoqItem       ConsolidatedBOQItem                 @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+  po                        PurchaseOrder                       @relation(fields: [poId], references: [id], onDelete: Cascade)
+  canonicalResource         UboqCanonicalResourceAccount?       @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+  uboqResourceRequirement   UboqProcurementResourceRequirement? @relation(fields: [uboqResourceRequirementId], references: [id], onDelete: Restrict)
+  mrItem                    MaterialRequestItem?                @relation("MrItemPoItems", fields: [mrItemId], references: [id], onDelete: Restrict)
+  canvassItem               CanvassItem?                        @relation("CanvassItemPoItems", fields: [canvassItemId], references: [id], onDelete: Restrict)
+  deliveryItems             DeliveryItem[]                      @relation("PoItemDeliveries")
+  costLedgers               ProjectCostLedger[]                 @relation("PoItemCostLedgers")
+  expenseBreakdowns         ExpenseBreakdownItem[]              @relation("PoItemExpenseBreakdowns")
+
+  @@index([canonicalResourceId])
+  @@index([uboqResourceRequirementId])
 }
 
 model Expense {
@@ -504,7 +590,7 @@ model Expense {
 }
 
 model ExpenseBreakdownItem {
-  id                  String             @id @default(cuid())
+  id                  String                        @id @default(cuid())
   expenseId           String
   description         String
   specification       String?
@@ -517,10 +603,17 @@ model ExpenseBreakdownItem {
   receiptInvoiceNo    String?
   purchaseDate        DateTime?
   remarks             String?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  expense             Expense            @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  poItemId            String?
+  canonicalResourceId String?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  expense             Expense                       @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  poItem              PurchaseOrderItem?            @relation("PoItemExpenseBreakdowns", fields: [poItemId], references: [id], onDelete: Restrict)
+  canonicalResource   UboqCanonicalResourceAccount? @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
   proofFiles          ExpenseProofFile[]
+
+  @@index([poItemId])
+  @@index([canonicalResourceId])
 }
 
 model ExpenseProofFile {
@@ -1120,14 +1213,25 @@ model Delivery {
 }
 
 model DeliveryItem {
-  id                    String              @id @default(cuid())
-  quantity              Float
-  deliveryId            String
-  consolidatedBoqItemId String
-  remarks               String?
-  drQuantity            Float?
-  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
-  delivery              Delivery            @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  id                        String                              @id @default(cuid())
+  quantity                  Float
+  deliveryId                String
+  consolidatedBoqItemId     String
+  remarks                   String?
+  drQuantity                Float?
+  canonicalResourceId       String?
+  uboqResourceRequirementId String?
+  resourceUnit              String?
+  poItemId                  String?
+  consolidatedBoqItem       ConsolidatedBOQItem                 @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+  delivery                  Delivery                            @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  canonicalResource         UboqCanonicalResourceAccount?       @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+  uboqResourceRequirement   UboqProcurementResourceRequirement? @relation(fields: [uboqResourceRequirementId], references: [id], onDelete: Restrict)
+  poItem                    PurchaseOrderItem?                  @relation("PoItemDeliveries", fields: [poItemId], references: [id], onDelete: Restrict)
+
+  @@index([poItemId])
+  @@index([canonicalResourceId])
+  @@index([uboqResourceRequirementId])
 }
 
 model ConsumptionLog {
@@ -1144,12 +1248,20 @@ model ConsumptionLog {
 }
 
 model ConsumptionItem {
-  id                    String              @id @default(cuid())
-  quantity              Float
-  logId                 String
-  consolidatedBoqItemId String
-  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
-  log                   ConsumptionLog      @relation(fields: [logId], references: [id], onDelete: Cascade)
+  id                        String                              @id @default(cuid())
+  quantity                  Float
+  logId                     String
+  consolidatedBoqItemId     String
+  canonicalResourceId       String?
+  uboqResourceRequirementId String?
+  resourceUnit              String?
+  consolidatedBoqItem       ConsolidatedBOQItem                 @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+  log                       ConsumptionLog                      @relation(fields: [logId], references: [id], onDelete: Cascade)
+  canonicalResource         UboqCanonicalResourceAccount?       @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+  uboqResourceRequirement   UboqProcurementResourceRequirement? @relation(fields: [uboqResourceRequirementId], references: [id], onDelete: Restrict)
+
+  @@index([canonicalResourceId])
+  @@index([uboqResourceRequirementId])
 }
 
 model MaterialIssuance {
@@ -1175,14 +1287,25 @@ model MaterialIssuance {
 }
 
 model IssuanceItem {
-  id                    String              @id @default(cuid())
-  requestedQty          Float
-  releasedQty           Float               @default(0)
-  issuanceId            String
-  consolidatedBoqItemId String
-  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
-  issuance              MaterialIssuance    @relation(fields: [issuanceId], references: [id], onDelete: Cascade)
-  returnItems           ReturnItem[]
+  id                        String                              @id @default(cuid())
+  requestedQty              Float
+  releasedQty               Float                               @default(0)
+  issuanceId                String
+  consolidatedBoqItemId     String
+  canonicalResourceId       String?
+  uboqResourceRequirementId String?
+  resourceUnit              String?
+  warehouseLocationId       String?
+  stockLotEvidenceId        String?
+  consolidatedBoqItem       ConsolidatedBOQItem                 @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+  issuance                  MaterialIssuance                    @relation(fields: [issuanceId], references: [id], onDelete: Cascade)
+  canonicalResource         UboqCanonicalResourceAccount?       @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+  uboqResourceRequirement   UboqProcurementResourceRequirement? @relation(fields: [uboqResourceRequirementId], references: [id], onDelete: Restrict)
+  stockLotEvidence          UboqStockLotEvidence?               @relation(fields: [stockLotEvidenceId], references: [id], onDelete: Restrict)
+  returnItems               ReturnItem[]
+
+  @@index([canonicalResourceId])
+  @@index([uboqResourceRequirementId])
 }
 
 model MaterialReturn {
@@ -1205,15 +1328,24 @@ model MaterialReturn {
 }
 
 model ReturnItem {
-  id                    String              @id @default(cuid())
-  returnedQty           Float
-  condition             String              @default("GOOD")
-  returnId              String
-  issuanceItemId        String
-  consolidatedBoqItemId String
-  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
-  issuanceItem          IssuanceItem        @relation(fields: [issuanceItemId], references: [id], onDelete: Cascade)
-  materialReturn        MaterialReturn      @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  id                        String                              @id @default(cuid())
+  returnedQty               Float
+  condition                 String                              @default("GOOD")
+  returnId                  String
+  issuanceItemId            String
+  consolidatedBoqItemId     String
+  canonicalResourceId       String?
+  uboqResourceRequirementId String?
+  resourceUnit              String?
+  warehouseLocationId       String?
+  consolidatedBoqItem       ConsolidatedBOQItem                 @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+  issuanceItem              IssuanceItem                        @relation(fields: [issuanceItemId], references: [id], onDelete: Cascade)
+  materialReturn            MaterialReturn                      @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  canonicalResource         UboqCanonicalResourceAccount?       @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+  uboqResourceRequirement   UboqProcurementResourceRequirement? @relation(fields: [uboqResourceRequirementId], references: [id], onDelete: Restrict)
+
+  @@index([canonicalResourceId])
+  @@index([uboqResourceRequirementId])
 }
 
 model AccountsPayable {
@@ -1332,6 +1464,7 @@ model Billing {
   deductions            BillingDeduction[]
   items                 BillingItem[]
   payments              Payment[]
+  uboqReceiptAllocations UboqClientReceiptAllocation[]
 }
 
 model BillingItem {
@@ -1389,6 +1522,7 @@ model Payment {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   billing                 Billing  @relation(fields: [billingId], references: [id], onDelete: Cascade)
+  uboqReceiptAllocation   UboqClientReceiptAllocation?
 }
 
 model VariationOrder {
@@ -2807,13 +2941,24 @@ model CanvassForm {
 }
 
 model CanvassItem {
-  id                    String              @id @default(cuid())
-  quantityRequired      Float
-  canvassFormId         String
-  consolidatedBoqItemId String
-  consolidatedBoqItem   ConsolidatedBOQItem @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
-  canvassForm           CanvassForm         @relation(fields: [canvassFormId], references: [id], onDelete: Cascade)
-  quotationItems        QuotationItem[]
+  id                        String                              @id @default(cuid())
+  quantityRequired          Float
+  canvassFormId             String
+  consolidatedBoqItemId     String
+  canonicalResourceId       String?
+  uboqResourceRequirementId String?
+  resourceUnit              String?
+  mrItemId                  String?
+  consolidatedBoqItem       ConsolidatedBOQItem                 @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+  canvassForm               CanvassForm                         @relation(fields: [canvassFormId], references: [id], onDelete: Cascade)
+  canonicalResource         UboqCanonicalResourceAccount?       @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+  uboqResourceRequirement   UboqProcurementResourceRequirement? @relation(fields: [uboqResourceRequirementId], references: [id], onDelete: Restrict)
+  mrItem                    MaterialRequestItem?                @relation("MrItemCanvassItems", fields: [mrItemId], references: [id], onDelete: Restrict)
+  quotationItems            QuotationItem[]
+  poItems                   PurchaseOrderItem[]                 @relation("CanvassItemPoItems")
+
+  @@index([canonicalResourceId])
+  @@index([uboqResourceRequirementId])
 }
 
 model SupplierQuotation {
@@ -2842,6 +2987,7 @@ model QuotationItem {
   totalCost         Float
   brand             String?
   remarks           String?
+  resourceUnit      String?
   quotationId       String
   canvassItemId     String
   canvassItem       CanvassItem       @relation(fields: [canvassItemId], references: [id], onDelete: Cascade)
@@ -3511,10 +3657,18 @@ model ProjectCostLedger {
 
   consolidatedBoqItemId String?
   awardedBoqItemId      String?
+  poItemId              String?
+  canonicalResourceId   String?
+  resourceUnit          String?
 
-  project             Project              @relation("ProjectCostLedgers", fields: [projectId], references: [id], onDelete: Cascade)
-  consolidatedBoqItem ConsolidatedBOQItem? @relation("ConsolidatedCostLedgers", fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
-  awardedBoqItem      AwardedBOQItem?      @relation("AwardedCostLedgers", fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  project             Project                       @relation("ProjectCostLedgers", fields: [projectId], references: [id], onDelete: Cascade)
+  consolidatedBoqItem ConsolidatedBOQItem?          @relation("ConsolidatedCostLedgers", fields: [consolidatedBoqItemId], references: [id], onDelete: Cascade)
+  awardedBoqItem      AwardedBOQItem?               @relation("AwardedCostLedgers", fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  poItem              PurchaseOrderItem?            @relation("PoItemCostLedgers", fields: [poItemId], references: [id], onDelete: Restrict)
+  canonicalResource   UboqCanonicalResourceAccount? @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+
+  @@index([poItemId])
+  @@index([canonicalResourceId])
 }
 
 model CommitmentLedger {
@@ -3620,7 +3774,7 @@ model ValueEngineeringRecord {
 
 model ProjectSchedule {
   id                 String    @id @default(cuid())
-  projectId          String    @unique
+  projectId          String
   name               String
   description        String?
   baselineStartDate  DateTime?
@@ -3634,8 +3788,23 @@ model ProjectSchedule {
   workingDays        Int       @default(0)
   holidays           String? // JSON string of dates
   workDaysConfig     String? // JSON e.g. ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+
+  lockedBOQVersionId     String?
+  lockedBOQChecksum      String?
+  baselineRevision       Int       @default(0)
+  awardedContractAmount  Decimal   @default(0)
+  scheduledAmount        Decimal   @default(0)
+  differenceAmount       Decimal   @default(0)
+  generatedBy            String?
+  approvedBy             String?
+  generatedAt            DateTime?
+  approvedAt             DateTime?
+  generationRulesVersion String?
+  validationMetrics      String?   @db.Text
+  feasibilityFlags       String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   activities      ScheduleActivity[]
   wbsNodes        ScheduleWBS[]
@@ -3645,8 +3814,58 @@ model ProjectSchedule {
   delayRecords    ScheduleDelayRecord[]
   recoveryPlans   ScheduleRecoveryPlan[]
   revisions       ScheduleRevisionRequest[]
+  boqAllocations  ScheduleBOQAllocation[]   @relation("ScheduleBOQAllocations")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // --- Phase 3 Additions ---
+  workflowStatus ProjectScheduleWorkflowStatus @default(AI_GENERATED_DRAFT)
+  reviewRound    Int                           @default(1)
+  revisionNumber Int?
+  revisionCode   String?
+
+  parentScheduleId   String?
+  previousBaselineId String?
+
+  projectStartDate      DateTime?
+  projectCompletionDate DateTime?
+
+  openAiModelIdentifier   String?
+  promptVersion           String?
+  schedulingEngineVersion String?
+  validationRulesVersion  String?
+
+  generatedById String?
+  activatedById String?
+  activatedAt   DateTime?
+  baselineCode  String?
+
+  activationSnapshotHash String?
+  rowVersion             Int     @default(1)
+
+  parentSchedule ProjectSchedule?  @relation("ScheduleRevisionParent", fields: [parentScheduleId], references: [id], onDelete: Restrict)
+  childRevisions ProjectSchedule[] @relation("ScheduleRevisionParent")
+
+  previousBaseline     ProjectSchedule?  @relation("PreviousApprovedBaseline", fields: [previousBaselineId], references: [id], onDelete: Restrict)
+  supersedingBaselines ProjectSchedule[] @relation("PreviousApprovedBaseline")
+
+  generatedByUser User? @relation("ScheduleGeneratedBy", fields: [generatedById], references: [id], onDelete: Restrict)
+  activatedBy     User? @relation("ScheduleActivatedBy", fields: [activatedById], references: [id], onDelete: Restrict)
+
+  approvals            ScheduleApproval[]
+  reviewComments       ScheduleReviewComment[]
+  baselineActivations  BaselineActivation[]
+  financialDataWaivers FinancialDataWaiver[]
+  revisionReasons      ScheduleRevisionReason[]
+  workflowTransitions  ScheduleWorkflowTransition[]
+
+  @@unique([id, projectId])
+  @@unique([projectId, revisionNumber])
+  @@unique([projectId, revisionCode])
+  @@index([projectId, workflowStatus])
+  @@index([parentScheduleId])
+  @@index([previousBaselineId])
+  @@index([lockedBOQVersionId])
 }
 
 model ScheduleWBS {
@@ -3693,11 +3912,23 @@ model ScheduleActivity {
   criticalPath          Boolean   @default(false)
   totalFloat            Int       @default(0)
   freeFloat             Int       @default(0)
-  assignedToId          String?
-  subcontractorId       String?
-  jobOrderId            String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+
+  activityType             String?
+  systemOrArea             String?
+  predecessorData          String? // JSON representation for complex dependencies
+  allocatedAmount          Decimal @default(0)
+  classificationConfidence Float?
+  aiRationale              String?
+  durationMethod           String?
+  productivityAssumption   Float?
+  crewCountAssumption      Int?
+  workFrontAssumption      Int?
+
+  assignedToId    String?
+  subcontractorId String?
+  jobOrderId      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   schedule   ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
   wbs        ScheduleWBS?    @relation(fields: [wbsId], references: [id], onDelete: Cascade)
@@ -3705,10 +3936,11 @@ model ScheduleActivity {
 
   predecessors    ScheduleDependency[]     @relation("SuccessorActivity")
   successors      ScheduleDependency[]     @relation("PredecessorActivity")
-  boqMappings     ScheduleBOQMapping[]
+  boqAllocations  ScheduleBOQAllocation[]
   powMappings     SchedulePOWMapping[]
   progressUpdates ScheduleProgressUpdate[]
   delayRecords    ScheduleDelayRecord[]
+  uboqLinks       UboqScheduleActivityLink[]
 }
 
 model ScheduleDependency {
@@ -3738,15 +3970,31 @@ model ScheduleMilestone {
   schedule ProjectSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
 }
 
-model ScheduleBOQMapping {
+model ScheduleBOQAllocation {
   id               String @id @default(cuid())
   activityId       String
   awardedBoqItemId String
   mappedQuantity   Float  @default(0)
   mappedWeight     Float  @default(0)
 
-  activity       ScheduleActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  awardedBoqItem AwardedBOQItem   @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  // Upgrade Phase B: New fields for detailed BOQ allocation ledger
+  scheduleId          String?
+  projectId           String?
+  phaseId             String?
+  boqLineId           String? // References ConsolidatedBOQItem.id
+  allocationMode      String? // SINGLE, QUANTITY_SPLIT, PERCENTAGE_SPLIT, REFERENCE_ONLY, ZERO_COST_REQUIREMENT
+  awardedQuantity     Decimal?
+  allocatedQuantity   Decimal?
+  allocatedPercentage Decimal?
+  awardedAmount       Decimal?
+  allocatedAmount     Decimal?
+  allocationReason    String?
+
+  activity            ScheduleActivity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  awardedBoqItem      AwardedBOQItem       @relation(fields: [awardedBoqItemId], references: [id], onDelete: Cascade)
+  consolidatedBoqItem ConsolidatedBOQItem? @relation(fields: [boqLineId], references: [id], onDelete: Cascade)
+  schedule            ProjectSchedule?     @relation("ScheduleBOQAllocations", fields: [scheduleId], references: [id], onDelete: Cascade)
+  project             Project?             @relation("ProjectBOQAllocations", fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model SchedulePOWMapping {
@@ -4437,43 +4685,44 @@ model SecuritySimulationArchive {
   exportedExcelUrl             String?
   createdAt                    DateTime  @default(now())
 }
-model UploadedWorkbookFile {
-  id                     String    @id @default(cuid())
-  projectId              String
-  templateCode           String?
-  templateName           String?
-  templateVersion        String?
-  documentType           String?
-  originalFilename       String
-  fileHash               String
-  mimeType               String
-  fileSize               Int
-  storagePath            String
-  preservedOriginalUrl   String?
-  latestPreservedVersionId String?
-  uploadedBy             String
-  uploadedAt             DateTime  @default(now())
-  recognizedTemplate     String?
-  validationStatus       String    @default("PENDING")
-  extractionStatus       String    @default("PENDING")
-  commitStatus           String    @default("PENDING")
-  onlyOfficeDocumentKey  String?
-  metadataJson           String?   @db.Text
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
 
-  project                Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  versions               WorkbookVersion[]
-  sessions               OnlyOfficeSession[]
-  extractedSections      BOQExtractedSection[]
-  extractedItems         BOQExtractedItem[]
-  formulaValidations     WorkbookFormulaValidation[]
-  templateValidations    WorkbookTemplateValidation[]
-  audits                 WorkbookExtractionAudit[]
+model UploadedWorkbookFile {
+  id                       String   @id @default(cuid())
+  projectId                String
+  templateCode             String?
+  templateName             String?
+  templateVersion          String?
+  documentType             String?
+  originalFilename         String
+  fileHash                 String
+  mimeType                 String
+  fileSize                 Int
+  storagePath              String
+  preservedOriginalUrl     String?
+  latestPreservedVersionId String?
+  uploadedBy               String
+  uploadedAt               DateTime @default(now())
+  recognizedTemplate       String?
+  validationStatus         String   @default("PENDING")
+  extractionStatus         String   @default("PENDING")
+  commitStatus             String   @default("PENDING")
+  onlyOfficeDocumentKey    String?
+  metadataJson             String?  @db.Text
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  project             Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions            WorkbookVersion[]
+  sessions            OnlyOfficeSession[]
+  extractedSections   BOQExtractedSection[]
+  extractedItems      BOQExtractedItem[]
+  formulaValidations  WorkbookFormulaValidation[]
+  templateValidations WorkbookTemplateValidation[]
+  audits              WorkbookExtractionAudit[]
 }
 
 model WorkbookVersion {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   versionNumber          Int
@@ -4482,11 +4731,11 @@ model WorkbookVersion {
   filePath               String
   fileHash               String
   createdBy              String
-  createdAt              DateTime  @default(now())
+  createdAt              DateTime @default(now())
   remarks                String?
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  sessions               OnlyOfficeSession[]
+  file     UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  sessions OnlyOfficeSession[]
 }
 
 model OnlyOfficeSession {
@@ -4505,29 +4754,29 @@ model OnlyOfficeSession {
   expiresAt              DateTime?
   lastCallbackAt         DateTime?
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  version                WorkbookVersion?     @relation(fields: [workbookVersionId], references: [id], onDelete: Cascade)
+  file    UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  version WorkbookVersion?     @relation(fields: [workbookVersionId], references: [id], onDelete: Cascade)
 }
 
 model BOQExtractedSection {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   sheetName              String?
   sourceRowNumber        Int?
   sectionCode            String?
   sectionName            String
-  displayOrder           Int       @default(0)
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  displayOrder           Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  items                  BOQExtractedItem[]
+  file    UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items   BOQExtractedItem[]
 }
 
 model BOQExtractedItem {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   sectionId              String?
@@ -4548,19 +4797,19 @@ model BOQExtractedItem {
   unitCost               Float?
   amount                 Float?
   percentage             Float?
-  formulaMapJson         String?   @db.Text
-  validationStatus       String    @default("PENDING")
-  validationErrorsJson   String?   @db.Text
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  formulaMapJson         String?  @db.Text
+  validationStatus       String   @default("PENDING")
+  validationErrorsJson   String?  @db.Text
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  section                BOQExtractedSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  file    UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  section BOQExtractedSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 }
 
 model WorkbookFormulaValidation {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   sheetName              String?
@@ -4570,28 +4819,28 @@ model WorkbookFormulaValidation {
   actualFormula          String?
   expectedValue          Float?
   actualValue            Float?
-  severity               String    @default("INFO")
-  validationStatus       String    @default("PENDING")
+  severity               String   @default("INFO")
+  validationStatus       String   @default("PENDING")
   message                String?
-  createdAt              DateTime  @default(now())
+  createdAt              DateTime @default(now())
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  file UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
 }
 
 model WorkbookTemplateValidation {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   validationType         String
   validationKey          String
   expectedValue          String?
   actualValue            String?
-  severity               String    @default("INFO")
-  status                 String    @default("PENDING")
+  severity               String   @default("INFO")
+  status                 String   @default("PENDING")
   message                String?
-  createdAt              DateTime  @default(now())
+  createdAt              DateTime @default(now())
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  file UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
 }
 
 model ProjectBOQVersion {
@@ -4609,28 +4858,1066 @@ model ProjectBOQVersion {
   totalIndirectCost            Float?
   totalAmount                  Float?
   remarks                      String?
-  createdAt                    DateTime  @default(now())
-  updatedAt                    DateTime  @updatedAt
+
+  // Phase 3D-C1: Structured Checksum fields
+  checksum          String?
+  checksumAlgorithm String?
+  checksumVersion   String?
+  sourceProvenance  String?
+  lockedAt          DateTime?
+  lockedById        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ScheduleGenerationAudit {
+  id                     String    @id @default(cuid())
+  projectId              String
+  userId                 String?
+  action                 String
+  previousScheduleId     String?
+  newScheduleId          String?
+  lockedBOQVersionId     String?
+  lockedBOQChecksum      String?
+  generationRequestId    String?
+  modelIdentifier        String?
+  promptVersion          String?
+  schemaVersion          String?
+  schedulingRulesVersion String?
+  reasoningSetting       String?
+  requestTimestamp       DateTime?
+  responseTimestamp      DateTime?
+  tokenUsage             String? // JSON { prompt, completion, total }
+  resultStatus           String?
+  validationResults      String? // JSON
+  correctionAttemptCount Int       @default(0)
+  timestamp              DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model WorkbookExtractionAudit {
-  id                     String    @id @default(cuid())
+  id                     String   @id @default(cuid())
   uploadedWorkbookFileId String
   projectId              String
   action                 String
-  status                 String    @default("SUCCESS")
+  status                 String   @default("SUCCESS")
   message                String?
-  detailsJson            String?   @db.Text
+  detailsJson            String?  @db.Text
   performedBy            String?
   performedByRole        String?
-  performedAt            DateTime  @default(now())
+  performedAt            DateTime @default(now())
   ipAddress              String?
   userAgent              String?
 
-  file                   UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
-  project                Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  file    UploadedWorkbookFile @relation(fields: [uploadedWorkbookFileId], references: [id], onDelete: Cascade)
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
+model AIConfiguration {
+  id                           String   @id @default(cuid())
+  primaryPlanningModel         String   @default("gpt-4o")
+  secondaryClassificationModel String   @default("gpt-4o-mini")
+  fallbackModel                String   @default("gpt-3.5-turbo")
+  reasoningEffort              String   @default("high")
+  maxOutputTokens              Int      @default(4096)
+  timeoutMs                    Int      @default(60000)
+  retryLimit                   Int      @default(2)
+  promptVersion                String   @default("v1.0")
+  jsonSchemaVersion            String   @default("v1.0")
+  schedulingRulesVersion       String   @default("v1.0")
+  updatedAt                    DateTime @updatedAt
+}
+
+// ==================================================
+// PHASE 3 BASELINE REVIEW & APPROVAL ENUMS
+// ==================================================
+
+enum ProjectScheduleWorkflowStatus {
+  AI_GENERATED_DRAFT
+  INVALID_GENERATED_DRAFT
+  READY_FOR_REVIEW
+
+  UNDER_TECHNICAL_REVIEW
+  TECHNICAL_REVISIONS_REQUIRED
+  TECHNICALLY_APPROVED
+
+  UNDER_CONTRACT_REVIEW
+  CONTRACT_REVISIONS_REQUIRED
+  CONTRACT_APPROVED
+
+  UNDER_FINANCE_REVIEW
+  FINANCE_REVISIONS_REQUIRED
+  FINANCE_APPROVED
+
+  PENDING_BASELINE_APPROVAL
+
+  ACTIVE_BASELINE
+  SUPERSEDED_BASELINE
+  ARCHIVED_BASELINE
+
+  REJECTED
+}
+
+enum ScheduleApprovalStage {
+  TECHNICAL
+  CONTRACT
+  FINANCE
+  FINAL_ACTIVATION
+}
+
+enum ScheduleApprovalDecision {
+  APPROVE
+  RETURN_FOR_REVISION
+  REJECT
+  REQUEST_CLARIFICATION
+}
+
+enum ScheduleCommentType {
+  TECHNICAL
+  FINANCIAL
+  BOQ_ALLOCATION
+  SEQUENCE
+  DURATION
+  PRODUCTIVITY
+  CREW
+  WORK_FRONT
+  CPM
+  CONTRACT_DATE
+  COMMISSIONING
+  CLOSEOUT
+}
+
+enum ScheduleCommentStatus {
+  OPEN
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum FinancialWaiverStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  REVOKED
+}
+
+enum ScheduleRevisionType {
+  AI_REGENERATION
+  TECHNICAL_CORRECTION
+  CONTRACT_CORRECTION
+  FINANCIAL_CORRECTION
+  RECOVERY
+  VARIATION_ORDER
+  TIME_EXTENSION
+  SUSPENSION_RESUMPTION
+  METHODOLOGY_CHANGE
+  RESOURCE_CHANGE
+  CLIENT_INSTRUCTION
+}
+
+// ==================================================
+// PHASE 3 BASELINE REVIEW & APPROVAL MODELS
+// ==================================================
+
+model ScheduleApproval {
+  id                   String                   @id @default(cuid())
+  projectId            String
+  scheduleId           String
+  reviewRound          Int
+  revisionCode         String?
+  approvalStage        ScheduleApprovalStage
+  decision             ScheduleApprovalDecision
+  reviewerId           String
+  reviewerNameSnapshot String
+  reviewerRoleSnapshot String
+  comments             String?                  @db.Text
+  validationSnapshot   Json?
+  snapshotVersion      String
+  scheduleSnapshotHash String?
+  lockedBOQChecksum    String?
+  decidedAt            DateTime                 @default(now())
+  createdAt            DateTime                 @default(now())
+  idempotencyKey       String?                  @unique
+  requestId            String?
+
+  schedule ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
+  reviewer User            @relation("ScheduleApprovalActor", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  @@index([projectId, scheduleId])
+  @@index([scheduleId, reviewRound])
+  @@index([scheduleId, approvalStage])
+  @@index([reviewerId])
+}
+
+model ScheduleReviewComment {
+  id                    String                @id @default(cuid())
+  projectId             String
+  scheduleId            String
+  reviewRound           Int
+  activityId            String?
+  phaseId               String?
+  commentType           ScheduleCommentType
+  comment               String                @db.Text
+  status                ScheduleCommentStatus @default(OPEN)
+  createdById           String
+  createdByNameSnapshot String
+  createdByRoleSnapshot String
+  resolvedById          String?
+  resolutionComment     String?               @db.Text
+  createdAt             DateTime              @default(now())
+  resolvedAt            DateTime?
+
+  schedule   ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
+  createdBy  User            @relation("ScheduleCommentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  resolvedBy User?           @relation("ScheduleCommentResolvedBy", fields: [resolvedById], references: [id], onDelete: Restrict)
+}
+
+model BaselineActivation {
+  id                      String    @id @default(cuid())
+  projectId               String
+  scheduleId              String
+  reviewRound             Int
+  revisionCode            String
+  previousBaselineId      String?
+  validationSnapshot      Json
+  snapshotVersion         String
+  scheduleSnapshotHash    String
+  lockedBOQChecksum       String?
+  activatedById           String
+  activatedByNameSnapshot String
+  activatedByRoleSnapshot String
+  activatedAt             DateTime  @default(now())
+  createdAt               DateTime  @default(now())
+  idempotencyKey          String?   @unique
+  requestId               String?
+  isAuthoritative         Boolean   @default(false)
+  invalidatedAt           DateTime?
+  invalidationReason      String?
+
+  schedule    ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
+  activatedBy User            @relation("BaselineActivationActor", fields: [activatedById], references: [id], onDelete: Restrict)
+}
+
+model FinancialDataWaiver {
+  id                      String                @id @default(cuid())
+  projectId               String
+  scheduleId              String
+  reason                  String                @db.Text
+  affectedFields          Json
+  normalizationMethod     String
+  migrationDeadline       DateTime?
+  requestedById           String
+  requestedByNameSnapshot String
+  requestedByRoleSnapshot String
+  approvedById            String?
+  approvedByNameSnapshot  String?
+  approvedByRoleSnapshot  String?
+  approvedAt              DateTime?
+  expiresAt               DateTime?
+  status                  FinancialWaiverStatus @default(PENDING)
+  createdAt               DateTime              @default(now())
+  revokedAt               DateTime?
+  revocationReason        String?               @db.Text
+
+  schedule    ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
+  requestedBy User            @relation("FinancialWaiverRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedBy  User?           @relation("FinancialWaiverApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+}
+
+model ScheduleRevisionReason {
+  id                    String               @id @default(cuid())
+  projectId             String
+  scheduleId            String
+  parentScheduleId      String?
+  revisionType          ScheduleRevisionType
+  reason                String               @db.Text
+  supportingReference   String?
+  createdById           String
+  createdByNameSnapshot String
+  createdByRoleSnapshot String
+  createdAt             DateTime             @default(now())
+
+  schedule  ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
+  createdBy User            @relation("ScheduleRevisionReasonCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+}
+
+enum ScheduleWorkflowAction {
+  SUBMIT_DRAFT_FOR_REVIEW
+  START_TECHNICAL_REVIEW
+}
+
+model ScheduleWorkflowTransition {
+  id                  String                        @id @default(cuid())
+  projectId           String
+  scheduleId          String
+  action              ScheduleWorkflowAction
+  fromStatus          ProjectScheduleWorkflowStatus
+  toStatus            ProjectScheduleWorkflowStatus
+  actorUserId         String
+  actorSessionVersion Int
+  expectedRowVersion  Int
+  resultingRowVersion Int
+  idempotencyKeyHash  String
+  correlationId       String?
+  occurredAt          DateTime                      @default(now())
+  metadata            String?                       @db.Text
+
+  project  Project         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  schedule ProjectSchedule @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Restrict)
+  actor    User            @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([scheduleId, action, idempotencyKeyHash])
+  @@index([scheduleId, occurredAt])
+  @@index([projectId, action, occurredAt])
+  @@index([actorUserId, occurredAt])
+}
+
+model PasswordRecoveryToken {
+  id                     String    @id @default(uuid())
+  userId                 String
+  tokenHash              String    @unique
+  purpose                String    @default("PASSWORD_RESET")
+  createdAt              DateTime  @default(now())
+  expiresAt              DateTime
+  consumedAt             DateTime?
+  revokedAt              DateTime?
+  requestedIpHash        String?
+  requestedUserAgentHash String?
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([purpose, expiresAt])
+  @@index([tokenHash, consumedAt, revokedAt])
+}
+
+model PasswordRecoveryRateLimit {
+  id             String    @id @default(uuid())
+  identifierHash String
+  attempts       Int       @default(1)
+  lastAttemptAt  DateTime  @default(now())
+  blockedUntil   DateTime?
+
+  @@index([identifierHash])
+}
+
+
+// ============================================================================
+// OSERP-PROJ-UBOQ-001 — UNIVERSAL BOQ & DOCUMENT INTELLIGENCE ENGINE (v2.1-R3)
+// ============================================================================
+
+enum UboqSectorType {
+  GOVERNMENT
+  CORPORATE
+  PRIVATE
+}
+
+enum UboqSnapshotStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  SUPERSEDED
+}
+
+enum UboqPrrStatus {
+  UNDER_REVIEW
+  APPROVED
+  SUPERSEDED
+}
+
+enum UboqTakeoffBasis {
+  CONTRACTOR_DETAILED_DUPA
+  SUMMARY_ONLY_VERIFIED
+}
+
+enum UboqResourceClass {
+  MATERIAL
+  EQUIPMENT_SUPPLY
+  CONSUMABLE
+  LABOR_PACKAGE
+  SUBCONTRACT_SCOPE
+  TESTING_SERVICE
+}
+
+enum UboqFulfillmentChannel {
+  SUPPLIER_PO
+  WAREHOUSE_STOCK
+  SUBCONTRACT
+  PETTY_CASH_MINOR
+  DIRECT_LABOR
+}
+
+enum UboqUomDimensionFamily {
+  VOLUME
+  MASS
+  LENGTH
+  AREA
+  COUNT
+  PACK
+  TIME_LABOR
+  TIME_EQUIP
+  TEST_SET
+  LUMP_SCOPE
+}
+
+enum UboqLedgerEventType {
+  PRR_APPROVED
+  PRR_SUPERSEDED
+  OPENING_STOCK_ALLOCATED
+  MRF_RESERVE
+  MRF_RELEASE
+  PO_COMMIT_TRANSFER
+  PO_DIRECT_COMMIT
+  PO_CLOSE_SHORT
+  DELIVERY_RECEIVE
+  DELIVERY_REVERSAL
+  ISSUANCE_CONSUME
+  RETURN_GOOD_RESTORE
+  RETURN_DAMAGED_QUARANTINE
+}
+
+model UboqSourceDocument {
+  id                String   @id @default(cuid())
+  projectId         String
+  fileName          String
+  mimeType          String
+  byteSize          Int
+  sha256Hash        String
+  magicSignature    String
+  storageUri        String
+  documentRole      String   @default("CONTRACT_BOQ")
+  uploadedById      String
+  isLockedImmutable Boolean  @default(true)
+  metadataJson      Json?
+  createdAt         DateTime @default(now())
+
+  project      Project                             @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  sections     UboqDocumentSection[]
+  candidates   UboqExtractionCandidate[]
+  snapshots    UboqOperationalSnapshot[]
+  phaseLines   UboqAwardedPhaseLine[]
+  requirements UboqProcurementResourceRequirement[]
+
+  @@unique([projectId, sha256Hash, documentRole])
+  @@index([projectId, createdAt])
+}
+
+model UboqDocumentSection {
+  id               String   @id @default(cuid())
+  sourceDocumentId String
+  sectionType      String   @default("WORKSHEET")
+  sheetOrPageRef   String
+  sectionTitle     String?
+  displayOrder     Int      @default(0)
+  layoutMetaJson   Json?
+  createdAt        DateTime @default(now())
+
+  sourceDocument UboqSourceDocument        @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  candidates     UboqExtractionCandidate[]
+
+  @@index([sourceDocumentId, displayOrder])
+}
+
+model UboqExtractionCandidate {
+  id                  String    @id @default(cuid())
+  sourceDocumentId    String
+  sectionId           String?
+  sourceRowNumber     Int?
+  sourceCellRef       String?
+  rawHeadingText      String?
+  mappedCanonicalId   String?
+  rawValueText        String?
+  rawFormulaText      String?
+  parsedJson          Json?
+  confidenceScore     Decimal   @default(1.0) @db.Decimal(5, 4)
+  extractionMethod    String    @default("DETERMINISTIC_PARSER")
+  requiresHumanReview Boolean   @default(false)
+  reviewDecision      String    @default("PENDING")
+  reviewedById        String?
+  reviewedAt          DateTime?
+  reviewNotes         String?
+  createdAt           DateTime  @default(now())
+
+  sourceDocument UboqSourceDocument     @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  section        UboqDocumentSection?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  phaseLines     UboqAwardedPhaseLine[]
+
+  @@index([sourceDocumentId, requiresHumanReview])
+}
+
+model UboqTaxPricingProfile {
+  id                       String         @id @default(cuid())
+  projectId                String
+  profileCode              String
+  versionCode              String
+  sectorType               UboqSectorType
+  estimateVatComponentRate Decimal        @default(0) @db.Decimal(9, 6)
+  estimateVatBaseMode      String         @default("NONE")
+  outputVatRate            Decimal        @default(0) @db.Decimal(9, 6)
+  salesVatCategory         String         @default("VAT_EXEMPT")
+  contractVatInclusive     Boolean        @default(true)
+  govVatWithholdingRate    Decimal        @default(0) @db.Decimal(9, 6)
+  ewtRate                  Decimal        @default(0) @db.Decimal(9, 6)
+  ocmRate                  Decimal        @default(0) @db.Decimal(9, 6)
+  contractorProfitRate     Decimal        @default(0) @db.Decimal(9, 6)
+  contingencyRate          Decimal        @default(0) @db.Decimal(9, 6)
+  retentionRate            Decimal        @default(0) @db.Decimal(9, 6)
+  advanceRecoupmentRate    Decimal        @default(0) @db.Decimal(9, 6)
+  effectiveFrom            DateTime       @default(now())
+  isImmutableApproved      Boolean        @default(false)
+  approvedById             String?
+  approvedAt               DateTime?
+  createdAt                DateTime       @default(now())
+
+  project   Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  contracts UboqContractAuthority[]
+
+  @@unique([projectId, profileCode, versionCode])
+  @@index([projectId, isImmutableApproved])
+}
+
+model UboqContractAuthority {
+  id                   String         @id @default(cuid())
+  projectId            String
+  taxProfileId         String?
+  sectorType           UboqSectorType
+  clientName           String
+  contractRef          String?
+  noaRef               String?
+  ntpRef               String?
+  clientPoRef          String?
+  pricingMethod        String         @default("UNIT_PRICE")
+  contractVatBasis     String         @default("VAT_INCLUSIVE")
+  awardedRevenue       Decimal        @default(0) @db.Decimal(18, 2)
+  awardedRevenueExVat  Decimal        @default(0) @db.Decimal(18, 2)
+  currentContractValue Decimal        @default(0) @db.Decimal(18, 2)
+  contractDurationDays Int?
+  commencementDate     DateTime?
+  voReference          String?
+  status               String         @default("DRAFT")
+  approvedById         String?
+  approvedAt           DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  project    Project                @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  taxProfile UboqTaxPricingProfile? @relation(fields: [taxProfileId], references: [id], onDelete: Restrict)
+  snapshots  UboqOperationalSnapshot[]
+
+  @@index([projectId, status])
+}
+
+model UboqOperationalSnapshot {
+  sourceEvidenceHash      String?
+  id                      String             @id @default(cuid())
+  projectId               String
+  contractAuthorityId     String?
+  sourceDocumentId        String?
+  versionNumber           Int
+  versionLabel            String
+  status                  UboqSnapshotStatus @default(DRAFT)
+  supersedesSnapshotId    String?
+  canonicalHash           String
+  stagedConsolidationJson Json?
+  stagedTakeoffsJson      Json?
+  preparedById            String
+  reviewedById            String?
+  reviewedAt              DateTime?
+  approvedById            String?
+  approvedAt              DateTime?
+  remarks                 String?
+  createdAt               DateTime           @default(now())
+
+  project            Project                              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  contractAuthority  UboqContractAuthority?               @relation(fields: [contractAuthorityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sourceDocument     UboqSourceDocument?                  @relation(fields: [sourceDocumentId], references: [id], onDelete: Restrict)
+  supersedesSnapshot UboqOperationalSnapshot?             @relation("UboqSnapshotLineage", fields: [supersedesSnapshotId], references: [id], onDelete: Restrict)
+  supersededBy       UboqOperationalSnapshot[]            @relation("UboqSnapshotLineage")
+  phaseLines         UboqAwardedPhaseLine[]
+  requirements       UboqProcurementResourceRequirement[]
+  cashFlowPeriods    UboqCashFlowPeriod[]
+  targetBudgets            UboqContractorTargetBudget[]
+  treasuryOpeningBalances  UboqTreasuryOpeningBalance[]
+
+  @@unique([projectId, versionNumber])
+  @@index([projectId, status])
+  @@index([projectId, contractAuthorityId])
+}
+
+model UboqAwardedPhaseLine {
+  id                    String                 @id @default(cuid())
+  projectId             String
+  snapshotId            String?
+  awardedBoqItemId      String?
+  sourceDocumentId      String?
+  extractionCandidateId String?
+  sourceSheetName       String?
+  sourceCellRef         String?
+  itemCode              String
+  phaseCode             String
+  sectionCode           String?
+  workDescription       String
+  specification         String?
+  specSignatureHash     String
+  unitRaw               String
+  unitNormalized        String
+  uomDimensionFamily    UboqUomDimensionFamily
+  pricingType           String                 @default("UNIT_PRICE")
+  originalQty           Decimal                @db.Decimal(18, 4)
+  approvedQty           Decimal                @db.Decimal(18, 4)
+  contractUnitRate      Decimal                @db.Decimal(18, 4)
+  contractLineAmount    Decimal                @db.Decimal(18, 2)
+  contractAmountExVat   Decimal                @default(0) @db.Decimal(18, 2)
+  agencyEstimateStatus  String                 @default("SOURCE_NOT_PROVIDED")
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  project             Project                          @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  snapshot            UboqOperationalSnapshot?         @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  awardedBoqItem      AwardedBOQItem?                  @relation(fields: [awardedBoqItemId], references: [id], onDelete: Restrict)
+  sourceDocument      UboqSourceDocument?              @relation(fields: [sourceDocumentId], references: [id], onDelete: Restrict)
+  extractionCandidate UboqExtractionCandidate?         @relation(fields: [extractionCandidateId], references: [id], onDelete: SetNull)
+  consolidationLinks  UboqConsolidationLink[]
+  agencyEstimates     UboqAgencyEstimateBaseline[]
+  targetBudgets       UboqContractorTargetBudget[]
+  workItemAllocations UboqResourceWorkItemAllocation[]
+  scheduleLinks       UboqScheduleActivityLink[]
+
+  @@index([projectId, phaseCode, itemCode])
+  @@index([projectId, specSignatureHash])
+  @@index([extractionCandidateId])
+}
+
+model UboqConsolidationGroup {
+  id                    String                 @id @default(cuid())
+  projectId             String
+  consolidatedBoqItemId String                 @unique
+  groupCode             String
+  canonicalDescription  String
+  specification         String?
+  specSignatureHash     String
+  unitNormalized        String
+  uomDimensionFamily    UboqUomDimensionFamily
+  totalApprovedQty      Decimal                @db.Decimal(18, 4)
+  weightedUnitRate      Decimal                @db.Decimal(18, 4)
+  totalContractAmount   Decimal                @db.Decimal(18, 2)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  project             Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  consolidatedBoqItem ConsolidatedBOQItem     @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Restrict)
+  links               UboqConsolidationLink[]
+
+  @@unique([projectId, specSignatureHash, unitNormalized])
+  @@index([projectId])
+}
+
+model UboqConsolidationLink {
+  id                   String   @id @default(cuid())
+  consolidationGroupId String
+  phaseLineId          String
+  allocatedQty         Decimal  @db.Decimal(18, 4)
+  allocationWeightPct  Decimal  @db.Decimal(9, 6)
+  createdAt            DateTime @default(now())
+
+  consolidationGroup UboqConsolidationGroup @relation(fields: [consolidationGroupId], references: [id], onDelete: Cascade)
+  phaseLine          UboqAwardedPhaseLine   @relation(fields: [phaseLineId], references: [id], onDelete: Restrict)
+
+  @@unique([consolidationGroupId, phaseLineId])
+}
+
+model UboqAgencyEstimateBaseline {
+  id                     String   @id @default(cuid())
+  projectId              String
+  phaseLineId            String?
+  agencyEdcAmt           Decimal? @db.Decimal(18, 2)
+  agencyAbcAmt           Decimal? @db.Decimal(18, 2)
+  estimateMaterialCost   Decimal  @default(0) @db.Decimal(18, 2)
+  estimateLaborCost      Decimal  @default(0) @db.Decimal(18, 2)
+  estimateEquipmentCost  Decimal  @default(0) @db.Decimal(18, 2)
+  estimatedDirectCost    Decimal  @default(0) @db.Decimal(18, 2)
+  ocmAmount              Decimal  @default(0) @db.Decimal(18, 2)
+  contingencyOcm         Decimal  @default(0) @db.Decimal(18, 2)
+  contractorProfitAmt    Decimal  @default(0) @db.Decimal(18, 2)
+  estimateVatAmt         Decimal  @default(0) @db.Decimal(18, 2)
+  estimatedIndirectCost  Decimal  @default(0) @db.Decimal(18, 2)
+  estimatedTotalUnitCost Decimal  @default(0) @db.Decimal(18, 4)
+  estimatedTotalAmount   Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt              DateTime @default(now())
+
+  project   Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  phaseLine UboqAwardedPhaseLine? @relation(fields: [phaseLineId], references: [id], onDelete: Restrict)
+
+  @@index([projectId])
+}
+
+model UboqContractorTargetBudget {
+  id                  String    @id @default(cuid())
+  projectId           String
+  snapshotId          String?
+  phaseLineId         String?
+  revisionNumber      Int       @default(1)
+  supersedesId        String?
+  targetDirectCostAmt Decimal   @default(0) @db.Decimal(18, 2)
+  targetTotalCost     Decimal   @default(0) @db.Decimal(18, 2)
+  targetProfit        Decimal   @default(0) @db.Decimal(18, 2)
+  targetMarginPct     Decimal   @default(0) @db.Decimal(9, 6)
+  commitmentOpenAmt   Decimal   @default(0) @db.Decimal(18, 2)
+  etcUncommitted      Decimal   @default(0) @db.Decimal(18, 2)
+  forecastEac         Decimal   @default(0) @db.Decimal(18, 2)
+  forecastProfit      Decimal   @default(0) @db.Decimal(18, 2)
+  approvedById        String?
+  approvedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  project      Project                      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  snapshot     UboqOperationalSnapshot?     @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  phaseLine    UboqAwardedPhaseLine?        @relation(fields: [phaseLineId], references: [id], onDelete: Restrict)
+  supersedes   UboqContractorTargetBudget?  @relation("UboqTargetBudgetLineage", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy UboqContractorTargetBudget[] @relation("UboqTargetBudgetLineage")
+
+  @@index([projectId])
+  @@index([projectId, snapshotId])
+}
+
+model UboqClientReceipt {
+  id                 String                        @id @default(cuid())
+  projectId          String
+  receiptReference   String
+  receiptDate        DateTime
+  totalReceiptAmount Decimal                       @db.Decimal(18, 2)
+  status             String                        @default("DRAFT")
+  verifiedById       String?
+  verifiedAt         DateTime?
+  remarks            String?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  project     Project                       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  allocations UboqClientReceiptAllocation[]
+
+  @@unique([projectId, receiptReference])
+  @@index([projectId])
+}
+
+model UboqClientReceiptAllocation {
+  id              String            @id @default(cuid())
+  projectId       String
+  receiptId       String
+  billingId       String
+  paymentId       String            @unique
+  allocatedAmount Decimal           @db.Decimal(18, 2)
+  createdAt       DateTime          @default(now())
+
+  project Project           @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  receipt UboqClientReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  billing Billing           @relation(fields: [billingId], references: [id], onDelete: Restrict)
+  payment Payment           @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@unique([receiptId, billingId])
+  @@index([projectId, receiptId])
+}
+
+model UboqCanonicalResourceAccount {
+  id                        String                 @id @default(cuid())
+  projectId                 String
+  consolidatedBoqItemId     String
+  resourceCode              String
+  resourceDescription       String
+  resourceSpec              String
+  specSignatureHash         String
+  resourceClass             UboqResourceClass      @default(MATERIAL)
+  fulfillmentChannel        UboqFulfillmentChannel @default(SUPPLIER_PO)
+  resourceUomNormalized     String
+  uomDimensionFamily        UboqUomDimensionFamily
+  activeApprovedPrId        String?
+  activeApprovedQty         Decimal                @default(0) @db.Decimal(18, 4)
+  allocatedUsableStockQty   Decimal                @default(0) @db.Decimal(18, 4)
+  openMrReservedQty         Decimal                @default(0) @db.Decimal(18, 4)
+  openCommittedPoQty        Decimal                @default(0) @db.Decimal(18, 4)
+  deliveredReceivedQty      Decimal                @default(0) @db.Decimal(18, 4)
+  consumedIssuedQty         Decimal                @default(0) @db.Decimal(18, 4)
+  damagedReturnedQty        Decimal                @default(0) @db.Decimal(18, 4)
+  availablePhysicalStockQty Decimal                @default(0) @db.Decimal(18, 4)
+  remainingProcurementQty   Decimal                @default(0) @db.Decimal(18, 4)
+  isOvercommittedByRevision Boolean                @default(false)
+  overcommittedQty          Decimal                @default(0) @db.Decimal(18, 4)
+  targetResourceUnitCost    Decimal                @default(0) @db.Decimal(18, 4)
+  rowVersion                Int                    @default(1)
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+
+  project             Project                              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  consolidatedBoqItem ConsolidatedBOQItem                  @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Restrict)
+  activeApprovedPr    UboqProcurementResourceRequirement?  @relation("ActiveApprovedAccountPrr", fields: [activeApprovedPrId], references: [id], onDelete: Restrict)
+  prrVersions         UboqProcurementResourceRequirement[] @relation("AccountPrrVersions")
+  stockLots           UboqStockLotEvidence[]
+  ledgerEntries       UboqResourceLedgerEntry[]
+  mrItems             MaterialRequestItem[]
+  canvassItems        CanvassItem[]
+  poItems             PurchaseOrderItem[]
+  deliveryItems       DeliveryItem[]
+  issuanceItems       IssuanceItem[]
+  returnItems         ReturnItem[]
+  consumptionItems    ConsumptionItem[]
+  costLedgers         ProjectCostLedger[]
+  expenseBreakdowns   ExpenseBreakdownItem[]
+
+  @@unique([projectId, consolidatedBoqItemId, specSignatureHash, resourceUomNormalized])
+  @@index([projectId, activeApprovedPrId])
+}
+
+model UboqProcurementResourceRequirement {
+  id                    String           @id @default(cuid())
+  canonicalResourceId   String
+  projectId             String
+  consolidatedBoqItemId String
+  snapshotId            String?
+  versionNumber         Int              @default(1)
+  supersedesId          String?
+  status                UboqPrrStatus    @default(UNDER_REVIEW)
+  takeoffBasis          UboqTakeoffBasis
+  resourceCoeff         Decimal?         @db.Decimal(18, 6)
+  workQuantityBasis     Decimal?         @db.Decimal(18, 4)
+  summaryVerifiedQty    Decimal?         @db.Decimal(18, 4)
+  requiredQty           Decimal          @db.Decimal(18, 4)
+  benchmarkUnitCost     Decimal          @default(0) @db.Decimal(18, 4)
+  procurementBudget     Decimal          @default(0) @db.Decimal(18, 2)
+  sourceDocumentId      String?
+  sourceSheetName       String?
+  sourceCellRef         String?
+  preparedById          String
+  reviewedById          String?
+  approvedById          String?
+  approvedAt            DateTime?
+  createdAt             DateTime         @default(now())
+
+  canonicalResource   UboqCanonicalResourceAccount         @relation("AccountPrrVersions", fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+  activeForAccounts   UboqCanonicalResourceAccount[]       @relation("ActiveApprovedAccountPrr")
+  project             Project                              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  consolidatedBoqItem ConsolidatedBOQItem                  @relation(fields: [consolidatedBoqItemId], references: [id], onDelete: Restrict)
+  snapshot            UboqOperationalSnapshot?             @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  sourceDocument      UboqSourceDocument?                  @relation(fields: [sourceDocumentId], references: [id], onDelete: Restrict)
+  supersedes          UboqProcurementResourceRequirement?  @relation("PrrSupersession", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy        UboqProcurementResourceRequirement[] @relation("PrrSupersession")
+  workItemAllocations UboqResourceWorkItemAllocation[]
+  ledgerEntries       UboqResourceLedgerEntry[]
+  mrItems             MaterialRequestItem[]
+  canvassItems        CanvassItem[]
+  poItems             PurchaseOrderItem[]
+  deliveryItems       DeliveryItem[]
+  issuanceItems       IssuanceItem[]
+  returnItems         ReturnItem[]
+  consumptionItems    ConsumptionItem[]
+
+  @@unique([canonicalResourceId, versionNumber])
+  @@index([projectId, status])
+}
+
+model UboqResourceWorkItemAllocation {
+  id               String   @id @default(cuid())
+  prrId            String
+  phaseLineId      String?
+  awardedBoqItemId String?
+  allocatedQty     Decimal  @db.Decimal(18, 4)
+  createdAt        DateTime @default(now())
+
+  prr            UboqProcurementResourceRequirement @relation(fields: [prrId], references: [id], onDelete: Cascade)
+  phaseLine      UboqAwardedPhaseLine?              @relation(fields: [phaseLineId], references: [id], onDelete: Restrict)
+  awardedBoqItem AwardedBOQItem?                    @relation(fields: [awardedBoqItemId], references: [id], onDelete: Restrict)
+
+  @@index([prrId])
+}
+
+model UboqStockLotEvidence {
+  id                  String   @id @default(cuid())
+  projectId           String
+  canonicalResourceId String
+  lotNumber           String
+  warehouseLocationId String
+  conditionCode       String   @default("GOOD")
+  verifiedQty         Decimal  @db.Decimal(18, 4)
+  allocatedQty        Decimal  @default(0) @db.Decimal(18, 4)
+  issuedQty           Decimal  @default(0) @db.Decimal(18, 4)
+  unitCost            Decimal  @default(0) @db.Decimal(18, 4)
+  inspectionRef       String
+  verifiedById        String
+  verifiedAt          DateTime @default(now())
+  status              String   @default("VERIFIED")
+  createdAt           DateTime @default(now())
+
+  project           Project                      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  canonicalResource UboqCanonicalResourceAccount @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+  issuanceItems     IssuanceItem[]
+
+  @@unique([projectId, canonicalResourceId, lotNumber, warehouseLocationId])
+  @@index([canonicalResourceId, conditionCode])
+}
+
+model UboqResourceLedgerEntry {
+  id                           String              @id @default(cuid())
+  projectId                    String
+  canonicalResourceId          String
+  prrSnapshotId                String?
+  eventType                    UboqLedgerEventType
+  sourceModule                 String
+  sourceHeaderId               String
+  sourceLineId                 String
+  poItemLineageId              String?
+  transitionSeq                Int                 @default(1)
+  txId                         String
+  warehouseLocationId          String?
+  conditionCode                String?
+  idempotencyKey               String              @unique
+  qtyDeltaApproved             Decimal             @default(0) @db.Decimal(18, 4)
+  qtyDeltaAllocatedStock       Decimal             @default(0) @db.Decimal(18, 4)
+  qtyDeltaOpenMr               Decimal             @default(0) @db.Decimal(18, 4)
+  qtyDeltaOpenPo               Decimal             @default(0) @db.Decimal(18, 4)
+  qtyDeltaDelivered            Decimal             @default(0) @db.Decimal(18, 4)
+  qtyDeltaConsumed             Decimal             @default(0) @db.Decimal(18, 4)
+  qtyDeltaDamaged              Decimal             @default(0) @db.Decimal(18, 4)
+  balanceAvailableStockAfter   Decimal             @db.Decimal(18, 4)
+  balanceRemainingProcureAfter Decimal             @db.Decimal(18, 4)
+  unitCostSnapshot             Decimal?            @db.Decimal(18, 4)
+  actorUserId                  String
+  remarks                      String?
+  createdAt                    DateTime            @default(now())
+
+  project           Project                             @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  canonicalResource UboqCanonicalResourceAccount        @relation(fields: [canonicalResourceId], references: [id], onDelete: Restrict)
+  prrSnapshot       UboqProcurementResourceRequirement? @relation(fields: [prrSnapshotId], references: [id], onDelete: Restrict)
+
+  @@unique([eventType, sourceLineId, transitionSeq])
+  @@index([canonicalResourceId, createdAt])
+  @@index([sourceHeaderId, txId])
+}
+
+model UboqTemplateDefinition {
+  id                 String   @id @default(cuid())
+  projectId          String?
+  layoutGroupId      String?
+  supersedesId       String?
+  duplicatedFromId   String?
+  sharingScope       String   @default("PRIVATE")
+  definitionHash     String?
+  changeSummary      String?
+  templateCode       String
+  templateName       String
+  rowGrain           String
+  selectedFieldsJson Json
+  headingAliasesJson Json?
+  groupingRulesJson  Json?
+  formulaAstJson     Json?
+  isSystemPreset     Boolean  @default(false)
+  versionNumber      Int      @default(1)
+  createdById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  project          Project?                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supersedes       UboqTemplateDefinition?  @relation("UboqTemplateVersionLineage", fields: [projectId, supersedesId], references: [projectId, id], onDelete: Cascade, onUpdate: Restrict)
+  supersededBy     UboqTemplateDefinition[] @relation("UboqTemplateVersionLineage")
+  duplicatedFrom   UboqTemplateDefinition?  @relation("UboqTemplateDuplicateLineage", fields: [projectId, duplicatedFromId], references: [projectId, id], onDelete: Cascade, onUpdate: Restrict)
+  duplicatedCopies UboqTemplateDefinition[] @relation("UboqTemplateDuplicateLineage")
+
+  @@unique([projectId, id])
+  @@unique([projectId, layoutGroupId, versionNumber])
+  @@index([projectId, templateCode])
+  @@index([projectId, templateCode, layoutGroupId, versionNumber])
+}
+
+model UboqTemplateAuditEvent {
+  id                  String   @id @default(cuid())
+  projectId           String
+  layoutGroupId       String?
+  layoutDefinitionId  String?
+  layoutVersionNumber Int?
+  layoutOwnerId       String?
+  sharingScope        String   @default("PRIVATE")
+  templateCode        String
+  eventType           String
+  actorUserId         String
+  actorRole           String
+  sourceId            String?
+  sourceVersion       String?
+  contractCode        String?
+  exportFormat        String?
+  outputSha256        String?
+  detailsJson         Json?
+  createdAt           DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([projectId, layoutGroupId, createdAt])
+}
+
+model UboqScheduleActivityLink {
+  id                  String   @id @default(cuid())
+  phaseLineId         String
+  activityId          String
+  allocatedQty        Decimal  @db.Decimal(18, 4)
+  allocationWeightPct Decimal  @db.Decimal(9, 6)
+  createdAt           DateTime @default(now())
+
+  phaseLine UboqAwardedPhaseLine @relation(fields: [phaseLineId], references: [id], onDelete: Restrict)
+  activity  ScheduleActivity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([phaseLineId, activityId])
+}
+
+model UboqCashFlowPeriod {
+  id                      String   @id @default(cuid())
+  projectId               String
+  snapshotId              String?
+  periodType              String   @default("HALF_MONTH")
+  periodIndex             Int
+  periodLabel             String
+  quarterLabel            String
+  periodStart             DateTime
+  periodEnd               DateTime
+  plannedValueWeightAmt   Decimal  @default(0) @db.Decimal(18, 2)
+  expectedBillingsAmt     Decimal  @default(0) @db.Decimal(18, 2)
+  forecastReceiptsAmt     Decimal  @default(0) @db.Decimal(18, 2)
+  procurementCashOutAmt   Decimal  @default(0) @db.Decimal(18, 2)
+  payrollSubconCashOutAmt Decimal  @default(0) @db.Decimal(18, 2)
+  otherCashOutAmt         Decimal  @default(0) @db.Decimal(18, 2)
+  actualCashReceiptsAmt   Decimal  @default(0) @db.Decimal(18, 2)
+  actualCashPaidAmt       Decimal  @default(0) @db.Decimal(18, 2)
+  closingCashAmt          Decimal  @default(0) @db.Decimal(18, 2)
+  liquidityGapAmt         Decimal  @default(0) @db.Decimal(18, 2)
+  roundingAdjustmentAmt   Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt               DateTime @default(now())
+
+  project  Project                  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  snapshot UboqOperationalSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, snapshotId, periodType, periodIndex])
+  @@index([projectId, quarterLabel])
+}
+
+model UboqValidationException {
+  id             String    @id @default(cuid())
+  projectId      String
+  snapshotId     String?
+  ruleCode       String
+  severity       String    @default("BLOCKING")
+  entityType     String
+  entityId       String?
+  message        String
+  detailsJson    Json?
+  status         String    @default("OPEN")
+  resolvedById   String?
+  resolvedAt     DateTime?
+  resolutionNote String?
+  createdAt      DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  @@index([projectId, status, severity])
+}
 
 // H02-B verified employer ownership; no seeded business identities.
 
@@ -4678,4 +5965,99 @@ model EmployerPayrollAuthority {
 
   @@id([employerId, userId, operation])
   @@index([userId])
+}
+
+model UboqSignedRoundTripPackage {
+  id                      String    @id @default(cuid())
+  projectId               String
+  templateCode            String
+  sourceType              String
+  sourceId                String
+  sourceVersion           String
+  sourceCanonicalHash     String
+  layoutMode              String
+  layoutGroupId           String?
+  layoutDefinitionId      String?
+  layoutVersionNumber     Int?
+  layoutDefinitionHash    String
+  selectedFieldsJson      Json
+  headingAliasesJson      Json?
+  rowCount                Int
+  rowIdentityDigest       String
+  financialFieldsIncluded Boolean   @default(false)
+  exportFormat            String
+  packageNonce            String    @unique
+  baselinePayloadSha256   String
+  manifestSignature       String
+  issuedById              String
+  issuedByRole            String
+  issuedAt                DateTime  @default(now())
+  expiresAt               DateTime
+  consumedByImportId      String?   @unique
+  consumedAt              DateTime?
+
+  project     Project                         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  issuedBy    User                            @relation("UboqRoundTripPackagesIssued", fields: [issuedById], references: [id], onDelete: Restrict)
+  submissions UboqRoundTripImportSubmission[]
+
+  @@unique([projectId, id])
+  @@index([projectId, templateCode, sourceId])
+  @@index([projectId, issuedAt])
+}
+
+model UboqRoundTripImportSubmission {
+  id                      String   @id @default(cuid())
+  projectId               String
+  packageId               String?
+  idempotencyKey          String
+  uploadedFileSha256      String
+  importFormat            String
+  templateCode            String
+  sourceId                String?
+  sourceVersion           String?
+  layoutDefinitionId      String?
+  layoutVersionNumber     Int?
+  layoutDefinitionHash    String?
+  conflictResolutionMode  String
+  actorUserId             String
+  actorRole               String
+  verificationStatus      String
+  failureCode             String?
+  totalRowCount           Int      @default(0)
+  changedRowCount         Int      @default(0)
+  nonFinancialChangeCount Int      @default(0)
+  financialChangeCount    Int      @default(0)
+  proposedChangesJson     Json?
+  diagnosticsJson         Json?
+  createdAt               DateTime @default(now())
+
+  project Project                     @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  pkg     UboqSignedRoundTripPackage? @relation(fields: [projectId, packageId], references: [projectId, id], onDelete: Restrict)
+  actor   User                        @relation("UboqRoundTripSubmissionsByActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, idempotencyKey])
+  @@index([projectId, createdAt])
+  @@index([projectId, verificationStatus, createdAt])
+}
+
+model UboqTreasuryOpeningBalance {
+  id                       String    @id @default(cuid())
+  projectId                String
+  snapshotId               String
+  openingEffectiveDate     DateTime
+  openingCashAmt           Decimal   @db.Decimal(18, 2)
+  bankStatementEvidenceRef String
+  verificationStatus       String    @default("DRAFT")
+  preparedById             String
+  verifiedById             String?
+  verifiedAt               DateTime?
+  remarks                  String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  project  Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  snapshot UboqOperationalSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, snapshotId])
+  @@index([projectId, verificationStatus])
 }
