@@ -59,6 +59,13 @@ function inspectZipCentralDirectory(buf: Buffer): {
     }
   }
   if (eocd < 0) throw zipInvalid();
+  // ExcelJS 4.4.0 uses JSZip's last EOCD signature, even if the signature
+  // occurs inside a comment. The scanner must never approve one directory
+  // while the downstream reader selects another and expands unchecked files.
+  // A nested EOCD in the accepted comment (or EOCD metadata) is ambiguous.
+  if (buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])) !== eocd) {
+    throw new Error('UBOQ_SEC_ZIP_AMBIGUOUS_DIRECTORY: Conflicting ZIP end-of-central-directory signatures');
+  }
 
   const diskNumber = buf.readUInt16LE(eocd + 4);
   const directoryDisk = buf.readUInt16LE(eocd + 6);
