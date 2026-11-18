@@ -619,3 +619,135 @@ test('document UI requires explicit tax confirmation then uploads files individu
   assert.equal(requests[0].form.get('taxProfileCode'),'CORP_PH_VAT_EXCL_12');assert.equal(requests[0].url,'/api/uboq/intake');
   assert.equal(refreshes,1);assert.equal(state[3].length,2);assert.match(state[3][1],/synthetic rejection/);
 });
+
+
+function projectListingFixture(realRole, simulatedRole) {
+  const queries = [];
+  let cookieReads = 0;
+  const prisma = {
+    user: {
+      findUnique: async ({ where }) => {
+        assert.equal(where.id, 'authenticated-user');
+        return { id: 'authenticated-user', role: realRole };
+      },
+      findMany: async () => [],
+    },
+    project: {
+      findMany: async (args) => {
+        queries.push(args);
+        return [];
+      },
+    },
+  };
+  const jsx = (type, props) => ({ type, props });
+  const deps = {
+    '@/lib/dal/auth': { verifySession: async () => ({ id: 'authenticated-user', role: realRole }) },
+    './page.module.css': {},
+    '@/lib/prisma': { prisma },
+    'next/link': () => null,
+    'next/headers': { cookies: async () => {
+      cookieReads++;
+      return { get: key => key === 'simulatedRole' ? { value: simulatedRole } : null };
+    } },
+    '@/components/PermissionGuard': () => null,
+    '@/lib/permissions': { getUserPermissions: async () => ({ PROJECT_MANAGEMENT: { canCreate: true } }) },
+    './ProjectStartButton': () => null,
+    './ManagerAssigner': () => null,
+    './DeleteProjectButton': () => null,
+    'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: Symbol('Fragment') },
+  };
+  return {
+    page: load('src/app/projects/page.tsx', deps).default,
+    queries,
+    getCookieReads: () => cookieReads,
+  };
+}
+
+test('server project list ignores simulated role for database scope', async () => {
+  for (const role of ['PROJECT_MANAGER', 'PROJECT_DIRECTOR', 'DIRECTORS', 'ADMINISTRATOR']) {
+    const f = projectListingFixture(role, 'SUPER_ADMIN');
+    await f.page();
+    assert.equal(f.queries.length, 1, 'exactly one project listing query');
+    const where = f.queries[0].where;
+    assert.equal(where.userAssignments.some.userId, 'authenticated-user');
+    assert.equal(where.userAssignments.some.assignmentStatus, 'active');
+    assert.equal(f.getCookieReads(), 0, 'mutable simulation cookie must not drive the data-query boundary');
+  }
+});
+
+test('real global admin can list projects without simulated cookie escalation', async () => {
+  for (const role of ['SUPER_ADMIN', 'SYSTEM_ADMIN']) {
+    const f = projectListingFixture(role, 'FINANCE_OFFICER');
+    await f.page();
+    assert.equal(Object.keys(f.queries[0].where).length, 0, 'global role has no project-assignment query filter');
+    assert.equal(f.getCookieReads(), 0);
+  }
+});
+
+
+function backendStatsFixture(realRole, simulatedRole, activeProjectId = 'unassigned-project') {
+  const captures = { projectCount: null, materialRequest: null };
+  let statsHandler;
+  const db = {
+    project: {
+      findUnique: async () => ({ id: activeProjectId }),
+      count: async ({ where }) => { captures.projectCount = where; return 0; },
+    },
+    user: {
+      findUnique: async () => ({
+        role: realRole,
+        projectAssignments: [{ projectId: 'assigned-project', assignmentStatus: 'active' }],
+      }),
+      count: async () => 0,
+    },
+    materialRequest: {
+      count: async ({ where }) => {
+        captures.materialRequest = where;
+        throw Error('STOP_AFTER_SCOPE_CAPTURES');
+      },
+    },
+  };
+  const router = {
+    get(path, handler) {
+      if (path === '/dashboard-stats') statsHandler = handler;
+    },
+    post() {}, delete() {},
+  };
+  load('apps/aws-backend/src/routes/projects.ts', {
+    '../lib/h02ProjectMutation': { invokeH02ProjectMutation: async () => {} },
+    'express': { Router: () => router },
+    '@prisma/client': { PrismaClient: class { constructor() { return db; } } },
+  });
+  assert.equal(typeof statsHandler, 'function');
+  let status = null;
+  const res = { status(code) { status = code; return this; }, json() { return this; } };
+  const req = { headers: {
+    'x-user-session': 'authenticated-user',
+    'x-simulated-role': simulatedRole,
+    'x-active-project-id': activeProjectId,
+  }};
+  return {
+    run: async () => { await statsHandler(req, res); return status; },
+    captures,
+  };
+}
+
+test('backend stats ignore forged simulated admin role and unauthorized active project', async () => {
+  for (const role of ['PROJECT_DIRECTOR', 'PROJECT_MANAGER', 'DIRECTORS', 'ADMINISTRATOR']) {
+    const f = backendStatsFixture(role, 'SUPER_ADMIN', 'unassigned-project');
+    assert.equal(await f.run(), 500, 'synthetic stop after project scope capture');
+    assert.equal(JSON.stringify(f.captures.projectCount.id), JSON.stringify({ in: ['assigned-project'] }));
+    assert.equal(JSON.stringify(f.captures.materialRequest.projectId), JSON.stringify({ in: ['assigned-project'] }));
+  }
+});
+
+test('backend stats honor real admin and legitimate assigned project selection', async () => {
+  const admin = backendStatsFixture('SUPER_ADMIN', 'PROJECT_MANAGER', 'unassigned-project');
+  assert.equal(await admin.run(), 500);
+  assert.equal(admin.captures.projectCount.id, undefined);
+  assert.equal(admin.captures.materialRequest.projectId, 'unassigned-project');
+  const assigned = backendStatsFixture('PROJECT_MANAGER', 'SUPER_ADMIN', 'assigned-project');
+  assert.equal(await assigned.run(), 500);
+  assert.equal(JSON.stringify(assigned.captures.projectCount.id), JSON.stringify({ in: ['assigned-project'] }));
+  assert.equal(assigned.captures.materialRequest.projectId, 'assigned-project');
+});
