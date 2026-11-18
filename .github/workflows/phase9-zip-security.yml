@@ -1,0 +1,29 @@
+name: Phase 9 ZIP Security CI
+
+on:
+  push:
+    branches:
+      - fix/oserp-phase9-zip-central-directory-20261118
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zip-scanner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install lockfile dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test the real ZIP scanner
+        run: node --test --test-name-pattern='real scanner' scripts/uboq/phase9-acceptance.test.cjs
+      - name: Type-check the scanner module
+        run: npx tsc --noEmit --pretty false --skipLibCheck --target ES2022 --module commonjs --moduleResolution node --types node --esModuleInterop src/lib/uboq/intake/security-guard.ts
