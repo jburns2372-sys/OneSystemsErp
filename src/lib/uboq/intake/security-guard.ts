@@ -15,6 +15,7 @@ export interface FileSecurityScanResult {
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB ceiling
 const MAX_ZIP_UNCOMPRESSED_BYTES = 80 * 1024 * 1024; // 80 MB ceiling
 const MAX_ZIP_COMPRESSION_RATIO = 100;
+const MAX_ZIP_ENTRIES = 2048; // Bound synchronous per-entry parsing and inflation
 
 const DANGEROUS_FORMULA_PATTERNS = [
   /^\s*[=+\-@]\s*(cmd|powershell|bash|sh|wscript|cscript|mshta|rundll32)\b/i,
@@ -35,11 +36,13 @@ function inspectZipCentralDirectory(buf: Buffer): {
   maxRatio: number;
   hasNestedArchive: boolean;
   entryNames: string[];
+  entries: Array<{ name: string; method: number; compressedSize: number; uncompressedSize: number; dataStart: number }>;
 } {
   let totalUncompressed = 0;
   let maxRatio = 1;
   let hasNestedArchive = false;
   const entryNames: string[] = [];
+  const entries: Array<{ name: string; method: number; compressedSize: number; uncompressedSize: number; dataStart: number }> = [];
 
   // ZIP local headers may intentionally contain zero sizes when bit 3 indicates
   // a data descriptor. Only verified central-directory sizes are authoritative.
@@ -64,6 +67,9 @@ function inspectZipCentralDirectory(buf: Buffer): {
   if (diskNumber || directoryDisk || !entryCount || entriesOnDisk !== entryCount ||
       entryCount === 0xffff || dirSize === 0xffffffff || dirOffset === 0xffffffff ||
       dirOffset + dirSize !== eocd) throw zipInvalid();
+  if (entryCount > MAX_ZIP_ENTRIES) {
+    throw new Error('UBOQ_SEC_ZIP_ENTRY_COUNT_EXCEEDED: Too many Office ZIP entries');
+  }
 
   let offset = dirOffset;
   for (let i = 0; i < entryCount; i++) {
@@ -124,11 +130,30 @@ function inspectZipCentralDirectory(buf: Buffer): {
     }
 
     entryNames.push(name);
+    entries.push({ name, method, compressedSize: compSize, uncompressedSize: uncompSize, dataStart: localDataStart });
     if (/\.(zip|rar|7z|tar|gz|bz2|xz|cab|iso)$/i.test(name)) hasNestedArchive = true;
     offset = next;
   }
   if (offset !== eocd) throw zipInvalid();
-  return { totalUncompressed, maxRatio, hasNestedArchive, entryNames };
+  return { totalUncompressed, maxRatio, hasNestedArchive, entryNames, entries };
+}
+
+/** Read only a validated, size-bounded Office ZIP entry. Never use unverified local header lengths. */
+export function readVerifiedOfficeZipEntry(buf: Buffer, entryName: string): Buffer {
+  const directory = inspectZipCentralDirectory(buf);
+  const matching = directory.entries.filter(entry => entry.name === entryName);
+  if (matching.length !== 1) {
+    throw new Error('UBOQ_SEC_OFFICE_ENTRY_MISSING_OR_DUPLICATE: Required Office entry is not unique');
+  }
+  const entry = matching[0];
+  const compressed = buf.subarray(entry.dataStart, entry.dataStart + entry.compressedSize);
+  if (entry.method === 0) return Buffer.from(compressed);
+  // inspectZipCentralDirectory already confirmed the bounded expanded size.
+  const inflated = inflateRawSync(compressed, { maxOutputLength: entry.uncompressedSize + 1 });
+  if (inflated.length !== entry.uncompressedSize) {
+    throw new Error('UBOQ_SEC_ZIP_SIZE_MISMATCH: Office entry expanded size changed');
+  }
+  return inflated;
 }
 
 function inspectOle2CompoundContainer(buf: Buffer): {
