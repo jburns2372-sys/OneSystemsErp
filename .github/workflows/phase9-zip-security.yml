@@ -1,9 +1,15 @@
 name: Phase 9 ZIP Security CI
 
 on:
+  pull_request:
+    branches:
+      - feat/oserp-unified-project-intake-p9
+      - release/oserp-proj-uboq-001
   push:
     branches:
       - fix/oserp-phase9-zip-central-directory-20261118
+      - feat/oserp-unified-project-intake-p9
+      - release/oserp-proj-uboq-001
   workflow_dispatch:
 
 permissions:
@@ -27,5 +33,5 @@ jobs:
         run: node --test --test-name-pattern='real scanner' scripts/uboq/phase9-acceptance.test.cjs
       - name: Run complete credential-free Phase 9 acceptance fixture
         run: node --test scripts/uboq/phase9-acceptance.test.cjs
-      - name: Type-check the scanner module
-        run: npx tsc --noEmit --pretty false --skipLibCheck --target ES2022 --module commonjs --moduleResolution node --types node --esModuleInterop src/lib/uboq/intake/security-guard.ts
+      - name: Type-check ZIP security scanner and DOCX parser
+        run: npx tsc --noEmit --pretty false --skipLibCheck --target ES2022 --module commonjs --moduleResolution node --types node --esModuleInterop src/lib/uboq/intake/security-guard.ts src/lib/uboq/intake/parsers.ts
