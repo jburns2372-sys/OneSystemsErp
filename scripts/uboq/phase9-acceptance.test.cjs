@@ -20,6 +20,34 @@ function load(file, deps = {}, env = {}, source, globals = {}) {
   }, { filename: file });
   return exports;
 }
+test('project listing: simulator cookie never elevates DB scope', () => {
+  const { mayReadAllProjects } = load('src/lib/uboq/project-list-visibility.ts');
+  const cases = [
+    ['PROJECT_MANAGER', null, false],
+    ['PROJECT_MANAGER', 'SUPER_ADMIN', false],
+    ['PROJECT_DIRECTOR', 'SUPER_ADMIN', false],
+    ['DIRECTORS', 'SYSTEM_ADMIN', false],
+    ['ADMINISTRATOR', 'SUPER_ADMIN', false],
+    ['FINANCE_OFFICER', 'SUPER_ADMIN', false],
+    ['GUEST USER', 'SUPER_ADMIN', false],
+    ['SUPER_ADMIN', null, true],
+    ['SUPER_ADMIN', 'SUPER_ADMIN', true],
+    ['SUPER_ADMIN', 'PROJECT_MANAGER', false],
+    ['SUPER_ADMIN', 'FINANCE_OFFICER', false],
+    ['SYSTEM_ADMIN', null, true],
+    ['SYSTEM_ADMIN', 'PROJECT_MANAGER', false],
+  ];
+  for (const [role, cookie, expected] of cases) {
+    assert.equal(mayReadAllProjects(role, cookie), expected,
+      'actual role ' + role + ', simulated role ' + String(cookie));
+  }
+  // Regression guard: the actual project query must consume this bounded
+  // decision; no cookie-derived effectiveRole should decide the DB scope.
+  const page = fs.readFileSync('src/app/projects/page.tsx', 'utf8');
+  assert.match(page, /mayReadAllProjects\(user\?\.role, simulatedRole\)/);
+  assert.doesNotMatch(page, /const isSuperAdmin = effectiveRole/);
+});
+
 const actor = { userId: 'synthetic-user', role: 'PROJECT_MANAGER', sessionVersion: 1 };
 const rls = { withUboqRlsContext: (_ctx, fn) => fn(), applyProjectRlsSessionVars: async () => {}, uboqRlsStorage: { getStore: () => undefined } };
 const response = { NextResponse: Response };
