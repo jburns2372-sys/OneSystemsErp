@@ -48,6 +48,74 @@ test('project listing: simulator cookie never elevates DB scope', () => {
   assert.doesNotMatch(page, /const isSuperAdmin = effectiveRole/);
 });
 
+test('backend project routes reject simulator-based elevation', async () => {
+  const backend = load('apps/aws-backend/src/lib/projectVisibility.ts');
+  const frontend = load('src/lib/uboq/project-list-visibility.ts');
+  for (const [role, sim] of [
+    ['PROJECT_DIRECTOR', 'SUPER_ADMIN'], ['ADMINISTRATOR', 'SUPER_ADMIN'],
+    ['FINANCE_OFFICER', 'SYSTEM_ADMIN'], ['SUPER_ADMIN', 'PROJECT_MANAGER'],
+    ['SUPER_ADMIN', 'SUPER_ADMIN'], ['SYSTEM_ADMIN', null],
+  ]) {
+    assert.equal(backend.mayReadAllProjects(role, sim), frontend.mayReadAllProjects(role, sim));
+  }
+
+  const handlers = {};
+  let actualRole = 'PROJECT_DIRECTOR';
+  let mutationCalls = 0;
+  const fakeRouter = {
+    get: (path, fn) => { handlers['GET ' + path] = fn; },
+    post: (path, fn) => { handlers['POST ' + path] = fn; },
+    delete: (path, fn) => { handlers['DELETE ' + path] = fn; },
+  };
+  const fakeDb = {
+    project: { findUnique: async () => ({ id: 'unassigned-project' }) },
+    user: { findUnique: async () => ({
+      role: actualRole, projectAssignments: [{ projectId: 'assigned-project' }],
+    }) },
+  };
+  load('apps/aws-backend/src/routes/projects.ts', {
+    '../lib/h02ProjectMutation': { invokeH02ProjectMutation: async () => { mutationCalls++; } },
+    '../lib/projectVisibility': backend,
+    'express': { Router: () => fakeRouter },
+    '@prisma/client': { PrismaClient: class { constructor() { return fakeDb; } } },
+  });
+  const res = () => ({
+    statusCode: 200, output: undefined,
+    status(n) { this.statusCode = n; return this; },
+    json(payload) { this.output = payload; return this; },
+  });
+  const ctx = {
+    headers: {
+      'x-user-session': 'user-1', 'x-simulated-role': 'SUPER_ADMIN',
+      'x-active-project-id': 'unassigned-project',
+    },
+    params: { id: 'unassigned-project' }, body: {},
+  };
+  assert.equal(typeof handlers['GET /dashboard-stats'], 'function');
+  assert.equal(typeof handlers['DELETE /:id'], 'function');
+  const dashboard = res();
+  await handlers['GET /dashboard-stats'](ctx, dashboard);
+  assert.equal(dashboard.statusCode, 403,
+    'Project Director simulating SUPER_ADMIN must not read unassigned financial stats');
+  const deletion = res();
+  await handlers['DELETE /:id'](ctx, deletion);
+  assert.equal(deletion.statusCode, 403,
+    'Project Director simulating SUPER_ADMIN must not authorize project deletion');
+  assert.equal(mutationCalls, 0);
+
+  actualRole = 'SUPER_ADMIN';
+  const narrowed = res();
+  await handlers['GET /dashboard-stats']({
+    ...ctx, headers: { ...ctx.headers, 'x-simulated-role': 'PROJECT_MANAGER' },
+  }, narrowed);
+  assert.equal(narrowed.statusCode, 403,
+    'Admin simulating Project Manager must not see unassigned project');
+
+  const executive = fs.readFileSync('src/app/actions/executiveActions.ts', 'utf8');
+  assert.equal((executive.match(/mayReadAllProjects\\(user\\.role, effectiveRole\\)/g) || []).length, 2,
+    'Executive portfolio and overview must use authoritative user role and simulated restriction');
+});
+
 test('Phase 9 PR CI does not create or delete Neon branches', () => {
   const workflow = fs.readFileSync('.github/workflows/neon-branch.yml', 'utf8');
   const create = workflow.split('  create_neon_branch:')[1]?.split('  delete_neon_branch:')[0];
