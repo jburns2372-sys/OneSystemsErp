@@ -376,6 +376,28 @@ test('real scanner caps ZIP entry count and preserves old adversarial classifica
   assert.throws(() => scan('many.xlsx', tooMany), /ZIP_ENTRY_COUNT_EXCEEDED/);
 });
 
+
+test('real scanner rejects duplicate central directory references before inflation', () => {
+  const scan = load('src/lib/uboq/intake/security-guard.ts', {
+    'node:crypto': crypto, 'node:path': require('node:path'),
+    'node:zlib': require('node:zlib'), xlsx: require('xlsx'),
+  }).scanUploadedDocumentSecurity;
+  const original = officeZipFixture('xl/workbook.xml', Buffer.from('<workbook/>'), {descriptor: true});
+  const oldEnd = original.length - 22;
+  const cdStart = original.readUInt32LE(oldEnd + 16);
+  const cd = original.subarray(cdStart, oldEnd);
+  const eocd = Buffer.from(original.subarray(oldEnd));
+  eocd.writeUInt16LE(2, 8);
+  eocd.writeUInt16LE(2, 10);
+  eocd.writeUInt32LE(cd.length * 2, 12);
+  const forged = Buffer.concat([original.subarray(0, oldEnd), cd, eocd]);
+  assert.throws(
+    () => scan('duplicate.xlsx', forged),
+    /UBOQ_SEC_ZIP_DUPLICATE_ENTRY/,
+  );
+});
+
+
 test('DOCX descriptor entry extraction preserves BOQ table candidates', async () => {
   const guard = load('src/lib/uboq/intake/security-guard.ts', {
     'node:crypto': crypto, 'node:path': require('node:path'),
