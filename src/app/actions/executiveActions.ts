@@ -3,6 +3,7 @@ import { verifySession } from '@/lib/dal/auth';
 
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
+import { mayReadAllProjects } from '@/lib/uboq/project-list-visibility';
 
 async function _getAccessDetails() {
   const cookieStore = await cookies();
@@ -49,7 +50,7 @@ async function _getAccessDetails() {
 export async function getCompanyOverview(projectId?: string) {
   try {
     const { user, effectiveRole } = await _getAccessDetails();
-    const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+    const isSuperAdmin = mayReadAllProjects(user.role, effectiveRole);
 
     // Fetch all active/ongoing projects or the specific selected project
     const projectFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
@@ -200,7 +201,7 @@ export async function getCompanyOverview(projectId?: string) {
 export async function getProjectPortfolio() {
   try {
     const { user, effectiveRole } = await _getAccessDetails();
-    const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+    const isSuperAdmin = mayReadAllProjects(user.role, effectiveRole);
 
     const projects = await prisma.project.findMany({
       where: isSuperAdmin ? undefined : {
