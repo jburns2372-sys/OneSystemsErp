@@ -230,7 +230,7 @@ for(const [opts,status] of [[{denied:true},403],[{documentDenied:true},403],[{mi
   const f=downloadFixture(opts);const res=await f.get();assert.equal(res.status,status);if(!opts.corrupt)assert.equal(f.inspect().read,0);
 });
 test('real scanner rejects empty, oversized and magic/extension mismatches',()=>{
-  const scan=load('src/lib/uboq/intake/security-guard.ts',{'node:crypto':crypto,'node:path':require('node:path'),xlsx:require('xlsx')}).scanUploadedDocumentSecurity;
+  const scan=load('src/lib/uboq/intake/security-guard.ts',{'node:crypto':crypto,'node:path':require('node:path'),'node:zlib':require('node:zlib'),xlsx:require('xlsx')}).scanUploadedDocumentSecurity;
   assert.throws(()=>scan('empty.csv',Buffer.alloc(0)),/EMPTY/);
   assert.throws(()=>scan('large.csv',Buffer.alloc(25*1024*1024+1)),/SIZE_EXCEEDED/);
   assert.throws(()=>scan('fake.csv',Buffer.from('%PDF-1.4 fixture'),'text/csv'),/MISMATCH/);
@@ -240,6 +240,59 @@ test('real scanner rejects empty, oversized and magic/extension mismatches',()=>
     assert.equal(scan('valid.csv',Buffer.from('a,b\n1,2'),mime).safe,true);
   }
 });
+
+
+test('real scanner verifies ZIP central directory, descriptors and bounded inflation',()=>{
+  const zlib=require('node:zlib');
+  const scan=load('src/lib/uboq/intake/security-guard.ts',{
+    'node:crypto':crypto,'node:path':require('node:path'),'node:zlib':zlib,xlsx:require('xlsx'),
+  }).scanUploadedDocumentSecurity;
+  const mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+  // A valid ordinary workbook must remain supported.
+  const XLSX=require('xlsx');
+  const workbook=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([['Item','Qty'],['A',1]]),'BOQ');
+  const ordinary=Buffer.from(XLSX.write(workbook,{bookType:'xlsx',type:'buffer'}));
+  assert.equal(scan('ordinary.xlsx',ordinary,mime).safe,true);
+
+  // With ZIP flag bit 3, local-header sizes are zero; only central sizes count.
+  const descriptorZip=(data,reportedSize=data.length)=>{
+    const name=Buffer.from('xl/workbook.xml');
+    const compressed=zlib.deflateRawSync(data);
+    const local=Buffer.alloc(30+name.length);
+    local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);
+    local.writeUInt16LE(8,6);local.writeUInt16LE(8,8);
+    local.writeUInt16LE(name.length,26);name.copy(local,30);
+    const descriptor=Buffer.alloc(16);
+    descriptor.writeUInt32LE(0x08074b50,0);
+    descriptor.writeUInt32LE(compressed.length,8);
+    descriptor.writeUInt32LE(data.length,12);
+    const central=Buffer.alloc(46+name.length);
+    central.writeUInt32LE(0x02014b50,0);
+    central.writeUInt16LE(20,4);central.writeUInt16LE(20,6);
+    central.writeUInt16LE(8,8);central.writeUInt16LE(8,10);
+    central.writeUInt32LE(compressed.length,20);
+    central.writeUInt32LE(reportedSize,24);
+    central.writeUInt16LE(name.length,28);name.copy(central,46);
+    const eocd=Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50,0);
+    eocd.writeUInt16LE(1,8);eocd.writeUInt16LE(1,10);
+    eocd.writeUInt32LE(central.length,12);
+    eocd.writeUInt32LE(local.length+compressed.length+descriptor.length,16);
+    return Buffer.concat([local,compressed,descriptor,central,eocd]);
+  };
+  assert.equal(scan('descriptor.xlsx',descriptorZip(Buffer.from('<workbook/>')),mime).safe,true);
+  const oversized=descriptorZip(Buffer.alloc(81*1024*1024,32));
+  assert.ok(oversized.length<25*1024*1024);
+  assert.throws(()=>scan('oversized.xlsx',oversized,mime),/ZIP_BOMB_BLOCKED/);
+  const forged=descriptorZip(Buffer.alloc(2*1024*1024,32),1024);
+  assert.throws(()=>scan('forged.xlsx',forged,mime),/ZIP_SIZE_MISMATCH/);
+  const corrupt=Buffer.from(descriptorZip(Buffer.from('<workbook/>')));
+  corrupt.writeUInt32LE(0,corrupt.length-22+16);
+  assert.throws(()=>scan('corrupt.xlsx',corrupt,mime),/ZIP_DIRECTORY_INVALID/);
+});
+
 
 function vaultModule(env={},blob={}) {
   return load('src/lib/uboq/storage/vault-storage.ts',{'node:crypto':crypto,'node:fs/promises':require('node:fs/promises'),'node:path':require('node:path'),'@vercel/blob':blob},env);
