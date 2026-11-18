@@ -42,3 +42,13 @@ jobs:
           DIRECT_URL: postgresql://noaccess:noaccess@127.0.0.1:65535/typecheck_only
       - name: Full-project TypeScript typecheck without production credentials
         run: npx tsc --noEmit --pretty false
+      - name: Install independent backend dependencies without lifecycle scripts
+        run: npm ci --prefix apps/aws-backend --ignore-scripts --no-audit --no-fund
+      - name: Generate backend Prisma client and typecheck without credentials
+        working-directory: apps/aws-backend
+        run: |
+          npx prisma generate
+          npm run typecheck
+        env:
+          DATABASE_URL: postgresql://noaccess:noaccess@127.0.0.1:65535/backend_typecheck_only
+          DIRECT_URL: postgresql://noaccess:noaccess@127.0.0.1:65535/backend_typecheck_only
