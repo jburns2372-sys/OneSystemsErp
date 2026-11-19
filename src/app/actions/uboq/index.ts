@@ -16,6 +16,10 @@ import {
 } from '@/lib/uboq/adapters/snapshot-orchestrator';
 import { validateVisualColumnMapping } from '@/lib/uboq/visual-mapping';
 import { allocateVerifiedOpeningStockAtomically } from '@/lib/uboq/resource-ledger';
+import {
+  syncUboqScheduleActivityLinks,
+  tryAutoSyncProjectScheduleLinks,
+} from '@/lib/uboq/adapters/schedule-link-adapter';
 import type { UboqSectorType } from '@prisma/client';
 
 export async function getProjectUboqDashboardAction(projectId: string) {
@@ -357,10 +361,17 @@ export async function approveUboqSnapshotAction(projectId: string, snapshotId: s
         throw new Error('UBOQ_CROSS_PROJECT_SPOOFING_BLOCKED: Snapshot does not belong to project');
       }
 
-      return approveOperationalSnapshotAndPrrs(prisma as never, {
+      const approved = await approveOperationalSnapshotAndPrrs(prisma as never, {
         snapshotId,
         approverUserId: actor.userId,
       });
+
+      const scheduleLinkSync = await tryAutoSyncProjectScheduleLinks(prisma as never, {
+        projectId,
+        actorUserId: actor.userId,
+      });
+
+      return { ...approved, scheduleLinkSync };
     }
   );
 
@@ -415,6 +426,34 @@ export async function allocateUboqOpeningStockAction(input: {
         verifiedByUserId: actor.userId,
       });
     }
+  );
+
+  revalidatePath(`/projects/${input.projectId}/uboq`);
+  return redactUboqPayloadForRole(res, actor.role);
+}
+
+export async function syncUboqScheduleLinksAction(input: {
+  projectId: string;
+  scheduleId: string;
+  requireCompleteAllocation?: boolean;
+}) {
+  const actor = await verifyOperationalSession();
+  if (!actor) {
+    throw new Error('UBOQ_UNAUTHORIZED: Active operational session required');
+  }
+  if (!input.projectId?.trim() || !input.scheduleId?.trim()) {
+    throw new Error('UBOQ_SCHEDULE_INVALID_INPUT: projectId and scheduleId are required');
+  }
+
+  const res = await withUboqRlsContext(
+    { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId: input.projectId },
+    async () =>
+      syncUboqScheduleActivityLinks(prisma as never, {
+        projectId: input.projectId,
+        scheduleId: input.scheduleId,
+        actorUserId: actor.userId,
+        requireCompleteAllocation: Boolean(input.requireCompleteAllocation),
+      })
   );
 
   revalidatePath(`/projects/${input.projectId}/uboq`);

@@ -17,6 +17,10 @@ import {
   resolveExtractionCandidateHumanReview,
   resolveUboqValidationException,
 } from '../../../../src/lib/uboq/adapters/snapshot-orchestrator';
+import {
+  syncUboqScheduleActivityLinks,
+  tryAutoSyncProjectScheduleLinks,
+} from '../../../../src/lib/uboq/adapters/schedule-link-adapter';
 
 const router = Router();
 
@@ -70,7 +74,8 @@ function mapUboqHttpErrorStatus(msg: string): number {
     msg.includes('UBOQ_PBAC') ||
     msg.includes('UBOQ_RBAC_FORBIDDEN') ||
     msg.includes('UBOQ_SOD_VIOLATION') ||
-    msg.includes('CROSS_PROJECT')
+    msg.includes('CROSS_PROJECT') ||
+    msg.includes('CROSS_SCHEDULE')
   ) {
     return 403;
   }
@@ -80,7 +85,15 @@ function mapUboqHttpErrorStatus(msg: string): number {
     msg.includes('SUPERSEDED') ||
     msg.includes('UBOQ_APPROVAL_BLOCKED') ||
     msg.includes('UBOQ_DRAFT_REGEN_BLOCKED') ||
-    msg.includes('INVALID_STATE')
+    msg.includes('INVALID_STATE') ||
+    msg.includes('UBOQ_UNAPPROVED_SNAPSHOT_SOURCE') ||
+    msg.includes('UBOQ_INACTIVE_SCHEDULE_DENIED') ||
+    msg.includes('UBOQ_ALLOCATION_OVERFLOW') ||
+    msg.includes('UBOQ_DUPLICATE_ALLOCATION') ||
+    msg.includes('UBOQ_MULTI_SNAPSHOT_OVERLAP') ||
+    msg.includes('UBOQ_AMBIGUOUS_PHASE_LINE_MAPPING') ||
+    msg.includes('UBOQ_INCOMPATIBLE_UNIT') ||
+    msg.includes('UBOQ_INCOMPLETE_ALLOCATION')
   ) {
     return 409;
   }
@@ -374,11 +387,18 @@ router.post('/project/:projectId/snapshots/:snapshotId/approve', async (req, res
 
     const approved = await withUboqRlsContext(
       { userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId },
-      () =>
-        approveOperationalSnapshotAndPrrs(prisma, {
+      async () => {
+        const resApproved = await approveOperationalSnapshotAndPrrs(prisma, {
           snapshotId,
           approverUserId: actor.id,
-        })
+        });
+        const scheduleLinkSync = await tryAutoSyncProjectScheduleLinks(prisma, {
+          projectId,
+          actorUserId: actor.id,
+          simulatedRole: simRole,
+        });
+        return { ...resApproved, scheduleLinkSync };
+      }
     );
 
     return res.json(redactBackendObject(approved, actorRole));
@@ -702,6 +722,33 @@ router.post('/project/:projectId/documents/:documentId/review-revision', async (
     const revision = await withUboqRlsContext({ userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId }, () =>
       forkApprovedSourceReviewRevision(prisma, { projectId, sourceDocumentId: documentId, preparedByUserId: actor.id }));
     return res.status(201).json(redactBackendObject(revision, (req as any).pbacContext?.simulatedRole || actor.role));
+  } catch (err: any) {
+    const message = String(err.message || '');
+    return res.status(mapUboqHttpErrorStatus(message)).json({ error: message });
+  }
+});
+
+router.post('/project/:projectId/schedules/:scheduleId/sync-links', async (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const { projectId, scheduleId } = req.params;
+    const actorRole = (req as any).pbacContext?.simulatedRole || actor?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
+    const { requireCompleteAllocation } = req.body || {};
+
+    const synced = await withUboqRlsContext(
+      { userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId },
+      () =>
+        syncUboqScheduleActivityLinks(prisma, {
+          projectId,
+          scheduleId,
+          actorUserId: actor.id,
+          simulatedRole: simRole,
+          requireCompleteAllocation: Boolean(requireCompleteAllocation),
+        })
+    );
+
+    return res.status(200).json(redactBackendObject(synced, actorRole));
   } catch (err: any) {
     const message = String(err.message || '');
     return res.status(mapUboqHttpErrorStatus(message)).json({ error: message });
