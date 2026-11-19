@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { put as putBlob } from '@vercel/blob';
 const prisma = new PrismaClient(); // Adjust path as per your AWS backend project structure
 import fs from 'fs';
 import path from 'path';
@@ -19,40 +18,36 @@ const getUploadDirPath = () => {
 
 router.post('/uploadDocument', async (req, res) => {
   try {
+    if (process.env.VERCEL) {
+      return res.status(501).json({
+        success: false,
+        error: 'SERVERLESS_LEGACY_UPLOAD_UNSUPPORTED',
+        message:
+          'Legacy base64 JSON document uploads are disabled on Vercel serverless runtime (4.5 MB body limit and ephemeral disk). Use the governed direct-to-Blob document intake endpoint.',
+      });
+    }
+
     const { fileName, fileContentBase64, fileType, fileSize, category, projectId, uploaderId } = req.body;
 
     if (!fileName || !fileContentBase64) {
       return res.status(400).json({ success: false, error: 'No file content provided.' });
     }
 
+    const uploadDir = getUploadDirPath();
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
     const fileExtension = path.extname(fileName);
     const baseName = path.basename(fileName, fileExtension);
     const safeBaseName = baseName.replace(/[^a-zA-Z0-9_-]/g, '_');
     const uniqueName = `${safeBaseName}_${Date.now()}${fileExtension}`;
-    const buffer = Buffer.from(fileContentBase64, 'base64');
+    const filePath = path.join(uploadDir, uniqueName);
 
-    let fileUrl: string;
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
-      const blob = await putBlob(`documents/${uniqueName}`, buffer, {
-        access: 'private',
-        contentType: fileType || 'application/octet-stream',
-      });
-      fileUrl = blob.url;
-    } else if (process.env.VERCEL) {
-      return res.status(503).json({
-        success: false,
-        error:
-          'DURABLE_UPLOAD_STORAGE_REQUIRED: Local filesystem uploads are disabled on Vercel serverless runtime. Configure BLOB_READ_WRITE_TOKEN.',
-      });
-    } else {
-      const uploadDir = getUploadDirPath();
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-      const filePath = path.join(uploadDir, uniqueName);
-      fs.writeFileSync(filePath, buffer);
-      fileUrl = `/uploads/documents/${uniqueName}`;
-    }
+    const buffer = Buffer.from(fileContentBase64, 'base64');
+    fs.writeFileSync(filePath, buffer);
+
+    const fileUrl = `/uploads/documents/${uniqueName}`;
 
     await prisma.document.create({
       data: {

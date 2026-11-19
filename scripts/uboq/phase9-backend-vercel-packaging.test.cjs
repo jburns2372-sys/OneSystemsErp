@@ -46,7 +46,7 @@ test('apps/aws-backend Vercel packaging is non-destructive and routes all paths 
 
   for (const routeFile of ['documentActions.ts', 'accomplishmentFileActions.ts']) {
     const src = fs.readFileSync(path.join(BACKEND_ROOT, 'src', 'routes', routeFile), 'utf8');
-    assert.match(src, /@vercel\/blob/, `${routeFile} must support durable Vercel Blob storage`);
-    assert.match(src, /DURABLE_UPLOAD_STORAGE_REQUIRED/, `${routeFile} must fail closed on Vercel without durable storage`);
+    assert.match(src, /SERVERLESS_LEGACY_UPLOAD_UNSUPPORTED/, `${routeFile} must fail closed on Vercel serverless runtime`);
+    assert.match(src, /status\(501\)/, `${routeFile} must return 501 for unsupported serverless base64 JSON uploads`);
   }
 });

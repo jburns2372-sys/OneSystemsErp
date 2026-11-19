@@ -3,7 +3,6 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 import { uploadToS3 as put } from '../../../../src/lib/s3';
-import { put as putBlob } from '@vercel/blob';
 import ExcelJS from "exceljs";
 import fs from 'fs';
 import path from 'path';
@@ -12,24 +11,17 @@ const router = Router();
 
 // Helper function, moved from original Next.js Server Action
 async function saveFileLocallyOrBlob(directory: string, fileName: string, buffer: Buffer, contentType?: string): Promise<string> {
+  if (process.env.VERCEL) {
+    throw new Error(
+      'SERVERLESS_LEGACY_UPLOAD_UNSUPPORTED: Legacy base64 JSON accomplishment uploads are disabled on Vercel serverless runtime (4.5 MB body limit and ephemeral disk). Use the governed direct-to-Blob intake flow.'
+    );
+  }
   if (process.env.AWS_ACCESS_KEY_ID) {
     const blob = await put(`${directory}/${fileName}`, buffer, {
       access: 'public', // Or specific ACL
       contentType: contentType || "application/octet-stream",
     });
     return blob.url;
-  }
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const blob = await putBlob(`${directory}/${fileName}`, buffer, {
-      access: 'private',
-      contentType: contentType || "application/octet-stream",
-    });
-    return blob.url;
-  }
-  if (process.env.VERCEL) {
-    throw new Error(
-      'DURABLE_UPLOAD_STORAGE_REQUIRED: Local filesystem uploads are disabled on Vercel serverless runtime. Configure BLOB_READ_WRITE_TOKEN or AWS S3.'
-    );
   }
   // Local storage fallback for non-serverless development only
   const uploadDir = path.join(process.cwd(), 'uploads', directory);
@@ -43,6 +35,14 @@ async function saveFileLocallyOrBlob(directory: string, fileName: string, buffer
 // Handler for uploadAccomplishmentFileAction
 router.post('/uploadAccomplishmentFileAction', async (req, res) => {
   try {
+    if (process.env.VERCEL) {
+      return res.status(501).json({
+        success: false,
+        error: 'SERVERLESS_LEGACY_UPLOAD_UNSUPPORTED',
+        message:
+          'Legacy base64 JSON accomplishment uploads are disabled on Vercel serverless runtime (4.5 MB body limit and ephemeral disk). Use the governed direct-to-Blob intake flow.',
+      });
+    }
     const { projectId, base64File, fileName, fileType, fileSize, currentUserId } = req.body;
 
     if (!base64File || !fileName || !projectId) {
