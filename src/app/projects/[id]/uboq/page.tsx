@@ -6,6 +6,11 @@ import { assertProjectGraphOwnership, withUboqRlsContext } from '@/lib/uboq/proj
 import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { redactUboqPayloadForRole } from '@/lib/uboq/security/redact-payload';
 import { SYSTEM_TEMPLATE_PRESETS } from '@/lib/uboq/template-builder';
+import VisualMappingReviewClient from './VisualMappingReviewClient';
+import type {
+  VisualSourceDocumentRecord,
+  VisualValidationExceptionRecord,
+} from '@/lib/uboq/visual-mapping';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,9 +69,28 @@ export default async function ProjectUboqWorkbenchPage({
             orderBy: { resourceCode: 'asc' },
           }),
           prisma.uboqValidationException.findMany({
-            where: { projectId, status: 'OPEN' },
+            where: { projectId },
             orderBy: { createdAt: 'desc' },
           }),
+          prisma.uboqSourceDocument.findMany({
+            where: { projectId },
+            orderBy: { createdAt: 'desc' },
+            include: {
+              candidates: {
+                orderBy: [{ sourceRowNumber: 'asc' }, { createdAt: 'asc' }],
+                include: {
+                  section: { select: { sectionTitle: true, sheetOrPageRef: true } },
+                },
+              },
+            },
+          }),
+          assertUboqStageAuthorization(prisma, {
+            userId: actor!.userId,
+            projectId,
+            capability: 'UBOQ_HUMAN_REVIEW_RESOLVE',
+          })
+            .then(() => true)
+            .catch(() => false),
         ]);
       }
     );
@@ -84,7 +108,81 @@ export default async function ProjectUboqWorkbenchPage({
     );
   }
 
-  const [project, contract, snapshots, phaseLines, consolidatedGroups, resourceAccounts, exceptions] = dashboardData;
+  const [
+    project,
+    contract,
+    snapshots,
+    phaseLines,
+    consolidatedGroups,
+    resourceAccounts,
+    allExceptions,
+    sourceDocumentsRaw,
+    canReview,
+  ] = dashboardData;
+
+  const exceptions = allExceptions.filter((e) => e.status === 'OPEN');
+
+  const approvedDocIds = new Set<string>();
+  for (const s of snapshots) {
+    if ((s.status === 'APPROVED' || s.approvedAt) && s.sourceDocumentId) {
+      approvedDocIds.add(s.sourceDocumentId);
+    }
+  }
+
+  const visualSourceDocuments: VisualSourceDocumentRecord[] = redactUboqPayloadForRole(
+    sourceDocumentsRaw.map((doc) => ({
+      id: doc.id,
+      projectId: doc.projectId,
+      fileName: doc.fileName,
+      mimeType: doc.mimeType,
+      byteSize: doc.byteSize,
+      sha256Hash: doc.sha256Hash,
+      documentRole: doc.documentRole,
+      isLockedImmutable: doc.isLockedImmutable,
+      isApprovedImmutable: approvedDocIds.has(doc.id),
+      createdAt: doc.createdAt.toISOString(),
+      candidates: doc.candidates.map((c) => ({
+        id: c.id,
+        sourceDocumentId: c.sourceDocumentId,
+        sourceRowNumber: c.sourceRowNumber,
+        sourceCellRef: c.sourceCellRef,
+        rawHeadingText: c.rawHeadingText,
+        mappedCanonicalId: c.mappedCanonicalId,
+        rawValueText: c.rawValueText,
+        rawFormulaText: c.rawFormulaText,
+        parsedJson:
+          c.parsedJson && typeof c.parsedJson === 'object' && !Array.isArray(c.parsedJson)
+            ? (c.parsedJson as Record<string, unknown>)
+            : null,
+        confidenceScore: Number(c.confidenceScore),
+        extractionMethod: c.extractionMethod,
+        requiresHumanReview: c.requiresHumanReview,
+        reviewDecision: c.reviewDecision,
+        reviewedById: c.reviewedById,
+        reviewedAt: c.reviewedAt ? c.reviewedAt.toISOString() : null,
+        reviewNotes: c.reviewNotes,
+        sectionTitle: c.section?.sectionTitle ?? null,
+        sheetOrPageRef: c.section?.sheetOrPageRef ?? null,
+      })),
+    })),
+    actor.role
+  );
+
+  const visualExceptions: VisualValidationExceptionRecord[] = allExceptions.map((e) => ({
+    id: e.id,
+    projectId: e.projectId,
+    snapshotId: e.snapshotId,
+    ruleCode: e.ruleCode,
+    severity: e.severity,
+    entityType: e.entityType,
+    entityId: e.entityId,
+    message: e.message,
+    status: e.status,
+    resolvedById: e.resolvedById,
+    resolvedAt: e.resolvedAt ? e.resolvedAt.toISOString() : null,
+    resolutionNote: e.resolutionNote,
+    createdAt: e.createdAt.toISOString(),
+  }));
 
   if (!project) {
     return <div style={{ padding: '32px', color: '#ef4444' }}>Project not found.</div>;
@@ -176,6 +274,16 @@ export default async function ProjectUboqWorkbenchPage({
           </div>
         </div>
       </div>
+
+      {/* Visual Column-Mapping & Candidate / Exception Review Workbench (Delta 1) */}
+      <VisualMappingReviewClient
+        projectId={project.id}
+        sectorType={(contract?.sectorType as 'GOVERNMENT' | 'CORPORATE' | 'PRIVATE' | undefined) ?? null}
+        taxProfileCode={contract?.taxProfile?.profileCode ?? null}
+        sourceDocuments={visualSourceDocuments}
+        exceptions={visualExceptions}
+        canReview={canReview}
+      />
 
       {/* Canonical Resource Accounts & Stock Balance */}
       <section style={{ marginBottom: '32px' }}>
