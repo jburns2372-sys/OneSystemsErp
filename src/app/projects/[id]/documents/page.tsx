@@ -58,15 +58,15 @@ export default async function ProjectDocumentsPage({
     );
   } catch {
     return (
-      <main style={{padding:32}}>
-        <h1>Project documents unavailable</h1>
-        <p>Project access was denied or the private document register could not be loaded.</p>
-        <Link href="/projects">Back to Projects</Link>
+      <main style={{padding:32,maxWidth:720,margin:'0 auto',color:'#f8fafc'}}>
+        <h1 style={{color:'#fca5a5'}}>Project documents unavailable</h1>
+        <p style={{color:'#cbd5e1'}}>Project access was denied or the private document register could not be loaded.</p>
+        <Link href="/projects" style={{color:'#38bdf8',fontWeight:600}}>&larr; Back to Projects</Link>
       </main>
     );
   }
 
-  if (!data.project) return <main style={{padding:32}}>Project not found.</main>;
+  if (!data.project) return <main style={{padding:32,color:'#fca5a5'}}>Project not found.</main>;
 
   const uploadGrant = await prisma.rolePermission.findFirst({
     where: { moduleName: 'DOCUMENTS', canUploadAttachment: true, role: { roleCode: actor.role, isActive: true } },
@@ -74,12 +74,52 @@ export default async function ProjectDocumentsPage({
   });
 
   return (
-    <main style={{padding:'28px',maxWidth:1400,margin:'0 auto',color:'#f8fafc'}}>
+    <main style={{padding:'20px clamp(14px, 3vw, 28px)',maxWidth:1360,margin:'0 auto',color:'#f8fafc'}}>
+      <nav
+        aria-label="Project documents workflow navigation"
+        style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap',marginBottom:16}}
+      >
+        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',fontSize:'0.84rem',color:'#94a3b8'}}>
+          <Link href="/projects" style={{color:'#cbd5e1'}}>Projects</Link>
+          <span aria-hidden="true">/</span>
+          <Link href={`/projects/${projectId}`} style={{color:'#38bdf8',fontWeight:600}}>{data.project.name}</Link>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page" style={{color:'#f8fafc',fontWeight:700}}>Upload Documents &amp; BOQ</span>
+          <span aria-hidden="true">&rarr;</span>
+          <Link href={`/projects/${projectId}/uboq`} style={{color:'#cbd5e1'}}>Review BOQ</Link>
+          <span aria-hidden="true">&rarr;</span>
+          <Link href={`/projects/${projectId}/scheduling`} style={{color:'#cbd5e1'}}>Scheduling</Link>
+        </div>
+
+        <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+          <Link
+            href={`/projects/${projectId}`}
+            style={{padding:'7px 12px',borderRadius:8,background:'rgba(15,23,42,0.7)',border:'1px solid rgba(148,163,184,0.3)',color:'#e2e8f0',fontSize:'0.82rem',fontWeight:600,textDecoration:'none'}}
+          >
+            &larr; Back to Project
+          </Link>
+          <Link
+            href={`/projects/${projectId}/uboq`}
+            style={{padding:'7px 13px',borderRadius:8,background:'rgba(56,189,248,0.14)',border:'1px solid rgba(56,189,248,0.45)',color:'#38bdf8',fontSize:'0.82rem',fontWeight:700,textDecoration:'none'}}
+          >
+            Review BOQ &rarr;
+          </Link>
+          <Link
+            href={`/projects/${projectId}/scheduling`}
+            style={{padding:'7px 12px',borderRadius:8,background:'rgba(15,23,42,0.7)',border:'1px solid rgba(148,163,184,0.3)',color:'#cbd5e1',fontSize:'0.82rem',fontWeight:600,textDecoration:'none'}}
+          >
+            Scheduling &rarr;
+          </Link>
+        </div>
+      </nav>
+
       <div style={{marginBottom:20}}>
-        <Link href="/projects" style={{color:'#67e8f9'}}>← Projects</Link>
-        <h1 style={{margin:'12px 0 4px'}}>Documents &amp; Universal BOQ Intake</h1>
-        <p style={{color:'#94a3b8',margin:0}}>
-          {data.project.name} · Sector: {data.project.projectCategory || 'Not confirmed'}
+        <div style={{fontSize:'0.75rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',color:'#38bdf8'}}>
+          Step 1 of 4
+        </div>
+        <h1 style={{margin:'4px 0 6px',fontSize:'clamp(1.3rem, 2.5vw, 1.7rem)'}}>Upload Project Documents &amp; BOQ</h1>
+        <p style={{color:'#94a3b8',margin:0,fontSize:'0.9rem'}}>
+          <strong style={{color:'#e2e8f0'}}>{data.project.name}</strong> &middot; Sector: {data.project.projectCategory || 'Not confirmed'}
         </p>
       </div>
       {!['GOVERNMENT','CORPORATE','PRIVATE'].includes(data.project.projectCategory || '') && (
