@@ -111,8 +111,8 @@ SELECT p.proname AS function_name,
        pg_get_function_identity_arguments(p.oid) AS arguments,
        pg_get_userbyid(p.proowner) AS function_owner,
        p.prosecdef AS security_definer,
-       EXISTS (SELECT 1 FROM unnest(p.proconfig) AS setting
-                 WHERE setting LIKE 'search_path=%') AS has_fixed_search_path,
+       EXISTS (SELECT 1 FROM unnest(p.proconfig) AS cfg(setting_value)
+                 WHERE cfg.setting_value LIKE 'search_path=%') AS has_fixed_search_path,
        COALESCE(array_length(p.proconfig, 1), 0) AS config_setting_count
 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
 WHERE n.nspname='public'
