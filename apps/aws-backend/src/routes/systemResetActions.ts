@@ -352,7 +352,10 @@ router.post('/getCurrentUserRole', async (req, res) => {
     if (!req.user?.id) {
       return res.status(401).json({ success: false, error: 'Authentication required.' });
     }
-    const effectiveRole = req.pbacContext?.simulatedRole || req.user.role || null;
+    const isSystemAdmin =
+      req.user.role === 'SUPER_ADMIN' || req.user.role === 'SYSTEM_ADMIN';
+    const effectiveRole =
+      (isSystemAdmin && req.pbacContext?.simulatedRole) || req.user.role || null;
     return res.json({ success: true, role: effectiveRole });
   } catch (e: any) {
     console.error('Failed to get current user role:', e);

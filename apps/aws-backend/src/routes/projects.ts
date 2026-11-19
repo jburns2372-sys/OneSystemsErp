@@ -446,20 +446,42 @@ router.get('/dashboard-stats', async (req, res) => {
         ? await prisma.aIValidationOverride.count({ where: { approvedBy: null } })
         : 0;
 
+function isPgPermissionDeniedError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as Record<string, any>;
+  if (e.code === '42501' || e.meta?.code === '42501') return true;
+  const msg = typeof e.message === 'string' ? e.message : '';
+  return /\b42501\b|permission denied for (?:table|relation)/i.test(msg);
+}
+
+    const unavailableMetrics: string[] = [];
+
     const pettyCashScope = modAuth.scopedProjectFilterForModules(
       activeProjectId,
       projectIds,
       'PETTY_CASH',
       'FINANCE'
     );
-    const pendingPettyCash = pettyCashScope.allowed
-      ? await prisma.pettyCashAccount.count({
+    let pendingPettyCash: number | null = 0;
+    if (pettyCashScope.allowed) {
+      try {
+        pendingPettyCash = await prisma.pettyCashAccount.count({
           where: {
             currentBalance: { lt: 5000 },
             ...(pettyCashScope.projectIdFilter ? { projectId: pettyCashScope.projectIdFilter } : {}),
           },
-        })
-      : 0;
+        });
+      } catch (err) {
+        if (isPgPermissionDeniedError(err)) {
+          // Narrow 42501 handling: runtime role lacks SELECT on PettyCashAccount;
+          // explicitly mark metric unavailable (null) rather than silently reporting 0.
+          pendingPettyCash = null;
+          unavailableMetrics.push('pendingPettyCash');
+        } else {
+          throw err;
+        }
+      }
+    }
 
     const payrollScope = modAuth.scopedProjectFilterForModules(
       activeProjectId,
@@ -642,7 +664,8 @@ router.get('/dashboard-stats', async (req, res) => {
       totalDailyLogs,
       totalDocuments,
       totalJobOrders,
-      totalVariationOrders
+      totalVariationOrders,
+      ...(unavailableMetrics.length > 0 ? { unavailableMetrics } : {}),
     });
   } catch {
     console.error('Error fetching dashboard stats');
