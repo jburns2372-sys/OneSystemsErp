@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
   },
   // Nested Git worktrees must not inherit the parent checkout's lockfile root.
   turbopack: { root: __dirname },
-  serverExternalPackages: ['pdf-parse', 'pdfjs-dist', 'tesseract.js', 'sharp'],
+  serverExternalPackages: ['pdf-parse', 'pdfjs-dist', 'tesseract.js', '@tesseract.js-data/eng', 'sharp'],
   // P9-DEF-PDF-01 / P9-DEF-OCR-01: tesseract.js worker script, wasm cores and offline traineddata are loaded at
   // runtime (new Worker / fs), so Vercel's static tracer omits them. Include them for UBOQ intake routes only.
   outputFileTracingIncludes: {

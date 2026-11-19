@@ -62,4 +62,8 @@ test('OCR roots: missing assets fail immediately with clean client error (NO pat
   assert.match(out.serverLogs[0], /\[UBOQ_OCR_TRAINEDDATA_MISSING\].*"cwd":/);
   assert.match(out.serverLogs[1], /\[UBOQ_OCR_WORKER_SCRIPT_MISSING\].*"existingRoots":/);
   assert.doesNotMatch(out.serverLogs.join(' '), /secret|token|password|AUTH_SECRET|postgres/i);
+
+  // Shared ocr-engine.ts must NEVER contain static require.resolve(...gz) that breaks Next.js Turbopack
+  const ocrSrc = fs.readFileSync(path.resolve(ROOT, 'src/lib/uboq/intake/ocr-engine.ts'), 'utf8');
+  assert.doesNotMatch(ocrSrc, /require\.resolve\([^)]*\.gz/);
 });

@@ -82,26 +82,20 @@ export function describeOcrAssetEnvironment(roots: string[] = nodeModulesRoots()
 }
 
 export function resolveOfflineTesseractLangPath(roots?: string[]): string {
-  // When using runtime default roots, resolve directly via live require.resolve / package entry FIRST so
-  // Vercel's static file tracer (@vercel/nft) traces both the package and .gz assets into the deployed bundle.
+  // Resolve via the @tesseract.js-data/eng package entry and filesystem checks ONLY — never via static
+  // .gz binary module imports, which Next.js Turbopack attempts to parse as JS modules.
   if (roots === undefined) {
-    try {
-      const bestInt = require.resolve('@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz');
-      if (fs.existsSync(bestInt)) return path.dirname(bestInt);
-    } catch {
-      /* fall through to 4.0.0 / ancestor walk */
-    }
-    try {
-      const std = require.resolve('@tesseract.js-data/eng/4.0.0/eng.traineddata.gz');
-      if (fs.existsSync(std)) return path.dirname(std);
-    } catch {
-      /* fall through to package entry / ancestor walk */
-    }
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const engPkg = require('@tesseract.js-data/eng') as { langPath?: string };
-      if (engPkg?.langPath && fs.existsSync(path.join(engPkg.langPath, 'eng.traineddata.gz'))) {
-        return engPkg.langPath;
+      if (engPkg?.langPath) {
+        const bestIntDir = path.resolve(engPkg.langPath, '..', '4.0.0_best_int');
+        if (fs.existsSync(path.join(bestIntDir, 'eng.traineddata.gz'))) {
+          return bestIntDir;
+        }
+        if (fs.existsSync(path.join(engPkg.langPath, 'eng.traineddata.gz'))) {
+          return engPkg.langPath;
+        }
       }
     } catch {
       /* fall through to ancestor walk */
