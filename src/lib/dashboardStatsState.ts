@@ -45,7 +45,7 @@ export interface DashboardStatsBaseline {
   expectedDeliveries: number;
   totalIssuances: number;
   totalSuppliers: number;
-  totalWorkers: number;
+  totalWorkers: number | null;
   totalUsers: number;
   totalAuditLogs: number;
   totalDailyLogs: number;
@@ -56,7 +56,7 @@ export interface DashboardStatsOptionalNumeric {
   pendingMRs?: number;
   totalExpenses?: number;
   accomplishmentPercentage?: number;
-  totalSubcontractors?: number;
+  totalSubcontractors?: number | null;
   totalDocuments?: number;
   totalVariationOrders?: number;
 }
@@ -170,10 +170,18 @@ export function normalizeLiveDashboardStats(payload: unknown): DashboardStatsRes
     : [];
   const unavailableSet = new Set(rawUnavailable);
 
+  const NULLABLE_UNAVAILABLE_BASELINE_KEYS = new Set<keyof DashboardStatsBaseline>([
+    'pendingPettyCash',
+    'totalWorkers',
+  ]);
+  const NULLABLE_UNAVAILABLE_OPTIONAL_KEYS = new Set<keyof DashboardStatsOptionalNumeric>([
+    'totalSubcontractors',
+  ]);
+
   const normalizedBaseline = {} as Record<keyof DashboardStatsBaseline, number | null>;
   for (const key of REQUIRED_DASHBOARD_KEYS) {
     const val = record[key];
-    if (val === null && key === 'pendingPettyCash' && unavailableSet.has(key)) {
+    if (val === null && NULLABLE_UNAVAILABLE_BASELINE_KEYS.has(key) && unavailableSet.has(key)) {
       normalizedBaseline[key] = null;
       continue;
     }
@@ -183,10 +191,14 @@ export function normalizeLiveDashboardStats(payload: unknown): DashboardStatsRes
     normalizedBaseline[key] = val;
   }
 
-  const normalizedOptional: DashboardStatsOptionalNumeric = {};
+  const normalizedOptional = {} as Record<keyof DashboardStatsOptionalNumeric, number | null | undefined>;
   for (const optKey of OPTIONAL_DASHBOARD_KEYS) {
     const val = record[optKey];
     if (val !== undefined) {
+      if (val === null && NULLABLE_UNAVAILABLE_OPTIONAL_KEYS.has(optKey) && unavailableSet.has(optKey)) {
+        normalizedOptional[optKey] = null;
+        continue;
+      }
       if (typeof val !== 'number' || !Number.isFinite(val)) {
         return buildUnavailableDashboardStats('BACKEND_INVALID_PAYLOAD');
       }
@@ -196,7 +208,7 @@ export function normalizeLiveDashboardStats(payload: unknown): DashboardStatsRes
 
   return {
     ...(normalizedBaseline as DashboardStatsBaseline),
-    ...normalizedOptional,
+    ...(normalizedOptional as DashboardStatsOptionalNumeric),
     statsUnavailable: false,
     statsStatus: 'LIVE',
     statsDiagnosticCode: null,

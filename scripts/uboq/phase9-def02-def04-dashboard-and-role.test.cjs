@@ -79,13 +79,46 @@ test('DEF-02: dashboardStatsState preserves valid metrics and explicitly marks p
   assert.equal(forgedNull.statsDiagnosticCode, 'BACKEND_INVALID_PAYLOAD');
 });
 
-test('DEF-02: backend projects.ts handles ONLY SQLSTATE 42501 on pettyCashAccount.count and emits unavailableMetrics', () => {
+test('DEF-02: backend projects.ts handles ONLY SQLSTATE 42501 on pettyCashAccount, worker, and subcontractor counts and emits unavailableMetrics', () => {
   const src = fs.readFileSync('apps/aws-backend/src/routes/projects.ts', 'utf8');
   assert.match(src, /function isPgPermissionDeniedError/);
   assert.match(src, /code === '42501'/);
   assert.match(src, /unavailableMetrics\.push\('pendingPettyCash'\)/);
   assert.match(src, /pendingPettyCash = null;/);
+  assert.match(src, /unavailableMetrics\.push\('totalWorkers'\)/);
+  assert.match(src, /totalWorkers = null;/);
+  assert.match(src, /unavailableMetrics\.push\('totalSubcontractors'\)/);
+  assert.match(src, /totalSubcontractors = null;/);
   assert.match(src, /else\s*\{\s*throw err;\s*\}/);
+
+  const state = loadTs('src/lib/dashboardStatsState.ts');
+  const multiUnavailable = state.normalizeLiveDashboardStats({
+    ...state.ZERO_DASHBOARD_STATS,
+    totalProjects: 3,
+    pendingPettyCash: null,
+    totalWorkers: null,
+    totalSubcontractors: null,
+    unavailableMetrics: ['pendingPettyCash', 'totalWorkers', 'totalSubcontractors'],
+  });
+  assert.equal(multiUnavailable.statsUnavailable, false);
+  assert.equal(multiUnavailable.totalProjects, 3);
+  assert.equal(multiUnavailable.pendingPettyCash, null);
+  assert.equal(multiUnavailable.totalWorkers, null);
+  assert.equal(multiUnavailable.totalSubcontractors, null);
+  assert.deepEqual(multiUnavailable.unavailableMetrics, [
+    'pendingPettyCash',
+    'totalWorkers',
+    'totalSubcontractors',
+  ]);
+  assert.equal(state.formatDashboardCount(multiUnavailable, multiUnavailable.totalWorkers), 'Unavailable');
+
+  // Forged null totalWorkers without unavailableMetrics must still fail closed
+  const forgedWorkersNull = state.normalizeLiveDashboardStats({
+    ...state.ZERO_DASHBOARD_STATS,
+    totalWorkers: null,
+  });
+  assert.equal(forgedWorkersNull.statsUnavailable, true);
+  assert.equal(forgedWorkersNull.statsDiagnosticCode, 'BACKEND_INVALID_PAYLOAD');
 });
 
 test('DEF-04: getCurrentUserRole rejects unauthenticated sessions, forged cookies, inactive users, and non-admin simulation', async () => {
