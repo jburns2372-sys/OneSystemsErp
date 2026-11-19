@@ -32,13 +32,53 @@ function firstExistingFile(candidates: string[]): string | null {
   return null;
 }
 
-function nodeModulesRoots(): string[] {
-  return [
-    path.join(process.cwd(), 'node_modules'),
-    path.resolve(__dirname, '..', '..', '..', '..', 'node_modules'),
-    path.resolve(__dirname, '..', '..', '..', '..', '..', '..', 'node_modules'),
-    path.resolve(__dirname, '..', '..', '..', '..', '..', 'node_modules'),
-  ];
+/**
+ * Candidate node_modules roots. Vercel lays a function out relative to its project/repo root, so the OCR assets can
+ * live under `<root>/node_modules` or `<root>/apps/aws-backend/node_modules` depending on how includeFiles was
+ * applied. Walk the ancestors of both cwd and this module's directory so any layout resolves, never a fixed depth.
+ */
+export function nodeModulesRoots(starts: string[] = [process.cwd(), __dirname]): string[] {
+  const roots: string[] = [];
+  const add = (p: string) => {
+    if (!roots.includes(p)) roots.push(p);
+  };
+  for (const start of starts) {
+    let dir = path.resolve(start);
+    for (let depth = 0; depth < 10; depth++) {
+      add(path.join(dir, 'node_modules'));
+      add(path.join(dir, 'apps', 'aws-backend', 'node_modules'));
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  return roots;
+}
+
+/** Non-secret layout summary appended to asset-missing errors so a deployed failure is diagnosable from the response. */
+export function describeOcrAssetEnvironment(roots: string[] = nodeModulesRoots()): string {
+  const safeList = (dir: string) => {
+    try {
+      return fs.readdirSync(dir).slice(0, 25);
+    } catch {
+      return [];
+    }
+  };
+  const present = roots
+    .filter((r) => fs.existsSync(r))
+    .slice(0, 6)
+    .map((r) => ({
+      root: r,
+      tesseractJs: fs.existsSync(path.join(r, 'tesseract.js')),
+      tesseractData: fs.existsSync(path.join(r, '@tesseract.js-data')),
+    }));
+  return JSON.stringify({
+    cwd: process.cwd(),
+    moduleDir: __dirname,
+    triedRoots: roots.length,
+    existingRoots: present,
+    cwdEntries: safeList(process.cwd()),
+  });
 }
 
 export function resolveOfflineTesseractLangPath(roots: string[] = nodeModulesRoots()): string {
@@ -48,7 +88,7 @@ export function resolveOfflineTesseractLangPath(roots: string[] = nodeModulesRoo
       if (fs.existsSync(path.join(dir, 'eng.traineddata.gz'))) return dir;
     }
   }
-  throw new Error('UBOQ_OCR_TRAINEDDATA_MISSING: Offline @tesseract.js-data/eng traineddata not found');
+  throw new Error(`UBOQ_OCR_TRAINEDDATA_MISSING: Offline @tesseract.js-data/eng traineddata not found diagnostics=${describeOcrAssetEnvironment(roots)}`);
 }
 
 /**
@@ -61,7 +101,7 @@ export function resolveTesseractWorkerScript(roots: string[] = nodeModulesRoots(
     roots.map((root) => path.join(root, 'tesseract.js', 'src', 'worker-script', 'node', 'index.js'))
   );
   if (!found) {
-    throw new Error('UBOQ_OCR_WORKER_SCRIPT_MISSING: tesseract.js node worker script not found in deployed bundle');
+    throw new Error(`UBOQ_OCR_WORKER_SCRIPT_MISSING: tesseract.js node worker script not found in deployed bundle diagnostics=${describeOcrAssetEnvironment(roots)}`);
   }
   return found;
 }
