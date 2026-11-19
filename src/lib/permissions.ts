@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { prisma } from './prisma';
 import { cookies } from 'next/headers';
 import { PERMISSION_FIELDS, isSystemAdminRole, resolveAuthorizationAction } from './authorizationActions';
 
