@@ -7,12 +7,10 @@ import {
 } from '../lib/prismaRls';
 
 const ADMIN_GLOBAL_ROLES = new Set(['SUPER_ADMIN', 'SYSTEM_ADMIN', 'PRESIDENT', 'VP_OPERATIONS']);
+// Only global system-admin roles may simulate another role; simulation can narrow PBAC, never widen it.
 const PRIVILEGED_SIMULATION_ROLES = new Set([
   'SUPER_ADMIN',
   'SYSTEM_ADMIN',
-  'ADMIN',
-  'PROJECT_DIRECTOR',
-  'DIRECTORS',
 ]);
 
 export interface AuthenticatedRequest extends Request {
@@ -155,6 +153,9 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
       if (typeof req.body.sessionId === 'string' && req.body.sessionId && req.body.sessionId !== user.id) {
         return res.status(403).json({ error: 'Forbidden: Body sessionId does not match authenticated user.' });
       }
+      if (typeof req.body.sessionToken === 'string' && req.body.sessionToken && req.body.sessionToken !== user.id) {
+        return res.status(403).json({ error: 'Forbidden: Body sessionToken does not match authenticated user.' });
+      }
       if (
         !ADMIN_GLOBAL_ROLES.has(user.role) &&
         user.role !== 'PROJECT_DIRECTOR' &&
@@ -167,6 +168,9 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
       if ('sessionId' in req.body) {
         req.body.sessionId = user.id;
       }
+      if ('sessionToken' in req.body) {
+        req.body.sessionToken = user.id;
+      }
       if (!canSimulate && 'simulatedRole' in req.body) {
         delete req.body.simulatedRole;
       }
@@ -178,14 +182,21 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
       claims.pid
     );
 
+    if (allCandidateProjectIds.some((pid) => pid.toLowerCase() === 'dashboard-stats')) {
+      return res.status(400).json({ error: 'Invalid project identifier' });
+    }
+
     if (allCandidateProjectIds.length > 1) {
       return res.status(403).json({
         error: 'Forbidden: Conflicting cross-project target identifiers in single request.',
       });
     }
 
+    const realRoleUpper = (user.role || '').trim().toUpperCase();
     const effectiveRoleForPbac = (verifiedSimRole || user.role || '').trim().toUpperCase();
-    if (allCandidateProjectIds.length > 0 && !ADMIN_GLOBAL_ROLES.has(effectiveRoleForPbac)) {
+    const hasGlobalUnscopedBypass =
+      ADMIN_GLOBAL_ROLES.has(realRoleUpper) && ADMIN_GLOBAL_ROLES.has(effectiveRoleForPbac);
+    if (allCandidateProjectIds.length > 0 && !hasGlobalUnscopedBypass) {
       const targetPid = allCandidateProjectIds[0];
       const accessCheck = await backendPrismaRaw.$queryRaw<Array<{ ok: boolean }>>`
         SELECT uboq_verify_bound_actor_for_project(
@@ -232,8 +243,8 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
     }
 
     next();
-  } catch (error) {
-    console.error('Auth Middleware Error:', error);
+  } catch {
+    console.error('Auth Middleware Error');
     res.status(500).json({ error: 'Internal Server Error during authentication' });
   }
 };

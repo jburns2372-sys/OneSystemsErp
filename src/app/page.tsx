@@ -31,14 +31,23 @@ export default async function Home() {
 
   if (currentUser) {
     primaryRole = currentUser.role || 'PROJECT_DIRECTOR';
-    isSystemAdmin = primaryRole === 'SUPER_ADMIN' || primaryRole === 'SYSTEM_ADMIN' || (currentUser.userRoles && currentUser.userRoles.some((ur: any) => ur.role.roleCode === 'SUPER_ADMIN' || ur.role.roleCode === 'SYSTEM_ADMIN'));
+    if (primaryRole === 'SUPER_ADMIN' || primaryRole === 'SYSTEM_ADMIN') {
+      let primaryRoleRecord = await prisma.role.findFirst({
+        where: { OR: [{ roleCode: primaryRole }, { roleName: primaryRole }] },
+        select: { isActive: true },
+      });
+      if (!primaryRoleRecord && primaryRole === 'SYSTEM_ADMIN') {
+        primaryRoleRecord = await prisma.role.findFirst({
+          where: { OR: [{ roleCode: 'SUPER_ADMIN' }, { roleName: 'SUPER_ADMIN' }] },
+          select: { isActive: true },
+        });
+      }
+      isSystemAdmin = primaryRoleRecord?.isActive === true;
+    }
   }
 
-  // Respect simulated role
-  const simulatedRole = cookieStore.get('simulatedRole')?.value;
-  const effectiveRole = (simulatedRole && (primaryRole === 'SUPER_ADMIN' || primaryRole === 'ADMIN' || primaryRole === 'PROJECT_DIRECTOR' || primaryRole === 'DIRECTORS')) 
-    ? simulatedRole 
-    : primaryRole;
+  // Only global system admins can simulate roles; simulation never alters real role redirects
+  const simulatedRole = isSystemAdmin ? cookieStore.get('simulatedRole')?.value : undefined;
 
   if (primaryRole === 'DIRECTORS' && !simulatedRole) {
     redirect('/executive/home');

@@ -3,12 +3,10 @@ import { cookies } from 'next/headers';
 import { verifySession } from '@/lib/dal/auth';
 import { getBackendUrl, isTrustedFirstPartyBackendUrl } from '@/lib/backendUrl';
 
+// Only active global system-admin roles may simulate roles; simulation never widens PBAC.
 const PRIVILEGED_SIMULATION_ROLES = new Set([
   'SUPER_ADMIN',
   'SYSTEM_ADMIN',
-  'ADMIN',
-  'PROJECT_DIRECTOR',
-  'DIRECTORS',
 ]);
 
 const FIRST_PARTY_AUTH_COOKIES = new Set([
@@ -143,6 +141,7 @@ export async function buildAuthenticatedBackendRequest(
     url: resolvedUrl,
     init: {
       ...init,
+      redirect: 'manual',
       headers,
     },
   };

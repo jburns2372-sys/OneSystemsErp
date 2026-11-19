@@ -4,6 +4,21 @@ import { verifySession } from '@/lib/dal/auth';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 
+const PUBLIC_EXECUTIVE_AUTH_ERRORS = new Set([
+  'Unauthorized: Session token missing',
+  'Unauthorized: User not found',
+  'Unauthorized: Account inactive',
+  'Unauthorized: Executive access required',
+]);
+
+function toPublicExecutiveError(error: unknown, fallbackMessage: string): Error {
+  const msg = error instanceof Error ? error.message : '';
+  if (PUBLIC_EXECUTIVE_AUTH_ERRORS.has(msg)) {
+    return new Error(msg);
+  }
+  return new Error(fallbackMessage);
+}
+
 async function _getAccessDetails() {
   const cookieStore = await cookies();
   const __session = await verifySession();
@@ -21,9 +36,66 @@ async function _getAccessDetails() {
   
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new Error('Unauthorized: User not found');
+  if ((user as any).status && (user as any).status !== 'ACTIVE') {
+    throw new Error('Unauthorized: Account inactive');
+  }
+  if ((user as any).lockedUntil && (user as any).lockedUntil > new Date()) {
+    throw new Error('Unauthorized: Account inactive');
+  }
 
-  const effectiveRole = (simulatedRoleFromRequest && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS')) 
-    ? simulatedRoleFromRequest 
+  const GUEST_ROLE_ALIASES = new Set(['GUEST_USER', 'GUEST USER']);
+  let primaryRoleRecord = await prisma.role.findFirst({
+    where: { OR: [{ roleCode: user.role }, { roleName: user.role }] },
+    include: { rolePermissions: true },
+  });
+  if (!primaryRoleRecord && user.role === 'SYSTEM_ADMIN') {
+    primaryRoleRecord = await prisma.role.findFirst({
+      where: { OR: [{ roleCode: 'SUPER_ADMIN' }, { roleName: 'SUPER_ADMIN' }] },
+      include: { rolePermissions: true },
+    });
+  }
+  const assignedRoles = await prisma.userRole.findMany({
+    where: { userId },
+    include: { role: { include: { rolePermissions: true } } },
+  });
+
+  if (!primaryRoleRecord?.isActive) {
+    throw new Error('Unauthorized: Executive access required');
+  }
+
+  const isGuestActor =
+    GUEST_ROLE_ALIASES.has(user.role) ||
+    GUEST_ROLE_ALIASES.has(primaryRoleRecord.roleCode) ||
+    GUEST_ROLE_ALIASES.has(primaryRoleRecord.roleName) ||
+    assignedRoles.some(
+      ({ role }: any) =>
+        role?.isActive && (GUEST_ROLE_ALIASES.has(role.roleCode) || GUEST_ROLE_ALIASES.has(role.roleName))
+    );
+  if (isGuestActor) {
+    throw new Error('Unauthorized: Executive access required');
+  }
+
+  const isRealSystemAdmin =
+    (user.role === 'SUPER_ADMIN' || user.role === 'SYSTEM_ADMIN') &&
+    primaryRoleRecord.isActive === true;
+
+  const hasModuleView = (roleObj: any) =>
+    Boolean(
+      roleObj?.isActive &&
+        roleObj.rolePermissions?.some(
+          (rp: any) => rp.moduleName === 'PROJECT_MANAGEMENT' && rp.canView === true
+        )
+    );
+
+  const realCanViewProjects =
+    hasModuleView(primaryRoleRecord) ||
+    assignedRoles.some(({ role }: any) => hasModuleView(role));
+  if (!realCanViewProjects) {
+    throw new Error('Unauthorized: Executive access required');
+  }
+
+  const effectiveRole = (simulatedRoleFromRequest && isRealSystemAdmin)
+    ? simulatedRoleFromRequest
     : (user.role || 'GUEST_USER');
 
   const allowedRoles = [
@@ -40,7 +112,29 @@ async function _getAccessDetails() {
     throw new Error('Unauthorized: Executive access required');
   }
 
-  return { user, effectiveRole };
+  if (simulatedRoleFromRequest && isRealSystemAdmin) {
+    let simRoleRecord = await prisma.role.findFirst({
+      where: { OR: [{ roleCode: simulatedRoleFromRequest }, { roleName: simulatedRoleFromRequest }] },
+      include: { rolePermissions: true },
+    });
+    if (!simRoleRecord && simulatedRoleFromRequest === 'SYSTEM_ADMIN') {
+      simRoleRecord = await prisma.role.findFirst({
+        where: { OR: [{ roleCode: 'SUPER_ADMIN' }, { roleName: 'SUPER_ADMIN' }] },
+        include: { rolePermissions: true },
+      });
+    }
+    if (
+      !simRoleRecord?.isActive ||
+      GUEST_ROLE_ALIASES.has(simulatedRoleFromRequest) ||
+      GUEST_ROLE_ALIASES.has(simRoleRecord.roleCode) ||
+      GUEST_ROLE_ALIASES.has(simRoleRecord.roleName) ||
+      !hasModuleView(simRoleRecord)
+    ) {
+      throw new Error('Unauthorized: Executive access required');
+    }
+  }
+
+  return { user, effectiveRole, isRealSystemAdmin };
 }
 
 /**
@@ -48,8 +142,8 @@ async function _getAccessDetails() {
  */
 export async function getCompanyOverview(projectId?: string) {
   try {
-    const { user, effectiveRole } = await _getAccessDetails();
-    const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+    const { user, effectiveRole, isRealSystemAdmin } = await _getAccessDetails();
+    const isSuperAdmin = isRealSystemAdmin && (effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN');
 
     // Fetch all active/ongoing projects or the specific selected project
     const projectFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
@@ -189,8 +283,9 @@ export async function getCompanyOverview(projectId?: string) {
 
     return result;
   } catch (error: any) {
-    console.error('Error in getCompanyOverview:', error);
-    throw new Error(error.message || 'Failed to get company overview');
+    const publicErr = toPublicExecutiveError(error, 'Failed to get company overview');
+    console.error('Error in getCompanyOverview');
+    throw publicErr;
   }
 }
 
@@ -199,8 +294,8 @@ export async function getCompanyOverview(projectId?: string) {
  */
 export async function getProjectPortfolio() {
   try {
-    const { user, effectiveRole } = await _getAccessDetails();
-    const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+    const { user, effectiveRole, isRealSystemAdmin } = await _getAccessDetails();
+    const isSuperAdmin = isRealSystemAdmin && (effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN');
 
     const projects = await prisma.project.findMany({
       where: isSuperAdmin ? undefined : {
@@ -259,7 +354,8 @@ export async function getProjectPortfolio() {
 
     return result;
   } catch (error: any) {
-    console.error('Error in getProjectPortfolio:', error);
-    throw new Error(error.message || 'Failed to get project portfolio');
+    const publicErr = toPublicExecutiveError(error, 'Failed to get project portfolio');
+    console.error('Error in getProjectPortfolio');
+    throw publicErr;
   }
 }

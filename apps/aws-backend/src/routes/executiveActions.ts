@@ -1,31 +1,121 @@
 // @ts-nocheck
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient(); // Adjust path based on your AWS backend setup
-import { requirePermission } from '../lib/permissions'; // Adjust path based on your AWS backend setup
+const prisma = new PrismaClient();
 
 const router = Router();
+const EXEC_GUEST_ROLES = new Set(['GUEST USER', 'GUEST_USER']);
+
+const PUBLIC_EXEC_ERRORS = new Map<string, number>([
+  ['Unauthorized: Session token missing', 401],
+  ['Unauthorized: User not found', 401],
+  ['Unauthorized: Account inactive', 403],
+  ['Unauthorized: Executive access required', 403],
+  ['Forbidden: Body sessionToken does not match authenticated user.', 403],
+]);
 
 /**
- * Internal helper function to validate user access and retrieve effective role.
- * This replaces the original getUserId and checkExecutiveAccess which relied on Next.js cookies.
- * The necessary sessionToken and simulatedRole are now passed from the Next.js frontend in the request body.
+ * Internal helper function to validate user access and retrieve effective role
+ * strictly from middleware-verified request identity (`req.user` / `x-user-session`),
+ * never trusting caller-supplied `req.body.sessionToken` or `req.body.simulatedRole`.
  */
-async function _getAccessDetails(sessionToken: string, simulatedRoleFromRequest?: string) {
-  const userId = sessionToken || ''; // Assuming sessionToken directly contains the userId
+async function _getAccessDetails(req: any) {
+  const verifiedUserId =
+    (typeof req.user?.id === 'string' && req.user.id) ||
+    (typeof req.headers?.['x-user-session'] === 'string' ? req.headers['x-user-session'] : '');
 
-  if (!userId) {
+  if (!verifiedUserId) {
     throw new Error('Unauthorized: Session token missing');
   }
 
-  await requirePermission(userId, 'PROJECT_MANAGEMENT', 'canView'); // Base requirement
-  
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) throw new Error('Unauthorized: User not found');
+  const bodySessionToken = req.body?.sessionToken;
+  if (typeof bodySessionToken === 'string' && bodySessionToken && bodySessionToken !== verifiedUserId) {
+    throw new Error('Forbidden: Body sessionToken does not match authenticated user.');
+  }
 
-  // Support role simulation: use simulatedRoleFromRequest if valid, otherwise user's actual role
-  const effectiveRole = (simulatedRoleFromRequest && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'PROJECT_DIRECTOR' || user.role === 'DIRECTORS')) 
-    ? simulatedRoleFromRequest 
+  const user = await prisma.user.findUnique({ where: { id: verifiedUserId } });
+  if (!user) throw new Error('Unauthorized: User not found');
+  if ((user.status && user.status !== 'ACTIVE') || (user.lockedUntil && user.lockedUntil > new Date())) {
+    throw new Error('Unauthorized: Account inactive');
+  }
+
+  let primaryRoleRecord = await prisma.role.findFirst({
+    where: { OR: [{ roleCode: user.role }, { roleName: user.role }] },
+    include: { rolePermissions: true },
+  });
+  if (!primaryRoleRecord && user.role === 'SYSTEM_ADMIN') {
+    primaryRoleRecord = await prisma.role.findFirst({
+      where: { OR: [{ roleCode: 'SUPER_ADMIN' }, { roleName: 'SUPER_ADMIN' }] },
+      include: { rolePermissions: true },
+    });
+  }
+  const assignedRoles = await prisma.userRole.findMany({
+    where: { userId: verifiedUserId },
+    include: { role: { include: { rolePermissions: true } } },
+  });
+
+  const isGuestActor =
+    EXEC_GUEST_ROLES.has(user.role) ||
+    EXEC_GUEST_ROLES.has(primaryRoleRecord?.roleCode) ||
+    EXEC_GUEST_ROLES.has(primaryRoleRecord?.roleName) ||
+    assignedRoles.some(
+      ({ role }: any) =>
+        role?.isActive && (EXEC_GUEST_ROLES.has(role.roleCode) || EXEC_GUEST_ROLES.has(role.roleName))
+    );
+
+  const hasProjectViewGrant = (roleObj: any) =>
+    Boolean(
+      roleObj?.isActive &&
+        roleObj.rolePermissions?.some(
+          (rp: any) => rp.moduleName === 'PROJECT_MANAGEMENT' && rp.canView === true
+        )
+    );
+
+  if (!primaryRoleRecord?.isActive || isGuestActor) {
+    throw new Error('Unauthorized: Executive access required');
+  }
+
+  // Only active primary global system admins can simulate roles; simulation cannot widen PBAC.
+  const isRealSystemAdmin =
+    (user.role === 'SUPER_ADMIN' || user.role === 'SYSTEM_ADMIN') &&
+    primaryRoleRecord.isActive === true;
+  const verifiedSimulatedRole =
+    typeof req.pbacContext?.simulatedRole === 'string' ? req.pbacContext.simulatedRole : undefined;
+  if (verifiedSimulatedRole && !isRealSystemAdmin) {
+    throw new Error('Unauthorized: Executive access required');
+  }
+
+  const realCanViewProjects =
+    hasProjectViewGrant(primaryRoleRecord) ||
+    assignedRoles.some(({ role }: any) => hasProjectViewGrant(role));
+  if (!realCanViewProjects) {
+    throw new Error('Unauthorized: Executive access required');
+  }
+
+  if (verifiedSimulatedRole) {
+    let simRoleRecord = await prisma.role.findFirst({
+      where: { OR: [{ roleCode: verifiedSimulatedRole }, { roleName: verifiedSimulatedRole }] },
+      include: { rolePermissions: true },
+    });
+    if (!simRoleRecord && verifiedSimulatedRole === 'SYSTEM_ADMIN') {
+      simRoleRecord = await prisma.role.findFirst({
+        where: { OR: [{ roleCode: 'SUPER_ADMIN' }, { roleName: 'SUPER_ADMIN' }] },
+        include: { rolePermissions: true },
+      });
+    }
+    if (
+      !simRoleRecord?.isActive ||
+      EXEC_GUEST_ROLES.has(verifiedSimulatedRole) ||
+      EXEC_GUEST_ROLES.has(simRoleRecord.roleCode) ||
+      EXEC_GUEST_ROLES.has(simRoleRecord.roleName) ||
+      !hasProjectViewGrant(simRoleRecord)
+    ) {
+      throw new Error('Unauthorized: Executive access required');
+    }
+  }
+
+  const effectiveRole = (verifiedSimulatedRole && isRealSystemAdmin)
+    ? verifiedSimulatedRole
     : (user.role || 'GUEST_USER');
 
   // Check if effective role is in the allowed executive roles list
@@ -43,7 +133,7 @@ async function _getAccessDetails(sessionToken: string, simulatedRoleFromRequest?
     throw new Error('Unauthorized: Executive access required');
   }
 
-  return { user, effectiveRole };
+  return { user, effectiveRole, isRealSystemAdmin };
 }
 
 /**
@@ -51,10 +141,10 @@ async function _getAccessDetails(sessionToken: string, simulatedRoleFromRequest?
  */
 router.post('/getCompanyOverview', async (req, res) => {
   try {
-    const { sessionToken, simulatedRole, projectId } = req.body;
+    const { projectId } = req.body || {};
 
-    const { user, effectiveRole } = await _getAccessDetails(sessionToken, simulatedRole);
-    const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+    const { user, effectiveRole, isRealSystemAdmin } = await _getAccessDetails(req);
+    const isSuperAdmin = isRealSystemAdmin && (effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN');
 
     // Fetch all active/ongoing projects or the specific selected project
     const projectFilter: any = { status: { in: ['ACTIVE', 'ONGOING', 'STARTED'] } };
@@ -194,8 +284,13 @@ router.post('/getCompanyOverview', async (req, res) => {
 
     res.json({ success: true, data: result });
   } catch (error: any) {
-    console.error('Error in getCompanyOverview:', error);
-    res.status(500).json({ success: false, error: error.message });
+    const msg = typeof error?.message === 'string' ? error.message : '';
+    const status = PUBLIC_EXEC_ERRORS.get(msg) || 500;
+    console.error('Error in getCompanyOverview');
+    res.status(status).json({
+      success: false,
+      error: status === 500 ? 'Failed to get company overview' : msg,
+    });
   }
 });
 
@@ -204,10 +299,8 @@ router.post('/getCompanyOverview', async (req, res) => {
  */
 router.post('/getProjectPortfolio', async (req, res) => {
   try {
-    const { sessionToken, simulatedRole } = req.body;
-
-    const { user, effectiveRole } = await _getAccessDetails(sessionToken, simulatedRole);
-    const isSuperAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN';
+    const { user, effectiveRole, isRealSystemAdmin } = await _getAccessDetails(req);
+    const isSuperAdmin = isRealSystemAdmin && (effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'SYSTEM_ADMIN');
 
     const projects = await prisma.project.findMany({
       where: isSuperAdmin ? undefined : {
@@ -266,8 +359,13 @@ router.post('/getProjectPortfolio', async (req, res) => {
 
     res.json({ success: true, data: result });
   } catch (error: any) {
-    console.error('Error in getProjectPortfolio:', error);
-    res.status(500).json({ success: false, error: error.message });
+    const msg = typeof error?.message === 'string' ? error.message : '';
+    const status = PUBLIC_EXEC_ERRORS.get(msg) || 500;
+    console.error('Error in getProjectPortfolio');
+    res.status(status).json({
+      success: false,
+      error: status === 500 ? 'Failed to get project portfolio' : msg,
+    });
   }
 });
 

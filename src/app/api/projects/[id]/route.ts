@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { verifyOperationalSession } from '@/lib/dal/auth';
-import { assertProjectGraphOwnership, isGlobalTenantAdminRole } from '@/lib/uboq/project-ownership';
+import { assertProjectGraphOwnership } from '@/lib/uboq/project-ownership';
+
+const RESERVED_PROJECT_SEGMENTS = new Set(['dashboard-stats']);
+const DELETE_ADMIN_ROLES = new Set(['SUPER_ADMIN', 'SYSTEM_ADMIN']);
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -11,6 +15,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     const { id: projectId } = await params;
+    if (!projectId || RESERVED_PROJECT_SEGMENTS.has(projectId.toLowerCase())) {
+      return NextResponse.json({ error: 'Invalid project identifier' }, { status: 400 });
+    }
     await assertProjectGraphOwnership(prisma, {
       userId: actor.userId,
       userRole: actor.role,
@@ -31,10 +38,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
     return NextResponse.json({ success: true, project: updatedProject });
   } catch (error: any) {
-    console.error('Error updating project:', error);
-    const msg = error?.message || 'Internal Server Error';
-    const status = msg.includes('UBOQ_PBAC') ? 403 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    console.error('Error updating project');
+    const msg = typeof error?.message === 'string' ? error.message : '';
+    if (msg.includes('UBOQ_PBAC')) {
+      return NextResponse.json({ error: 'Forbidden: Project ownership access denied' }, { status: 403 });
+    }
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -44,11 +53,66 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!isGlobalTenantAdminRole(actor.role)) {
-      return NextResponse.json({ error: 'Forbidden: Only administrative directors may delete projects' }, { status: 403 });
+    const { id: projectId } = await params;
+    if (!projectId || RESERVED_PROJECT_SEGMENTS.has(projectId.toLowerCase())) {
+      return NextResponse.json({ error: 'Invalid project identifier' }, { status: 400 });
+    }
+    if (!DELETE_ADMIN_ROLES.has(actor.role)) {
+      return NextResponse.json({ error: 'Forbidden: Only SUPER_ADMIN or SYSTEM_ADMIN may delete projects' }, { status: 403 });
+    }
+    const GUEST_ROLE_ALIASES = new Set(['GUEST_USER', 'GUEST USER']);
+    let primaryAdminRole = await prisma.role.findFirst({
+      where: { OR: [{ roleCode: actor.role }, { roleName: actor.role }] },
+      select: { isActive: true, roleCode: true, roleName: true },
+    });
+    if (!primaryAdminRole && actor.role === 'SYSTEM_ADMIN') {
+      primaryAdminRole = await prisma.role.findFirst({
+        where: { OR: [{ roleCode: 'SUPER_ADMIN' }, { roleName: 'SUPER_ADMIN' }] },
+        select: { isActive: true, roleCode: true, roleName: true },
+      });
+    }
+    const assignedRoles = await prisma.userRole.findMany({
+      where: { userId: actor.userId },
+      include: { role: true },
+    });
+    const hasGuestAssignment =
+      GUEST_ROLE_ALIASES.has(actor.role) ||
+      GUEST_ROLE_ALIASES.has(primaryAdminRole?.roleCode || '') ||
+      GUEST_ROLE_ALIASES.has(primaryAdminRole?.roleName || '') ||
+      assignedRoles.some(
+        ({ role }: any) =>
+          role?.isActive &&
+          (GUEST_ROLE_ALIASES.has(role.roleCode) || GUEST_ROLE_ALIASES.has(role.roleName))
+      );
+    if (!primaryAdminRole?.isActive || hasGuestAssignment) {
+      return NextResponse.json({ error: 'Forbidden: Active global system-admin role required' }, { status: 403 });
+    }
+    const cookieStore = await cookies();
+    const simulatedRole = cookieStore.get('simulatedRole')?.value;
+    if (simulatedRole) {
+      if (!DELETE_ADMIN_ROLES.has(simulatedRole)) {
+        return NextResponse.json({ error: 'Forbidden: Project deletion is blocked while simulating a non-admin role' }, { status: 403 });
+      }
+      let simAdminRole = await prisma.role.findFirst({
+        where: { OR: [{ roleCode: simulatedRole }, { roleName: simulatedRole }] },
+        select: { isActive: true, roleCode: true, roleName: true },
+      });
+      if (!simAdminRole && simulatedRole === 'SYSTEM_ADMIN') {
+        simAdminRole = await prisma.role.findFirst({
+          where: { OR: [{ roleCode: 'SUPER_ADMIN' }, { roleName: 'SUPER_ADMIN' }] },
+          select: { isActive: true, roleCode: true, roleName: true },
+        });
+      }
+      if (
+        !simAdminRole?.isActive ||
+        GUEST_ROLE_ALIASES.has(simulatedRole) ||
+        GUEST_ROLE_ALIASES.has(simAdminRole.roleCode) ||
+        GUEST_ROLE_ALIASES.has(simAdminRole.roleName)
+      ) {
+        return NextResponse.json({ error: 'Forbidden: Active simulated admin role required' }, { status: 403 });
+      }
     }
 
-    const { id: projectId } = await params;
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       select: {
@@ -91,8 +155,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Error deleting project:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  } catch {
+    console.error('Error deleting project');
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
