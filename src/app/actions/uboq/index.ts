@@ -11,8 +11,10 @@ import {
   ingestAndStageProjectUboqPackage,
   regenerateDraftSnapshotFromVerifiedDocument,
   resolveExtractionCandidateHumanReview,
+  resolveUboqValidationException,
   type ResourceTakeoffSpecInput,
 } from '@/lib/uboq/adapters/snapshot-orchestrator';
+import { validateVisualColumnMapping } from '@/lib/uboq/visual-mapping';
 import { allocateVerifiedOpeningStockAtomically } from '@/lib/uboq/resource-ledger';
 import type { UboqSectorType } from '@prisma/client';
 
@@ -158,6 +160,144 @@ export async function resolveUboqExtractionCandidateAction(input: {
 
   revalidatePath(`/projects/${input.projectId}/uboq`);
   return redactUboqPayloadForRole(res, actor.role);
+}
+
+export async function resolveUboqValidationExceptionAction(input: {
+  projectId: string;
+  exceptionId: string;
+  resolutionNote: string;
+}) {
+  const actor = await verifyOperationalSession();
+  if (!actor) {
+    throw new Error('UBOQ_UNAUTHORIZED: Active operational session required');
+  }
+  if (!input.projectId?.trim() || !input.exceptionId?.trim()) {
+    throw new Error('UBOQ_INVALID_INPUT: projectId and exceptionId are required');
+  }
+
+  const res = await withUboqRlsContext(
+    { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId: input.projectId },
+    async () =>
+      resolveUboqValidationException(prisma as never, {
+        projectId: input.projectId,
+        exceptionId: input.exceptionId,
+        resolverUserId: actor.userId,
+        resolutionNote: input.resolutionNote,
+      })
+  );
+
+  revalidatePath(`/projects/${input.projectId}/uboq`);
+  return redactUboqPayloadForRole(res, actor.role);
+}
+
+export async function applyVisualColumnMappingAction(input: {
+  projectId: string;
+  sourceDocumentId: string;
+  candidateIds: string[];
+  columnMap: Record<string, string | null | undefined>;
+  reviewNotes: string;
+  decision?: 'HUMAN_VERIFIED' | 'HUMAN_EXCLUDED';
+}) {
+  const actor = await verifyOperationalSession();
+  if (!actor) {
+    throw new Error('UBOQ_UNAUTHORIZED: Active operational session required');
+  }
+  if (!input.projectId?.trim() || !input.sourceDocumentId?.trim()) {
+    throw new Error('UBOQ_INVALID_INPUT: projectId and sourceDocumentId are required');
+  }
+  const decision = input.decision ?? 'HUMAN_VERIFIED';
+  if (decision !== 'HUMAN_VERIFIED' && decision !== 'HUMAN_EXCLUDED') {
+    throw new Error(`UBOQ_INVALID_REVIEW_DECISION: Unsupported decision "${String(decision)}"`);
+  }
+  if (!input.reviewNotes?.trim()) {
+    throw new Error('UBOQ_REVIEW_NOTES_REQUIRED: Visual column mapping requires explicit audit notes');
+  }
+
+  const mappingValidation = validateVisualColumnMapping(input.columnMap);
+  if (!mappingValidation.valid) {
+    throw new Error(mappingValidation.errors[0] || 'UBOQ_INVALID_COLUMN_MAPPING');
+  }
+
+  const rawIds = Array.isArray(input.candidateIds) ? input.candidateIds : [];
+  const uniqueIds: string[] = [];
+  const seen = new Set<string>();
+  let skippedDuplicateCount = 0;
+  for (const id of rawIds) {
+    const trimmed = String(id || '').trim();
+    if (!trimmed) continue;
+    if (seen.has(trimmed)) {
+      skippedDuplicateCount += 1;
+      continue;
+    }
+    seen.add(trimmed);
+    uniqueIds.push(trimmed);
+  }
+  if (uniqueIds.length === 0) {
+    throw new Error('UBOQ_NO_CANDIDATES_SELECTED: Select at least one extraction candidate');
+  }
+
+  const result = await withUboqRlsContext(
+    { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId: input.projectId },
+    async () => {
+      await assertUboqStageAuthorization(prisma, {
+        userId: actor.userId,
+        projectId: input.projectId,
+        capability: 'UBOQ_HUMAN_REVIEW_RESOLVE',
+      });
+
+      // Verify source document ownership within active project before touching any candidate
+      const sourceDoc = await prisma.uboqSourceDocument.findUnique({
+        where: { id: input.sourceDocumentId },
+        select: { id: true, projectId: true, sha256Hash: true },
+      });
+      if (!sourceDoc || sourceDoc.projectId !== input.projectId) {
+        throw new Error('UBOQ_SOURCE_DOCUMENT_NOT_FOUND_FOR_PROJECT');
+      }
+
+      // Verify all targeted candidates belong to BOTH projectId and sourceDocumentId
+      const ownedCandidates = await prisma.uboqExtractionCandidate.findMany({
+        where: {
+          id: { in: uniqueIds },
+          sourceDocumentId: input.sourceDocumentId,
+          sourceDocument: { projectId: input.projectId },
+        },
+        select: { id: true },
+      });
+      if (ownedCandidates.length !== uniqueIds.length) {
+        throw new Error('UBOQ_CANDIDATE_NOT_FOUND_FOR_PROJECT: One or more candidates do not belong to this project document');
+      }
+
+      const updatedResults = [];
+      for (const candidateId of uniqueIds) {
+        const updated = await resolveExtractionCandidateHumanReview(prisma as never, {
+          projectId: input.projectId,
+          candidateId,
+          reviewerUserId: actor.userId,
+          decision,
+          reviewNotes: input.reviewNotes.trim(),
+          canonicalFieldRemap:
+            Object.keys(mappingValidation.normalizedRemap).length > 0
+              ? mappingValidation.normalizedRemap
+              : undefined,
+        });
+        updatedResults.push(updated);
+      }
+
+      return {
+        sourceDocumentId: sourceDoc.id,
+        sourceSha256Hash: sourceDoc.sha256Hash,
+        appliedCount: updatedResults.length,
+        skippedDuplicateCount,
+        decision,
+        normalizedRemap: mappingValidation.normalizedRemap,
+        autoApproved: false as const,
+        results: updatedResults,
+      };
+    }
+  );
+
+  revalidatePath(`/projects/${input.projectId}/uboq`);
+  return redactUboqPayloadForRole(result, actor.role);
 }
 
 export async function regenerateUboqDraftSnapshotAction(input: {
