@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createProjectProfile } from '@/app/actions/project-intake';
+import { setActiveProjectCookie } from '@/app/actions/activeProject';
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '10px 12px', borderRadius: 8,
@@ -81,6 +82,8 @@ export default function ProjectStartButton() {
 
       if ('projectId' in result && result.projectId) {
         const targetUrl = '/projects/' + encodeURIComponent(result.projectId) + '/documents';
+        // Bind the active project cookie before navigating so Topbar renders the new project immediately under RLS.
+        await setActiveProjectCookie(result.projectId).catch(() => undefined);
         setCreatedProjectId(result.projectId);
         setSubmitting(false);
         // Navigate directly to the new project's Documents page without triggering

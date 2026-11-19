@@ -449,27 +449,34 @@ test('real scanner rejects duplicate central directory references before inflati
 
 
 
-test('real scanner and XLSX extraction reject central-directory disagreement before ExcelJS', async () => {
+test('real scanner and XLSX extraction reject central-directory disagreement before streaming XLSX parser', async () => {
   const zlib = require('node:zlib');
   const XLSX = require('xlsx');
-  const ExcelJS = require('exceljs');
   const guard = load('src/lib/uboq/intake/security-guard.ts', {
     'node:crypto': crypto, 'node:path': require('node:path'),
     'node:zlib': zlib, xlsx: XLSX,
   });
-  let workbookConstructed = 0;
-  const observedExcelJS = {
-    Workbook: class extends ExcelJS.Workbook {
-      constructor() { super(); workbookConstructed++; }
+  const realReader = load('src/lib/uboq/intake/xlsx-streaming-reader.ts', {
+    'node:stream': require('node:stream'),
+    'node:zlib': zlib,
+    './security-guard': guard,
+  });
+  let streamInvocations = 0;
+  const observedReader = {
+    ...realReader,
+    streamVerifiedXlsxWorksheets: async (...args) => {
+      streamInvocations++;
+      return realReader.streamVerifiedXlsxWorksheets(...args);
     },
   };
   const parser = load('src/lib/uboq/intake/parsers.ts', {
-    exceljs: observedExcelJS, xlsx: XLSX, 'csv-parse/sync': require('csv-parse/sync'),
+    xlsx: XLSX, 'csv-parse/sync': require('csv-parse/sync'),
     '../field-catalog': { resolveCanonicalFieldId: () => null },
     './security-guard': guard,
+    './xlsx-streaming-reader': observedReader,
   });
 
-  // A normal workbook must still reach the REAL ExcelJS parser and produce BOQ data.
+  // A normal workbook must still reach the REAL streaming XLSX parser and produce BOQ data.
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Item Code', 'Work Description', 'Unit', 'Quantity', 'Unit Rate'],
@@ -477,7 +484,7 @@ test('real scanner and XLSX extraction reject central-directory disagreement bef
   ]), 'BOQ');
   const ordinary = Buffer.from(XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
   const ordinaryResult = await parser.extractUniversalDocumentPackage('ordinary.xlsx', ordinary);
-  assert.ok(workbookConstructed > 0, 'Ordinary XLSX must use real ExcelJS');
+  assert.ok(streamInvocations > 0, 'Ordinary XLSX must use real streaming XLSX reader');
   assert.ok(ordinaryResult.candidates.some(c => c.mappedFields.item_code === 'P1-01'),
     'Legitimate BOQ row should remain extractable');
 
@@ -541,11 +548,11 @@ test('real scanner and XLSX extraction reject central-directory disagreement bef
   const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   assert.throws(() => guard.scanUploadedDocumentSecurity('disagreement.xlsx', conflicting, mime),
     /UBOQ_SEC_ZIP_AMBIGUOUS_DIRECTORY/);
-  const before = workbookConstructed;
+  const before = streamInvocations;
   await assert.rejects(() => parser.extractUniversalDocumentPackage('disagreement.xlsx', conflicting),
     /UBOQ_SEC_ZIP_AMBIGUOUS_DIRECTORY/);
-  assert.equal(workbookConstructed, before,
-    'The real XLSX extraction path must reject before constructing ExcelJS, not inflate unverified media');
+  assert.equal(streamInvocations, before,
+    'The real XLSX extraction path must reject before invoking the streaming XLSX reader, not inflate unverified media');
 });
 
 
@@ -585,11 +592,17 @@ test('DOCX descriptor entry extraction preserves BOQ table candidates', async ()
     'node:crypto': crypto, 'node:path': require('node:path'),
     'node:zlib': require('node:zlib'), xlsx: require('xlsx'),
   });
+  const realReader = load('src/lib/uboq/intake/xlsx-streaming-reader.ts', {
+    'node:stream': require('node:stream'),
+    'node:zlib': require('node:zlib'),
+    './security-guard': guard,
+  });
   const parser = load('src/lib/uboq/intake/parsers.ts', {
-    exceljs: require('exceljs'), xlsx: require('xlsx'),
+    xlsx: require('xlsx'),
     'csv-parse/sync': require('csv-parse/sync'),
     '../field-catalog': { resolveCanonicalFieldId: () => null },
     './security-guard': guard,
+    './xlsx-streaming-reader': realReader,
   });
   const xml = Buffer.from('<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>' +
     '<w:tr><w:tc><w:p><w:t>Item Code</w:t></w:p></w:tc><w:tc><w:p><w:t>Work Description</w:t></w:p></w:tc><w:tc><w:p><w:t>Unit</w:t></w:p></w:tc><w:tc><w:p><w:t>Quantity</w:t></w:p></w:tc><w:tc><w:p><w:t>Unit Rate</w:t></w:p></w:tc></w:tr>' +

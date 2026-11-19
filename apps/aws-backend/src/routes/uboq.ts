@@ -83,6 +83,7 @@ function mapUboqHttpErrorStatus(msg: string): number {
     return 403;
   }
   if (msg.includes('NOT_FOUND')) return 404;
+  if (msg.includes('UBOQ_XLSX_LIMIT_EXCEEDED') || msg.includes('UBOQ_XLSX_EMPTY_WORKBOOK')) return 422;
   if (
     msg.includes('CEILING_EXCEEDED') ||
     msg.includes('SUPERSEDED') ||

@@ -164,6 +164,32 @@ function inspectZipCentralDirectory(buf: Buffer): {
   return { totalUncompressed, maxRatio, hasNestedArchive, entryNames, entries };
 }
 
+export interface VerifiedOfficeZipEntry {
+  readonly name: string;
+  readonly method: number;
+  readonly compressedSize: number;
+  readonly uncompressedSize: number;
+  readonly dataStart: number;
+}
+
+/**
+ * Validates the entire Office ZIP central directory (anti-ZIP-bomb, duplicate/overlap checks,
+ * bounded deflate verification) and returns authoritative verified entry descriptors for
+ * streaming readers without re-parsing unverified local headers.
+ */
+export function listVerifiedOfficeZipEntries(buf: Buffer): {
+  readonly totalUncompressed: number;
+  readonly maxRatio: number;
+  readonly entries: ReadonlyArray<VerifiedOfficeZipEntry>;
+} {
+  const directory = inspectZipCentralDirectory(buf);
+  return {
+    totalUncompressed: directory.totalUncompressed,
+    maxRatio: directory.maxRatio,
+    entries: directory.entries,
+  };
+}
+
 /** Read only a validated, size-bounded Office ZIP entry. Never use unverified local header lengths. */
 export function readVerifiedOfficeZipEntry(buf: Buffer, entryName: string): Buffer {
   const directory = inspectZipCentralDirectory(buf);

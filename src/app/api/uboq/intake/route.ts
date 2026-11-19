@@ -215,7 +215,9 @@ export async function POST(request: NextRequest) {
       ? 403
       : /CONFLICT|DUPLICATE|ALREADY|LUMP_SUM|MISMATCH/i.test(msg)
         ? 409
-        : 400;
+        : /UBOQ_XLSX_LIMIT_EXCEEDED|UBOQ_XLSX_EMPTY_WORKBOOK/i.test(msg)
+          ? 422
+          : 400;
     return NextResponse.json({ error: msg }, { status });
   }
 }

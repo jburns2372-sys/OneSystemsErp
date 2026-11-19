@@ -1,8 +1,8 @@
-import ExcelJS from 'exceljs';
 import * as XLSX from 'xlsx';
 import { parse as parseCsvSync } from 'csv-parse/sync';
 import { resolveCanonicalFieldId } from '../field-catalog';
 import { inspectCellSecurity, scanUploadedDocumentSecurity, readVerifiedOfficeZipEntry, type FileSecurityScanResult } from './security-guard';
+import { streamVerifiedXlsxWorksheets } from './xlsx-streaming-reader';
 
 function ensureServerlessPdfGlobals() {
   const g = globalThis as Record<string, unknown>;
@@ -134,37 +134,6 @@ function parseNumericValue(val: unknown): number | null {
     return Number.isFinite(num) ? num : null;
   }
   return null;
-}
-
-function extractExcelCellPrimitives(cell: ExcelJS.Cell): {
-  text: string;
-  numOrText: string | number | null;
-  formula: string | null;
-} {
-  const v = cell.value;
-  if (v === null || v === undefined) {
-    return { text: '', numOrText: null, formula: null };
-  }
-  if (typeof v === 'object' && 'formula' in v) {
-    const fObj = v as { formula?: string; result?: unknown };
-    const res = fObj.result;
-    const num = parseNumericValue(res);
-    return {
-      text: res !== undefined && res !== null ? String(res) : '',
-      numOrText: num !== null ? num : res !== undefined && res !== null ? String(res) : null,
-      formula: fObj.formula ? `=${fObj.formula.replace(/^=/, '')}` : null,
-    };
-  }
-  if (typeof v === 'object' && 'richText' in v && Array.isArray((v as { richText: Array<{ text: string }> }).richText)) {
-    const joined = (v as { richText: Array<{ text: string }> }).richText.map((rt) => rt.text).join('');
-    return { text: joined, numOrText: joined, formula: null };
-  }
-  const num = parseNumericValue(v);
-  return {
-    text: String(v),
-    numOrText: num !== null ? num : String(v),
-    formula: null,
-  };
 }
 
 function unzipDocxDocumentXml(buf: Buffer): string {
@@ -504,35 +473,31 @@ export async function extractUniversalDocumentPackage(
   const blockingErrors: string[] = [...security.findings];
 
   if (security.detectedFormat === 'XLSX') {
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer as unknown as Parameters<typeof wb.xlsx.load>[0]);
-
-    let order = 0;
-    wb.eachSheet((worksheet) => {
-      order++;
-      const grid: Array<Array<InternalGridCell>> = [];
-      worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-        if (rowNumber > MAX_SHEET_ROWS) return;
+    // Bounded incremental OOXML worksheet streaming: processes one worksheet at a time directly from
+    // the security-verified ZIP central directory, skipping style/column-range expansion (<col max="16384"/>)
+    // and externalLinks caches so complex workbooks stay well within Vercel serverless memory budgets.
+    await streamVerifiedXlsxWorksheets(buffer, ({ sheetName, displayOrder, rows }) => {
+      const denseGrid: Array<Array<InternalGridCell>> = [];
+      for (const row of rows) {
         const rowCells: Array<InternalGridCell> = [];
-        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-          if (colNumber > MAX_SHEET_COLS) return;
-          const prim = extractExcelCellPrimitives(cell);
-          rowCells[colNumber - 1] = {
-            ...prim,
-            cellRef: cell.address || `R${rowNumber}C${colNumber}`,
+        for (const cell of row.cells) {
+          rowCells[cell.colNumber - 1] = {
+            text: cell.text,
+            numOrText: cell.numOrText,
+            formula: cell.formula,
+            cellRef: cell.cellRef,
             confidence: 0.99,
           };
-        });
-        grid[rowNumber - 1] = rowCells;
-      });
+        }
+        denseGrid.push(rowCells);
+      }
 
-      const denseGrid = grid.filter(Boolean);
-      const parsed = parseGridRowsToCandidates(denseGrid, worksheet.name, worksheet.name, 'DETERMINISTIC_PARSER', 0.99, null);
+      const parsed = parseGridRowsToCandidates(denseGrid, sheetName, sheetName, 'DETERMINISTIC_PARSER', 0.99, null);
       sections.push({
         sectionType: 'WORKSHEET',
-        sheetOrPageRef: worksheet.name,
-        sectionTitle: worksheet.name,
-        displayOrder: order,
+        sheetOrPageRef: sheetName,
+        sectionTitle: sheetName,
+        displayOrder,
         headerMap: parsed.headerMap,
       });
       allCandidates.push(...parsed.candidates);
@@ -660,6 +625,7 @@ export async function extractUniversalDocumentPackage(
       // The Express backend compiles with classic CommonJS module resolution, which cannot see the package
       // "exports" subpath types; the literal specifier is kept (not a variable) so the file tracer still
       // bundles pdf-parse/worker.
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore TS2307 under moduleResolution=node10 only; resolves normally in Next (bundler) and at runtime
       const workerModule = (await import('pdf-parse/worker')) as { getData: () => string };
       PDFParse.setWorker(workerModule.getData());
