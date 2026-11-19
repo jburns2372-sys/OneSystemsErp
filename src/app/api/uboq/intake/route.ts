@@ -14,6 +14,7 @@ import {
   resolveExtractionCandidateHumanReview,
   type ResourceTakeoffSpecInput,
 } from '@/lib/uboq/adapters/snapshot-orchestrator';
+import { tryAutoSyncProjectScheduleLinks } from '@/lib/uboq/adapters/schedule-link-adapter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -166,13 +167,43 @@ export async function POST(request: NextRequest) {
           if (!snap || snap.projectId !== projectId) {
             throw new Error('UBOQ_CROSS_PROJECT_SPOOFING_BLOCKED');
           }
-          return approveOperationalSnapshotAndPrrs(prisma as never, {
+          const approvedSnapshot = await approveOperationalSnapshotAndPrrs(prisma as never, {
             snapshotId,
             approverUserId: actor.userId,
           });
+          // P9-DEF-SYNC-01: same UBOQ-side schedule-link behavior as approveUboqSnapshotAction and the
+          // Express approval API. Non-blocking: failures are reported explicitly as synced:false + reason.
+          const scheduleLinkSync = await tryAutoSyncProjectScheduleLinks(prisma as never, {
+            projectId,
+            actorUserId: actor.userId,
+          });
+          return { ...approvedSnapshot, scheduleLinkSync };
         }
       );
       return NextResponse.json(redactUboqPayloadForRole(approved, actor.role), {
+        headers: { 'Cache-Control': 'private, no-store' },
+      });
+    }
+
+    if (action === 'SYNC_SCHEDULE_LINKS') {
+      // Covers the schedule-created-AFTER-approval sequence: re-runs the idempotent UBOQ-side adapter.
+      // Authorization (UBOQ_INTAKE_STAGE + project RLS) is enforced inside the adapter; synced:false is
+      // returned verbatim with its exact reason and is never reported as a linkage success.
+      const synced = await withUboqRlsContext(
+        { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId },
+        async () => {
+          await assertUboqStageAuthorization(prisma, {
+            userId: actor.userId,
+            projectId,
+            capability: 'UBOQ_INTAKE_STAGE',
+          });
+          return tryAutoSyncProjectScheduleLinks(prisma as never, {
+            projectId,
+            actorUserId: actor.userId,
+          });
+        }
+      );
+      return NextResponse.json(redactUboqPayloadForRole(synced, actor.role), {
         headers: { 'Cache-Control': 'private, no-store' },
       });
     }

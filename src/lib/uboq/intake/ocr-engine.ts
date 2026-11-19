@@ -21,18 +21,98 @@ export interface OcrRecognizedPageGrid {
   }>;
 }
 
-function resolveOfflineTesseractLangPath(): string {
-  const candidates = [
-    path.join(process.cwd(), 'node_modules', '@tesseract.js-data', 'eng', '4.0.0_best_int'),
-    path.join(process.cwd(), 'node_modules', '@tesseract.js-data', 'eng', '4.0.0'),
-    path.resolve(__dirname, '..', '..', '..', '..', 'node_modules', '@tesseract.js-data', 'eng', '4.0.0_best_int'),
-  ];
+function firstExistingFile(candidates: string[]): string | null {
   for (const p of candidates) {
-    if (fs.existsSync(path.join(p, 'eng.traineddata.gz'))) {
-      return p;
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+    } catch {
+      /* continue */
+    }
+  }
+  return null;
+}
+
+function nodeModulesRoots(): string[] {
+  return [
+    path.join(process.cwd(), 'node_modules'),
+    path.resolve(__dirname, '..', '..', '..', '..', 'node_modules'),
+    path.resolve(__dirname, '..', '..', '..', '..', '..', '..', 'node_modules'),
+    path.resolve(__dirname, '..', '..', '..', '..', '..', 'node_modules'),
+  ];
+}
+
+function resolveOfflineTesseractLangPath(): string {
+  for (const root of nodeModulesRoots()) {
+    for (const variant of ['4.0.0_best_int', '4.0.0']) {
+      const dir = path.join(root, '@tesseract.js-data', 'eng', variant);
+      if (fs.existsSync(path.join(dir, 'eng.traineddata.gz'))) return dir;
     }
   }
   throw new Error('UBOQ_OCR_TRAINEDDATA_MISSING: Offline @tesseract.js-data/eng traineddata not found');
+}
+
+/**
+ * P9-DEF-OCR-01: the default tesseract.js worker path is built with path.join(__dirname, ...) and
+ * `new Worker(path)`, which Vercel's tracing does not follow. Resolve the worker script explicitly so it
+ * is both locatable and (via ocrAssetTracing in the backend / outputFileTracingIncludes in Next) shipped.
+ */
+function resolveTesseractWorkerScript(): string {
+  const found = firstExistingFile(
+    nodeModulesRoots().map((root) => path.join(root, 'tesseract.js', 'src', 'worker-script', 'node', 'index.js'))
+  );
+  if (!found) {
+    throw new Error('UBOQ_OCR_WORKER_SCRIPT_MISSING: tesseract.js node worker script not found in deployed bundle');
+  }
+  return found;
+}
+
+export const UBOQ_OCR_INIT_TIMEOUT_MS = 45_000;
+export const UBOQ_OCR_RECOGNIZE_TIMEOUT_MS = 90_000;
+
+class OcrTimeoutError extends Error {
+  constructor(stage: string, ms: number) {
+    super(`UBOQ_OCR_TIMEOUT: OCR ${stage} exceeded ${ms}ms and the worker was terminated`);
+    this.name = 'OcrTimeoutError';
+  }
+}
+
+/**
+ * Bounded execution that does NOT rely on Promise.race alone: on timeout the supplied onTimeout hook
+ * terminates the underlying worker thread so it cannot keep running after the request has failed.
+ */
+export function runWithBoundedTimeout<T>(
+  work: Promise<T>,
+  stage: string,
+  ms: number,
+  onTimeout: () => void
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        onTimeout();
+      } catch {
+        /* termination best-effort */
+      }
+      reject(new OcrTimeoutError(stage, ms));
+    }, ms);
+    work.then(
+      (v) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
 }
 
 interface TesseractWordLike {
@@ -180,14 +260,46 @@ export async function runRasterImageOcr(
   }
 
   const langPath = resolveOfflineTesseractLangPath();
-  const worker = await Tesseract.createWorker('eng', 1, {
+  const workerPath = resolveTesseractWorkerScript();
+
+  let worker: Awaited<ReturnType<typeof Tesseract.createWorker>> | null = null;
+  let terminated = false;
+  const terminateWorker = async () => {
+    if (terminated) return;
+    terminated = true;
+    try {
+      await worker?.terminate();
+    } catch {
+      /* already terminated */
+    }
+  };
+
+  const creation = Tesseract.createWorker('eng', 1, {
     langPath,
+    workerPath,
     gzip: true,
     cacheMethod: 'none',
   });
+  try {
+    worker = await runWithBoundedTimeout(creation, 'worker initialization', UBOQ_OCR_INIT_TIMEOUT_MS, () => {
+      // Worker not yet returned: terminate it as soon as creation eventually settles.
+      creation.then((w) => w.terminate()).catch(() => undefined);
+    });
+  } catch (err) {
+    creation.then((w) => w.terminate()).catch(() => undefined);
+    throw err;
+  }
 
   try {
-    const res = await worker.recognize(normalizedPng, {}, { blocks: true, text: true });
+    const activeWorker = worker;
+    const res = await runWithBoundedTimeout(
+      activeWorker.recognize(normalizedPng, {}, { blocks: true, text: true }),
+      'recognition',
+      UBOQ_OCR_RECOGNIZE_TIMEOUT_MS,
+      () => {
+        void terminateWorker();
+      }
+    );
     const data = res.data as unknown as Record<string, unknown>;
     const overallConfidence = Number(
       Math.max(0, Math.min(1, Number((data as { confidence?: number }).confidence ?? 0) / 100)).toFixed(4)
@@ -242,6 +354,6 @@ export async function runRasterImageOcr(
       rows,
     };
   } finally {
-    await worker.terminate();
+    await terminateWorker();
   }
 }

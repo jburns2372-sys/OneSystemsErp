@@ -9,6 +9,7 @@ import {
 import { assertUboqStageAuthorization } from '../../../../src/lib/uboq/security/stage-rbac';
 import { withUboqRlsContext } from '../../../../src/lib/uboq/project-ownership';
 import { resolveUboqVaultStorageProvider } from '../../../../src/lib/uboq/storage/vault-storage';
+import '../lib/uboq/ocrAssetTracing';
 import {
   approveOperationalSnapshotAndPrrs,
   forkApprovedSourceReviewRevision,
@@ -722,6 +723,37 @@ router.post('/project/:projectId/documents/:documentId/review-revision', async (
     const revision = await withUboqRlsContext({ userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId }, () =>
       forkApprovedSourceReviewRevision(prisma, { projectId, sourceDocumentId: documentId, preparedByUserId: actor.id }));
     return res.status(201).json(redactBackendObject(revision, (req as any).pbacContext?.simulatedRole || actor.role));
+  } catch (err: any) {
+    const message = String(err.message || '');
+    return res.status(mapUboqHttpErrorStatus(message)).json({ error: message });
+  }
+});
+
+router.post('/project/:projectId/sync-schedule-links', async (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const { projectId } = req.params;
+    const actorRole = (req as any).pbacContext?.simulatedRole || actor?.role || '';
+    const simRole = (req as any).pbacContext?.simulatedRole || null;
+
+    await assertUboqStageAuthorization(prisma, {
+      userId: actor?.id,
+      projectId,
+      capability: 'UBOQ_INTAKE_STAGE',
+      simulatedRole: simRole,
+    });
+
+    // Schedule-created-AFTER-approval path: idempotent re-run; synced:false returned verbatim with reason.
+    const result = await withUboqRlsContext(
+      { userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId },
+      () =>
+        tryAutoSyncProjectScheduleLinks(prisma, {
+          projectId,
+          actorUserId: actor.id,
+          simulatedRole: simRole,
+        })
+    );
+    return res.status(200).json(redactBackendObject(result, actorRole));
   } catch (err: any) {
     const message = String(err.message || '');
     return res.status(mapUboqHttpErrorStatus(message)).json({ error: message });
