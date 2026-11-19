@@ -4,8 +4,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "npx tsx watch src/index.ts",
-    "build": "prisma generate",
-    "postinstall": "prisma generate",
+    "build": "prisma generate --schema=../../prisma/schema.prisma",
+    "postinstall": "prisma generate --schema=../../prisma/schema.prisma",
     "typecheck": "tsc --noEmit",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -20,6 +20,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1083.0",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.19.3",
+    "@tesseract.js-data/eng": "^1.0.0",
     "@vercel/blob": "^2.9.0",
     "ai": "^6.0.221",
     "bcryptjs": "^3.0.3",
@@ -28,6 +29,9 @@
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
+    "pdf-parse": "^2.4.5",
+    "sharp": "^0.34.1",
+    "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

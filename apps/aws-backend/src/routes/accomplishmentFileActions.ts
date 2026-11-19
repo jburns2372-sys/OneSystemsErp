@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 import { uploadToS3 as put } from '../../../../src/lib/s3';
+import { put as putBlob } from '@vercel/blob';
 import ExcelJS from "exceljs";
 import fs from 'fs';
 import path from 'path';
@@ -11,26 +12,32 @@ const router = Router();
 
 // Helper function, moved from original Next.js Server Action
 async function saveFileLocallyOrBlob(directory: string, fileName: string, buffer: Buffer, contentType?: string): Promise<string> {
-  // NOTE: process.env.BLOB_READ_WRITE_TOKEN is Vercel-specific, for AWS we only consider S3.
-  // We'll assume if AWS_ACCESS_KEY_ID is set, we use S3, otherwise local storage (for dev/test)
   if (process.env.AWS_ACCESS_KEY_ID) {
     const blob = await put(`${directory}/${fileName}`, buffer, {
       access: 'public', // Or specific ACL
       contentType: contentType || "application/octet-stream",
     });
     return blob.url;
-  } else {
-    // Local storage path needs to be absolute for the AWS backend context
-    // This part might need adjustment based on where the Express app runs and its file system access
-    const uploadDir = path.join(process.cwd(), 'uploads', directory); // Using 'uploads' directory
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    fs.writeFileSync(path.join(uploadDir, fileName), buffer);
-    // For local storage, the URL would typically be served by the Express app itself or is internal.
-    // For simplicity, let's return a simulated URL for local.
-    return `${process.env.AWS_BACKEND_URL || 'http://localhost:4000'}/uploads/${directory}/${fileName}`; // Adjust if serving locally
   }
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blob = await putBlob(`${directory}/${fileName}`, buffer, {
+      access: 'private',
+      contentType: contentType || "application/octet-stream",
+    });
+    return blob.url;
+  }
+  if (process.env.VERCEL) {
+    throw new Error(
+      'DURABLE_UPLOAD_STORAGE_REQUIRED: Local filesystem uploads are disabled on Vercel serverless runtime. Configure BLOB_READ_WRITE_TOKEN or AWS S3.'
+    );
+  }
+  // Local storage fallback for non-serverless development only
+  const uploadDir = path.join(process.cwd(), 'uploads', directory);
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  fs.writeFileSync(path.join(uploadDir, fileName), buffer);
+  return `${process.env.AWS_BACKEND_URL || 'http://localhost:4000'}/uploads/${directory}/${fileName}`;
 }
 
 // Handler for uploadAccomplishmentFileAction

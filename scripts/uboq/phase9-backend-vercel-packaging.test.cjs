@@ -10,8 +10,8 @@ const BACKEND_ROOT = path.resolve(ROOT, 'apps', 'aws-backend');
 
 test('apps/aws-backend Vercel packaging is non-destructive and routes all paths to Express entrypoint', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(BACKEND_ROOT, 'package.json'), 'utf8'));
-  assert.equal(pkg.scripts?.build, 'prisma generate');
-  assert.equal(pkg.scripts?.postinstall, 'prisma generate');
+  assert.equal(pkg.scripts?.build, 'prisma generate --schema=../../prisma/schema.prisma');
+  assert.equal(pkg.scripts?.postinstall, 'prisma generate --schema=../../prisma/schema.prisma');
   for (const [name, script] of Object.entries(pkg.scripts || {})) {
     assert.doesNotMatch(
       String(script),
@@ -33,10 +33,20 @@ test('apps/aws-backend Vercel packaging is non-destructive and routes all paths 
 
   for (const dep of [
     '@aws-sdk/client-cognito-identity-provider',
+    '@tesseract.js-data/eng',
     'bcryptjs',
     'csv-parse',
+    'pdf-parse',
+    'sharp',
+    'tesseract.js',
     'xlsx',
   ]) {
     assert.ok(pkg.dependencies?.[dep], `apps/aws-backend/package.json must declare runtime dependency "${dep}"`);
+  }
+
+  for (const routeFile of ['documentActions.ts', 'accomplishmentFileActions.ts']) {
+    const src = fs.readFileSync(path.join(BACKEND_ROOT, 'src', 'routes', routeFile), 'utf8');
+    assert.match(src, /@vercel\/blob/, `${routeFile} must support durable Vercel Blob storage`);
+    assert.match(src, /DURABLE_UPLOAD_STORAGE_REQUIRED/, `${routeFile} must fail closed on Vercel without durable storage`);
   }
 });
