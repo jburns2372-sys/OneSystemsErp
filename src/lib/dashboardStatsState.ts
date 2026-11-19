@@ -38,7 +38,7 @@ export interface DashboardStatsBaseline {
   totalPayables: number;
   totalAccomplishments: number;
   pendingMRFs: number;
-  pendingPettyCash: number;
+  pendingPettyCash: number | null;
   activePayrollPeriods: number;
   openCanvassing: number;
   activePurchaseOrders: number;
@@ -65,6 +65,7 @@ export interface DashboardStatsResult extends DashboardStatsBaseline, DashboardS
   statsUnavailable: boolean;
   statsStatus: 'LIVE' | 'UNAVAILABLE';
   statsDiagnosticCode: DashboardStatsDiagnosticCode | null;
+  unavailableMetrics?: string[];
 }
 
 export const ZERO_DASHBOARD_STATS: Readonly<DashboardStatsBaseline> = Object.freeze({
@@ -164,9 +165,18 @@ export function normalizeLiveDashboardStats(payload: unknown): DashboardStatsRes
     return buildUnavailableDashboardStats('BACKEND_INVALID_PAYLOAD');
   }
 
-  const normalizedBaseline = {} as DashboardStatsBaseline;
+  const rawUnavailable = Array.isArray(record.unavailableMetrics)
+    ? record.unavailableMetrics.filter((k): k is string => typeof k === 'string' && k.length > 0)
+    : [];
+  const unavailableSet = new Set(rawUnavailable);
+
+  const normalizedBaseline = {} as Record<keyof DashboardStatsBaseline, number | null>;
   for (const key of REQUIRED_DASHBOARD_KEYS) {
     const val = record[key];
+    if (val === null && key === 'pendingPettyCash' && unavailableSet.has(key)) {
+      normalizedBaseline[key] = null;
+      continue;
+    }
     if (typeof val !== 'number' || !Number.isFinite(val)) {
       return buildUnavailableDashboardStats('BACKEND_INVALID_PAYLOAD');
     }
@@ -185,11 +195,12 @@ export function normalizeLiveDashboardStats(payload: unknown): DashboardStatsRes
   }
 
   return {
-    ...normalizedBaseline,
+    ...(normalizedBaseline as DashboardStatsBaseline),
     ...normalizedOptional,
     statsUnavailable: false,
     statsStatus: 'LIVE',
     statsDiagnosticCode: null,
+    ...(rawUnavailable.length > 0 ? { unavailableMetrics: rawUnavailable } : {}),
   };
 }
 
@@ -200,6 +211,9 @@ export function isDashboardStatsUnavailable(stats: any): boolean {
 export function formatDashboardCount(stats: any, value: unknown, suffix = ''): string {
   if (isDashboardStatsUnavailable(stats)) {
     return '—';
+  }
+  if (value === null) {
+    return 'Unavailable';
   }
   const numeric = Number(value ?? 0);
   if (!Number.isFinite(numeric)) {

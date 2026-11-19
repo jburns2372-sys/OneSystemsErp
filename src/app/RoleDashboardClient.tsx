@@ -230,7 +230,7 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
           </div>
           <div className={styles.statCard}>
             <h3>Petty Cash Low Balance</h3>
-            <p className={styles.statValue} style={{ color: statsUnavailable ? 'var(--text-secondary)' : stats.pendingPettyCash > 0 ? '#f97316' : '#22c55e' }}>{countText(stats?.pendingPettyCash, ' Accts')}</p>
+            <p className={styles.statValue} style={{ color: statsUnavailable || stats?.pendingPettyCash === null ? 'var(--text-secondary)' : stats.pendingPettyCash > 0 ? '#f97316' : '#22c55e' }}>{countText(stats?.pendingPettyCash, ' Accts')}</p>
             <Link href="/petty-cash" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Review Replenishments ➔</Link>
           </div>
           <div className={styles.statCard}>

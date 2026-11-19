@@ -288,22 +288,31 @@ export async function resetTransactionData(confirmationText: string) {
 
 export async function getCurrentUserRole() {
   try {
-    const cookieStore = await cookies();
-    const __session = await verifySession();
-  const sessionId = __session?.id || '';
-    const simulatedRole = cookieStore.get('simulatedRole')?.value;
-    
-    if (simulatedRole) return simulatedRole;
+    const session = await verifySession();
+    const sessionId = session?.id || '';
     if (!sessionId) return null;
 
-    const currentUser = await prisma.user.findUnique({ where: { id: sessionId }});
-    
-    if (!currentUser) {
-      const userCount = await prisma.user.count();
-      if (userCount === 0) return 'SUPER_ADMIN';
+    const currentUser = await prisma.user.findUnique({
+      where: { id: sessionId },
+      select: { role: true, status: true, lockedUntil: true },
+    });
+    if (
+      !currentUser ||
+      currentUser.status !== 'ACTIVE' ||
+      (currentUser.lockedUntil && currentUser.lockedUntil > new Date())
+    ) {
+      return null;
     }
 
-    return currentUser?.role || null;
+    const isSystemAdmin =
+      currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'SYSTEM_ADMIN';
+    if (isSystemAdmin) {
+      const cookieStore = await cookies();
+      const simulatedRole = (cookieStore.get('simulatedRole')?.value || '').trim();
+      if (simulatedRole) return simulatedRole;
+    }
+
+    return currentUser.role || null;
   } catch (e: any) {
     console.error('Failed to get current user role:', e);
     return null;
