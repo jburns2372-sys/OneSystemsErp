@@ -41,8 +41,8 @@ function nodeModulesRoots(): string[] {
   ];
 }
 
-function resolveOfflineTesseractLangPath(): string {
-  for (const root of nodeModulesRoots()) {
+export function resolveOfflineTesseractLangPath(roots: string[] = nodeModulesRoots()): string {
+  for (const root of roots) {
     for (const variant of ['4.0.0_best_int', '4.0.0']) {
       const dir = path.join(root, '@tesseract.js-data', 'eng', variant);
       if (fs.existsSync(path.join(dir, 'eng.traineddata.gz'))) return dir;
@@ -56,9 +56,9 @@ function resolveOfflineTesseractLangPath(): string {
  * `new Worker(path)`, which Vercel's tracing does not follow. Resolve the worker script explicitly so it
  * is both locatable and (via ocrAssetTracing in the backend / outputFileTracingIncludes in Next) shipped.
  */
-function resolveTesseractWorkerScript(): string {
+export function resolveTesseractWorkerScript(roots: string[] = nodeModulesRoots()): string {
   const found = firstExistingFile(
-    nodeModulesRoots().map((root) => path.join(root, 'tesseract.js', 'src', 'worker-script', 'node', 'index.js'))
+    roots.map((root) => path.join(root, 'tesseract.js', 'src', 'worker-script', 'node', 'index.js'))
   );
   if (!found) {
     throw new Error('UBOQ_OCR_WORKER_SCRIPT_MISSING: tesseract.js node worker script not found in deployed bundle');

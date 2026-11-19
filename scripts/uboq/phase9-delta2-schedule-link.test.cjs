@@ -29,7 +29,7 @@ function loadTsModule(relPath, mocks = {}) {
       return mocks[specifier];
     }
     if (specifier === '@prisma/client') {
-      return { Prisma };
+      return require('@prisma/client');
     }
     if (specifier.startsWith('./') || specifier.startsWith('../')) {
       const resolvedBase = path.resolve(path.dirname(absPath), specifier);

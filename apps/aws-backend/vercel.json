@@ -1,4 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "express"
+  "framework": "express",
+  "functions": {
+    "src/index.ts": {
+      "includeFiles": "node_modules/{tesseract.js/**,tesseract.js-core/**,wasm-feature-detect/**,bmp-js/**,node-fetch/**,whatwg-url/**,tr46/**,webidl-conversions/**,zlibjs/**,regenerator-runtime/**,is-url/**,idb-keyval/**,@tesseract.js-data/eng/4.0.0_best_int/**}"
+    }
+  }
 }

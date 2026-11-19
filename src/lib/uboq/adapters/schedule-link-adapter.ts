@@ -1,4 +1,4 @@
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { Prisma, ProjectScheduleWorkflowStatus, type PrismaClient } from '@prisma/client';
 import { assertUboqStageAuthorization } from '../security/stage-rbac';
 import { canConvertUom, normalizeUom } from '../uom-registry';
 
@@ -8,7 +8,16 @@ const QTY_TOLERANCE = new Prisma.Decimal('0.0001');
 const WEIGHT_TOLERANCE = new Prisma.Decimal('0.0001');
 
 const DISALLOWED_SCHEDULE_STATUSES = new Set(['ARCHIVED', 'DELETED', 'CANCELLED', 'REJECTED']);
-const DISALLOWED_WORKFLOW_STATUSES = new Set(['REJECTED', 'SUPERSEDED', 'ARCHIVED']);
+/**
+ * Workflow states that must never receive schedule links. Strongly typed against the Prisma enum so an invalid
+ * member is a compile error and can never reach the database filter (P9-DEF-SYNC-02).
+ */
+const DISALLOWED_WORKFLOW_STATUS_LIST: readonly ProjectScheduleWorkflowStatus[] = [
+  ProjectScheduleWorkflowStatus.REJECTED,
+  ProjectScheduleWorkflowStatus.SUPERSEDED_BASELINE,
+  ProjectScheduleWorkflowStatus.ARCHIVED_BASELINE,
+];
+const DISALLOWED_WORKFLOW_STATUSES: ReadonlySet<string> = new Set<string>(DISALLOWED_WORKFLOW_STATUS_LIST);
 
 export type NumericLike = Prisma.Decimal | number | string | null | undefined;
 
@@ -766,7 +775,7 @@ export async function tryAutoSyncProjectScheduleLinks(
     where: {
       projectId: params.projectId,
       status: { notIn: Array.from(DISALLOWED_SCHEDULE_STATUSES) },
-      workflowStatus: { notIn: Array.from(DISALLOWED_WORKFLOW_STATUSES) as never },
+      workflowStatus: { notIn: [...DISALLOWED_WORKFLOW_STATUS_LIST] },
     },
     orderBy: [{ updatedAt: 'desc' }],
     select: {
