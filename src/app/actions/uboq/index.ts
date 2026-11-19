@@ -16,7 +16,10 @@ import {
 } from '@/lib/uboq/adapters/snapshot-orchestrator';
 import { validateVisualColumnMapping } from '@/lib/uboq/visual-mapping';
 import { allocateVerifiedOpeningStockAtomically } from '@/lib/uboq/resource-ledger';
-import { syncUboqScheduleActivityLinks } from '@/lib/uboq/adapters/schedule-link-adapter';
+import {
+  syncUboqScheduleActivityLinks,
+  tryAutoSyncProjectScheduleLinks,
+} from '@/lib/uboq/adapters/schedule-link-adapter';
 import type { UboqSectorType } from '@prisma/client';
 
 export async function getProjectUboqDashboardAction(projectId: string) {
@@ -358,10 +361,17 @@ export async function approveUboqSnapshotAction(projectId: string, snapshotId: s
         throw new Error('UBOQ_CROSS_PROJECT_SPOOFING_BLOCKED: Snapshot does not belong to project');
       }
 
-      return approveOperationalSnapshotAndPrrs(prisma as never, {
+      const approved = await approveOperationalSnapshotAndPrrs(prisma as never, {
         snapshotId,
         approverUserId: actor.userId,
       });
+
+      const scheduleLinkSync = await tryAutoSyncProjectScheduleLinks(prisma as never, {
+        projectId,
+        actorUserId: actor.userId,
+      });
+
+      return { ...approved, scheduleLinkSync };
     }
   );
 

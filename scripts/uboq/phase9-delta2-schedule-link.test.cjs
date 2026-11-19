@@ -422,6 +422,72 @@ test('Delta 2: unauthorized actor is rejected before transaction starts', async 
   assert.equal(txCalled, false);
 });
 
+test('Delta 2: tryAutoSyncProjectScheduleLinks auto-links eligible ACTIVE_BASELINE schedule and safely skips when no schedule/allocations exist', async () => {
+  const adapter = loadAdapter();
+  const fx = makeBaseFixture();
+
+  // Case 1: No eligible schedule yet -> non-blocking skip
+  const emptyPrisma = {
+    projectSchedule: { findMany: async () => [] },
+  };
+  const skipped = await adapter.tryAutoSyncProjectScheduleLinks(emptyPrisma, {
+    projectId: fx.projectId,
+    actorUserId: 'u-director',
+  });
+  assert.equal(skipped.synced, false);
+  assert.equal(skipped.reason, 'NO_ELIGIBLE_SCHEDULE_OR_ALLOCATIONS');
+
+  // Case 2: Eligible ACTIVE_BASELINE schedule with allocations -> auto-syncs idempotently
+  const stored = new Map();
+  let seq = 1;
+  const tx = {
+    projectSchedule: { findUnique: async () => fx.schedule },
+    uboqOperationalSnapshot: { findFirst: async () => fx.approvedSnapshot },
+    uboqAwardedPhaseLine: { findMany: async () => fx.phaseLines },
+    scheduleActivity: { findMany: async () => fx.activities },
+    scheduleBOQAllocation: { findMany: async () => fx.allocations },
+    awardedBOQItem: { findMany: async () => fx.awardedBoqItems },
+    uboqScheduleActivityLink: {
+      findMany: async () => Array.from(stored.values()),
+      create: async ({ data }) => {
+        const pl = fx.phaseLines.find((p) => p.id === data.phaseLineId);
+        const rec = {
+          id: `auto-${seq++}`,
+          ...data,
+          phaseLine: {
+            snapshotId: pl.snapshotId,
+            awardedBoqItemId: pl.awardedBoqItemId,
+            phaseCode: pl.phaseCode,
+            sectionCode: pl.sectionCode,
+            itemCode: pl.itemCode,
+          },
+        };
+        stored.set(`${data.phaseLineId}::${data.activityId}`, rec);
+        return rec;
+      },
+      update: async ({ where, data }) => ({ id: where.id, ...data }),
+    },
+  };
+  const livePrisma = {
+    projectSchedule: {
+      findMany: async () => [
+        { id: 'sched-draft', workflowStatus: 'AI_GENERATED_DRAFT', _count: { boqAllocations: 1 } },
+        { id: fx.schedule.id, workflowStatus: 'ACTIVE_BASELINE', _count: { boqAllocations: 3 } },
+      ],
+    },
+    $transaction: async (fn) => fn(tx),
+  };
+
+  const autoRes = await adapter.tryAutoSyncProjectScheduleLinks(livePrisma, {
+    projectId: fx.projectId,
+    actorUserId: 'u-director',
+  });
+  assert.equal(autoRes.synced, true);
+  assert.equal(autoRes.scheduleId, fx.schedule.id);
+  assert.equal(autoRes.createdCount, 3);
+  assert.equal(autoRes.totalLinks, 3);
+});
+
 test('Delta 2: all 13/13 accepted R2 canonical baseline source files remain LF SHA-256 unchanged', () => {
   const ledger = JSON.parse(
     fs.readFileSync(path.resolve(ROOT, 'docs/uboq/phase9-accepted-baseline-ledger.json'), 'utf8')

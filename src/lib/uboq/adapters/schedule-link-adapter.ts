@@ -729,3 +729,88 @@ export async function syncUboqScheduleActivityLinks(
     };
   });
 }
+
+/**
+ * Narrow UBOQ-side automatic invocation hook called after BOQ snapshot approval.
+ * Discovers the project's active/latest eligible ProjectSchedule with existing
+ * ScheduleBOQAllocation rows and runs idempotent syncUboqScheduleActivityLinks
+ * without modifying the frozen scheduling engine or blocking snapshot approval
+ * when no schedule/allocations exist yet.
+ */
+export async function tryAutoSyncProjectScheduleLinks(
+  prismaInput: PrismaClient | { readonly $transaction: unknown },
+  params: {
+    projectId: string;
+    actorUserId: string;
+    simulatedRole?: string | null;
+  }
+): Promise<
+  | {
+      synced: true;
+      scheduleId: string;
+      createdCount: number;
+      updatedCount: number;
+      unchangedCount: number;
+      totalLinks: number;
+      incompletePhaseLineCount: number;
+    }
+  | {
+      synced: false;
+      scheduleId: string | null;
+      reason: string;
+    }
+> {
+  const prisma = prismaInput as PrismaClient;
+
+  const candidates = await prisma.projectSchedule.findMany({
+    where: {
+      projectId: params.projectId,
+      status: { notIn: Array.from(DISALLOWED_SCHEDULE_STATUSES) },
+      workflowStatus: { notIn: Array.from(DISALLOWED_WORKFLOW_STATUSES) as never },
+    },
+    orderBy: [{ updatedAt: 'desc' }],
+    select: {
+      id: true,
+      workflowStatus: true,
+      _count: { select: { boqAllocations: true } },
+    },
+  });
+
+  const target =
+    candidates.find((s) => s.workflowStatus === 'ACTIVE_BASELINE' && s._count.boqAllocations > 0) ??
+    candidates.find((s) => s._count.boqAllocations > 0) ??
+    null;
+
+  if (!target) {
+    return {
+      synced: false,
+      scheduleId: candidates[0]?.id ?? null,
+      reason: 'NO_ELIGIBLE_SCHEDULE_OR_ALLOCATIONS',
+    };
+  }
+
+  try {
+    const synced = await syncUboqScheduleActivityLinks(prisma, {
+      projectId: params.projectId,
+      scheduleId: target.id,
+      actorUserId: params.actorUserId,
+      simulatedRole: params.simulatedRole ?? null,
+      requireCompleteAllocation: false,
+    });
+    return {
+      synced: true,
+      scheduleId: synced.scheduleId,
+      createdCount: synced.createdCount,
+      updatedCount: synced.updatedCount,
+      unchangedCount: synced.unchangedCount,
+      totalLinks: synced.totalLinks,
+      incompletePhaseLineCount: synced.incompletePhaseLineCount,
+    };
+  } catch (err: unknown) {
+    return {
+      synced: false,
+      scheduleId: target.id,
+      reason: err instanceof Error ? err.message : String(err),
+    };
+  }
+}

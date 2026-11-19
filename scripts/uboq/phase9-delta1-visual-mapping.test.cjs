@@ -234,6 +234,12 @@ function buildActionsModule({
         throw new Error('should not be called');
       },
     },
+    '@/lib/uboq/adapters/schedule-link-adapter': {
+      syncUboqScheduleActivityLinks: async () => {
+        throw new Error('should not be called');
+      },
+      tryAutoSyncProjectScheduleLinks: async () => ({ synced: false, scheduleId: null, reason: 'MOCKED' }),
+    },
     '@/lib/uboq/adapters/snapshot-orchestrator': {
       approveOperationalSnapshotAndPrrs: async () => {
         calls.approveCalls.push(true);

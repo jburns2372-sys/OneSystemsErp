@@ -17,7 +17,10 @@ import {
   resolveExtractionCandidateHumanReview,
   resolveUboqValidationException,
 } from '../../../../src/lib/uboq/adapters/snapshot-orchestrator';
-import { syncUboqScheduleActivityLinks } from '../../../../src/lib/uboq/adapters/schedule-link-adapter';
+import {
+  syncUboqScheduleActivityLinks,
+  tryAutoSyncProjectScheduleLinks,
+} from '../../../../src/lib/uboq/adapters/schedule-link-adapter';
 
 const router = Router();
 
@@ -384,11 +387,18 @@ router.post('/project/:projectId/snapshots/:snapshotId/approve', async (req, res
 
     const approved = await withUboqRlsContext(
       { userId: actor.id, sessionVersion: actor.sessionVersion ?? 0, projectId },
-      () =>
-        approveOperationalSnapshotAndPrrs(prisma, {
+      async () => {
+        const resApproved = await approveOperationalSnapshotAndPrrs(prisma, {
           snapshotId,
           approverUserId: actor.id,
-        })
+        });
+        const scheduleLinkSync = await tryAutoSyncProjectScheduleLinks(prisma, {
+          projectId,
+          actorUserId: actor.id,
+          simulatedRole: simRole,
+        });
+        return { ...resApproved, scheduleLinkSync };
+      }
     );
 
     return res.json(redactBackendObject(approved, actorRole));
