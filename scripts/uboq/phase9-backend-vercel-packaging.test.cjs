@@ -49,4 +49,18 @@ test('apps/aws-backend Vercel packaging is non-destructive and routes all paths 
     assert.match(src, /SERVERLESS_LEGACY_UPLOAD_UNSUPPORTED/, `${routeFile} must fail closed on Vercel serverless runtime`);
     assert.match(src, /status\(501\)/, `${routeFile} must return 501 for unsupported serverless base64 JSON uploads`);
   }
+
+  const accSrc = fs.readFileSync(path.join(BACKEND_ROOT, 'src', 'routes', 'accomplishmentFileActions.ts'), 'utf8');
+  for (const writePath of [
+    '/uploadAccomplishmentFileAction',
+    '/createWorkingCopyAction',
+    '/saveFileEditAction',
+    '/saveAsNewAccomplishmentFileAction',
+    '/createSuccessiveBillingAction',
+  ]) {
+    assert.ok(
+      accSrc.includes(`'${writePath}'`),
+      `accomplishmentFileActions.ts serverless 501 middleware must cover ${writePath}`
+    );
+  }
 });

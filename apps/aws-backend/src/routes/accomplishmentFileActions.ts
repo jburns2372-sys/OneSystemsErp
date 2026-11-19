@@ -9,6 +9,30 @@ import path from 'path';
 
 const router = Router();
 
+const SERVERLESS_UNSUPPORTED_ACCOMPLISHMENT_WRITE_PATHS = new Set([
+  '/uploadAccomplishmentFileAction',
+  '/createWorkingCopyAction',
+  '/saveFileEditAction',
+  '/saveAsNewAccomplishmentFileAction',
+  '/createSuccessiveBillingAction',
+]);
+
+router.use((req, res, next) => {
+  if (
+    process.env.VERCEL &&
+    req.method === 'POST' &&
+    SERVERLESS_UNSUPPORTED_ACCOMPLISHMENT_WRITE_PATHS.has(req.path)
+  ) {
+    return res.status(501).json({
+      success: false,
+      error: 'SERVERLESS_LEGACY_UPLOAD_UNSUPPORTED',
+      message:
+        'Legacy base64 JSON / local-disk accomplishment write endpoints are disabled on Vercel serverless runtime (4.5 MB body limit and ephemeral disk). Use the governed direct-to-Blob intake flow.',
+    });
+  }
+  return next();
+});
+
 // Helper function, moved from original Next.js Server Action
 async function saveFileLocallyOrBlob(directory: string, fileName: string, buffer: Buffer, contentType?: string): Promise<string> {
   if (process.env.VERCEL) {
@@ -35,14 +59,6 @@ async function saveFileLocallyOrBlob(directory: string, fileName: string, buffer
 // Handler for uploadAccomplishmentFileAction
 router.post('/uploadAccomplishmentFileAction', async (req, res) => {
   try {
-    if (process.env.VERCEL) {
-      return res.status(501).json({
-        success: false,
-        error: 'SERVERLESS_LEGACY_UPLOAD_UNSUPPORTED',
-        message:
-          'Legacy base64 JSON accomplishment uploads are disabled on Vercel serverless runtime (4.5 MB body limit and ephemeral disk). Use the governed direct-to-Blob intake flow.',
-      });
-    }
     const { projectId, base64File, fileName, fileType, fileSize, currentUserId } = req.body;
 
     if (!base64File || !fileName || !projectId) {
