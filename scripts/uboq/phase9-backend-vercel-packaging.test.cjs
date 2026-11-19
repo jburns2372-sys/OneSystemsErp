@@ -30,4 +30,13 @@ test('apps/aws-backend Vercel packaging is non-destructive and routes all paths 
   const indexSrc = fs.readFileSync(path.join(BACKEND_ROOT, 'src', 'index.ts'), 'utf8');
   assert.match(indexSrc, /if\s*\(\s*!process\.env\.VERCEL\s*\)/);
   assert.match(indexSrc, /export\s+default\s+app\b/);
+
+  for (const dep of [
+    '@aws-sdk/client-cognito-identity-provider',
+    'bcryptjs',
+    'csv-parse',
+    'xlsx',
+  ]) {
+    assert.ok(pkg.dependencies?.[dep], `apps/aws-backend/package.json must declare runtime dependency "${dep}"`);
+  }
 });
