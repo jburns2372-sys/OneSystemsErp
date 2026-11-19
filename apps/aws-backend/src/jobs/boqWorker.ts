@@ -68,23 +68,11 @@ export async function runBoqUploadJob(jobId: string, projectId: string | null | 
       });
     }
 
-    let targetProjectId = projectId;
+    const targetProjectId = projectId;
     if (!targetProjectId) {
-      if (!projectName) {
-        // Fallback to fileName without extension if no project name is found inside the sheet
-        projectName = fileName.replace(/\.[^/.]+$/, "") || `New Project ${new Date().toISOString().split('T')[0]}`;
-      }
-      const newProject = await prisma.project.create({
-        data: {
-          name: projectName,
-          location: location || "",
-          description: subject || "Uploaded from BOQ Template Center",
-          status: "PLANNING",
-          startDate: new Date(),
-          endDate: new Date(),
-        }
-      });
-      targetProjectId = newProject.id;
+      throw new Error(
+        'PROJECT_ID_REQUIRED: Implicit project creation during BOQ upload is disabled. Create the project first via the governed createProjectProfile workflow.'
+      );
     }
 
     // Helper to safely get string from cell (handles rich text)

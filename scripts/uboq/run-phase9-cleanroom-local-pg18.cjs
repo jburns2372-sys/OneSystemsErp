@@ -1745,6 +1745,25 @@ async function main() {
       }
     });
 
+    // Shut down local PostgreSQL and verify disposable cleanroom directory is completely removed
+    // BEFORE reporting PASS or writing a PASS receipt.
+    if (runtimePrisma) {
+      await runtimePrisma.$disconnect().catch(() => {});
+      runtimePrisma = null;
+    }
+    while (openClients.length > 0) {
+      const c = openClients.pop();
+      await c.end().catch(() => {});
+    }
+    if (clusterStarted) {
+      runPgBin('pg_ctl', ['-D', dataDir, '-m', 'fast', '-w', 'stop'], {}, 60000, true);
+      clusterStarted = false;
+    }
+    fs.rmSync(runtimeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 });
+    if (fs.existsSync(runtimeDir)) {
+      throw new Error(`Cleanroom scratch directory was not deleted after stop: ${runtimeDir}`);
+    }
+
     report.completedAt = new Date().toISOString();
     report.status = 'PASS';
 
@@ -1773,17 +1792,29 @@ async function main() {
     if (runtimePrisma) {
       await runtimePrisma.$disconnect().catch(() => {});
     }
-    for (const c of openClients) {
+    while (openClients.length > 0) {
+      const c = openClients.pop();
       await c.end().catch(() => {});
     }
     if (clusterStarted) {
       try {
         runPgBin('pg_ctl', ['-D', dataDir, '-m', 'fast', '-w', 'stop'], {}, 60000, true);
-      } catch {}
+      } catch (stopErr) {
+        console.error('CLEANROOM_PG_STOP_ERROR:', stopErr?.message || stopErr);
+      }
     }
-    try {
-      fs.rmSync(runtimeDir, { recursive: true, force: true });
-    } catch {}
+    if (fs.existsSync(runtimeDir)) {
+      try {
+        fs.rmSync(runtimeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 });
+      } catch (rmErr) {
+        console.error('CLEANROOM_SCRATCH_DELETE_ERROR:', rmErr?.message || rmErr);
+        process.exitCode = 1;
+      }
+      if (fs.existsSync(runtimeDir)) {
+        console.error(`CLEANROOM_SCRATCH_STILL_EXISTS: ${runtimeDir}`);
+        process.exitCode = 1;
+      }
+    }
   }
 }
 

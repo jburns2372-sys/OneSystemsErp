@@ -143,3 +143,47 @@ test('legacy mutations.ts:createProject fails closed with zero DB/Blob side effe
     /LEGACY_CREATE_PROJECT_DISABLED/
   );
 });
+
+
+test('legacy Gate 7 import route and backend BOQ worker cannot bypass atomic signed-RLS project creation', () => {
+  const gate7Route = fs.readFileSync(
+    path.join(ROOT, 'src', 'app', 'api', 'gate7', 'import', 'route.ts'),
+    'utf8'
+  );
+  assert.match(gate7Route, /LEGACY_GATE7_IMPORT_DISABLED/);
+  assert.match(gate7Route, /status:\s*410/);
+  assert.doesNotMatch(gate7Route, /prisma\.project\.create/);
+
+  const boqWorker = fs.readFileSync(
+    path.join(ROOT, 'apps', 'aws-backend', 'src', 'jobs', 'boqWorker.ts'),
+    'utf8'
+  );
+  assert.match(boqWorker, /PROJECT_ID_REQUIRED/);
+  assert.doesNotMatch(boqWorker, /prisma\.project\.create/);
+});
+
+test('cleanroom inventory SQL rejects oserp logins reaching non-oserp BYPASSRLS/SUPERUSER roles', () => {
+  const sql = fs.readFileSync(
+    path.join(ROOT, 'scripts', 'uboq', 'phase9-cleanroom-inventory.sql'),
+    'utf8'
+  );
+  assert.match(sql, /RUNTIME_LOGIN_REACHES_PRIVILEGED_TARGET:/);
+  assert.match(sql, /mc\.granted_bypassrls/);
+  assert.match(sql, /mc\.granted_super/);
+  assert.match(sql, /mc\.can_assume_or_inherit/);
+});
+
+test('local PG 18 cleanroom runner fails if disposable scratch directory cannot be deleted', () => {
+  const runner = fs.readFileSync(
+    path.join(ROOT, 'scripts', 'uboq', 'run-phase9-cleanroom-local-pg18.cjs'),
+    'utf8'
+  );
+  assert.match(runner, /Cleanroom scratch directory was not deleted after stop/);
+  assert.match(runner, /CLEANROOM_SCRATCH_DELETE_ERROR:/);
+  assert.match(runner, /CLEANROOM_SCRATCH_STILL_EXISTS:/);
+  assert.ok(
+    runner.indexOf('Cleanroom scratch directory was not deleted after stop') <
+      runner.indexOf("report.status = 'PASS'"),
+    'Scratch deletion verification must run before marking status PASS'
+  );
+});

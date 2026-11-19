@@ -154,10 +154,15 @@ WITH RECURSIVE membership_closure AS (
     m_role.rolcanlogin AS member_can_login,
     g_role.oid AS target_role_oid,
     g_role.rolname AS granted_role,
+    g_role.rolbypassrls AS granted_bypassrls,
+    g_role.rolsuper AS granted_super,
+    g_role.rolcreaterole AS granted_createrole,
+    g_role.rolcreatedb AS granted_createdb,
     am.admin_option AS any_edge_admin,
     am.admin_option AS exercisable_admin,
     am.inherit_option AS all_inherit,
     am.set_option AS all_set,
+    (am.inherit_option OR am.set_option) AS can_assume_or_inherit,
     ARRAY[m_role.oid, g_role.oid] AS visited
   FROM pg_auth_members am
   JOIN pg_roles m_role ON m_role.oid = am.member
@@ -169,10 +174,15 @@ WITH RECURSIVE membership_closure AS (
     mc.member_can_login,
     parent_role.oid AS target_role_oid,
     parent_role.rolname AS granted_role,
+    parent_role.rolbypassrls AS granted_bypassrls,
+    parent_role.rolsuper AS granted_super,
+    parent_role.rolcreaterole AS granted_createrole,
+    parent_role.rolcreatedb AS granted_createdb,
     (mc.any_edge_admin OR am2.admin_option) AS any_edge_admin,
     ((mc.all_set OR mc.all_inherit) AND am2.admin_option) AS exercisable_admin,
     (mc.all_inherit AND am2.inherit_option) AS all_inherit,
     (mc.all_set AND am2.set_option) AS all_set,
+    (mc.can_assume_or_inherit AND (am2.inherit_option OR am2.set_option)) AS can_assume_or_inherit,
     mc.visited || parent_role.oid
   FROM membership_closure mc
   JOIN pg_auth_members am2 ON am2.member = mc.target_role_oid
@@ -269,6 +279,20 @@ violations AS (
       )
       OR (mc.member_role IN ('oserp_preview_runtime_app', 'oserp_preview_direct_app') AND mc.granted_role <> 'oserp_compat_app')
       OR (mc.member_role = 'oserp_preview_payroll_app' AND mc.granted_role <> 'oserp_company_payroll_app')
+    )
+
+  UNION ALL
+  -- Reject ANY oserp_* login reaching ANY role (including non-oserp_* roles) with BYPASSRLS,
+  -- SUPERUSER, CREATEROLE, or CREATEDB via direct/transitive membership, INHERIT, SET, or ADMIN.
+  SELECT 'RUNTIME_LOGIN_REACHES_PRIVILEGED_TARGET:' || mc.member_role || '->' || mc.granted_role
+  FROM membership_closure mc
+  WHERE mc.member_can_login
+    AND mc.member_role ~* '^oserp_'
+    AND (
+      mc.granted_bypassrls
+      OR mc.granted_super
+      OR mc.granted_createrole
+      OR mc.granted_createdb
     )
 
   UNION ALL
