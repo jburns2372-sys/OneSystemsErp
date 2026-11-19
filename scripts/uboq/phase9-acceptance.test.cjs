@@ -26,8 +26,11 @@ const response = { NextResponse: Response };
 const taxEngine = () => load('src/lib/uboq/tax-engine.ts');
 function intakeFixture(overrides = {}) {
   const calls = [];
+  const approveCalls = [];
+  const syncCalls = [];
   const db = { project: { findUnique: async () => ({ projectCategory: 'CORPORATE' }) },
-    uboqSourceDocument:{findFirst:async()=>({metadataJson:{stagedIntakeOptions:{sectorType:'CORPORATE',taxProfileCode:'CORP_PH_VAT_EXCL_12'}}})} };
+    uboqSourceDocument:{findFirst:async()=>({metadataJson:{stagedIntakeOptions:{sectorType:'CORPORATE',taxProfileCode:'CORP_PH_VAT_EXCL_12'}}})},
+    uboqOperationalSnapshot:{findUnique:async()=>({id:'snap-1',projectId:'synthetic-project'})} };
   const deps = {
     'next/server': response, '@/lib/prisma': { prisma: db },
     '@/lib/dal/auth': { verifyOperationalSession: async () => actor },
@@ -39,10 +42,16 @@ function intakeFixture(overrides = {}) {
     '@/lib/uboq/adapters/snapshot-orchestrator': {
       ingestAndStageProjectUboqPackage: async (_db, p) => { calls.push(p); return { snapshot: { status: 'DRAFT' } }; },
       regenerateDraftSnapshotFromVerifiedDocument:async(_db,p)=>{calls.push(p);return {snapshot:{status:'DRAFT'}};},
+      approveOperationalSnapshotAndPrrs: async (_db, p) => { approveCalls.push(p); return { snapshotId: p.snapshotId, status: 'APPROVED' }; },
+      resolveExtractionCandidateHumanReview: async () => ({}),
+    },
+    // Explicit minimal mock (deny-by-default loader preserved): records every schedule-sync invocation.
+    '@/lib/uboq/adapters/schedule-link-adapter': {
+      tryAutoSyncProjectScheduleLinks: async (_db, p) => { syncCalls.push(p); return { synced: true, scheduleId: 'sched-1', createdCount: 1, updatedCount: 0, unchangedCount: 0, totalLinks: 1, incompletePhaseLineCount: 0 }; },
     },
     ...overrides,
   };
-  return { calls, db, post: load('src/app/api/uboq/intake/route.ts', deps).POST };
+  return { calls, approveCalls, syncCalls, db, post: load('src/app/api/uboq/intake/route.ts', deps).POST };
 }
 function request(fields = {}) {
   const form = new FormData();
@@ -55,8 +64,48 @@ for (const fields of [{}, { sectorType: 'CORPORATE' }, { sectorType: 'CORPORATE'
   test('BOQ rejects missing/invalid/project-incompatible confirmation: ' + JSON.stringify(fields), async () => {
     const f = intakeFixture(); const res = await f.post(request(fields));
     assert.equal(res.status, 400); assert.equal(f.calls.length, 0);
+    // Invalid multipart intake must never reach snapshot approval or schedule sync.
+    assert.equal(f.approveCalls.length, 0); assert.equal(f.syncCalls.length, 0);
   });
 }
+const jsonPost = (body) => new Request('http://fixture/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+test('APPROVE_SNAPSHOT approves then runs the schedule-link sync with the verified actor and project', async () => {
+  const f = intakeFixture();
+  const res = await f.post(jsonPost({ action: 'APPROVE_SNAPSHOT', projectId: 'synthetic-project', snapshotId: 'snap-1' }));
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.status, 'APPROVED');
+  assert.equal(f.approveCalls.length, 1);
+  assert.equal(f.syncCalls.length, 1);
+  assert.equal(f.syncCalls[0].projectId, 'synthetic-project');
+  assert.equal(f.syncCalls[0].actorUserId, 'synthetic-user');
+  assert.equal(body.scheduleLinkSync.synced, true);
+});
+test('APPROVE_SNAPSHOT reports synced:false verbatim and never treats it as success', async () => {
+  const f = intakeFixture({ '@/lib/uboq/adapters/schedule-link-adapter': { tryAutoSyncProjectScheduleLinks: async () => ({ synced: false, scheduleId: null, reason: 'NO_ELIGIBLE_SCHEDULE_OR_ALLOCATIONS' }) } });
+  const body = await (await f.post(jsonPost({ action: 'APPROVE_SNAPSHOT', projectId: 'synthetic-project', snapshotId: 'snap-1' }))).json();
+  assert.equal(body.status, 'APPROVED');
+  assert.equal(body.scheduleLinkSync.synced, false);
+  assert.equal(body.scheduleLinkSync.reason, 'NO_ELIGIBLE_SCHEDULE_OR_ALLOCATIONS');
+});
+test('APPROVE_SNAPSHOT denies cross-project snapshots and unauthorized actors before approval or sync', async () => {
+  const cross = intakeFixture();
+  cross.db.uboqOperationalSnapshot.findUnique = async () => ({ id: 'snap-x', projectId: 'other-project' });
+  assert.equal((await cross.post(jsonPost({ action: 'APPROVE_SNAPSHOT', projectId: 'synthetic-project', snapshotId: 'snap-x' }))).status, 403);
+  assert.equal(cross.approveCalls.length, 0); assert.equal(cross.syncCalls.length, 0);
+  const denied = intakeFixture({ '@/lib/uboq/security/stage-rbac': { assertUboqStageAuthorization: async () => { throw Error('PBAC_DENIED'); } } });
+  assert.equal((await denied.post(jsonPost({ action: 'APPROVE_SNAPSHOT', projectId: 'synthetic-project', snapshotId: 'snap-1' }))).status, 403);
+  assert.equal(denied.approveCalls.length, 0); assert.equal(denied.syncCalls.length, 0);
+});
+test('SYNC_SCHEDULE_LINKS (schedule created after approval) is authorized and reports the adapter result', async () => {
+  const f = intakeFixture();
+  const res = await f.post(jsonPost({ action: 'SYNC_SCHEDULE_LINKS', projectId: 'synthetic-project' }));
+  assert.equal(res.status, 200);
+  assert.equal(f.syncCalls.length, 1); assert.equal(f.approveCalls.length, 0);
+  const denied = intakeFixture({ '@/lib/uboq/security/stage-rbac': { assertUboqStageAuthorization: async () => { throw Error('PBAC_DENIED'); } } });
+  assert.equal((await denied.post(jsonPost({ action: 'SYNC_SCHEDULE_LINKS', projectId: 'synthetic-project' }))).status, 403);
+  assert.equal(denied.syncCalls.length, 0);
+});
 test('BOQ passes explicitly confirmed compatible profile and remains DRAFT', async () => {
   const f = intakeFixture(); const res = await f.post(request({ sectorType: 'CORPORATE', taxProfileCode: 'CORP_PH_VAT_INCL_12' }));
   assert.equal(res.status, 201); assert.equal(f.calls[0].taxProfileCode, 'CORP_PH_VAT_INCL_12');
