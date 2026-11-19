@@ -18,7 +18,7 @@ function permissionsHarness(primary = 'ACCOUNTANT', options = {}) {
     userRole: { findMany: async () => { if (options.failAssignments) throw new Error('DB unavailable'); return (options.assigned || []).map(role => ({ role })); } },
     role: { findFirst: async ({where}) => roles.find(r => where.OR.some(q => Object.entries(q).every(([k,v]) => r[k] === v))) || null },
   };
-  const api = loadTs('src/lib/permissions.ts', { '@/lib/prisma': { prisma }, 'next/headers': { cookies: async () => ({get: () => options.simulate ? {value: options.simulate} : undefined}) } });
+  const api = loadTs('src/lib/permissions.ts', { './prisma': { prisma }, 'next/headers': { cookies: async () => ({get: () => options.simulate ? {value: options.simulate} : undefined}) } });
   return { api, prisma, user };
 }
 function accessHarness(options = {}) {
@@ -33,7 +33,7 @@ function accessHarness(options = {}) {
     auditLog: { create: async () => { audits++; return {id:'audit'}; } },
   };
   const permissionApi = { getUserPermissions: async () => permissions, getPermissionsForRole: async () => options.projectPermissions || {} };
-  const access = loadTs('src/lib/accessControl.ts', {'@/lib/prisma':{prisma}, '@/lib/permissions':permissionApi});
+  const access = loadTs('src/lib/accessControl.ts', {'./prisma':{prisma}, './permissions':permissionApi});
   const engine = loadTs('src/lib/securityEngine.ts', {'@/lib/prisma':{prisma}, '@/lib/permissions':permissionApi, './securityLogger':{logFullSecurityEvent:async()=>{}}});
   const scheduling = loadTs('src/lib/scheduling/authUtils.ts', {'@/lib/prisma':{prisma}, '@/lib/permissions':permissionApi, '@/lib/dal/auth':{verifySession:async()=>user}, 'next/headers':{cookies:async()=>({get:()=>undefined})}});
   return {access,engine,scheduling,audits:()=>audits};

@@ -33,6 +33,8 @@ jobs:
         run: node --test --test-name-pattern='real scanner' scripts/uboq/phase9-acceptance.test.cjs
       - name: Run complete credential-free Phase 9 acceptance fixture
         run: node --test scripts/uboq/phase9-acceptance.test.cjs
+      - name: Test backend deployment packaging and CommonJS runtime imports
+        run: node --test scripts/uboq/phase9-backend-vercel-packaging.test.cjs scripts/uboq/backend-runtime-packaging.test.cjs
       - name: Type-check ZIP security scanner and DOCX parser
         run: npx tsc --noEmit --pretty false --skipLibCheck --target ES2022 --module commonjs --moduleResolution node --types node --esModuleInterop src/lib/uboq/intake/security-guard.ts src/lib/uboq/intake/parsers.ts
       - name: Generate Prisma client for full-project typecheck

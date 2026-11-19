@@ -17,7 +17,7 @@ function load(primary,assignedGuest=false){
   const exports={};
   const result=ts.transpileModule(fs.readFileSync('src/lib/permissions.ts','utf8'),{reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}});
   assert.equal(result.diagnostics.length,0);
-  vm.runInNewContext(result.outputText,{exports,require:n=>n==='@/lib/prisma'?{prisma}:n==='next/headers'?{cookies:async()=>({get:()=>undefined})}:n==='./authorizationActions'?loadTs('src/lib/authorizationActions.ts'):(()=>{throw new Error('Unexpected dependency');})()});
+  vm.runInNewContext(result.outputText,{exports,require:n=>n==='./prisma'?{prisma}:n==='next/headers'?{cookies:async()=>({get:()=>undefined})}:n==='./authorizationActions'?loadTs('src/lib/authorizationActions.ts'):(()=>{throw new Error('Unexpected dependency');})()});
   return exports;
 }
 for(const guest of ['GUEST_USER','GUEST USER'])test(`${guest} honors explicit deny in user and simulated role paths`,async()=>{
