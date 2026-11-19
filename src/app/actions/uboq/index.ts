@@ -14,6 +14,7 @@ import {
   type ResourceTakeoffSpecInput,
 } from '@/lib/uboq/adapters/snapshot-orchestrator';
 import { allocateVerifiedOpeningStockAtomically } from '@/lib/uboq/resource-ledger';
+import { syncUboqScheduleActivityLinks } from '@/lib/uboq/adapters/schedule-link-adapter';
 import type { UboqSectorType } from '@prisma/client';
 
 export async function getProjectUboqDashboardAction(projectId: string) {
@@ -275,6 +276,34 @@ export async function allocateUboqOpeningStockAction(input: {
         verifiedByUserId: actor.userId,
       });
     }
+  );
+
+  revalidatePath(`/projects/${input.projectId}/uboq`);
+  return redactUboqPayloadForRole(res, actor.role);
+}
+
+export async function syncUboqScheduleLinksAction(input: {
+  projectId: string;
+  scheduleId: string;
+  requireCompleteAllocation?: boolean;
+}) {
+  const actor = await verifyOperationalSession();
+  if (!actor) {
+    throw new Error('UBOQ_UNAUTHORIZED: Active operational session required');
+  }
+  if (!input.projectId?.trim() || !input.scheduleId?.trim()) {
+    throw new Error('UBOQ_SCHEDULE_INVALID_INPUT: projectId and scheduleId are required');
+  }
+
+  const res = await withUboqRlsContext(
+    { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId: input.projectId },
+    async () =>
+      syncUboqScheduleActivityLinks(prisma as never, {
+        projectId: input.projectId,
+        scheduleId: input.scheduleId,
+        actorUserId: actor.userId,
+        requireCompleteAllocation: Boolean(input.requireCompleteAllocation),
+      })
   );
 
   revalidatePath(`/projects/${input.projectId}/uboq`);
