@@ -38,6 +38,7 @@ interface Props {
 }
 
 type StatusFilter = 'ALL' | 'PENDING' | 'HUMAN_VERIFIED' | 'HUMAN_EXCLUDED';
+type SheetKindFilter = 'ALL' | 'BOQ' | 'SUPPORTING';
 type AdvancedSubTab = 'mapping' | 'diagnostics';
 
 const LOCAL_PROFILES_STORAGE_KEY_PREFIX = 'oserp_uboq_input_mapping_profiles_v1:';
@@ -75,6 +76,8 @@ export default function VisualMappingReviewClient({
 
   const [selectedDocId, setSelectedDocId] = useState<string>(sourceDocuments[0]?.id ?? '');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [sheetKindFilter, setSheetKindFilter] = useState<SheetKindFilter>('ALL');
+  const [focusedCandidateId, setFocusedCandidateId] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   // Advanced Tools hidden by default for ordinary ERP users
@@ -143,10 +146,44 @@ export default function VisualMappingReviewClient({
     [selectedDoc]
   );
 
+  const boqSheetRowCount = useMemo(
+    () => readableRows.filter(({ row }) => row.sheetKind === 'BOQ').length,
+    [readableRows]
+  );
+  const supportingSheetRowCount = useMemo(
+    () => readableRows.filter(({ row }) => row.sheetKind === 'SUPPORTING').length,
+    [readableRows]
+  );
+  const hasMultipleSheetKinds = boqSheetRowCount > 0 && supportingSheetRowCount > 0;
+
   const filteredRows = useMemo(() => {
-    if (statusFilter === 'ALL') return readableRows;
-    return readableRows.filter(({ row }) => row.statusKey === statusFilter);
-  }, [readableRows, statusFilter]);
+    return readableRows.filter(({ row }) => {
+      if (statusFilter !== 'ALL' && row.statusKey !== statusFilter) return false;
+      if (sheetKindFilter !== 'ALL' && row.sheetKind !== sheetKindFilter) return false;
+      return true;
+    });
+  }, [readableRows, statusFilter, sheetKindFilter]);
+
+  function jumpToNextUncertainItem() {
+    if (pendingCandidates.length === 0) return;
+    setStatusFilter('PENDING');
+    setSheetKindFilter('ALL');
+    const currentIdx = focusedCandidateId
+      ? pendingCandidates.findIndex((c) => c.id === focusedCandidateId)
+      : -1;
+    const next = pendingCandidates[(currentIdx + 1) % pendingCandidates.length];
+    if (!next) return;
+    setFocusedCandidateId(next.id);
+    if (typeof document !== 'undefined') {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`uboq-review-note-${next.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus();
+        }
+      });
+    }
+  }
 
   const openExceptions = useMemo(() => exceptions.filter((e) => e.status === 'OPEN'), [exceptions]);
   const isDocLockedByApproval = Boolean(selectedDoc?.isApprovedImmutable);
@@ -551,6 +588,85 @@ export default function VisualMappingReviewClient({
         </div>
       ) : (
         <>
+          {/* Review Queue Guidance Banner (Highlights Uncertain Items & Explains Audit Notes in Plain Language) */}
+          {pendingCandidates.length > 0 && canReview && !isDocLockedByApproval && (
+            <div
+              role="region"
+              aria-label="Items needing review"
+              style={{
+                padding: '12px 14px',
+                borderRadius: '10px',
+                marginBottom: '14px',
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.42)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ flex: '1 1 320px' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fde68a' }}>
+                  Review Queue: {pendingCandidates.length} item(s) need your check before saving the Draft
+                </div>
+                <div style={{ fontSize: '0.79rem', color: '#cbd5e1', marginTop: '3px', lineHeight: 1.4 }}>
+                  Uncertain items are never approved automatically. Add a brief note explaining your check (for example,
+                  &ldquo;Confirmed against signed BOQ&rdquo; or &ldquo;Corrected quantity&rdquo;) — this is required for the project audit log.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={jumpToNextUncertainItem}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  background: '#f59e0b',
+                  color: '#0f172a',
+                  border: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Next Item Needing Review &rarr;
+              </button>
+            </div>
+          )}
+
+          {/* Multi-Sheet Workbook Filter (DPWH BOQ Sheets vs Supporting Sheets) */}
+          {hasMultipleSheetKinds && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 600 }}>Workbook Sheets:</span>
+              {(
+                [
+                  ['ALL', `All Sheets (${readableRows.length})`],
+                  ['BOQ', `BOQ Sheets (${boqSheetRowCount})`],
+                  ['SUPPORTING', `Supporting Sheets (${supportingSheetRowCount})`],
+                ] as const
+              ).map(([kind, label]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => setSheetKindFilter(kind)}
+                  style={{
+                    padding: '5px 11px',
+                    borderRadius: '999px',
+                    fontSize: '0.77rem',
+                    fontWeight: 600,
+                    border: sheetKindFilter === kind ? '1px solid #10b981' : '1px solid rgba(148,163,184,0.26)',
+                    background: sheetKindFilter === kind ? 'rgba(16, 185, 129, 0.16)' : 'rgba(2, 6, 23, 0.45)',
+                    color: sheetKindFilter === kind ? '#6ee7b7' : '#cbd5e1',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Filter Bar & Progress Summary */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
             <div role="tablist" aria-label="Filter BOQ items by status" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -629,8 +745,16 @@ export default function VisualMappingReviewClient({
                 ) : (
                   filteredRows.map(({ candidate: c, row }) => {
                     const isEditing = editingCandidateId === c.id;
+                    const isFocused = focusedCandidateId === c.id;
                     return (
-                      <tr key={c.id} style={{ borderTop: '1px solid rgba(148,163,184,0.15)', verticalAlign: 'top' }}>
+                      <tr
+                        key={c.id}
+                        style={{
+                          borderTop: '1px solid rgba(148,163,184,0.15)',
+                          verticalAlign: 'top',
+                          background: isFocused ? 'rgba(245, 158, 11, 0.08)' : undefined,
+                        }}
+                      >
                         <td style={{ padding: '12px' }}>
                           {isEditing ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -667,9 +791,25 @@ export default function VisualMappingReviewClient({
                           ) : (
                             <>
                               <div style={{ fontWeight: 600, color: '#f8fafc', lineHeight: 1.35 }}>{row.description}</div>
-                              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px' }}>
-                                Item {row.itemCode}
-                                {row.phaseCode ? ` · ${row.phaseCode}` : ''}
+                              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                <span>
+                                  Item {row.itemCode}
+                                  {row.phaseCode ? ` · ${row.phaseCode}` : ''}
+                                </span>
+                                {hasMultipleSheetKinds && (
+                                  <span
+                                    style={{
+                                      padding: '1px 6px',
+                                      borderRadius: '4px',
+                                      fontSize: '0.68rem',
+                                      fontWeight: 600,
+                                      background: row.sheetKind === 'BOQ' ? 'rgba(56, 189, 248, 0.14)' : 'rgba(148, 163, 184, 0.16)',
+                                      color: row.sheetKind === 'BOQ' ? '#38bdf8' : '#cbd5e1',
+                                    }}
+                                  >
+                                    {row.sheetKind === 'BOQ' ? `BOQ: ${row.sheetLabel}` : `Supporting: ${row.sheetLabel}`}
+                                  </span>
+                                )}
                               </div>
                             </>
                           )}
@@ -757,9 +897,10 @@ export default function VisualMappingReviewClient({
                           {canReview && !isDocLockedByApproval ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                               <input
+                                id={`uboq-review-note-${c.id}`}
                                 type="text"
                                 aria-label={`Review note for ${row.description}`}
-                                placeholder="Short review note..."
+                                placeholder="Reason (e.g. Confirmed vs BOQ)..."
                                 value={candidateNotes[c.id] ?? ''}
                                 onChange={(e) => setCandidateNotes((prev) => ({ ...prev, [c.id]: e.target.value }))}
                                 style={{

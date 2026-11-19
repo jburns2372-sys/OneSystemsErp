@@ -207,51 +207,76 @@ test('Task 5: Topbar and ActiveProjectSelector display real effective access con
   assert.match(selectorSrc, /No assigned projects/);
 });
 
-test('P0: createProjectProfile deduplicates concurrent/repeat submissions with the same submissionToken and allows clean retry on failure', async () => {
-  let txCalls = 0;
-  let shouldFail = false;
-  let uuidSeq = 0;
-  const db = {
-    rolePermission: { findFirst: async () => ({ id: 'grant-1' }) },
-    $transaction: async (fn) => {
-      txCalls += 1;
-      if (shouldFail) throw new Error('TRANSIENT_DB_ERROR');
-      return fn({
-        $queryRaw: async () => [{ phase9_create_project_profile: 'ok' }],
-      });
-    },
-  };
-  const intakeMod = loadTsModule('src/app/actions/project-intake.ts', {
-    '@/lib/prisma': { prisma: db },
-    '@/lib/dal/auth': { verifyOperationalSession: async () => ({ userId: 'u-admin', role: 'SUPER_ADMIN', sessionVersion: 1 }) },
-    'node:crypto': { randomUUID: () => `proj-uuid-${++uuidSeq}` },
-    '@/lib/uboq/project-ownership': { applyProjectRlsSessionVars: async () => {} },
-  });
+test('P0: createProjectProfile enforces durable cross-instance idempotency via server-derived UUID + Postgres 23505 ownership verification', async () => {
+  const realCrypto = require('node:crypto');
+  const committedProjects = new Map(); // id -> ownerUserId
+
+  function createFreshInstance(actorUserId) {
+    let txAttempts = 0;
+    const db = {
+      rolePermission: { findFirst: async () => ({ id: 'grant-1' }) },
+      project: {
+        findFirst: async ({ where }) => {
+          const owner = committedProjects.get(where.id);
+          return owner === where.userAssignments.some.userId ? { id: where.id } : null;
+        },
+      },
+      $transaction: async (fn) => {
+        txAttempts += 1;
+        return fn({
+          $queryRaw: async (_strings, projectId) => {
+            if (committedProjects.has(projectId)) {
+              const dupErr = new Error('duplicate key value violates unique constraint "Project_pkey"');
+              dupErr.code = '23505';
+              throw dupErr;
+            }
+            committedProjects.set(projectId, actorUserId);
+            return [{ phase9_create_project_profile: projectId }];
+          },
+        });
+      },
+    };
+    const mod = loadTsModule('src/app/actions/project-intake.ts', {
+      '@/lib/prisma': { prisma: db },
+      '@/lib/dal/auth': { verifyOperationalSession: async () => ({ userId: actorUserId, role: 'SUPER_ADMIN', sessionVersion: 1 }) },
+      'node:crypto': realCrypto,
+      '@/lib/uboq/project-ownership': { applyProjectRlsSessionVars: async () => {} },
+    });
+    return { mod, getTxAttempts: () => txAttempts };
+  }
 
   const makeForm = (token) => {
     const f = new FormData();
-    f.set('name', 'P0 Test Project');
+    f.set('name', 'P0 Durable Project');
     f.set('sector', 'CORPORATE');
-    if (token) f.set('submissionToken', token);
+    f.set('submissionToken', token);
     return f;
   };
 
-  // Duplicate concurrent submission with same token creates only ONE project
-  const [r1, r2] = await Promise.all([
-    intakeMod.createProjectProfile(makeForm('tok-dup-1')),
-    intakeMod.createProjectProfile(makeForm('tok-dup-1')),
-  ]);
-  assert.equal(r1.projectId, 'proj-uuid-1');
-  assert.equal(r2.projectId, 'proj-uuid-1');
-  assert.equal(txCalls, 1, 'duplicate submission must not create a second project');
+  // Same user across TWO separate serverless instances with same submissionToken -> same projectId, 1 DB row
+  const token = '12345678-1234-4123-8123-1234567890ab';
+  const instA = createFreshInstance('owner-1');
+  const instB = createFreshInstance('owner-1');
+  const rA = await instA.mod.createProjectProfile(makeForm(token));
+  const rB = await instB.mod.createProjectProfile(makeForm(token));
+  assert.equal(rA.projectId, rB.projectId);
+  assert.equal(committedProjects.size, 1, 'cross-instance retry must never create a duplicate project');
 
-  // Failed submission evicts token so a subsequent retry succeeds cleanly
-  shouldFail = true;
-  await assert.rejects(() => intakeMod.createProjectProfile(makeForm('tok-retry-1')), /TRANSIENT_DB_ERROR/);
-  shouldFail = false;
-  const rRetry = await intakeMod.createProjectProfile(makeForm('tok-retry-1'));
-  assert.equal(rRetry.projectId, 'proj-uuid-3');
-  assert.equal(txCalls, 3);
+  // Different user with the same token derives a DIFFERENT server-bound UUID (no cross-user collision/attach)
+  const instOther = createFreshInstance('other-user-2');
+  const rOther = await instOther.mod.createProjectProfile(makeForm(token));
+  assert.notEqual(rOther.projectId, rA.projectId);
+  assert.equal(committedProjects.size, 2);
+});
+
+test('DPWH multi-sheet classification distinguishes BOQ sheets from supporting DUPA/Summary/ABC sheets', () => {
+  assert.equal(ux.classifySourceSheet('BOQ - Part A', null).kind, 'BOQ');
+  assert.equal(ux.classifySourceSheet('Bill of Quantities', null).kind, 'BOQ');
+  assert.equal(ux.classifySourceSheet('Part B - Earthworks', null).kind, 'BOQ');
+  assert.equal(ux.classifySourceSheet('DUPA', null).kind, 'SUPPORTING');
+  assert.equal(ux.classifySourceSheet('Summary of Quantities', null).kind, 'SUPPORTING');
+  assert.equal(ux.classifySourceSheet('ABC Computation', null).kind, 'SUPPORTING');
+  assert.equal(ux.classifySourceSheet('General Notes', null).kind, 'SUPPORTING');
 });
 
 test('P0 & P1: ProjectStartButton avoids router.push+refresh hang, blocks duplicate submits, and Documents landing restores familiar workflow', () => {

@@ -33,6 +33,8 @@ export interface UboqWorkflowSummary {
   readonly stageDetail: string;
 }
 
+export type SourceSheetKind = 'BOQ' | 'SUPPORTING';
+
 export interface ReadableBoqRow {
   readonly id: string;
   readonly rowNumber: number | null;
@@ -47,12 +49,33 @@ export interface ReadableBoqRow {
   readonly statusLabel: 'Needs Review' | 'Accepted' | 'Excluded';
   readonly needsAttention: boolean;
   readonly issueSummary: string | null;
+  readonly sheetKind: SourceSheetKind;
+  readonly sheetLabel: string;
   readonly confidencePct: number;
   readonly extractionMethod: string;
   readonly sourceLocation: string;
   readonly coordinates: Record<string, string>;
   readonly rawFormulaText: string | null;
   readonly reviewNotes: string | null;
+}
+
+const SUPPORTING_SHEET_PATTERN =
+  /\b(dupa|summary|cover|abc|approved budget|general notes|notes|reference|cash\s*flow|s-?curve|schedule|manpower|equipment|materials list|appendix|index|instructions)\b/i;
+
+/**
+ * Classifies multi-sheet workbook sections (such as DPWH workbooks) into primary BOQ sheets
+ * vs supporting reference sheets (DUPA, Summary, ABC, Cover, Notes) for ordinary ERP users.
+ */
+export function classifySourceSheet(
+  sheetOrPageRef: string | null | undefined,
+  sectionTitle: string | null | undefined
+): { readonly kind: SourceSheetKind; readonly label: string } {
+  const raw = String(sheetOrPageRef || sectionTitle || '').trim();
+  const label = raw || 'Main BOQ';
+  if (raw && SUPPORTING_SHEET_PATTERN.test(raw) && !/\b(boq|bill of quantities|pay items)\b/i.test(raw)) {
+    return { kind: 'SUPPORTING', label };
+  }
+  return { kind: 'BOQ', label };
 }
 
 export interface HeaderAccessContext {
@@ -165,6 +188,8 @@ export function extractReadableBoqRow(candidate: VisualCandidateRecord): Readabl
     issues.push(confidencePct < 90 ? `Check scanned text (${confidencePct}% read certainty)` : 'Requires reviewer check');
   }
 
+  const sheetInfo = classifySourceSheet(candidate.sheetOrPageRef, candidate.sectionTitle);
+
   return {
     id: candidate.id,
     rowNumber: candidate.sourceRowNumber,
@@ -179,6 +204,8 @@ export function extractReadableBoqRow(candidate: VisualCandidateRecord): Readabl
     statusLabel,
     needsAttention: statusKey === 'PENDING' || issues.length > 0,
     issueSummary: issues.length > 0 ? issues.join(' · ') : null,
+    sheetKind: sheetInfo.kind,
+    sheetLabel: sheetInfo.label,
     confidencePct,
     extractionMethod: candidate.extractionMethod,
     sourceLocation:
