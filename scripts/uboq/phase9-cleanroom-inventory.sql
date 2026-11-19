@@ -86,6 +86,7 @@ WITH owners AS (
     'oserp_preview_direct_app', 'oserp_preview_payroll_app')
 )
 SELECT 1 / (CASE WHEN (SELECT COUNT(*) FROM runtime_roles) = 8
+                  AND (SELECT table_owner IS NOT NULL AND command_owner IS NOT NULL FROM owners)
                   AND NOT EXISTS (
                     SELECT 1 FROM runtime_roles r CROSS JOIN owners
                     WHERE r.rolbypassrls
