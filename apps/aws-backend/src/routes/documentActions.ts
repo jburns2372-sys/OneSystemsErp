@@ -18,6 +18,15 @@ const getUploadDirPath = () => {
 
 router.post('/uploadDocument', async (req, res) => {
   try {
+    if (process.env.VERCEL) {
+      return res.status(501).json({
+        success: false,
+        error: 'SERVERLESS_LEGACY_UPLOAD_UNSUPPORTED',
+        message:
+          'Legacy base64 JSON document uploads are disabled on Vercel serverless runtime (4.5 MB body limit and ephemeral disk). Use the governed direct-to-Blob document intake endpoint.',
+      });
+    }
+
     const { fileName, fileContentBase64, fileType, fileSize, category, projectId, uploaderId } = req.body;
 
     if (!fileName || !fileContentBase64) {
