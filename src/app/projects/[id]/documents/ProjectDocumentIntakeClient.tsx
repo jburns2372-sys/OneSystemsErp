@@ -139,8 +139,18 @@ export default function ProjectDocumentIntakeClient(props: {
           style={{background:'#22d3ee',color:'#042f2e',padding:'11px 18px',border:0,borderRadius:8,fontWeight:700,cursor:'pointer'}}>
           {busy ? 'Uploading and validating...' : 'Upload Selected Documents'}
         </button>
-        {results.length>0 && <div role="status" aria-live="polite" style={{marginTop:12}}>
-          {results.map((line,i)=><p key={i} style={{margin:'5px 0',color:'#e2e8f0'}}>{line}</p>)}
+        {results.length>0 && <div role="status" aria-live="polite" style={{marginTop:14,padding:12,borderRadius:8,background:'rgba(15,23,42,0.75)',border:'1px solid rgba(56,189,248,0.3)'}}>
+          {results.map((line,i)=><p key={i} style={{margin:'4px 0',color:'#e2e8f0',fontSize:14}}>{line}</p>)}
+          {results.some(line => line.includes('BOQ staged for review')) && (
+            <div style={{marginTop:10}}>
+              <Link
+                href={'/projects/'+encodeURIComponent(props.projectId)+'/uboq'}
+                style={{display:'inline-block',background:'#10b981',color:'#022c22',padding:'8px 14px',borderRadius:8,fontWeight:700,fontSize:13,textDecoration:'none'}}
+              >
+                Continue to Step 2: Review BOQ Items &rarr;
+              </Link>
+            </div>
+          )}
         </div>}
       </section>
 
