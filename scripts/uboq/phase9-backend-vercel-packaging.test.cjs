@@ -52,16 +52,17 @@ test('apps/aws-backend Vercel packaging is non-destructive and routes all paths 
   }
 
   const accSrc = fs.readFileSync(path.join(BACKEND_ROOT, 'src', 'routes', 'accomplishmentFileActions.ts'), 'utf8');
+  assert.match(accSrc, /req\.path\.replace\(\/\\\/\+\$\/,\s*''\)\.toLowerCase\(\)/);
   for (const writePath of [
-    '/uploadAccomplishmentFileAction',
-    '/createWorkingCopyAction',
-    '/saveFileEditAction',
-    '/saveAsNewAccomplishmentFileAction',
-    '/createSuccessiveBillingAction',
+    '/uploadaccomplishmentfileaction',
+    '/createworkingcopyaction',
+    '/savefileeditaction',
+    '/saveasnewaccomplishmentfileaction',
+    '/createsuccessivebillingaction',
   ]) {
     assert.ok(
       accSrc.includes(`'${writePath}'`),
-      `accomplishmentFileActions.ts serverless 501 middleware must cover ${writePath}`
+      `accomplishmentFileActions.ts serverless 501 middleware must cover normalized ${writePath}`
     );
   }
 });

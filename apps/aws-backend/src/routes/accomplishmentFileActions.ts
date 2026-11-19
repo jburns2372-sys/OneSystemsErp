@@ -10,18 +10,19 @@ import path from 'path';
 const router = Router();
 
 const SERVERLESS_UNSUPPORTED_ACCOMPLISHMENT_WRITE_PATHS = new Set([
-  '/uploadAccomplishmentFileAction',
-  '/createWorkingCopyAction',
-  '/saveFileEditAction',
-  '/saveAsNewAccomplishmentFileAction',
-  '/createSuccessiveBillingAction',
+  '/uploadaccomplishmentfileaction',
+  '/createworkingcopyaction',
+  '/savefileeditaction',
+  '/saveasnewaccomplishmentfileaction',
+  '/createsuccessivebillingaction',
 ]);
 
 router.use((req, res, next) => {
+  const normalizedPath = req.path.replace(/\/+$/, '').toLowerCase();
   if (
     process.env.VERCEL &&
     req.method === 'POST' &&
-    SERVERLESS_UNSUPPORTED_ACCOMPLISHMENT_WRITE_PATHS.has(req.path)
+    SERVERLESS_UNSUPPORTED_ACCOMPLISHMENT_WRITE_PATHS.has(normalizedPath)
   ) {
     return res.status(501).json({
       success: false,
