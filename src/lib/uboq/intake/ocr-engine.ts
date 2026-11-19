@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import sharp from 'sharp';
 import Tesseract from 'tesseract.js';
@@ -81,24 +82,34 @@ export function describeOcrAssetEnvironment(roots: string[] = nodeModulesRoots()
   });
 }
 
+function getRuntimeNodeRequire(): NodeRequire | null {
+  try {
+    return createRequire(path.join(process.cwd(), 'package.json'));
+  } catch {
+    return null;
+  }
+}
+
 export function resolveOfflineTesseractLangPath(roots?: string[]): string {
-  // Resolve via the @tesseract.js-data/eng package entry and filesystem checks ONLY — never via static
-  // .gz binary module imports, which Next.js Turbopack attempts to parse as JS modules.
+  // Resolve via runtime createRequire('@tesseract.js-data/eng') + filesystem checks so Next.js Turbopack
+  // never attempts to statically bundle binary .gz files or deep package subpaths.
   if (roots === undefined) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const engPkg = require('@tesseract.js-data/eng') as { langPath?: string };
-      if (engPkg?.langPath) {
-        const bestIntDir = path.resolve(engPkg.langPath, '..', '4.0.0_best_int');
-        if (fs.existsSync(path.join(bestIntDir, 'eng.traineddata.gz'))) {
-          return bestIntDir;
+    const runtimeRequire = getRuntimeNodeRequire();
+    if (runtimeRequire) {
+      try {
+        const engPkg = runtimeRequire('@tesseract.js-data/eng') as { langPath?: string };
+        if (engPkg?.langPath) {
+          const bestIntDir = path.resolve(engPkg.langPath, '..', '4.0.0_best_int');
+          if (fs.existsSync(path.join(bestIntDir, 'eng.traineddata.gz'))) {
+            return bestIntDir;
+          }
+          if (fs.existsSync(path.join(engPkg.langPath, 'eng.traineddata.gz'))) {
+            return engPkg.langPath;
+          }
         }
-        if (fs.existsSync(path.join(engPkg.langPath, 'eng.traineddata.gz'))) {
-          return engPkg.langPath;
-        }
+      } catch {
+        /* fall through to ancestor walk */
       }
-    } catch {
-      /* fall through to ancestor walk */
     }
   }
 
@@ -114,16 +125,19 @@ export function resolveOfflineTesseractLangPath(roots?: string[]): string {
 }
 
 /**
- * P9-DEF-OCR-01: resolve the tesseract.js node worker script via live require.resolve first (ensuring
- * static file tracing in Vercel Express / Next bundles), falling back to ancestor root walking.
+ * P9-DEF-OCR-01: resolve the tesseract.js node worker script via runtime createRequire first,
+ * falling back to ancestor root walking (Express tracing lives in apps/aws-backend/src/lib/uboq/ocrAssetTracing.ts).
  */
 export function resolveTesseractWorkerScript(roots?: string[]): string {
   if (roots === undefined) {
-    try {
-      const resolved = require.resolve('tesseract.js/src/worker-script/node/index.js');
-      if (fs.existsSync(resolved)) return resolved;
-    } catch {
-      /* fall through to ancestor walk */
+    const runtimeRequire = getRuntimeNodeRequire();
+    if (runtimeRequire) {
+      try {
+        const resolved = runtimeRequire.resolve('tesseract.js/src/worker-script/node/index.js');
+        if (fs.existsSync(resolved)) return resolved;
+      } catch {
+        /* fall through to ancestor walk */
+      }
     }
   }
 
