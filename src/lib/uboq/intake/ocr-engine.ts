@@ -32,35 +32,80 @@ function firstExistingFile(candidates: string[]): string | null {
   return null;
 }
 
-function nodeModulesRoots(): string[] {
-  return [
-    path.join(process.cwd(), 'node_modules'),
-    path.resolve(__dirname, '..', '..', '..', '..', 'node_modules'),
-    path.resolve(__dirname, '..', '..', '..', '..', '..', '..', 'node_modules'),
-    path.resolve(__dirname, '..', '..', '..', '..', '..', 'node_modules'),
-  ];
+/**
+ * Candidate node_modules roots. Vercel lays a function out relative to its project/repo root, so the OCR assets can
+ * live under `<root>/node_modules` or `<root>/apps/aws-backend/node_modules` depending on how includeFiles was
+ * applied. Walk the ancestors of both cwd and this module's directory so any layout resolves, never a fixed depth.
+ */
+export function nodeModulesRoots(starts: string[] = [process.cwd(), __dirname]): string[] {
+  const roots: string[] = [];
+  const add = (p: string) => {
+    if (!roots.includes(p)) roots.push(p);
+  };
+  for (const start of starts) {
+    let dir = path.resolve(start);
+    for (let depth = 0; depth < 10; depth++) {
+      add(path.join(dir, 'node_modules'));
+      add(path.join(dir, 'apps', 'aws-backend', 'node_modules'));
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  return roots;
+}
+
+/** Server-side-only layout diagnostic summary (NEVER returned in HTTP error responses). */
+export function describeOcrAssetEnvironment(roots: string[] = nodeModulesRoots()): string {
+  const safeList = (dir: string) => {
+    try {
+      return fs.readdirSync(dir).slice(0, 25);
+    } catch {
+      return [];
+    }
+  };
+  const present = roots
+    .filter((r) => fs.existsSync(r))
+    .slice(0, 6)
+    .map((r) => ({
+      root: r,
+      tesseractJs: fs.existsSync(path.join(r, 'tesseract.js')),
+      tesseractData: fs.existsSync(path.join(r, '@tesseract.js-data')),
+    }));
+  return JSON.stringify({
+    cwd: process.cwd(),
+    moduleDir: __dirname,
+    triedRoots: roots.length,
+    existingRoots: present,
+    cwdEntries: safeList(process.cwd()),
+  });
 }
 
 export function resolveOfflineTesseractLangPath(roots: string[] = nodeModulesRoots()): string {
+  // Pure filesystem lookup across ancestor node_modules roots (zero require/require.resolve calls in this
+  // shared module so Next.js Turbopack never attempts to statically parse binary .gz or deep subpaths).
+  // Serverless bundling is handled separately by next.config.ts outputFileTracingIncludes (Next.js)
+  // and apps/aws-backend/src/lib/uboq/ocrAssetTracing.ts + vercel.json includeFiles (Express).
   for (const root of roots) {
     for (const variant of ['4.0.0_best_int', '4.0.0']) {
       const dir = path.join(root, '@tesseract.js-data', 'eng', variant);
       if (fs.existsSync(path.join(dir, 'eng.traineddata.gz'))) return dir;
     }
   }
+  console.error('[UBOQ_OCR_TRAINEDDATA_MISSING]', describeOcrAssetEnvironment(roots));
   throw new Error('UBOQ_OCR_TRAINEDDATA_MISSING: Offline @tesseract.js-data/eng traineddata not found');
 }
 
 /**
- * P9-DEF-OCR-01: the default tesseract.js worker path is built with path.join(__dirname, ...) and
- * `new Worker(path)`, which Vercel's tracing does not follow. Resolve the worker script explicitly so it
- * is both locatable and (via ocrAssetTracing in the backend / outputFileTracingIncludes in Next) shipped.
+ * P9-DEF-OCR-01: resolve the tesseract.js node worker script via filesystem lookup across ancestor roots
+ * (zero static require.resolve calls in this shared module; Express tracing lives in ocrAssetTracing.ts).
  */
 export function resolveTesseractWorkerScript(roots: string[] = nodeModulesRoots()): string {
   const found = firstExistingFile(
     roots.map((root) => path.join(root, 'tesseract.js', 'src', 'worker-script', 'node', 'index.js'))
   );
   if (!found) {
+    console.error('[UBOQ_OCR_WORKER_SCRIPT_MISSING]', describeOcrAssetEnvironment(roots));
     throw new Error('UBOQ_OCR_WORKER_SCRIPT_MISSING: tesseract.js node worker script not found in deployed bundle');
   }
   return found;

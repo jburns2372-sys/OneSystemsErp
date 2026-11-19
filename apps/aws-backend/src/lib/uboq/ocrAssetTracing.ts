@@ -7,17 +7,36 @@
  * the worker script (plus its static tesseract-core / wasm-feature-detect requires) and the offline
  * traineddata into the bundle. The function is never invoked.
  */
-export function __ubOqOcrAssetTracingHints(): string[] {
-  return [
-    require.resolve('tesseract.js/src/worker-script/node/index.js'),
-    require.resolve('tesseract.js/src/worker-script/node/getCore.js'),
-    require.resolve('tesseract.js-core/tesseract-core-relaxedsimd-lstm'),
-    require.resolve('tesseract.js-core/tesseract-core-relaxedsimd'),
-    require.resolve('tesseract.js-core/tesseract-core-simd-lstm'),
-    require.resolve('tesseract.js-core/tesseract-core-simd'),
-    require.resolve('tesseract.js-core/tesseract-core-lstm'),
-    require.resolve('tesseract.js-core/tesseract-core'),
-    require.resolve('@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz'),
-    require.resolve('@tesseract.js-data/eng/4.0.0/eng.traineddata.gz'),
+/**
+ * P9-DEF-OCR-01 — live serverless file-tracing registration for Express on Vercel.
+ *
+ * Previously __ubOqOcrAssetTracingHints() was exported but never invoked, allowing bundlers / dead-code
+ * elimination to drop its require.resolve() calls so eng.traineddata.gz and tesseract-core WASM files were
+ * omitted from the Express Lambda bundle. Calling registerOcrAssetTracingHints() at route registration time
+ * keeps every literal require.resolve() reachable for @vercel/nft without altering runtime request behavior.
+ */
+export function registerOcrAssetTracingHints(): number {
+  const specs: Array<() => string> = [
+    () => require.resolve('tesseract.js/src/worker-script/node/index.js'),
+    () => require.resolve('tesseract.js/src/worker-script/node/getCore.js'),
+    () => require.resolve('tesseract.js-core/tesseract-core-relaxedsimd-lstm'),
+    () => require.resolve('tesseract.js-core/tesseract-core-relaxedsimd'),
+    () => require.resolve('tesseract.js-core/tesseract-core-simd-lstm'),
+    () => require.resolve('tesseract.js-core/tesseract-core-simd'),
+    () => require.resolve('tesseract.js-core/tesseract-core-lstm'),
+    () => require.resolve('tesseract.js-core/tesseract-core'),
+    // Note: binary .gz files are traced via apps/aws-backend/vercel.json includeFiles and
+    // next.config.ts outputFileTracingIncludes — never via literal .gz module imports,
+    // because Next.js Turbopack compiles apps/aws-backend via src/pages/api/[...slug].ts.
+    () => require.resolve('@tesseract.js-data/eng'),
   ];
+  let resolvedCount = 0;
+  for (const fn of specs) {
+    try {
+      if (fn()) resolvedCount += 1;
+    } catch {
+      /* individual optional core variants may vary by platform */
+    }
+  }
+  return resolvedCount;
 }
