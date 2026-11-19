@@ -36,6 +36,7 @@ test('apps/aws-backend Vercel packaging is non-destructive and routes all paths 
     '@tesseract.js-data/eng',
     'bcryptjs',
     'csv-parse',
+    'next',
     'pdf-parse',
     'sharp',
     'tesseract.js',
