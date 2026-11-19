@@ -55,7 +55,7 @@ export function nodeModulesRoots(starts: string[] = [process.cwd(), __dirname]):
   return roots;
 }
 
-/** Non-secret layout summary appended to asset-missing errors so a deployed failure is diagnosable from the response. */
+/** Server-side-only layout diagnostic summary (NEVER returned in HTTP error responses). */
 export function describeOcrAssetEnvironment(roots: string[] = nodeModulesRoots()): string {
   const safeList = (dir: string) => {
     try {
@@ -81,27 +81,65 @@ export function describeOcrAssetEnvironment(roots: string[] = nodeModulesRoots()
   });
 }
 
-export function resolveOfflineTesseractLangPath(roots: string[] = nodeModulesRoots()): string {
-  for (const root of roots) {
+export function resolveOfflineTesseractLangPath(roots?: string[]): string {
+  // When using runtime default roots, resolve directly via live require.resolve / package entry FIRST so
+  // Vercel's static file tracer (@vercel/nft) traces both the package and .gz assets into the deployed bundle.
+  if (roots === undefined) {
+    try {
+      const bestInt = require.resolve('@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz');
+      if (fs.existsSync(bestInt)) return path.dirname(bestInt);
+    } catch {
+      /* fall through to 4.0.0 / ancestor walk */
+    }
+    try {
+      const std = require.resolve('@tesseract.js-data/eng/4.0.0/eng.traineddata.gz');
+      if (fs.existsSync(std)) return path.dirname(std);
+    } catch {
+      /* fall through to package entry / ancestor walk */
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const engPkg = require('@tesseract.js-data/eng') as { langPath?: string };
+      if (engPkg?.langPath && fs.existsSync(path.join(engPkg.langPath, 'eng.traineddata.gz'))) {
+        return engPkg.langPath;
+      }
+    } catch {
+      /* fall through to ancestor walk */
+    }
+  }
+
+  const effectiveRoots = roots ?? nodeModulesRoots();
+  for (const root of effectiveRoots) {
     for (const variant of ['4.0.0_best_int', '4.0.0']) {
       const dir = path.join(root, '@tesseract.js-data', 'eng', variant);
       if (fs.existsSync(path.join(dir, 'eng.traineddata.gz'))) return dir;
     }
   }
-  throw new Error(`UBOQ_OCR_TRAINEDDATA_MISSING: Offline @tesseract.js-data/eng traineddata not found diagnostics=${describeOcrAssetEnvironment(roots)}`);
+  console.error('[UBOQ_OCR_TRAINEDDATA_MISSING]', describeOcrAssetEnvironment(effectiveRoots));
+  throw new Error('UBOQ_OCR_TRAINEDDATA_MISSING: Offline @tesseract.js-data/eng traineddata not found');
 }
 
 /**
- * P9-DEF-OCR-01: the default tesseract.js worker path is built with path.join(__dirname, ...) and
- * `new Worker(path)`, which Vercel's tracing does not follow. Resolve the worker script explicitly so it
- * is both locatable and (via ocrAssetTracing in the backend / outputFileTracingIncludes in Next) shipped.
+ * P9-DEF-OCR-01: resolve the tesseract.js node worker script via live require.resolve first (ensuring
+ * static file tracing in Vercel Express / Next bundles), falling back to ancestor root walking.
  */
-export function resolveTesseractWorkerScript(roots: string[] = nodeModulesRoots()): string {
+export function resolveTesseractWorkerScript(roots?: string[]): string {
+  if (roots === undefined) {
+    try {
+      const resolved = require.resolve('tesseract.js/src/worker-script/node/index.js');
+      if (fs.existsSync(resolved)) return resolved;
+    } catch {
+      /* fall through to ancestor walk */
+    }
+  }
+
+  const effectiveRoots = roots ?? nodeModulesRoots();
   const found = firstExistingFile(
-    roots.map((root) => path.join(root, 'tesseract.js', 'src', 'worker-script', 'node', 'index.js'))
+    effectiveRoots.map((root) => path.join(root, 'tesseract.js', 'src', 'worker-script', 'node', 'index.js'))
   );
   if (!found) {
-    throw new Error(`UBOQ_OCR_WORKER_SCRIPT_MISSING: tesseract.js node worker script not found in deployed bundle diagnostics=${describeOcrAssetEnvironment(roots)}`);
+    console.error('[UBOQ_OCR_WORKER_SCRIPT_MISSING]', describeOcrAssetEnvironment(effectiveRoots));
+    throw new Error('UBOQ_OCR_WORKER_SCRIPT_MISSING: tesseract.js node worker script not found in deployed bundle');
   }
   return found;
 }

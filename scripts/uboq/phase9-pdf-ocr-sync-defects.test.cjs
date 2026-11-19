@@ -70,7 +70,7 @@ test('P9-DEF-OCR-01: serverless asset tracing declared for Next routes and Expre
   const hints = read('apps/aws-backend/src/lib/uboq/ocrAssetTracing.ts');
   assert.match(hints, /require\.resolve\('tesseract\.js\/src\/worker-script\/node\/index\.js'\)/);
   assert.match(hints, /eng\.traineddata\.gz/);
-  assert.match(read('apps/aws-backend/src/routes/uboq.ts'), /import '\.\.\/lib\/uboq\/ocrAssetTracing'/);
+  assert.match(read('apps/aws-backend/src/routes/uboq.ts'), /registerOcrAssetTracingHints/);
 });
 
 test('P9-DEF-SYNC-01: Next /api/uboq/intake APPROVE_SNAPSHOT uses same sync hook, authorization and idempotent adapter', () => {

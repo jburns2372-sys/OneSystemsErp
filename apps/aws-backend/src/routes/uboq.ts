@@ -9,7 +9,7 @@ import {
 import { assertUboqStageAuthorization } from '../../../../src/lib/uboq/security/stage-rbac';
 import { withUboqRlsContext } from '../../../../src/lib/uboq/project-ownership';
 import { resolveUboqVaultStorageProvider } from '../../../../src/lib/uboq/storage/vault-storage';
-import '../lib/uboq/ocrAssetTracing';
+import { registerOcrAssetTracingHints } from '../lib/uboq/ocrAssetTracing';
 import {
   approveOperationalSnapshotAndPrrs,
   forkApprovedSourceReviewRevision,
@@ -24,6 +24,8 @@ import {
 } from '../../../../src/lib/uboq/adapters/schedule-link-adapter';
 
 const router = Router();
+// Keep OCR worker/WASM/traineddata asset hints live-reachable for Vercel @vercel/nft tracing.
+registerOcrAssetTracingHints();
 
 const SENSITIVE_INTERNAL_COST_KEYS = new Set([
   'targetResourceUnitCost',
