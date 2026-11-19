@@ -69,7 +69,8 @@ test('P9-DEF-OCR-01: serverless asset tracing declared for Next routes and Expre
   assert.match(cfg, /@tesseract\.js-data\/eng\/4\.0\.0_best_int/);
   const hints = read('apps/aws-backend/src/lib/uboq/ocrAssetTracing.ts');
   assert.match(hints, /require\.resolve\('tesseract\.js\/src\/worker-script\/node\/index\.js'\)/);
-  assert.match(hints, /eng\.traineddata\.gz/);
+  assert.match(hints, /require\.resolve\('@tesseract\.js-data\/eng'\)/);
+  assert.doesNotMatch(hints, /require\.resolve\([^)]*\.gz/);
   assert.match(read('apps/aws-backend/src/routes/uboq.ts'), /registerOcrAssetTracingHints/);
 });
 

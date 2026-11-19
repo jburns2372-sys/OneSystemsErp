@@ -25,9 +25,10 @@ export function registerOcrAssetTracingHints(): number {
     () => require.resolve('tesseract.js-core/tesseract-core-simd'),
     () => require.resolve('tesseract.js-core/tesseract-core-lstm'),
     () => require.resolve('tesseract.js-core/tesseract-core'),
+    // Note: binary .gz files are traced via apps/aws-backend/vercel.json includeFiles and
+    // next.config.ts outputFileTracingIncludes — never via literal .gz module imports,
+    // because Next.js Turbopack compiles apps/aws-backend via src/pages/api/[...slug].ts.
     () => require.resolve('@tesseract.js-data/eng'),
-    () => require.resolve('@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz'),
-    () => require.resolve('@tesseract.js-data/eng/4.0.0/eng.traineddata.gz'),
   ];
   let resolvedCount = 0;
   for (const fn of specs) {
