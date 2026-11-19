@@ -547,16 +547,35 @@ function isPgPermissionDeniedError(err: unknown): boolean {
       projectIds,
       'WORKER_DATABASE'
     );
-    const totalWorkers = workerScope.allowed
-      ? await prisma.worker.count({
+    let totalWorkers: number | null = 0;
+    if (workerScope.allowed) {
+      try {
+        totalWorkers = await prisma.worker.count({
           where: workerScope.projectIdFilter ? { projectId: workerScope.projectIdFilter } : undefined,
-        })
-      : 0;
+        });
+      } catch (err) {
+        if (isPgPermissionDeniedError(err)) {
+          totalWorkers = null;
+          unavailableMetrics.push('totalWorkers');
+        } else {
+          throw err;
+        }
+      }
+    }
 
-    const totalSubcontractors =
-      modAuth.isEffectiveAdmin && modAuth.canViewModule('SUBCONTRACTING')
-        ? await prisma.subcontractor.count()
-        : 0;
+    let totalSubcontractors: number | null = 0;
+    if (modAuth.isEffectiveAdmin && modAuth.canViewModule('SUBCONTRACTING')) {
+      try {
+        totalSubcontractors = await prisma.subcontractor.count();
+      } catch (err) {
+        if (isPgPermissionDeniedError(err)) {
+          totalSubcontractors = null;
+          unavailableMetrics.push('totalSubcontractors');
+        } else {
+          throw err;
+        }
+      }
+    }
 
     const supplierScope = modAuth.scopedProjectFilterForModules(
       activeProjectId,

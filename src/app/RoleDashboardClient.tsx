@@ -322,7 +322,7 @@ export default function RoleDashboardClient({ stats, isSystemAdmin, initialRole 
           </div>
           <div className={styles.statCard}>
             <h3>Workers Database</h3>
-            <p className={styles.statValue}>{countText(stats?.totalWorkers)}</p>
+            <p className={styles.statValue} style={statsUnavailable || stats?.totalWorkers === null ? { color: 'var(--text-secondary)' } : undefined}>{countText(stats?.totalWorkers)}</p>
             <Link href="/workers" style={{ color: 'var(--accent-color)', fontSize: '0.85rem', marginTop: '10px', display: 'inline-block' }}>Manage Workers ➔</Link>
           </div>
           <div className={styles.statCard}>
