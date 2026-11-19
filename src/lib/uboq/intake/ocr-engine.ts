@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { Worker } from 'node:worker_threads';
 import sharp from 'sharp';
-import Tesseract from 'tesseract.js';
 
 export interface OcrRecognizedCell {
   readonly text: string;
@@ -111,13 +111,63 @@ export function resolveTesseractWorkerScript(roots: string[] = nodeModulesRoots(
   return found;
 }
 
-export const UBOQ_OCR_INIT_TIMEOUT_MS = 45_000;
-export const UBOQ_OCR_RECOGNIZE_TIMEOUT_MS = 90_000;
+export const UBOQ_OCR_INIT_TIMEOUT_MS = 15_000;
+export const UBOQ_OCR_RECOGNIZE_TIMEOUT_MS = 25_000;
+export const UBOQ_OCR_TOTAL_BUDGET_MS = 40_000;
+export const UBOQ_OCR_CLEANUP_TIMEOUT_MS = 3_000;
+
+export type OcrTraceStage =
+  | 'request_received'
+  | 'image_preprocessing_completed'
+  | 'traineddata_verified'
+  | 'worker_script_verified'
+  | 'create_worker_started'
+  | 'create_worker_completed'
+  | 'create_worker_failed'
+  | 'recognize_started'
+  | 'recognize_completed'
+  | 'recognize_failed'
+  | 'worker_cleanup_completed';
+
+export interface OcrStageTraceEvent {
+  readonly stage: OcrTraceStage;
+  readonly pageNumber: number;
+  readonly elapsedMs: number;
+  readonly stageMs: number;
+  readonly ok: boolean;
+  readonly errorCode?: string;
+}
+
+/**
+ * Emits safe structured server-side OCR stage timings (NEVER credentials, paths, listings, or raw OCR evidence).
+ */
+export function emitOcrStageTrace(event: OcrStageTraceEvent): void {
+  const payload = JSON.stringify({
+    stage: event.stage,
+    pageNumber: event.pageNumber,
+    elapsedMs: event.elapsedMs,
+    stageMs: event.stageMs,
+    ok: event.ok,
+    ...(event.errorCode ? { errorCode: event.errorCode } : {}),
+  });
+  if (event.ok) {
+    console.info('[UBOQ_OCR_TRACE]', payload);
+  } else {
+    console.error('[UBOQ_OCR_TRACE]', payload);
+  }
+}
 
 class OcrTimeoutError extends Error {
   constructor(stage: string, ms: number) {
-    super(`UBOQ_OCR_TIMEOUT: OCR ${stage} exceeded ${ms}ms and the worker was terminated`);
+    super(`UBOQ_OCR_TIMEOUT: OCR stage=${stage} exceeded ${ms}ms and the worker was terminated`);
     this.name = 'OcrTimeoutError';
+  }
+}
+
+class OcrWorkerExecutionError extends Error {
+  constructor(stage: string) {
+    super(`UBOQ_OCR_WORKER_FAILED: OCR stage=${stage} failed`);
+    this.name = 'OcrWorkerExecutionError';
   }
 }
 
@@ -273,6 +323,244 @@ function splitWordsIntoCells(words: TesseractWordLike[], fallbackLineText: strin
   return cells;
 }
 
+interface TesseractWorkerPacket {
+  workerId?: string;
+  jobId?: string;
+  status?: 'resolve' | 'reject' | 'progress';
+  action?: string;
+  data?: unknown;
+}
+
+/**
+ * Spawns tesseract.js's node worker script directly on node:worker_threads so we always hold the live
+ * Worker handle for true OS/V8 thread termination (even during init), attach real EventEmitter 'error'/'exit'
+ * listeners (avoiding tesseract.js's browser-only worker.onerror no-op and swallowed .catch(() => {})),
+ * and enforce a strict end-to-end budget below the serverless function maxDuration.
+ */
+export async function executeBoundedTesseractWorker(params: {
+  workerPath: string;
+  langPath: string;
+  normalizedPng: Buffer;
+  pageNumber: number;
+  startedAt: number;
+  initTimeoutMs?: number;
+  recognizeTimeoutMs?: number;
+  totalBudgetMs?: number;
+}): Promise<Record<string, unknown>> {
+  const {
+    workerPath,
+    langPath,
+    normalizedPng,
+    pageNumber,
+    startedAt,
+    initTimeoutMs = UBOQ_OCR_INIT_TIMEOUT_MS,
+    recognizeTimeoutMs = UBOQ_OCR_RECOGNIZE_TIMEOUT_MS,
+    totalBudgetMs = UBOQ_OCR_TOTAL_BUDGET_MS,
+  } = params;
+
+  const remainingBudget = (stage: string): number => {
+    const rem = totalBudgetMs - (Date.now() - startedAt);
+    if (rem <= 0) {
+      throw new OcrTimeoutError(stage, totalBudgetMs);
+    }
+    return rem;
+  };
+
+  let rawWorker: Worker | null = null;
+  let terminated = false;
+  let workerFailure: Error | null = null;
+  const pendingJobs = new Map<string, { resolve: (data: unknown) => void; reject: (err: Error) => void }>();
+
+  const rejectAllPending = (err: Error) => {
+    if (!workerFailure) workerFailure = err;
+    for (const [, p] of pendingJobs) {
+      p.reject(err);
+    }
+    pendingJobs.clear();
+  };
+
+  const terminateWorker = async (): Promise<void> => {
+    if (terminated) return;
+    terminated = true;
+    const cleanupStart = Date.now();
+    const w = rawWorker;
+    rawWorker = null;
+    if (w) {
+      try {
+        await Promise.race([
+          w.terminate().then(() => undefined),
+          new Promise<void>((resolve) => setTimeout(resolve, UBOQ_OCR_CLEANUP_TIMEOUT_MS)),
+        ]);
+      } catch {
+        /* best-effort worker termination */
+      }
+    }
+    emitOcrStageTrace({
+      stage: 'worker_cleanup_completed',
+      pageNumber,
+      elapsedMs: Date.now() - startedAt,
+      stageMs: Date.now() - cleanupStart,
+      ok: true,
+    });
+  };
+
+  let jobSeq = 0;
+  const workerId = `ubOqOcrWorker-${pageNumber}`;
+
+  const dispatchWorkerJob = (action: string, payload: Record<string, unknown>, stageName: string, stageCapMs: number): Promise<unknown> => {
+    if (workerFailure) return Promise.reject(workerFailure);
+    if (!rawWorker) return Promise.reject(new OcrWorkerExecutionError(stageName));
+    const budgetMs = Math.max(1, Math.min(stageCapMs, remainingBudget(stageName)));
+    const jobId = `job-${++jobSeq}`;
+    const promiseKey = `${action}-${jobId}`;
+
+    const jobPromise = new Promise<unknown>((resolve, reject) => {
+      pendingJobs.set(promiseKey, { resolve, reject });
+      try {
+        rawWorker!.postMessage({ workerId, jobId, action, payload });
+      } catch (err) {
+        pendingJobs.delete(promiseKey);
+        console.error('[UBOQ_OCR_WORKER_POST_ERROR]', stageName, err instanceof Error ? err.message : String(err));
+        reject(new OcrWorkerExecutionError(stageName));
+      }
+    });
+
+    return runWithBoundedTimeout(jobPromise, stageName, budgetMs, () => {
+      pendingJobs.delete(promiseKey);
+      void terminateWorker();
+    });
+  };
+
+  const createStart = Date.now();
+  emitOcrStageTrace({
+    stage: 'create_worker_started',
+    pageNumber,
+    elapsedMs: createStart - startedAt,
+    stageMs: 0,
+    ok: true,
+  });
+
+  try {
+    rawWorker = new Worker(workerPath);
+    rawWorker.on('message', (packet: TesseractWorkerPacket) => {
+      if (!packet || typeof packet !== 'object') return;
+      const key = `${packet.action ?? ''}-${packet.jobId ?? ''}`;
+      const entry = pendingJobs.get(key);
+      if (packet.status === 'resolve' && entry) {
+        pendingJobs.delete(key);
+        entry.resolve(packet.data);
+      } else if (packet.status === 'reject' && entry) {
+        pendingJobs.delete(key);
+        console.error('[UBOQ_OCR_WORKER_JOB_REJECTED]', packet.action ?? 'unknown', String(packet.data ?? ''));
+        entry.reject(new OcrWorkerExecutionError(String(packet.action ?? 'worker_job')));
+      }
+    });
+    rawWorker.on('error', (err) => {
+      console.error('[UBOQ_OCR_WORKER_THREAD_ERROR]', err instanceof Error ? err.message : String(err));
+      rejectAllPending(new OcrWorkerExecutionError('worker_thread_error'));
+    });
+    rawWorker.on('exit', (code) => {
+      if (!terminated && code !== 0) {
+        console.error('[UBOQ_OCR_WORKER_THREAD_EXIT]', `exitCode=${code}`);
+        rejectAllPending(new OcrWorkerExecutionError('worker_thread_exit'));
+      }
+    });
+
+    const initDeadline = createStart + initTimeoutMs;
+    const initRemaining = (subStage: string) => Math.max(1, Math.min(initDeadline - Date.now(), remainingBudget(subStage)));
+
+    await dispatchWorkerJob(
+      'load',
+      { options: { lstmOnly: true, corePath: undefined, logging: false } },
+      'create_worker_load',
+      initRemaining('create_worker_load')
+    );
+    await dispatchWorkerJob(
+      'loadLanguage',
+      {
+        langs: 'eng',
+        options: {
+          langPath,
+          dataPath: undefined,
+          cachePath: undefined,
+          cacheMethod: 'none',
+          gzip: true,
+          lstmOnly: true,
+        },
+      },
+      'create_worker_load_language',
+      initRemaining('create_worker_load_language')
+    );
+    await dispatchWorkerJob(
+      'initialize',
+      { langs: 'eng', oem: 1, config: {} },
+      'create_worker_initialize',
+      initRemaining('create_worker_initialize')
+    );
+
+    emitOcrStageTrace({
+      stage: 'create_worker_completed',
+      pageNumber,
+      elapsedMs: Date.now() - startedAt,
+      stageMs: Date.now() - createStart,
+      ok: true,
+    });
+  } catch (err) {
+    emitOcrStageTrace({
+      stage: 'create_worker_failed',
+      pageNumber,
+      elapsedMs: Date.now() - startedAt,
+      stageMs: Date.now() - createStart,
+      ok: false,
+      errorCode: err instanceof Error ? err.name : 'Error',
+    });
+    await terminateWorker();
+    throw err;
+  }
+
+  const recognizeStart = Date.now();
+  emitOcrStageTrace({
+    stage: 'recognize_started',
+    pageNumber,
+    elapsedMs: recognizeStart - startedAt,
+    stageMs: 0,
+    ok: true,
+  });
+
+  try {
+    const data = await dispatchWorkerJob(
+      'recognize',
+      {
+        image: new Uint8Array(normalizedPng),
+        options: {},
+        output: { blocks: true, text: true },
+      },
+      'recognize',
+      recognizeTimeoutMs
+    );
+    emitOcrStageTrace({
+      stage: 'recognize_completed',
+      pageNumber,
+      elapsedMs: Date.now() - startedAt,
+      stageMs: Date.now() - recognizeStart,
+      ok: true,
+    });
+    return (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+  } catch (err) {
+    emitOcrStageTrace({
+      stage: 'recognize_failed',
+      pageNumber,
+      elapsedMs: Date.now() - startedAt,
+      stageMs: Date.now() - recognizeStart,
+      ok: false,
+      errorCode: err instanceof Error ? err.name : 'Error',
+    });
+    throw err;
+  } finally {
+    await terminateWorker();
+  }
+}
+
 /**
  * Executes genuine pixel-level Tesseract OCR on PNG/JPEG/raw RGBA page bitmaps using offline traineddata.
  * Preserves page dimensions, word/cell bounding boxes, and true OCR confidence scores.
@@ -281,9 +569,19 @@ export async function runRasterImageOcr(
   imageBufferOrRaw: Buffer | { rawRgba: Uint8Array; width: number; height: number },
   pageNumber = 1
 ): Promise<OcrRecognizedPageGrid> {
+  const startedAt = Date.now();
+  emitOcrStageTrace({
+    stage: 'request_received',
+    pageNumber,
+    elapsedMs: 0,
+    stageMs: 0,
+    ok: true,
+  });
+
   let normalizedPng: Buffer;
   let width = 0;
   let height = 0;
+  const preprocessStart = Date.now();
 
   if (Buffer.isBuffer(imageBufferOrRaw)) {
     const meta = await sharp(imageBufferOrRaw).metadata();
@@ -304,101 +602,92 @@ export async function runRasterImageOcr(
       .toBuffer();
   }
 
-  const langPath = resolveOfflineTesseractLangPath();
-  const workerPath = resolveTesseractWorkerScript();
-
-  let worker: Awaited<ReturnType<typeof Tesseract.createWorker>> | null = null;
-  let terminated = false;
-  const terminateWorker = async () => {
-    if (terminated) return;
-    terminated = true;
-    try {
-      await worker?.terminate();
-    } catch {
-      /* already terminated */
-    }
-  };
-
-  const creation = Tesseract.createWorker('eng', 1, {
-    langPath,
-    workerPath,
-    gzip: true,
-    cacheMethod: 'none',
+  emitOcrStageTrace({
+    stage: 'image_preprocessing_completed',
+    pageNumber,
+    elapsedMs: Date.now() - startedAt,
+    stageMs: Date.now() - preprocessStart,
+    ok: true,
   });
-  try {
-    worker = await runWithBoundedTimeout(creation, 'worker initialization', UBOQ_OCR_INIT_TIMEOUT_MS, () => {
-      // Worker not yet returned: terminate it as soon as creation eventually settles.
-      creation.then((w) => w.terminate()).catch(() => undefined);
-    });
-  } catch (err) {
-    creation.then((w) => w.terminate()).catch(() => undefined);
-    throw err;
-  }
 
-  try {
-    const activeWorker = worker;
-    const res = await runWithBoundedTimeout(
-      activeWorker.recognize(normalizedPng, {}, { blocks: true, text: true }),
-      'recognition',
-      UBOQ_OCR_RECOGNIZE_TIMEOUT_MS,
-      () => {
-        void terminateWorker();
-      }
-    );
-    const data = res.data as unknown as Record<string, unknown>;
-    const overallConfidence = Number(
-      Math.max(0, Math.min(1, Number((data as { confidence?: number }).confidence ?? 0) / 100)).toFixed(4)
-    );
+  const langStart = Date.now();
+  const langPath = resolveOfflineTesseractLangPath();
+  emitOcrStageTrace({
+    stage: 'traineddata_verified',
+    pageNumber,
+    elapsedMs: Date.now() - startedAt,
+    stageMs: Date.now() - langStart,
+    ok: true,
+  });
 
-    const rawLines = extractLinesFromTesseractResult(data);
-    const rows: Array<{
-      readonly rowNumber: number;
-      readonly rowConfidence: number;
-      readonly cells: ReadonlyArray<OcrRecognizedCell>;
-    }> = [];
+  const workerScriptStart = Date.now();
+  const workerPath = resolveTesseractWorkerScript();
+  emitOcrStageTrace({
+    stage: 'worker_script_verified',
+    pageNumber,
+    elapsedMs: Date.now() - startedAt,
+    stageMs: Date.now() - workerScriptStart,
+    ok: true,
+  });
 
-    if (rawLines.length > 0) {
-      rawLines.forEach((ln) => {
-        const lineText = String(ln.text ?? '').trim();
-        if (!lineText) return;
-        const lineConf = Number(Math.max(0, Math.min(1, Number(ln.confidence ?? overallConfidence * 100) / 100)).toFixed(4));
-        const lineBbox = ln.bbox ?? { x0: 0, y0: 0, x1: width, y1: height };
-        const cells = splitWordsIntoCells(ln.words ?? [], lineText, lineBbox, lineConf);
-        if (cells.length === 0) return;
-        const minCellConf = Math.min(...cells.map((c) => c.confidence));
-        const rowConf = Number(Math.min(lineConf, minCellConf).toFixed(4));
-        rows.push({
-          rowNumber: rows.length + 1,
-          rowConfidence: rowConf,
-          cells,
-        });
+  const data = await executeBoundedTesseractWorker({
+    workerPath,
+    langPath,
+    normalizedPng,
+    pageNumber,
+    startedAt,
+  });
+
+  const overallConfidence = Number(
+    Math.max(0, Math.min(1, Number((data as { confidence?: number }).confidence ?? 0) / 100)).toFixed(4)
+  );
+
+  const rawLines = extractLinesFromTesseractResult(data);
+  const rows: Array<{
+    readonly rowNumber: number;
+    readonly rowConfidence: number;
+    readonly cells: ReadonlyArray<OcrRecognizedCell>;
+  }> = [];
+
+  if (rawLines.length > 0) {
+    rawLines.forEach((ln) => {
+      const lineText = String(ln.text ?? '').trim();
+      if (!lineText) return;
+      const lineConf = Number(Math.max(0, Math.min(1, Number(ln.confidence ?? overallConfidence * 100) / 100)).toFixed(4));
+      const lineBbox = ln.bbox ?? { x0: 0, y0: 0, x1: width, y1: height };
+      const cells = splitWordsIntoCells(ln.words ?? [], lineText, lineBbox, lineConf);
+      if (cells.length === 0) return;
+      const minCellConf = Math.min(...cells.map((c) => c.confidence));
+      const rowConf = Number(Math.min(lineConf, minCellConf).toFixed(4));
+      rows.push({
+        rowNumber: rows.length + 1,
+        rowConfidence: rowConf,
+        cells,
       });
-    } else {
-      const plainText = String((data as { text?: string }).text ?? '');
-      plainText
-        .split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .forEach((lineText) => {
-          const cells = splitWordsIntoCells([], lineText, { x0: 0, y0: 0, x1: width, y1: height }, overallConfidence);
-          if (cells.length > 0) {
-            rows.push({
-              rowNumber: rows.length + 1,
-              rowConfidence: overallConfidence,
-              cells,
-            });
-          }
-        });
-    }
-
-    return {
-      pageNumber,
-      width,
-      height,
-      overallConfidence,
-      rows,
-    };
-  } finally {
-    await terminateWorker();
+    });
+  } else {
+    const plainText = String((data as { text?: string }).text ?? '');
+    plainText
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach((lineText) => {
+        const cells = splitWordsIntoCells([], lineText, { x0: 0, y0: 0, x1: width, y1: height }, overallConfidence);
+        if (cells.length > 0) {
+          rows.push({
+            rowNumber: rows.length + 1,
+            rowConfidence: overallConfidence,
+            cells,
+          });
+        }
+      });
   }
+
+  return {
+    pageNumber,
+    width,
+    height,
+    overallConfidence,
+    rows,
+  };
 }
