@@ -653,6 +653,23 @@ export async function extractUniversalDocumentPackage(
     // H01: Genuine multi-page PDF binary parsing via pdfjs-backed PDFParse + automatic raster OCR fallback for scanned PDF pages
     ensureServerlessPdfGlobals();
     const { PDFParse } = await import('pdf-parse');
+    // P9-DEF-PDF-01: pdf-parse v2 resolves "./pdf.worker.mjs" via a runtime dynamic import that Vercel's
+    // file tracing does not include. The official "pdf-parse/worker" entry embeds the worker as an inline
+    // data URL, so no separate .mjs file needs to exist inside the serverless bundle.
+    try {
+      // The Express backend compiles with classic CommonJS module resolution, which cannot see the package
+      // "exports" subpath types; the literal specifier is kept (not a variable) so the file tracer still
+      // bundles pdf-parse/worker.
+      // @ts-ignore TS2307 under moduleResolution=node10 only; resolves normally in Next (bundler) and at runtime
+      const workerModule = (await import('pdf-parse/worker')) as { getData: () => string };
+      PDFParse.setWorker(workerModule.getData());
+    } catch (workerErr) {
+      throw new Error(
+        `UBOQ_PDF_WORKER_UNAVAILABLE: Unable to configure embedded pdf-parse worker (${
+          workerErr instanceof Error ? workerErr.message : String(workerErr)
+        })`
+      );
+    }
     const pdfParser = new PDFParse({ data: new Uint8Array(buffer) });
     try {
       const textResult = await pdfParser.getText();
