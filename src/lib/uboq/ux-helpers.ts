@@ -61,11 +61,12 @@ export interface ReadableBoqRow {
 }
 
 const SUPPORTING_SHEET_PATTERN =
-  /\b(dupa|summary|cover|abc|approved budget|general notes|notes|reference|cash\s*flow|s-?curve|schedule|manpower|equipment|materials list|appendix|index|instructions)\b/i;
+  /\b(dupa|program\s+of\s+works|\bpow\b|unit\s+rate|unit\s+price\s+analysis|cost\s+analysis|summary|cover|abc|approved\s+budget|general\s+notes|notes|reference|cash\s*flow|s-?curve|pert|cpm|gantt|schedule|sched\b|manpower|equipment|materials\s+list|appendix|index|instructions)\b/i;
 
 /**
  * Classifies multi-sheet workbook sections (such as DPWH workbooks) into primary BOQ sheets
- * vs supporting reference sheets (DUPA, Summary, ABC, Cover, Notes) for ordinary ERP users.
+ * vs supporting reference sheets (POW, DUPA, Schedule, Cash Flow, Summary, ABC, Cover, Notes)
+ * for ordinary ERP users.
  */
 export function classifySourceSheet(
   sheetOrPageRef: string | null | undefined,
@@ -73,7 +74,7 @@ export function classifySourceSheet(
 ): { readonly kind: SourceSheetKind; readonly label: string } {
   const raw = String(sheetOrPageRef || sectionTitle || '').trim();
   const label = raw || 'Main BOQ';
-  if (raw && SUPPORTING_SHEET_PATTERN.test(raw) && !/\b(boq|bill of quantities|pay items)\b/i.test(raw)) {
+  if (raw && SUPPORTING_SHEET_PATTERN.test(raw) && !/\b(boq|bill\s+of\s+quantities|pay\s+items)\b/i.test(raw)) {
     return { kind: 'SUPPORTING', label };
   }
   return { kind: 'BOQ', label };
@@ -165,23 +166,33 @@ export function extractReadableBoqRow(candidate: VisualCandidateRecord): Readabl
         ? Number((quantity * unitPrice).toFixed(2))
         : null;
 
-  const rowClassification = classifyAwardedBoqRow({
-    itemCode,
-    description,
-    unit,
-    quantity,
-    unitPrice,
-    lineAmount: explicitAmount,
-    rawTextValues: [itemCode, description, unit].filter(Boolean),
-    hasFormula: Boolean(candidate.rawFormulaText),
-  });
+  const storedRowClass =
+    candidate.parsedJson &&
+    typeof candidate.parsedJson === 'object' &&
+    typeof candidate.parsedJson.rowClassification === 'string'
+      ? candidate.parsedJson.rowClassification
+      : null;
+
+  const rowClassification =
+    storedRowClass ??
+    classifyAwardedBoqRow({
+      itemCode,
+      description,
+      unit,
+      quantity,
+      unitPrice,
+      lineAmount: explicitAmount,
+      rawTextValues: [itemCode, description, unit].filter(Boolean),
+      hasFormula: Boolean(candidate.rawFormulaText),
+    });
   const isNonPayableHeadingOrNote =
     rowClassification === 'HEADING' ||
     rowClassification === 'SUBHEADING' ||
     rowClassification === 'NOTE' ||
     rowClassification === 'HEADER_META' ||
     rowClassification === 'SUBTOTAL' ||
-    rowClassification === 'GRAND_TOTAL';
+    rowClassification === 'GRAND_TOTAL' ||
+    rowClassification === 'PRICE_COMPONENT';
 
   const statusKey: 'PENDING' | 'HUMAN_VERIFIED' | 'HUMAN_EXCLUDED' =
     candidate.reviewDecision === 'HUMAN_VERIFIED' ||

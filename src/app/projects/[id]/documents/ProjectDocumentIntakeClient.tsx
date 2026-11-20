@@ -50,6 +50,9 @@ function friendlyUploadError(rawError: unknown, status?: number): string {
   if (msg.includes('UBOQ_RBAC_FORBIDDEN') || msg.includes('UBOQ_PBAC')) {
     return 'Your account does not have permission to upload this file category.';
   }
+  if (msg.includes('UBOQ_UNRELATED_DOCUMENT_BLOCKED')) {
+    return 'This file appears to belong to a different project and was not attached. Check that you have the right project selected before uploading.';
+  }
   if (msg.includes('UBOQ_SEC_') || msg.includes('UBOQ_INTAKE_SECURITY_BLOCKED')) {
     return 'This file did not pass safety checks (macros, embedded scripts, or damaged archive structure).';
   }

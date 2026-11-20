@@ -152,7 +152,7 @@ function buildPhaseInputLineFromCandidateFields(params: {
   const sourcedAbc = toPositiveFiniteNumber(fields.agency_abc);
 
   return {
-    lineKey: `LINE-${lineIndex + 1}`,
+    lineKey: String(fields.source_line_id || `LINE-${lineIndex + 1}`).trim(),
     itemCode: String(fields.item_code || `ITEM-${lineIndex + 1}`).trim(),
     phaseCode: resolvedPhase,
     sectionCode: fields.section_code ? String(fields.section_code).trim() : null,
@@ -710,6 +710,9 @@ export async function ingestAndStageProjectUboqPackage(
                 recalculatedTotal: extracted.awardedBoqVerification.recalculatedTotal,
                 roundingDecimals: extracted.awardedBoqVerification.roundingDecimals,
                 counts: extracted.awardedBoqVerification.counts,
+                ...(extracted.awardedBoqVerification.worksheetRoles
+                  ? { worksheetRoles: extracted.awardedBoqVerification.worksheetRoles }
+                  : {}),
                 priceComponents: extracted.awardedBoqVerification.priceComponents,
                 discrepancies: extracted.awardedBoqVerification.discrepancies.slice(0, 100),
               }
@@ -732,6 +735,7 @@ export async function ingestAndStageProjectUboqPackage(
                 vaultBackend: vaultReceipt.backend,
                 stagedIntakeOptions,
                 ...(compactVerification ? { awardedBoqVerification: compactVerification } : {}),
+                ...(extracted.contractExtraction ? { contractExtraction: extracted.contractExtraction } : {}),
               } as unknown as Prisma.InputJsonValue,
             },
           });

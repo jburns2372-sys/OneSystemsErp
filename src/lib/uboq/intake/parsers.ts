@@ -4,7 +4,13 @@ import { resolveCanonicalFieldId } from '../field-catalog';
 import { inspectCellSecurity, scanUploadedDocumentSecurity, readVerifiedOfficeZipEntry, type FileSecurityScanResult } from './security-guard';
 import { streamVerifiedXlsxWorksheets } from './xlsx-streaming-reader';
 import {
+  extractContractDocumentFromPages,
+  type ContractTextPage,
+  type ExtractedContractDocument,
+} from '../contract-document-extractor';
+import {
   classifyAwardedBoqRow,
+  reconcileImportedAwardedBoqCandidates,
   verifyAwardedBoqWorkbook,
   type AwardedBoqRowClassification,
   type AwardedBoqVerificationReport,
@@ -75,6 +81,8 @@ export interface UniversalExtractionResult {
   readonly candidates: ExtractedBoqRowCandidate[];
   readonly blockingErrors: string[];
   readonly awardedBoqVerification?: AwardedBoqVerificationReport;
+  readonly contractExtraction?: ExtractedContractDocument;
+  readonly extractedTextPages?: ReadonlyArray<ContractTextPage>;
 }
 
 interface InternalGridCell {
@@ -89,16 +97,18 @@ const MAX_SHEET_ROWS = 10000;
 const MAX_SHEET_COLS = 200;
 
 const HEADER_SEMANTIC_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/^(pay\s*item(\s*(no|code|id|ref))?|item\s*(no|code|id|ref|number)|boq\s*code|wbs\s*item|ref\s*code|refcode|code)$/i, 'item_code'],
-  [/^(phase|phase\s*code|building|zone|package|part|bldg)$/i, 'phase_code'],
+  [/^(boq\s*line\s*\/\s*phase|line\s*id\s*\/\s*phase|phase\s*\/\s*line)$/i, 'phase_line_composite'],
+  [/^(pay\s*item\s*\/\s*description|item\s*\/\s*description|item\s*code\s*\/\s*description)$/i, 'item_desc_composite'],
+  [/^(pay\s*item(\s*(no|code|id|ref|number))?|item\s*(no|code|id|ref|number)|boq\s*(code|line|item|no)|wbs\s*item|ref\s*code|refcode|code|line\s*id|line\s*no)$/i, 'item_code'],
+  [/^(phase|phase\s*code|phase\s*id|building|zone|package|part|bldg|work\s*phase)$/i, 'phase_code'],
   [/^(section|division|work\s*section|category)$/i, 'section_code'],
-  [/^(work\s*description|item\s*description|description(\s*of\s*works?)?|scope(\s*(of\s*works?|title))?|work\s*item|particulars)$/i, 'work_description'],
+  [/^(work\s*description|item\s*description|description(\s*of\s*works?)?|scope(\s*(of\s*works?|title))?|work\s*item(\s*description)?|particulars|bill\s*item|activity\s*description)$/i, 'work_description'],
   [/^(spec|specification|technical\s*spec|material\s*spec|grade)$/i, 'specification'],
   [/^(unit|uom|meas(urement)?\s*unit|unit\s*of\s*measure)$/i, 'unit'],
-  [/^(qty|quantity|approved\s*(qty|quantity)|contract\s*(qty|quantity)|bill\s*(qty|quantity))$/i, 'approved_qty'],
+  [/^(qty|quantity|quantities|boq\s*(qty|quantity)|approved\s*(qty|quantity)|contract\s*(qty|quantity)|awarded\s*(qty|quantity)|bill\s*(qty|quantity)|est(imated)?\s*(qty|quantity)|total\s*(qty|quantity)|volume)$/i, 'approved_qty'],
   [/^(original\s*(qty|quantity)|orig\s*(qty|quantity))$/i, 'original_qty'],
-  [/^(unit\s*(rate|price|cost)|unitrate|unitprice|contract\s*(unit\s*)?rate|bid\s*(unit\s*)?(rate|price)|rate)$/i, 'contract_unit_rate'],
-  [/^(amount|total\s*amount|line\s*amount|contract\s*amount|extended\s*(amt|amount)|total\s*cost|total)$/i, 'contract_line_amount'],
+  [/^(total\s*unit\s*(bid\s*)?(rate|price|cost)|unit\s*(bid\s*)?(rate|price|cost)|unitrate|unitprice|contract\s*(unit\s*)?(rate|price)|bid\s*(unit\s*)?(rate|price)|awarded\s*(unit\s*)?(rate|price)|rate|price\s*per\s*unit)$/i, 'contract_unit_rate'],
+  [/^(amount|total\s*(bid\s*)?(amount|cost|price)|bid\s*amount|line\s*(amount|total)|contract\s*(amount|price)|extended\s*(amt|amount|price)|total)$/i, 'contract_line_amount'],
   [/^(resource\s*code|stock\s*code|material\s*code)$/i, 'resource_id'],
   [/^(resource\s*description|material\s*description|material\s*name|resource)$/i, 'resource_description'],
   [/^(resource\s*spec|brand\s*spec)$/i, 'resource_spec'],
@@ -113,6 +123,9 @@ const HEADER_SEMANTIC_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/^(profit|contractor\s*profit)$/i, 'contractor_profit_amt'],
   [/^(vat|estimate\s*vat)$/i, 'estimate_vat_amt'],
 ];
+
+const NON_PAYABLE_NOTE_TEXT_REGEX =
+  /^(by\s+client|by\s+owner|included|incl\.?|excluded|excl\.?|n\/a|not\s+applicable|not\s+included|for\s+reference|see\s+note|waived|free\s+of\s+charge|foc|tbd|existing|others?)$/i;
 
 export function mapHeaderToCanonicalField(rawHeader: string): string | null {
   const cleaned = String(rawHeader ?? '')
@@ -174,20 +187,39 @@ function parseGridRowsToCandidates(
   for (let r = 0; r < Math.min(rows.length, 30); r++) {
     const row = rows[r];
     if (!row) continue;
-    let matchedCols = 0;
-    const tempMap: Record<number, string> = {};
-    for (let c = 0; c < row.length; c++) {
-      const mapped = mapHeaderToCanonicalField(row[c]?.text ?? '');
-      if (mapped && !Object.values(tempMap).includes(mapped)) {
-        tempMap[c] = mapped;
-        matchedCols++;
+    const nextRow = r + 1 < rows.length ? rows[r + 1] : null;
+    const nextLooksLikeSubHeader =
+      Boolean(nextRow) &&
+      nextRow!.filter((c) => c && String(c.text ?? '').trim() !== '').length >= 2 &&
+      nextRow!.every((c) => !c || parseNumericValue(c.text) === null) &&
+      !nextRow!.some((c) => c && /^\(\d+\)$/.test(String(c.text ?? '').trim()));
+
+    const tryHeader = (useNext: boolean) => {
+      let matchedCols = 0;
+      const tempMap: Record<number, string> = {};
+      const maxCols = Math.max(row.length, useNext && nextRow ? nextRow.length : 0);
+      for (let c = 0; c < maxCols; c++) {
+        const baseText = String(row[c]?.text ?? '').trim();
+        const combinedText = useNext && nextRow ? `${baseText} ${String(nextRow[c]?.text ?? '').trim()}`.trim() : baseText;
+        const mapped = mapHeaderToCanonicalField(combinedText) ?? (useNext ? mapHeaderToCanonicalField(baseText) : null);
+        if (mapped && !Object.values(tempMap).includes(mapped)) {
+          tempMap[c] = mapped;
+          matchedCols++;
+        }
       }
-    }
-    if (matchedCols >= 2 && matchedCols > bestScore) {
-      bestScore = matchedCols;
-      headerRowIdx = r;
+      return { matchedCols, tempMap };
+    };
+
+    const singleTry = tryHeader(false);
+    const mergedTry = nextLooksLikeSubHeader ? tryHeader(true) : { matchedCols: 0, tempMap: {} };
+    const chosen = mergedTry.matchedCols > singleTry.matchedCols ? mergedTry : singleTry;
+    const effectiveHeaderIdx = mergedTry.matchedCols > singleTry.matchedCols ? r + 1 : r;
+
+    if (chosen.matchedCols >= 2 && chosen.matchedCols > bestScore) {
+      bestScore = chosen.matchedCols;
+      headerRowIdx = effectiveHeaderIdx;
       for (const k of Object.keys(headerMap)) delete headerMap[Number(k)];
-      Object.assign(headerMap, tempMap);
+      Object.assign(headerMap, chosen.tempMap);
     }
   }
 
@@ -252,10 +284,52 @@ function parseGridRowsToCandidates(
         rowConfidences.push(cell.confidence);
       }
 
-      if (numericCanonicalFields.has(canonicalId)) {
+      if (canonicalId === 'phase_line_composite') {
+        const parts = String(cell.text ?? '')
+          .split(/\r?\n|\s*\|\s*/)
+          .map((p) => p.trim())
+          .filter(Boolean);
+        const phasePart = parts.find((p) => /^(phase|part|zone|bldg|building|pkg|package)\b/i.test(p)) ?? parts[1] ?? null;
+        const lineIdPart = parts.find((p) => p !== phasePart) ?? parts[0] ?? null;
+        if (lineIdPart) {
+          mappedFields.source_line_id = lineIdPart;
+          cellCoordinates.source_line_id = `${sheetOrPageRef}!${cell.cellRef}`;
+        }
+        if (phasePart) {
+          mappedFields.phase_code = phasePart;
+          cellCoordinates.phase_code = `${sheetOrPageRef}!${cell.cellRef}`;
+        }
+      } else if (canonicalId === 'item_desc_composite') {
+        const parts = String(cell.text ?? '')
+          .split(/\r?\n/)
+          .map((p) => p.trim())
+          .filter(Boolean);
+        if (parts.length >= 2 && /^[A-Za-z0-9][A-Za-z0-9()._-]{1,24}$/.test(parts[0])) {
+          mappedFields.item_code = parts[0];
+          mappedFields.work_description = parts.slice(1).join(' ');
+          cellCoordinates.item_code = `${sheetOrPageRef}!${cell.cellRef}`;
+          cellCoordinates.work_description = `${sheetOrPageRef}!${cell.cellRef}`;
+        } else {
+          const single = parts.join(' ').trim();
+          const splitInline = /^([A-Za-z0-9][A-Za-z0-9()._-]{1,20})\s+[-–—:]?\s*(.{4,})$/.exec(single);
+          if (splitInline && /\d/.test(splitInline[1])) {
+            mappedFields.item_code = splitInline[1];
+            mappedFields.work_description = splitInline[2].trim();
+          } else {
+            mappedFields.work_description = single || null;
+          }
+          cellCoordinates.work_description = `${sheetOrPageRef}!${cell.cellRef}`;
+        }
+      } else if (numericCanonicalFields.has(canonicalId)) {
         const rawTrimmed = String(cell.text ?? '').trim();
         const parsedNum = parseNumericValue(cell.numOrText);
-        if (rawTrimmed && rawTrimmed !== '-' && rawTrimmed !== '—' && parsedNum === null) {
+        if (
+          rawTrimmed &&
+          rawTrimmed !== '-' &&
+          rawTrimmed !== '—' &&
+          !NON_PAYABLE_NOTE_TEXT_REGEX.test(rawTrimmed) &&
+          parsedNum === null
+        ) {
           // Ambiguous/unreadable numeric token (e.g. blurred OCR token) -> NEVER fabricate a number; flag human review!
           hasAmbiguousNumericToken = true;
         }
@@ -273,15 +347,14 @@ function parseGridRowsToCandidates(
       mappedFields.phase_code = currentPhaseContext;
     }
 
-    const descOrCode = `${mappedFields.item_code ?? ''} ${mappedFields.work_description ?? ''} ${mappedFields.resource_description ?? ''}`.trim();
+    const descOrCode = `${mappedFields.source_line_id ?? ''} ${mappedFields.item_code ?? ''} ${mappedFields.work_description ?? ''} ${mappedFields.resource_description ?? ''}`.trim();
     if (!descOrCode || /^(sub[\s-]?total|grand\s+total|total\b)/i.test(descOrCode)) {
       continue;
     }
 
     // Classify row according to Awarded BOQ business rules: headings, subheadings, descriptive notes
-    // ("By Client", "Included", "Excluded"), and multi-row header legends are NEVER flagged merely for
-    // missing quantity/unit/price. Only payable items with missing calculation values, ambiguous numeric
-    // tokens, low OCR confidence, or security alerts require human exception review.
+    // ("By Client", "Included", "Excluded", "Unit Bid Price in Words"), price components (VAT/Discounts),
+    // and multi-row header legends are NEVER flagged merely for missing quantity/unit/price.
     const rowClassification = classifyAwardedBoqRow({
       itemCode: mappedFields.item_code ? String(mappedFields.item_code) : null,
       description: mappedFields.work_description ? String(mappedFields.work_description) : descOrCode,
@@ -299,7 +372,8 @@ function parseGridRowsToCandidates(
       rowClassification === 'NOTE' ||
       rowClassification === 'HEADER_META' ||
       rowClassification === 'SUBTOTAL' ||
-      rowClassification === 'GRAND_TOTAL';
+      rowClassification === 'GRAND_TOTAL' ||
+      rowClassification === 'PRICE_COMPONENT';
 
     // VAL-02: Never fabricate missing quantities, units, or unit rates!
     const hasCoreBoqFields = Boolean(
@@ -392,8 +466,12 @@ function buildPdfCoordinateGridFromTextItems(
 
   rowBands.sort((a, b) => b.yRef - a.yRef);
 
-  const grid: Array<Array<InternalGridCell>> = [];
-  rowBands.forEach((band, rIdx) => {
+  const rawBands: Array<{
+    yRef: number;
+    cells: Array<{ text: string; x: number; y: number; right: number }>;
+  }> = [];
+
+  rowBands.forEach((band) => {
     const frags = [...band.fragments].sort((a, b) => a.x - b.x);
     if (frags.length === 1 && (/\|/.test(frags[0].text) || /\t/.test(frags[0].text) || /\s{2,}/.test(frags[0].text))) {
       const cols = frags[0].text.includes('|')
@@ -402,18 +480,16 @@ function buildPdfCoordinateGridFromTextItems(
           ? frags[0].text.split('\t')
           : frags[0].text.split(/\s{2,}/);
       if (cols.length >= 2) {
-        grid.push(
-          cols.map((col, cIdx) => {
+        let curX = frags[0].x;
+        rawBands.push({
+          yRef: band.yRef,
+          cells: cols.map((col) => {
             const clean = col.trim();
-            return {
-              text: clean,
-              numOrText: parseNumericValue(clean) ?? clean,
-              formula: /^\s*[=+\-@]/.test(clean) ? clean : null,
-              cellRef: `P${pageNum}R${rIdx + 1}C${cIdx + 1}@x=${Math.round(frags[0].x)},y=${Math.round(frags[0].y)}`,
-              confidence: 0.96,
-            };
-          })
-        );
+            const cObj = { text: clean, x: curX, y: band.yRef, right: curX + Math.max(20, clean.length * 5) };
+            curX += Math.max(40, clean.length * 6);
+            return cObj;
+          }),
+        });
       }
       return;
     }
@@ -429,10 +505,189 @@ function buildPdfCoordinateGridFromTextItems(
         mergedCells.push({ text: f.text, x: f.x, y: f.y, right: f.x + f.w });
       }
     }
+    if (mergedCells.length >= 1) {
+      rawBands.push({ yRef: band.yRef, cells: mergedCells });
+    }
+  });
 
-    if (mergedCells.length >= 2) {
+  // Detect any multi-column BOQ table header band so stacked multi-line table cells align cleanly by X coordinate!
+  let headerBandIdx = -1;
+  let bestHeaderScore = 0;
+  let headerAnchors: Array<{ colIdx: number; x: number; right: number; canonical: string | null }> = [];
+
+  for (let bIdx = 0; bIdx < rawBands.length; bIdx++) {
+    const b = rawBands[bIdx];
+    if (b.cells.length < 3) continue;
+    let score = 0;
+    const seen = new Set<string>();
+    const anchors = b.cells.map((mc, cIdx) => {
+      const mapped = mapHeaderToCanonicalField(mc.text);
+      if (mapped && !seen.has(mapped)) {
+        seen.add(mapped);
+        score++;
+      }
+      return { colIdx: cIdx, x: mc.x, right: mc.right, canonical: mapped };
+    });
+    if (score >= 3 && score > bestHeaderScore) {
+      bestHeaderScore = score;
+      headerBandIdx = bIdx;
+      headerAnchors = anchors;
+    }
+  }
+
+  const grid: Array<Array<InternalGridCell>> = [];
+
+  if (headerBandIdx !== -1 && headerAnchors.length >= 3) {
+    const numericColIndices = new Set<number>(
+      headerAnchors
+        .filter((a) =>
+          ['approved_qty', 'original_qty', 'contract_unit_rate', 'contract_line_amount'].includes(a.canonical ?? '')
+        )
+        .map((a) => a.colIdx)
+    );
+    const unitColIdx = headerAnchors.find((a) => a.canonical === 'unit')?.colIdx ?? -1;
+
+    // Emit the header row cleanly
+    const hb = rawBands[headerBandIdx];
+    grid.push(
+      hb.cells.map((mc, cIdx) => ({
+        text: mc.text,
+        numOrText: mc.text,
+        formula: null,
+        cellRef: `P${pageNum}R1C${cIdx + 1}@x=${Math.round(mc.x)},y=${Math.round(mc.y)}`,
+        confidence: 0.96,
+      }))
+    );
+
+    // Map each cell fragment below the header to its nearest header column anchor by X coordinate
+    const mapCellToCol = (mc: { x: number; right: number }): number => {
+      let bestIdx = 0;
+      let bestDist = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < headerAnchors.length; i++) {
+        const a = headerAnchors[i];
+        const nextAnchor = headerAnchors[i + 1];
+        const boundaryRight = nextAnchor ? nextAnchor.x - 4 : Number.POSITIVE_INFINITY;
+        // Prefer direct span containment first, then nearest start/right distance
+        if (mc.x >= a.x - 18 && mc.x < boundaryRight) {
+          return i;
+        }
+        const dist = Math.min(Math.abs(mc.x - a.x), Math.abs(mc.right - a.right));
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
+        }
+      }
+      return bestIdx;
+    };
+
+    const alignedRows: Array<{
+      yRef: number;
+      cols: Array<{ text: string; x: number; y: number } | null>;
+      hasNumericOrUnit: boolean;
+      isTotalOrStop: boolean;
+    }> = [];
+
+    for (let bIdx = headerBandIdx + 1; bIdx < rawBands.length; bIdx++) {
+      const b = rawBands[bIdx];
+      const joinedText = b.cells.map((c) => c.text).join(' ').trim();
+      if (/^(annex\s+[b-z]\b|pricing\s+and\s+provenance\s+note|simulated\s+execution|workbook\s+trace|notes?\s*:)/i.test(joinedText)) {
+        break;
+      }
+
+      const cols: Array<{ text: string; x: number; y: number } | null> = new Array(headerAnchors.length).fill(null);
+      for (const mc of b.cells) {
+        const cIdx = mapCellToCol(mc);
+        const existing = cols[cIdx];
+        if (existing) {
+          existing.text = `${existing.text} ${mc.text}`.trim();
+        } else {
+          cols[cIdx] = { text: mc.text, x: mc.x, y: mc.y };
+        }
+      }
+
+      const isTotal = /^(sub[\s-]?total|grand\s+total|total\b)/i.test(joinedText);
+      const hasNumericOrUnit =
+        (unitColIdx >= 0 && Boolean(cols[unitColIdx]?.text)) ||
+        [...numericColIndices].some((idx) => cols[idx] !== null && parseNumericValue(cols[idx]!.text) !== null);
+
+      alignedRows.push({ yRef: b.yRef, cols, hasNumericOrUnit, isTotalOrStop: isTotal });
+      if (isTotal) break;
+    }
+
+    // Fold tightly stacked descriptor-only continuation lines (before or after a data band) into their BOQ row
+    const foldedRows: Array<Array<{ text: string; x: number; y: number } | null>> = [];
+    let pendingPrefix: Array<{ yRef: number; cols: Array<{ text: string; x: number; y: number } | null> }> = [];
+
+    const mergeInto = (
+      target: Array<{ text: string; x: number; y: number } | null>,
+      source: Array<{ text: string; x: number; y: number } | null>,
+      prepend: boolean
+    ) => {
+      for (let c = 0; c < target.length; c++) {
+        const s = source[c];
+        if (!s || !s.text) continue;
+        const t = target[c];
+        if (!t) {
+          target[c] = { ...s };
+        } else {
+          t.text = prepend ? `${s.text}\n${t.text}` : `${t.text}\n${s.text}`;
+        }
+      }
+    };
+
+    for (let i = 0; i < alignedRows.length; i++) {
+      const ar = alignedRows[i];
+      if (ar.isTotalOrStop) {
+        pendingPrefix = [];
+        foldedRows.push(ar.cols);
+        continue;
+      }
+      if (ar.hasNumericOrUnit) {
+        const cloned = ar.cols.map((c) => (c ? { ...c } : null));
+        for (let p = pendingPrefix.length - 1; p >= 0; p--) {
+          if (Math.abs(pendingPrefix[p].yRef - ar.yRef) <= 36) {
+            mergeInto(cloned, pendingPrefix[p].cols, true);
+          }
+        }
+        pendingPrefix = [];
+        foldedRows.push(cloned);
+      } else {
+        // Check if this descriptor-only line is a bottom continuation of the previous data row OR a top line of the next data row
+        const prevAligned = i > 0 ? alignedRows[i - 1] : null;
+        const nextAligned = i + 1 < alignedRows.length ? alignedRows[i + 1] : null;
+        const distPrev = prevAligned && prevAligned.hasNumericOrUnit && !prevAligned.isTotalOrStop ? Math.abs(prevAligned.yRef - ar.yRef) : Number.POSITIVE_INFINITY;
+        const distNext = nextAligned && nextAligned.hasNumericOrUnit && !nextAligned.isTotalOrStop ? Math.abs(ar.yRef - nextAligned.yRef) : Number.POSITIVE_INFINITY;
+
+        if (distPrev <= 24 && distPrev <= distNext && foldedRows.length > 0) {
+          mergeInto(foldedRows[foldedRows.length - 1], ar.cols, false);
+        } else {
+          pendingPrefix.push({ yRef: ar.yRef, cols: ar.cols });
+        }
+      }
+    }
+
+    foldedRows.forEach((cols, rIdx) => {
       grid.push(
-        mergedCells.map((mc, cIdx) => ({
+        cols.map((mc, cIdx) => {
+          const clean = mc ? mc.text.trim() : '';
+          return {
+            text: clean,
+            numOrText: parseNumericValue(clean) ?? clean,
+            formula: /^\s*[=+\-@]/.test(clean) ? clean : null,
+            cellRef: `P${pageNum}R${rIdx + 2}C${cIdx + 1}@x=${Math.round(mc?.x ?? headerAnchors[cIdx].x)},y=${Math.round(mc?.y ?? 0)}`,
+            confidence: 0.96,
+          };
+        })
+      );
+    });
+
+    return grid;
+  }
+
+  rawBands.forEach((b, rIdx) => {
+    if (b.cells.length >= 2) {
+      grid.push(
+        b.cells.map((mc, cIdx) => ({
           text: mc.text,
           numOrText: parseNumericValue(mc.text) ?? mc.text,
           formula: /^\s*[=+\-@]/.test(mc.text) ? mc.text : null,
@@ -506,6 +761,7 @@ export async function extractUniversalDocumentPackage(
   const allCandidates: ExtractedBoqRowCandidate[] = [];
   const blockingErrors: string[] = [...security.findings];
   let awardedBoqVerification: AwardedBoqVerificationReport | undefined;
+  const extractedTextPages: ContractTextPage[] = [];
 
   if (security.detectedFormat === 'XLSX') {
     // Bounded incremental OOXML worksheet streaming: processes one worksheet at a time directly from
@@ -717,6 +973,14 @@ export async function extractUniversalDocumentPackage(
         }
 
         if (coordGrid.length >= 2 || rawPageText.length >= 12 || (firstTable && firstTable.length >= 2)) {
+          if (rawPageText.length > 0) {
+            extractedTextPages.push({
+              pageNumber: pageNum,
+              text: rawPageText,
+              confidence: 0.96,
+              extractionMethod: 'NATIVE_PDF',
+            });
+          }
           const grid = coordGrid.length >= 2 ? coordGrid : splitNativePdfPageToGrid(rawPageText, pageNum, firstTable);
           const parsed = parseGridRowsToCandidates(grid, pageRef, `${fileName} (${pageRef})`, 'NATIVE_PDF_PARSER', 0.96, pageNum);
           sections.push({
@@ -809,6 +1073,18 @@ export async function extractUniversalDocumentPackage(
     // H01: Genuine pixel OCR on PNG / JPG / JPEG raster scans with word bounding boxes & real OCR confidence
     const { runRasterImageOcr } = await import('./ocr-engine');
     const ocrPage = await runRasterImageOcr(buffer, 1);
+    const ocrPageText = ocrPage.rows
+      .map((r) => r.cells.map((c) => c.text).join(' | '))
+      .join('\n')
+      .trim();
+    if (ocrPageText) {
+      extractedTextPages.push({
+        pageNumber: 1,
+        text: ocrPageText,
+        confidence: ocrPage.overallConfidence,
+        extractionMethod: 'OCR_RASTER',
+      });
+    }
     const ocrGrid: Array<Array<InternalGridCell>> = ocrPage.rows.map((r) =>
       r.cells.map((c, cIdx) => ({
         text: c.text,
@@ -879,11 +1155,34 @@ export async function extractUniversalDocumentPackage(
     }
   }
 
+  const contractExtraction =
+    extractedTextPages.length > 0
+      ? extractContractDocumentFromPages(fileName, extractedTextPages, {
+          sourceSha256: security.sha256Hash,
+        })
+      : undefined;
+
+  if (!awardedBoqVerification && allCandidates.length > 0) {
+    awardedBoqVerification = reconcileImportedAwardedBoqCandidates(
+      allCandidates.map((c, idx) => ({
+        id: `ext-${idx + 1}`,
+        sourceRowNumber: c.sourceRowNumber,
+        sourceCellRef: c.sourceCellRef,
+        sheetOrPageRef: c.sheetOrPageRef,
+        rawFormulaText: Object.keys(c.rawFormulas).length > 0 ? JSON.stringify(c.rawFormulas) : null,
+        mappedFields: c.mappedFields,
+        rowClassification: c.rowClassification ?? null,
+      }))
+    );
+  }
+
   return {
     security,
     sections,
     candidates: allCandidates,
     blockingErrors,
     awardedBoqVerification,
+    contractExtraction,
+    extractedTextPages: extractedTextPages.length > 0 ? extractedTextPages : undefined,
   };
 }

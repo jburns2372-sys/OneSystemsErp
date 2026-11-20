@@ -5,6 +5,12 @@ import { verifyOperationalSession } from '@/lib/dal/auth';
 import { assertUboqStageAuthorization, isRolePermittedForUboqStage } from '@/lib/uboq/security/stage-rbac';
 import { withUboqRlsContext, applyProjectRlsSessionVars } from '@/lib/uboq/project-ownership';
 import ProjectDocumentIntakeClient from './ProjectDocumentIntakeClient';
+import ContractReconciliationBanner from '../ContractReconciliationBanner';
+import {
+  reconcileProjectContractDocuments,
+  type ExtractedContractDocument,
+} from '@/lib/uboq/contract-document-extractor';
+import type { DocumentRelevanceAssessment } from '@/lib/uboq/project-relevance';
 import { requireProjectDocumentPermission } from '@/lib/uboq/security/document-permissions';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +26,7 @@ export default async function ProjectDocumentsPage({
     project: { id: string; name: string; projectCategory: string | null } | null;
     files: Array<{
       id: string; fileName: string; documentRole: string; byteSize: number;
-      createdAt: Date; sha256Hash: string;
+      createdAt: Date; sha256Hash: string; metadataJson: unknown;
       snapshots: Array<{ status: string }>;
     }>;
   };
@@ -46,7 +52,7 @@ export default async function ProjectDocumentsPage({
               where: { projectId },
               select: {
                 id: true, fileName: true, documentRole: true,
-                byteSize: true, createdAt: true, sha256Hash: true,
+                byteSize: true, createdAt: true, sha256Hash: true, metadataJson: true,
                 snapshots: { select: { status: true }, take: 1, orderBy: { versionNumber: 'desc' } },
               },
               orderBy: { createdAt: 'desc' },
@@ -72,6 +78,30 @@ export default async function ProjectDocumentsPage({
     where: { moduleName: 'DOCUMENTS', canUploadAttachment: true, role: { roleCode: actor.role, isActive: true } },
     select: { id: true },
   });
+
+  const extractedContractDocs: ExtractedContractDocument[] = [];
+  const needsConfirmationDocs: Array<{ id: string; fileName: string; relevance: DocumentRelevanceAssessment }> = [];
+  let boqRecalcTotal: number | null = null;
+  for (const f of data.files) {
+    const meta = f.metadataJson && typeof f.metadataJson === 'object' ? (f.metadataJson as Record<string, unknown>) : null;
+    if (meta?.contractExtraction && typeof meta.contractExtraction === 'object') {
+      extractedContractDocs.push(meta.contractExtraction as ExtractedContractDocument);
+    }
+    if (meta?.projectRelevance && typeof meta.projectRelevance === 'object') {
+      const rel = meta.projectRelevance as DocumentRelevanceAssessment;
+      if (rel.status === 'NEEDS_CONFIRMATION') {
+        needsConfirmationDocs.push({ id: f.id, fileName: f.fileName, relevance: rel });
+      }
+    }
+    if (boqRecalcTotal === null && meta?.awardedBoqVerification && typeof meta.awardedBoqVerification === 'object') {
+      const rt = (meta.awardedBoqVerification as { recalculatedTotal?: unknown }).recalculatedTotal;
+      if (typeof rt === 'number' && Number.isFinite(rt) && rt > 0) boqRecalcTotal = rt;
+    }
+  }
+  const contractReconciliation =
+    extractedContractDocs.length > 0
+      ? reconcileProjectContractDocuments(extractedContractDocs, { boqRecalculatedTotal: boqRecalcTotal })
+      : null;
 
   return (
     <main style={{padding:'20px clamp(14px, 3vw, 28px)',maxWidth:1360,margin:'0 auto',color:'#f8fafc'}}>
@@ -128,6 +158,10 @@ export default async function ProjectDocumentsPage({
           but BOQ staging requires an approved sector and tax profile.
         </p>
       )}
+      <ContractReconciliationBanner
+        reconciliation={contractReconciliation}
+        needsConfirmationDocs={needsConfirmationDocs}
+      />
       <ProjectDocumentIntakeClient
         projectId={projectId}
         sector={data.project.projectCategory || ''}

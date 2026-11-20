@@ -9,6 +9,12 @@ import { redactUboqPayloadForRole } from '@/lib/uboq/security/redact-payload';
 import VisualMappingReviewClient from './VisualMappingReviewClient';
 import SnapshotApprovalPanel, { type SnapshotSummaryItem } from './SnapshotApprovalPanel';
 import AwardedBoqReconciliationPanel from '../AwardedBoqReconciliationPanel';
+import ContractReconciliationBanner from '../ContractReconciliationBanner';
+import {
+  reconcileProjectContractDocuments,
+  type ExtractedContractDocument,
+} from '@/lib/uboq/contract-document-extractor';
+import type { DocumentRelevanceAssessment } from '@/lib/uboq/project-relevance';
 import {
   reconcileImportedAwardedBoqCandidates,
   type AwardedBoqVerificationReport,
@@ -340,6 +346,10 @@ export default async function ProjectUboqWorkbenchPage({
                 ? (c.parsedJson as Record<string, unknown>)
                 : {};
             const mapped = (pJson.effectiveCanonicalFields ?? pJson.mappedFields ?? {}) as Record<string, unknown>;
+            const rowClassification =
+              typeof pJson.rowClassification === 'string'
+                ? (pJson.rowClassification as Parameters<typeof reconcileImportedAwardedBoqCandidates>[0][number]['rowClassification'])
+                : null;
             return {
               id: c.id,
               sourceRowNumber: c.sourceRowNumber,
@@ -347,6 +357,7 @@ export default async function ProjectUboqWorkbenchPage({
               sheetOrPageRef: c.section?.sheetOrPageRef ?? null,
               rawFormulaText: c.rawFormulaText,
               mappedFields: mapped,
+              rowClassification,
             };
           }),
           {
@@ -356,6 +367,27 @@ export default async function ProjectUboqWorkbenchPage({
         );
       })()
     : null;
+
+  const extractedContractDocs: ExtractedContractDocument[] = [];
+  const needsConfirmationDocs: Array<{ id: string; fileName: string; relevance: DocumentRelevanceAssessment }> = [];
+  for (const doc of sourceDocumentsRaw) {
+    const meta = doc.metadataJson && typeof doc.metadataJson === 'object' ? (doc.metadataJson as Record<string, unknown>) : null;
+    if (meta?.contractExtraction && typeof meta.contractExtraction === 'object') {
+      extractedContractDocs.push(meta.contractExtraction as ExtractedContractDocument);
+    }
+    if (meta?.projectRelevance && typeof meta.projectRelevance === 'object') {
+      const rel = meta.projectRelevance as DocumentRelevanceAssessment;
+      if (rel.status === 'NEEDS_CONFIRMATION') {
+        needsConfirmationDocs.push({ id: doc.id, fileName: doc.fileName, relevance: rel });
+      }
+    }
+  }
+  const contractReconciliation =
+    extractedContractDocs.length > 0
+      ? reconcileProjectContractDocuments(extractedContractDocs, {
+          boqRecalculatedTotal: boqVerification?.recalculatedTotal ?? null,
+        })
+      : null;
 
   return (
     <main style={{ padding: '20px clamp(14px, 3vw, 28px)', maxWidth: '1360px', margin: '0 auto', color: 'var(--text-primary, #f8fafc)' }}>
@@ -444,6 +476,11 @@ export default async function ProjectUboqWorkbenchPage({
           {contract ? ` · ${contract.sectorType}` : ''}
         </p>
       </header>
+
+      <ContractReconciliationBanner
+        reconciliation={contractReconciliation}
+        needsConfirmationDocs={needsConfirmationDocs}
+      />
 
       <AwardedBoqReconciliationPanel
         projectId={project.id}
