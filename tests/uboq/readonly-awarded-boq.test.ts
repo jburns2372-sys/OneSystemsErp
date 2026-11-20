@@ -17,6 +17,7 @@ import {
   reconcileImportedAwardedBoqCandidates,
 } from '../../src/lib/uboq/awarded-boq-reconciler';
 import { extractUniversalDocumentPackage } from '../../src/lib/uboq/intake/parsers';
+import { canConvertUom, normalizeUom } from '../../src/lib/uboq/uom-registry';
 
 const WORKTREE_ROOT = process.cwd();
 const PGH_XLSX_PATH =
@@ -123,6 +124,21 @@ async function testReal441EntryPghWorkbookZeroApprovals(): Promise<void> {
   assert.equal(legendInVerif!.classification, 'HEADER_META');
   assert.equal(legendInVerif!.quantity, null);
   assert.equal(legendInVerif!.lineAmount, null);
+
+  // Verify every priced PGH HVAC unit normalizes cleanly (ZERO VAL-03 UBOQ_UNKNOWN_UOM blocking errors)
+  const unknownUnits: string[] = [];
+  for (const row of verif.classifiedRows) {
+    if (row.classification !== 'PAY_ITEM' || !row.unit) continue;
+    try {
+      normalizeUom(row.unit, row.description);
+    } catch {
+      unknownUnits.push(row.unit);
+    }
+  }
+  assert.deepEqual(unknownUnits, [], `All PGH HVAC pay-item units must normalize without VAL-03 errors; unknown: ${unknownUnits.join(', ')}`);
+  // Distinct discrete pack units must remain non-convertible to preserve UOM safety
+  assert.equal(canConvertUom('tank', 'roll'), false);
+  assert.equal(canConvertUom('bottle', 'length_6m'), false);
 }
 
 async function testSynthetic1050EntryBoqZeroApprovals(): Promise<void> {
