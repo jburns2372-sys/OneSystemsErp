@@ -40,7 +40,7 @@ const TAX_PROFILES: Record<string, Array<[string, string]>> = {
 };
 
 function friendlyUploadError(rawError: unknown, status?: number): string {
-  const msg = String(rawError || '');
+  const msg = String(rawError || '').trim();
   if (msg.includes('UBOQ_XLSX_LIMIT_EXCEEDED')) {
     return 'This spreadsheet is larger than the single-upload processing limit. Save only the BOQ sheets to a smaller .xlsx file and upload again.';
   }
@@ -52,6 +52,9 @@ function friendlyUploadError(rawError: unknown, status?: number): string {
   }
   if (msg.includes('UBOQ_SEC_') || msg.includes('UBOQ_INTAKE_SECURITY_BLOCKED')) {
     return 'This file did not pass safety checks (macros, embedded scripts, or damaged archive structure).';
+  }
+  if (msg && !/[/\\]|node_modules|stack|sql|prisma/i.test(msg)) {
+    return msg;
   }
   return status ? `Upload could not be completed (HTTP ${status}). Please retry.` : 'Upload could not be completed.';
 }
@@ -72,11 +75,11 @@ export default function ProjectDocumentIntakeClient(props: {
   const [tax, setTax] = useState<string>(defaultTax);
   const [queue, setQueue] = useState<QueuedUploadFile[]>([]);
   const [busy, setBusy] = useState(false);
-  const [results, setResults] = useState<Array<{ fileName: string; category: string; ok: boolean; text: string; isBoq: boolean }>>([]);
+  const [results, setResults] = useState<string[]>([]);
   const [formNotice, setFormNotice] = useState<string | null>(null);
 
   const activeTax = taxes.some(([code]) => code === tax) ? tax : defaultTax;
-  const hasQueuedBoq = queue.some((q) => q.roleCode === 'CONTRACT_BOQ');
+  const hasQueuedBoq = queue.length > 0 ? queue.some((q) => q.roleCode === 'CONTRACT_BOQ') : true;
   const needsTaxChoice = hasQueuedBoq && taxes.length > 1;
   const unconfirmedCount = queue.filter((q) => q.confidence === 'NEEDS_CONFIRMATION' && !q.confirmed).length;
 
@@ -121,49 +124,54 @@ export default function ProjectDocumentIntakeClient(props: {
 
   async function uploadQueuedFiles() {
     setFormNotice(null);
-    if (queue.length === 0) {
+    const directFiles = queue.length === 0 ? Array.from(input.current?.files || []) : [];
+    const itemsToProcess: QueuedUploadFile[] =
+      queue.length > 0
+        ? queue
+        : directFiles.map((file, idx) => {
+            const proposal = classifyProjectDocumentFile(file.name);
+            return {
+              key: `direct-${file.name}-${idx}`,
+              file,
+              roleCode: proposal.roleCode,
+              confidence: proposal.confidence,
+              reason: proposal.reason,
+              confirmed: true,
+            };
+          });
+
+    if (itemsToProcess.length === 0) {
       setFormNotice('Select one or more project files first.');
       return;
     }
-    if (unconfirmedCount > 0) {
+    if (queue.length > 0 && unconfirmedCount > 0) {
       setFormNotice(`Please confirm or choose a category for the ${unconfirmedCount} highlighted file(s) before uploading.`);
       return;
     }
-    if (hasQueuedBoq && !activeTax) {
+    const batchHasBoq = itemsToProcess.some((q) => q.roleCode === 'CONTRACT_BOQ');
+    if (batchHasBoq && !activeTax) {
       setFormNotice('Please select the contract tax/price basis for the Awarded BOQ before uploading.');
       return;
     }
 
     setBusy(true);
-    const completed: Array<{ fileName: string; category: string; ok: boolean; text: string; isBoq: boolean }> = [];
+    const completed: string[] = [];
     const remaining: QueuedUploadFile[] = [];
 
-    for (const item of queue) {
+    for (const item of itemsToProcess) {
       const isBoq = item.roleCode === 'CONTRACT_BOQ';
       const allowed = isBoq ? props.canStageBoq : props.canUploadEvidence;
       const categoryLabel = getDocumentCategoryLabel(item.roleCode);
 
       if (!allowed) {
-        completed.push({
-          fileName: item.file.name,
-          category: categoryLabel,
-          ok: false,
-          text: 'Your role does not have permission to upload this document category.',
-          isBoq,
-        });
-        remaining.push(item);
+        completed.push(`${item.file.name} (${categoryLabel}): Your role does not have permission to upload this document category.`);
+        if (queue.length > 0) remaining.push(item);
         continue;
       }
 
       if (item.file.size > 25 * 1024 * 1024) {
-        completed.push({
-          fileName: item.file.name,
-          category: categoryLabel,
-          ok: false,
-          text: 'Exceeds the 25 MB per-file upload limit.',
-          isBoq,
-        });
-        remaining.push(item);
+        completed.push(`${item.file.name} (${categoryLabel}): Exceeds the 25 MB per-file upload limit.`);
+        if (queue.length > 0) remaining.push(item);
         continue;
       }
 
@@ -183,49 +191,33 @@ export default function ProjectDocumentIntakeClient(props: {
         const res = await fetch(url, { method: 'POST', body: form, credentials: 'same-origin' });
         const value = await res.json().catch(() => ({}));
         if (!res.ok) {
-          completed.push({
-            fileName: item.file.name,
-            category: categoryLabel,
-            ok: false,
-            text: friendlyUploadError(value.error, res.status),
-            isBoq,
-          });
-          remaining.push(item);
+          completed.push(`${item.file.name} (${categoryLabel}): ${friendlyUploadError(value.error, res.status)}`);
+          if (queue.length > 0) remaining.push(item);
         } else {
           const isDup = Boolean(value.duplicate || value.duplicateIdempotentReplay);
-          completed.push({
-            fileName: item.file.name,
-            category: categoryLabel,
-            ok: true,
-            text: isBoq
-              ? isDup
-                ? 'Awarded BOQ already stored — existing verified copy preserved'
-                : 'Awarded BOQ uploaded — calculations and formulas checked automatically'
-              : isDup
-                ? 'Supporting document already stored in the Document Register'
-                : 'Stored securely in the Document Register',
-            isBoq,
-          });
+          const msg = isBoq
+            ? isDup
+              ? 'Awarded BOQ already stored — existing verified copy preserved'
+              : 'Awarded BOQ uploaded — calculations and formulas checked automatically'
+            : isDup
+              ? 'Supporting document already stored in the Document Register'
+              : 'Stored securely in the Document Register';
+          completed.push(`${item.file.name} (${categoryLabel}): ${msg}`);
         }
       } catch {
-        completed.push({
-          fileName: item.file.name,
-          category: categoryLabel,
-          ok: false,
-          text: 'Connection interrupted. Check the Document Register before retrying.',
-          isBoq,
-        });
-        remaining.push(item);
+        completed.push(`${item.file.name} (${categoryLabel}): Connection interrupted. Check the Document Register before retrying.`);
+        if (queue.length > 0) remaining.push(item);
       }
     }
 
     setResults(completed);
-    setQueue(remaining);
+    if (queue.length > 0) setQueue(remaining);
+    if (input.current) input.current.value = '';
     setBusy(false);
     router.refresh();
   }
 
-  const anyUploadSucceeded = results.some((r) => r.ok);
+  const anyUploadSucceeded = results.some((line) => line.includes('uploaded') || line.includes('Stored') || line.includes('already stored'));
   const hasExistingDocs = props.files.length > 0;
   const canUploadAnything = props.canStageBoq || props.canUploadEvidence;
 
@@ -397,7 +389,7 @@ export default function ProjectDocumentIntakeClient(props: {
 
         {/* One primary action per screen */}
         <div style={{ marginTop: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          {queue.length > 0 ? (
+          {(queue.length > 0 || (!hasExistingDocs && !anyUploadSucceeded)) ? (
             <button
               type="button"
               onClick={uploadQueuedFiles}
@@ -412,9 +404,13 @@ export default function ProjectDocumentIntakeClient(props: {
                 cursor: busy ? 'wait' : 'pointer',
               }}
             >
-              {busy ? 'Uploading and verifying...' : `Upload ${queue.length} Selected File${queue.length === 1 ? '' : 's'}`}
+              {busy
+                ? 'Uploading and verifying...'
+                : queue.length > 0
+                  ? `Upload ${queue.length} Selected File${queue.length === 1 ? '' : 's'}`
+                  : 'Upload Selected Documents'}
             </button>
-          ) : (hasExistingDocs || anyUploadSucceeded) ? (
+          ) : (
             <Link
               href={`/projects/${encodeURIComponent(props.projectId)}?tab=awarded-boq`}
               style={{
@@ -430,7 +426,7 @@ export default function ProjectDocumentIntakeClient(props: {
             >
               Continue to Project Workspace &rarr;
             </Link>
-          ) : null}
+          )}
 
           {(hasExistingDocs || anyUploadSucceeded) && (
             <Link
@@ -456,10 +452,10 @@ export default function ProjectDocumentIntakeClient(props: {
               gap: 6,
             }}
           >
-            {results.map((r, i) => (
-              <div key={i} style={{ fontSize: 13.5, color: r.ok ? '#a7f3d0' : '#fca5a5' }}>
-                <strong>{r.fileName}</strong> ({r.category}): {r.text}
-              </div>
+            {results.map((line, i) => (
+              <p key={i} style={{ margin: '2px 0', fontSize: 13.5, color: '#e2e8f0' }}>
+                {line}
+              </p>
             ))}
           </div>
         )}

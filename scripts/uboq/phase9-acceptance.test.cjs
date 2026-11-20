@@ -673,9 +673,11 @@ test('document register query and rendered rows stay project-scoped without vaul
 test('document UI requires explicit tax confirmation then uploads files individually with partial failure',async()=>{
   let index=0,refreshes=0;const state=[];const requests=[];
   const ref={current:{files:[new File(['a'],'one.csv'),new File(['b'],'two.csv')],value:'selected'}};
+  const docClassifier = load('src/lib/uboq/document-classifier.ts', {});
   const component=load('src/app/projects/[id]/documents/ProjectDocumentIntakeClient.tsx',{
     'react/jsx-runtime':jsx,react:{useRef:()=>ref,useState:initial=>{const i=index++;if(!(i in state))state[i]=initial;return[state[i],v=>state[i]=v];}},
-    'next/navigation':{useRouter:()=>({refresh:()=>refreshes++})},'next/link':{default:()=>{}}}, {},undefined,
+    'next/navigation':{useRouter:()=>({refresh:()=>refreshes++})},'next/link':{default:()=>{}},
+    '@/lib/uboq/document-classifier':docClassifier}, {},undefined,
     {fetch:async(url,options)=>{requests.push({url,form:options.body});return{ok:requests.length===1,status:requests.length===1?201:400,json:async()=>({error:'synthetic rejection'})};}}).default;
   const props={projectId:'synthetic-project',sector:'CORPORATE',canStageBoq:true,canUploadEvidence:true,files:[]};
   const render=()=>{index=0;return component(props);};
