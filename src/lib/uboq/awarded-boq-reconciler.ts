@@ -338,11 +338,13 @@ export function classifyAwardedBoqRow(input: {
   const amtFormula = String(input.amountFormula ?? '').trim().toUpperCase();
 
   // 1. Multi-row header / numbering / legend rows like "(1) (2) (3) (4) (5a-1) (5a) = E+F+G (6) = D×M"
+  //    or single-cell column legend rows such as "(2)"
   const isParenLegendCell = (t: string): boolean => /^\(\d+[a-z]?(?:-\d+)?\)(?:\s*=\s*.+)?$/i.test(t);
   if (
-    rawTexts.length > 0 &&
-    (rawTexts.every((t) => /^\(\d+\)$/.test(t) || /^[\[\]()0-9+*xX/\-\s]+$/.test(t)) ||
-      (rawTexts.length >= 3 && rawTexts.filter(isParenLegendCell).length >= Math.ceil(rawTexts.length * 0.75)))
+    (desc && isParenLegendCell(desc) && (!itemCode || isParenLegendCell(itemCode)) && (!unit || isParenLegendCell(unit))) ||
+    (rawTexts.length > 0 &&
+      (rawTexts.every((t) => /^\(\d+\)$/.test(t) || /^[\[\]()0-9+*xX/\-\s]+$/.test(t)) ||
+        (rawTexts.length >= 2 && rawTexts.filter(isParenLegendCell).length >= Math.ceil(rawTexts.length * 0.65))))
   ) {
     return 'HEADER_META';
   }
@@ -1724,22 +1726,23 @@ export function verifyAwardedBoqWorkbook(
         }
       }
 
+      const isHeaderMeta = classification === 'HEADER_META';
       classifiedRows.push({
         worksheet: sheet.sheetName,
         rowNumber: row.rowNumber,
         classification,
         itemCode,
         description: combinedLabel,
-        unit,
-        quantity: qty,
-        unitPrice,
-        directCost,
-        indirectCost,
-        lineAmount,
-        recalculatedAmount,
-        formulaText: totalCell?.formula ?? directCell?.formula ?? null,
+        unit: isHeaderMeta ? null : unit,
+        quantity: isHeaderMeta ? null : qty,
+        unitPrice: isHeaderMeta ? null : unitPrice,
+        directCost: isHeaderMeta ? null : directCost,
+        indirectCost: isHeaderMeta ? null : indirectCost,
+        lineAmount: isHeaderMeta ? null : lineAmount,
+        recalculatedAmount: isHeaderMeta ? null : recalculatedAmount,
+        formulaText: isHeaderMeta ? null : (totalCell?.formula ?? directCell?.formula ?? null),
         cellRef: primaryRef,
-        hasDiscrepancy: rowHasDiscrepancy,
+        hasDiscrepancy: isHeaderMeta ? false : rowHasDiscrepancy,
       });
     }
   }
@@ -2073,22 +2076,23 @@ export function reconcileImportedAwardedBoqCandidates(
       }
     }
 
+    const isHeaderMeta = classification === 'HEADER_META';
     classifiedRows.push({
       worksheet,
       rowNumber: c.sourceRowNumber ?? 0,
       classification,
       itemCode,
       description: desc || cellRef,
-      unit,
-      quantity: qty,
-      unitPrice,
-      directCost,
-      indirectCost,
-      lineAmount,
-      recalculatedAmount: recalc,
-      formulaText: c.rawFormulaText,
+      unit: isHeaderMeta ? null : unit,
+      quantity: isHeaderMeta ? null : qty,
+      unitPrice: isHeaderMeta ? null : unitPrice,
+      directCost: isHeaderMeta ? null : directCost,
+      indirectCost: isHeaderMeta ? null : indirectCost,
+      lineAmount: isHeaderMeta ? null : lineAmount,
+      recalculatedAmount: isHeaderMeta ? null : recalc,
+      formulaText: isHeaderMeta ? null : c.rawFormulaText,
       cellRef,
-      hasDiscrepancy: rowHasDiscrepancy,
+      hasDiscrepancy: isHeaderMeta ? false : rowHasDiscrepancy,
     });
   }
 
