@@ -461,8 +461,9 @@ export default async function ProjectUboqWorkbenchPage({
         verification={boqVerification}
         hasWorkspaceBoq={(project._count?.awardedBoqItems ?? 0) > 0}
         isBoqLocked={Boolean(project.boqLocked)}
-        canPopulateWorkspaceBoq={canApprove || canSyncSchedule}
+        canPopulateWorkspaceBoq={canApprove}
         isSimulatingRole={accessContext.isSimulating}
+        showWorkspaceCta
       />
 
       {/* Guided 4-Step Progress Bar */}

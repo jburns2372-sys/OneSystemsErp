@@ -21,6 +21,7 @@ interface Props {
   canPopulateWorkspaceBoq: boolean;
   isSimulatingRole: boolean;
   compact?: boolean;
+  showWorkspaceCta?: boolean;
 }
 
 function fmtPhp(val: number | null | undefined): string {
@@ -37,6 +38,7 @@ export default function AwardedBoqReconciliationPanel({
   canPopulateWorkspaceBoq,
   isSimulatingRole,
   compact = false,
+  showWorkspaceCta = false,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -225,20 +227,32 @@ export default function AwardedBoqReconciliationPanel({
               marginBottom: '6px',
             }}
           >
-            {isMatch
-              ? 'RECONCILED'
-              : isMissingContract
-                ? 'AWAITING OFFICIAL CONTRACT AMOUNT'
-                : 'DISCREPANCIES DETECTED'}
+            {verification.outcomeLabel}
           </span>
           <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.05rem' }}>{verification.headline}</h3>
           <div style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '4px' }}>
-            Immutable Source: <strong style={{ color: '#e2e8f0' }}>{sourceDocument.fileName}</strong> &middot;{' '}
-            {verification.counts.payItems} priced pay items &middot; {verification.counts.headingsAndNotes} headings/notes separated (no routine item-by-item reapproval required)
+            Source: <strong style={{ color: '#e2e8f0' }}>{sourceDocument.fileName}</strong> &middot;{' '}
+            {verification.counts.payItems} priced pay items &middot; {verification.counts.headingsAndNotes} headings/notes separated (no item-by-item reapproval required)
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {showWorkspaceCta && (
+            <Link
+              href={`/projects/${projectId}?tab=awarded-boq`}
+              style={{
+                padding: '7px 14px',
+                borderRadius: '8px',
+                background: '#10b981',
+                color: '#022c22',
+                textDecoration: 'none',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+              }}
+            >
+              Continue to Project Workspace &rarr;
+            </Link>
+          )}
           <Link
             href={`/projects/${projectId}/documents`}
             style={{
@@ -255,20 +269,37 @@ export default function AwardedBoqReconciliationPanel({
             Documents Register
           </Link>
           <Link
-            href={`/projects/${projectId}/uboq`}
+            href={`/projects/${projectId}/uboq/templates`}
             style={{
               padding: '7px 12px',
               borderRadius: '8px',
-              background: 'rgba(56, 189, 248, 0.14)',
-              border: '1px solid rgba(56, 189, 248, 0.4)',
-              color: '#7dd3fc',
+              background: 'rgba(139, 92, 246, 0.16)',
+              border: '1px solid rgba(167, 139, 250, 0.4)',
+              color: '#ddd6fe',
               textDecoration: 'none',
               fontSize: '0.82rem',
               fontWeight: 600,
             }}
           >
-            BOQ Verification Details &rarr;
+            BOQ Templates (T0–T12)
           </Link>
+          {!showWorkspaceCta && (
+            <Link
+              href={`/projects/${projectId}/uboq`}
+              style={{
+                padding: '7px 12px',
+                borderRadius: '8px',
+                background: 'rgba(56, 189, 248, 0.14)',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                color: '#7dd3fc',
+                textDecoration: 'none',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+              }}
+            >
+              BOQ Verification Details &rarr;
+            </Link>
+          )}
         </div>
       </div>
 
@@ -399,10 +430,10 @@ export default function AwardedBoqReconciliationPanel({
             </div>
             <div style={{ color: '#94a3b8', fontSize: '0.78rem', marginTop: '3px' }}>
               {isMatch
-                ? 'Imports verified pay items and headings into Contract Value & BOQ, Procurement Benchmark, Master Materials, Profitability, and Scheduling. Does NOT auto-create PRRs, purchase orders, payments, or variations.'
+                ? 'Applies verified pay items and headings into existing Project Workspace tabs (Contract Value & BOQ, Procurement Benchmark, Master Materials, Profitability, and Scheduling). Requires authorized contract-import permission (not a second commercial approval) and does NOT auto-create PRRs, purchase orders, payments, billings, or variations.'
                 : isMissingContract
-                  ? 'Record the official awarded contract amount from authorized contract evidence before populating the Project Workspace BOQ.'
-                  : 'Resolve the reported calculation or contract-total discrepancies before populating the Project Workspace BOQ.'}
+                  ? 'Record the official awarded contract amount from verified NOA or signed contract evidence before populating the Project Workspace BOQ. You may safely continue navigating the project while waiting.'
+                  : 'Resolve the reported calculation, formula, or contract-total discrepancies before populating the Project Workspace BOQ.'}
             </div>
           </div>
 

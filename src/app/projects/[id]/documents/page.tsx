@@ -115,9 +115,9 @@ export default async function ProjectDocumentsPage({
 
       <div style={{marginBottom:20}}>
         <div style={{fontSize:'0.75rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',color:'#38bdf8'}}>
-          Step 1 of 4
+          Step 2 of 4
         </div>
-        <h1 style={{margin:'4px 0 6px',fontSize:'clamp(1.3rem, 2.5vw, 1.7rem)'}}>Upload Project Documents &amp; BOQ</h1>
+        <h1 style={{margin:'4px 0 6px',fontSize:'clamp(1.3rem, 2.5vw, 1.7rem)'}}>Upload Project Documents &amp; Awarded BOQ</h1>
         <p style={{color:'#94a3b8',margin:0,fontSize:'0.9rem'}}>
           <strong style={{color:'#e2e8f0'}}>{data.project.name}</strong> &middot; Sector: {data.project.projectCategory || 'Not confirmed'}
         </p>

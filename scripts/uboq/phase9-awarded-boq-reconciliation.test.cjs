@@ -365,9 +365,19 @@ test('Shared OOXML formulas (<f t="shared" si="0"/>) translate relative row offs
   assert.equal(rep.counts.cachedValueMismatches, 0);
 });
 
-test('Authorized Workspace BOQ Bridge enforces reconciliation, blocks role preview, and NEVER auto-creates PRRs/POs/Payments/VOs', async () => {
+test('Authorized Workspace BOQ Bridge enforces UBOQ_SNAPSHOT_APPROVE, immutable source, same-source idempotency, different-source conflict, concurrency lock, and ZERO auto-posting', async () => {
+  const realStageRbac = loadTs('src/lib/uboq/security/stage-rbac.ts');
+  let requestedCapabilities = [];
   const bridge = loadTs('src/lib/uboq/adapters/workspace-boq-bridge.ts', {
-    '../security/stage-rbac': { assertUboqStageAuthorization: async () => true },
+    '../security/stage-rbac': {
+      assertUboqStageAuthorization: async (_prisma, params) => {
+        requestedCapabilities.push(params.capability);
+        if (!realStageRbac.isRolePermittedForUboqStage(params.userId === 'eng-only' ? 'PROJECT_ENGINEER' : 'SUPER_ADMIN', params.capability)) {
+          throw new Error(`UBOQ_RBAC_FORBIDDEN: ${params.capability} denied`);
+        }
+        return true;
+      },
+    },
     '../project-ownership': {
       applyProjectRlsSessionVars: async () => {},
       uboqRlsStorage: { getStore: () => null },
@@ -375,73 +385,106 @@ test('Authorized Workspace BOQ Bridge enforces reconciliation, blocks role previ
     '../awarded-boq-reconciler': reconciler,
   });
 
-  const makeMockPrisma = (contractAmount) => {
+  const makeMockPrisma = (contractAmount, opts = {}) => {
     const insertedBoq = [];
     const auditLogs = [];
+    let rowLockCount = 0;
     let forbiddenAutoPostCalled = false;
+    const docId = opts.docId || 'doc-1';
+    const sha256Hash = opts.sha256Hash || 'a'.repeat(64);
+    const isLockedImmutable = opts.isLockedImmutable !== undefined ? opts.isLockedImmutable : true;
+
     const tx = {
+      $queryRaw: async () => { rowLockCount++; return [{ id: 'proj-1' }]; },
+      project: {
+        findUnique: async () => ({ id: 'proj-1', boqLocked: false }),
+      },
       awardedBOQItem: {
         count: async () => insertedBoq.length,
         create: async ({ data }) => { insertedBoq.push(data); return { id: `boq-${insertedBoq.length}`, ...data }; },
       },
       auditLog: {
         create: async ({ data }) => { auditLogs.push(data); return data; },
+        findFirst: async () => (auditLogs.length > 0 ? { remarks: auditLogs[auditLogs.length - 1].remarks } : null),
       },
       uboqProcurementResourceRequirement: { create: async () => { forbiddenAutoPostCalled = true; } },
       purchaseOrder: { create: async () => { forbiddenAutoPostCalled = true; } },
       materialRequest: { create: async () => { forbiddenAutoPostCalled = true; } },
       variationOrder: { create: async () => { forbiddenAutoPostCalled = true; } },
     };
+
+    const makeDoc = (overrideId, overrideSha) => ({
+      id: overrideId || docId,
+      projectId: 'proj-1',
+      fileName: 'awarded.xlsx',
+      isLockedImmutable,
+      sha256Hash: overrideSha || sha256Hash,
+      metadataJson: {},
+      candidates: [
+        {
+          id: 'c1',
+          sourceRowNumber: 2,
+          sourceCellRef: 'BOQ!A2',
+          rawFormulaText: null,
+          section: { sheetOrPageRef: 'BOQ' },
+          parsedJson: { mappedFields: { item_code: 'I', work_description: 'GENERAL REQUIREMENTS' } },
+        },
+        {
+          id: 'c2',
+          sourceRowNumber: 3,
+          sourceCellRef: 'BOQ!A3',
+          rawFormulaText: '{"contract_line_amount":"=D3*E3"}',
+          section: { sheetOrPageRef: 'BOQ' },
+          parsedJson: {
+            mappedFields: {
+              item_code: '1.1',
+              work_description: 'Concrete Works',
+              unit: 'cu.m',
+              approved_qty: 10,
+              contract_unit_rate: 5000,
+              contract_line_amount: 50000,
+            },
+          },
+        },
+      ],
+    });
+
+    let activeDocOverride = null;
     return {
       insertedBoq,
       auditLogs,
+      getRowLockCount: () => rowLockCount,
       wasForbiddenCalled: () => forbiddenAutoPostCalled,
+      setNextDoc: (id, sha) => { activeDocOverride = { id, sha }; },
       prisma: {
         project: {
           findUnique: async () => ({ id: 'proj-1', name: 'Test Project', contractAmount, boqLocked: false }),
         },
         uboqSourceDocument: {
-          findFirst: async () => ({
-            id: 'doc-1',
-            projectId: 'proj-1',
-            fileName: 'awarded.xlsx',
-            sha256Hash: 'a'.repeat(64),
-            metadataJson: {},
-            candidates: [
-              {
-                id: 'c1',
-                sourceRowNumber: 2,
-                sourceCellRef: 'BOQ!A2',
-                rawFormulaText: null,
-                section: { sheetOrPageRef: 'BOQ' },
-                parsedJson: { mappedFields: { item_code: 'I', work_description: 'GENERAL REQUIREMENTS' } },
-              },
-              {
-                id: 'c2',
-                sourceRowNumber: 3,
-                sourceCellRef: 'BOQ!A3',
-                rawFormulaText: '{"contract_line_amount":"=D3*E3"}',
-                section: { sheetOrPageRef: 'BOQ' },
-                parsedJson: {
-                  mappedFields: {
-                    item_code: '1.1',
-                    work_description: 'Concrete Works',
-                    unit: 'cu.m',
-                    approved_qty: 10,
-                    contract_unit_rate: 5000,
-                    contract_line_amount: 50000,
-                  },
-                },
-              },
-            ],
-          }),
+          findFirst: async () =>
+            activeDocOverride ? makeDoc(activeDocOverride.id, activeDocOverride.sha) : makeDoc(),
         },
         $transaction: async (fn) => fn(tx),
       },
     };
   };
 
-  // 1. Blocked during role preview
+  // 1. Document staging permission alone (PROJECT_ENGINEER) MUST BE DENIED operational baseline write
+  requestedCapabilities = [];
+  await assert.rejects(
+    () =>
+      bridge.populateWorkspaceAwardedBoqFromVerifiedDocument(makeMockPrisma(50000).prisma, {
+        projectId: 'proj-1',
+        sourceDocumentId: 'doc-1',
+        actorUserId: 'eng-only',
+        actorRole: 'PROJECT_ENGINEER',
+        confirmationNote: 'Attempt by staging-only role',
+      }),
+    /UBOQ_RBAC_FORBIDDEN/
+  );
+  assert.deepEqual(requestedCapabilities, ['UBOQ_SNAPSHOT_APPROVE'], 'Must strictly require UBOQ_SNAPSHOT_APPROVE with no fallback to UBOQ_INTAKE_STAGE');
+
+  // 2. Blocked during role preview
   await assert.rejects(
     () =>
       bridge.populateWorkspaceAwardedBoqFromVerifiedDocument(makeMockPrisma(50000).prisma, {
@@ -455,7 +498,20 @@ test('Authorized Workspace BOQ Bridge enforces reconciliation, blocks role previ
     /UBOQ_ROLE_PREVIEW_BLOCKED/
   );
 
-  // 2. Blocked when official contractAmount is 0 (PGH safeguard!)
+  // 3. Blocked when source document is not immutable
+  await assert.rejects(
+    () =>
+      bridge.populateWorkspaceAwardedBoqFromVerifiedDocument(makeMockPrisma(50000, { isLockedImmutable: false }).prisma, {
+        projectId: 'proj-1',
+        sourceDocumentId: 'doc-1',
+        actorUserId: 'u1',
+        actorRole: 'SUPER_ADMIN',
+        confirmationNote: 'Non-immutable source check',
+      }),
+    /UBOQ_SOURCE_IMMUTABILITY_REQUIRED/
+  );
+
+  // 4. Blocked when official contractAmount is 0 (PGH safeguard!)
   await assert.rejects(
     () =>
       bridge.populateWorkspaceAwardedBoqFromVerifiedDocument(makeMockPrisma(0).prisma, {
@@ -468,7 +524,7 @@ test('Authorized Workspace BOQ Bridge enforces reconciliation, blocks role previ
     /UBOQ_AWARDED_CONTRACT_AMOUNT_REQUIRED/
   );
 
-  // 3. Blocked when recalculated total != official contract amount
+  // 5. Blocked when recalculated total != official contract amount
   await assert.rejects(
     () =>
       bridge.populateWorkspaceAwardedBoqFromVerifiedDocument(makeMockPrisma(48000).prisma, {
@@ -481,7 +537,7 @@ test('Authorized Workspace BOQ Bridge enforces reconciliation, blocks role previ
     /UBOQ_AWARDED_BOQ_DISCREPANCIES_UNRESOLVED/
   );
 
-  // 4. Succeeds cleanly on exact VERIFIED_MATCH, populates AwardedBOQItem + AuditLog, ZERO auto-posted PRRs/POs/VOs
+  // 6. Succeeds cleanly on exact VERIFIED_MATCH with row lock, populates AwardedBOQItem + AuditLog, ZERO auto-posting
   const okMock = makeMockPrisma(50000);
   const res = await bridge.populateWorkspaceAwardedBoqFromVerifiedDocument(okMock.prisma, {
     projectId: 'proj-1',
@@ -491,19 +547,104 @@ test('Authorized Workspace BOQ Bridge enforces reconciliation, blocks role previ
     confirmationNote: 'Verified awarded contract BOQ',
   });
   assert.equal(res.insertedRowCount, 2);
+  assert.equal(res.alreadyPopulated, false);
   assert.equal(res.payItemCount, 1);
   assert.equal(res.headingCount, 1);
-  assert.equal(res.reconciledTotal, 50000);
-  assert.equal(res.officialAwardedContractAmount, 50000);
+  assert.equal(okMock.getRowLockCount(), 1, 'Must acquire project-scoped FOR UPDATE row lock');
   assert.equal(okMock.auditLogs.length, 1);
   assert.equal(okMock.wasForbiddenCalled(), false);
+
+  // 7. Repeat import of the SAME verified source is idempotent (alreadyPopulated: true, 0 new inserts)
+  const repeatRes = await bridge.populateWorkspaceAwardedBoqFromVerifiedDocument(okMock.prisma, {
+    projectId: 'proj-1',
+    sourceDocumentId: 'doc-1',
+    actorUserId: 'u1',
+    actorRole: 'SUPER_ADMIN',
+    confirmationNote: 'Repeat same source',
+  });
+  assert.equal(repeatRes.alreadyPopulated, true);
+  assert.equal(repeatRes.insertedRowCount, 0);
+  assert.equal(okMock.insertedBoq.length, 2, 'No duplicate BOQ items created');
+
+  // 8. DIFFERENT source document on an already-populated workspace MUST throw conflict (never silently alreadyPopulated:true)
+  okMock.setNextDoc('doc-2', 'b'.repeat(64));
+  await assert.rejects(
+    () =>
+      bridge.populateWorkspaceAwardedBoqFromVerifiedDocument(okMock.prisma, {
+        projectId: 'proj-1',
+        sourceDocumentId: 'doc-2',
+        actorUserId: 'u1',
+        actorRole: 'SUPER_ADMIN',
+        confirmationNote: 'Attempt different source',
+      }),
+    /UBOQ_WORKSPACE_BOQ_CONFLICT/
+  );
 });
 
-test('July Project Workspace parity & signed RLS preserved in src/app/projects/[id]/page.tsx', () => {
+test('Step 2 Multi-Document Auto-Classifier proposes per-file categories and flags uncertain files for confirmation', () => {
+  const clf = loadTs('src/lib/uboq/document-classifier.ts');
+  assert.equal(clf.classifyProjectDocumentFile('PGH_AWARDED BILL OF QUANTITY.xlsx').roleCode, 'CONTRACT_BOQ');
+  assert.equal(clf.classifyProjectDocumentFile('Notice_of_Award_2026.pdf').roleCode, 'CONTRACT');
+  assert.equal(clf.classifyProjectDocumentFile('NTP_Signed.pdf').roleCode, 'CONTRACT');
+  assert.equal(clf.classifyProjectDocumentFile('Contract_Agreement.pdf').roleCode, 'CONTRACT');
+  assert.equal(clf.classifyProjectDocumentFile('DPWH_POW_2026.xlsx').roleCode, 'AGENCY_ESTIMATE');
+  assert.equal(clf.classifyProjectDocumentFile('Project_DUPA_Breakdown.xlsx').roleCode, 'DUPA');
+  assert.equal(clf.classifyProjectDocumentFile('Master_Gantt_Schedule.pdf').roleCode, 'SCHEDULE');
+  assert.equal(clf.classifyProjectDocumentFile('MEPF_Floor_Plan_Drawing.pdf').roleCode, 'DRAWING');
+  assert.equal(clf.classifyProjectDocumentFile('Technical_Specifications_VRF.docx').roleCode, 'TECHNICAL_SPEC');
+  const uncertain = clf.classifyProjectDocumentFile('scan_001.pdf');
+  assert.equal(uncertain.confidence, 'NEEDS_CONFIRMATION');
+  const uncertainSheet = clf.classifyProjectDocumentFile('file123.xlsx');
+  assert.equal(uncertainSheet.confidence, 'NEEDS_CONFIRMATION');
+});
+
+test('Step 3 reports all 5 exact verification outcome categories (A-E) cleanly', () => {
+  const emptyRep = reconciler.verifyAwardedBoqWorkbook([{ sheetName: 'Empty', rows: [] }], { officialAwardedContractAmount: 10000 });
+  assert.equal(emptyRep.outcomeCategory, 'UNABLE_TO_VERIFY');
+  assert.equal(emptyRep.outcomeLabel, 'Unable to Verify');
+  assert.ok(emptyRep.unableToVerifyReason);
+
+  const cleanSheets = [
+    {
+      sheetName: 'BOQ',
+      rows: [
+        {
+          rowNumber: 1,
+          cells: [
+            { colNumber: 1, cellRef: 'A1', text: 'Item', numOrText: 'Item', formula: null },
+            { colNumber: 2, cellRef: 'B1', text: 'Description', numOrText: 'Description', formula: null },
+            { colNumber: 3, cellRef: 'C1', text: 'Unit', numOrText: 'Unit', formula: null },
+            { colNumber: 4, cellRef: 'D1', text: 'Qty', numOrText: 'Qty', formula: null },
+            { colNumber: 5, cellRef: 'E1', text: 'Unit Price', numOrText: 'Unit Price', formula: null },
+            { colNumber: 6, cellRef: 'F1', text: 'Amount', numOrText: 'Amount', formula: null },
+          ],
+        },
+        {
+          rowNumber: 2,
+          cells: [
+            { colNumber: 1, cellRef: 'A2', text: '1', numOrText: '1', formula: null },
+            { colNumber: 2, cellRef: 'B2', text: 'Site Clearing', numOrText: 'Site Clearing', formula: null },
+            { colNumber: 3, cellRef: 'C2', text: 'lot', numOrText: 'lot', formula: null },
+            { colNumber: 4, cellRef: 'D2', text: '1', numOrText: 1, formula: null },
+            { colNumber: 5, cellRef: 'E2', text: '10000', numOrText: 10000, formula: null },
+            { colNumber: 6, cellRef: 'F2', text: '10000', numOrText: 10000, formula: '=D2*E2' },
+          ],
+        },
+      ],
+    },
+  ];
+  assert.equal(reconciler.verifyAwardedBoqWorkbook(cleanSheets, { officialAwardedContractAmount: 10000 }).outcomeCategory, 'BOQ_VERIFIED');
+  assert.equal(reconciler.verifyAwardedBoqWorkbook(cleanSheets, { officialAwardedContractAmount: 0 }).outcomeCategory, 'OFFICIAL_CONTRACT_AMOUNT_REQUIRED');
+  assert.equal(reconciler.verifyAwardedBoqWorkbook(cleanSheets, { officialAwardedContractAmount: 9000 }).outcomeCategory, 'CONTRACT_TOTAL_MISMATCH');
+});
+
+test('July Project Workspace parity, signed RLS, Templates T0-T12 access, and strict UBOQ_SNAPSHOT_APPROVE preserved', () => {
   const pageSrc = read('src/app/projects/[id]/page.tsx');
   assert.match(pageSrc, /verifyOperationalSession/);
   assert.match(pageSrc, /withUboqRlsContext/);
   assert.match(pageSrc, /AwardedBoqReconciliationPanel/);
+  assert.match(pageSrc, /BOQ Templates \(T0–T12\)/);
+  assert.match(pageSrc, /capability:\s*'UBOQ_SNAPSHOT_APPROVE'/);
   assert.match(pageSrc, /Project Summary/);
   assert.match(pageSrc, /Contract Value & BOQ/);
   assert.match(pageSrc, /Procurement Benchmark/);
@@ -514,6 +655,11 @@ test('July Project Workspace parity & signed RLS preserved in src/app/projects/[
   assert.match(pageSrc, /withUboqRlsContext\(rlsCtx,\s*\(\)\s*=>\s*ProjectSummaryTab/);
   assert.match(pageSrc, /withUboqRlsContext\(rlsCtx,\s*\(\)\s*=>\s*BOQConsolidationTab/);
   assert.match(pageSrc, /withUboqRlsContext\(rlsCtx,\s*\(\)\s*=>\s*ProjectMaterialsControlTab/);
+
+  const intakeClient = read('src/app/projects/[id]/documents/ProjectDocumentIntakeClient.tsx');
+  assert.match(intakeClient, /classifyProjectDocumentFile/);
+  assert.match(intakeClient, /Continue to Project Workspace/);
+  assert.match(intakeClient, /Please confirm category/);
 });
 
 test('All 13/13 accepted R2 canonical baseline source files remain LF SHA-256 unchanged', () => {

@@ -414,6 +414,12 @@ export function formatFriendlyUboqError(rawError: unknown): string {
   if (msg.includes('UBOQ_ROLE_PREVIEW_BLOCKED')) {
     return 'Exit Role Preview before performing contract-import actions.';
   }
+  if (msg.includes('UBOQ_WORKSPACE_BOQ_CONFLICT')) {
+    return 'This Project Workspace BOQ is already populated from a different source file. Resolve the conflict before importing another BOQ.';
+  }
+  if (msg.includes('UBOQ_SOURCE_IMMUTABILITY_REQUIRED')) {
+    return 'Only immutable, verified source BOQ files can populate the Project Workspace.';
+  }
   if (msg.includes('UBOQ_WORKSPACE_BOQ_LOCKED')) {
     return 'This Project Workspace BOQ is already locked.';
   }

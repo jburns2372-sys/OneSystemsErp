@@ -114,7 +114,7 @@ export default async function ProjectDetailsPage({
       assertUboqStageAuthorization(prisma, {
         userId: actor.userId,
         projectId: id,
-        capability: 'UBOQ_INTAKE_STAGE',
+        capability: 'UBOQ_SNAPSHOT_APPROVE',
         simulatedRole: accessContext.activePreviewRoleCode,
       })
         .then(() => true)
@@ -325,6 +325,21 @@ export default async function ProjectDetailsPage({
               }}
             >
               BOQ Verification Details
+            </Link>
+            <Link
+              href={`/projects/${project.id}/uboq/templates`}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '14px',
+                background: 'rgba(139, 92, 246, 0.14)',
+                border: '1px solid rgba(167, 139, 250, 0.4)',
+                color: '#ddd6fe',
+                textDecoration: 'none',
+                fontSize: '0.82rem',
+                fontWeight: 'bold',
+              }}
+            >
+              BOQ Templates (T0–T12)
             </Link>
             <Link
               href={`/projects/${project.id}/scheduling`}

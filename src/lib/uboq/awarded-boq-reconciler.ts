@@ -85,8 +85,18 @@ export type AwardedBoqReconciliationStatus =
   | 'CONTRACT_AMOUNT_REQUIRED'
   | 'DISCREPANCY_FOUND';
 
+export type AwardedBoqOutcomeCategory =
+  | 'BOQ_VERIFIED'
+  | 'CALCULATION_FORMULA_DISCREPANCY'
+  | 'CONTRACT_TOTAL_MISMATCH'
+  | 'OFFICIAL_CONTRACT_AMOUNT_REQUIRED'
+  | 'UNABLE_TO_VERIFY';
+
 export interface AwardedBoqVerificationReport {
   readonly status: AwardedBoqReconciliationStatus;
+  readonly outcomeCategory: AwardedBoqOutcomeCategory;
+  readonly outcomeLabel: string;
+  readonly unableToVerifyReason: string | null;
   readonly headline: string;
   readonly calculationCheck: 'PASS' | 'FAIL';
   readonly formulaCheck: 'PASS' | 'FAIL' | 'NO_FORMULAS';
@@ -1399,20 +1409,62 @@ export function verifyAwardedBoqWorkbook(
   const formulaHasErrors = brokenFormulas > 0 || cachedValueMismatches > 0 || unsupportedFormulas > 0;
 
   let status: AwardedBoqReconciliationStatus;
+  let outcomeCategory: AwardedBoqOutcomeCategory;
+  let outcomeLabel: string;
+  let unableToVerifyReason: string | null = null;
   let headline: string;
-  if (discrepancies.length > 0) {
+
+  const hasCalcOrFormulaDiscrepancy = discrepancies.some((d) => d.code !== 'CONTRACT_TOTAL_MISMATCH');
+  const hasContractTotalMismatch = discrepancies.some((d) => d.code === 'CONTRACT_TOTAL_MISMATCH');
+
+  if (payItemsCount === 0 && workbookRecalculatedGrandTotal === null) {
     status = 'DISCREPANCY_FOUND';
-    headline = `BOQ verification found ${discrepancies.length} ${discrepancies.length === 1 ? 'discrepancy' : 'discrepancies'} requiring attention.`;
+    outcomeCategory = 'UNABLE_TO_VERIFY';
+    outcomeLabel = 'Unable to Verify';
+    unableToVerifyReason = 'No readable priced BOQ pay items or totals were detected in this file.';
+    headline = `Unable to Verify — ${unableToVerifyReason}`;
+  } else if (unsupportedFormulas > 0 && !hasCalcOrFormulaDiscrepancy) {
+    status = 'DISCREPANCY_FOUND';
+    outcomeCategory = 'UNABLE_TO_VERIFY';
+    outcomeLabel = 'Unable to Verify';
+    unableToVerifyReason = `${unsupportedFormulas} unsupported Excel formula(s) could not be independently evaluated.`;
+    headline = `Unable to Verify — ${unableToVerifyReason}`;
+  } else if (hasCalcOrFormulaDiscrepancy) {
+    status = 'DISCREPANCY_FOUND';
+    outcomeCategory = unsupportedFormulas > 0 && brokenFormulas === 0 && cachedValueMismatches === 0 && !calculationHasErrors
+      ? 'UNABLE_TO_VERIFY'
+      : 'CALCULATION_FORMULA_DISCREPANCY';
+    outcomeLabel = outcomeCategory === 'UNABLE_TO_VERIFY' ? 'Unable to Verify' : 'Calculation/Formula Discrepancy';
+    unableToVerifyReason =
+      outcomeCategory === 'UNABLE_TO_VERIFY'
+        ? `${unsupportedFormulas} unsupported Excel formula(s) could not be independently evaluated.`
+        : null;
+    headline =
+      outcomeCategory === 'UNABLE_TO_VERIFY'
+        ? `Unable to Verify — ${unableToVerifyReason}`
+        : `BOQ verification found ${discrepancies.length} ${discrepancies.length === 1 ? 'discrepancy' : 'discrepancies'} requiring attention.`;
+  } else if (hasContractTotalMismatch) {
+    status = 'DISCREPANCY_FOUND';
+    outcomeCategory = 'CONTRACT_TOTAL_MISMATCH';
+    outcomeLabel = 'Contract Total Mismatch';
+    headline = `Contract Total Mismatch — Recalculated BOQ total differs from the Official Awarded Contract Amount.`;
   } else if (officialAwardedContractAmount === null) {
     status = 'CONTRACT_AMOUNT_REQUIRED';
+    outcomeCategory = 'OFFICIAL_CONTRACT_AMOUNT_REQUIRED';
+    outcomeLabel = 'Official Contract Amount Required';
     headline = MSG_CONTRACT_AMOUNT_REQUIRED;
   } else {
     status = 'VERIFIED_MATCH';
+    outcomeCategory = 'BOQ_VERIFIED';
+    outcomeLabel = 'BOQ Verified';
     headline = MSG_VERIFIED_MATCH;
   }
 
   return {
     status,
+    outcomeCategory,
+    outcomeLabel,
+    unableToVerifyReason,
     headline,
     calculationCheck: calculationHasErrors ? 'FAIL' : 'PASS',
     formulaCheck: totalFormulasChecked === 0 ? 'NO_FORMULAS' : formulaHasErrors ? 'FAIL' : 'PASS',
@@ -1684,20 +1736,63 @@ export function reconcileImportedAwardedBoqCandidates(
   const effectiveFormulaCount = Math.max(totalFormulasChecked, persisted?.counts?.totalFormulasChecked ?? 0);
 
   let status: AwardedBoqReconciliationStatus;
+  let outcomeCategory: AwardedBoqOutcomeCategory;
+  let outcomeLabel: string;
+  let unableToVerifyReason: string | null = null;
   let headline: string;
-  if (discrepancies.length > 0) {
+
+  const persistedUnsupported = persisted?.counts?.unsupportedFormulas ?? 0;
+  const hasCalcOrFormulaDiscrepancy = discrepancies.some((d) => d.code !== 'CONTRACT_TOTAL_MISMATCH');
+  const hasContractTotalMismatch = discrepancies.some((d) => d.code === 'CONTRACT_TOTAL_MISMATCH');
+
+  if (payItems === 0 && recalculatedTotal === 0) {
     status = 'DISCREPANCY_FOUND';
-    headline = `BOQ verification found ${discrepancies.length} ${discrepancies.length === 1 ? 'discrepancy' : 'discrepancies'} requiring attention.`;
+    outcomeCategory = 'UNABLE_TO_VERIFY';
+    outcomeLabel = 'Unable to Verify';
+    unableToVerifyReason = 'No readable priced BOQ pay items or totals were detected in this file.';
+    headline = `Unable to Verify — ${unableToVerifyReason}`;
+  } else if (persistedUnsupported > 0 && !hasCalcOrFormulaDiscrepancy) {
+    status = 'DISCREPANCY_FOUND';
+    outcomeCategory = 'UNABLE_TO_VERIFY';
+    outcomeLabel = 'Unable to Verify';
+    unableToVerifyReason = `${persistedUnsupported} unsupported Excel formula(s) could not be independently evaluated.`;
+    headline = `Unable to Verify — ${unableToVerifyReason}`;
+  } else if (hasCalcOrFormulaDiscrepancy) {
+    status = 'DISCREPANCY_FOUND';
+    outcomeCategory = persistedUnsupported > 0 && brokenFormulas === 0 && (persisted?.counts?.cachedValueMismatches ?? 0) === 0 && !calcFail
+      ? 'UNABLE_TO_VERIFY'
+      : 'CALCULATION_FORMULA_DISCREPANCY';
+    outcomeLabel = outcomeCategory === 'UNABLE_TO_VERIFY' ? 'Unable to Verify' : 'Calculation/Formula Discrepancy';
+    unableToVerifyReason =
+      outcomeCategory === 'UNABLE_TO_VERIFY'
+        ? `${persistedUnsupported} unsupported Excel formula(s) could not be independently evaluated.`
+        : null;
+    headline =
+      outcomeCategory === 'UNABLE_TO_VERIFY'
+        ? `Unable to Verify — ${unableToVerifyReason}`
+        : `BOQ verification found ${discrepancies.length} ${discrepancies.length === 1 ? 'discrepancy' : 'discrepancies'} requiring attention.`;
+  } else if (hasContractTotalMismatch) {
+    status = 'DISCREPANCY_FOUND';
+    outcomeCategory = 'CONTRACT_TOTAL_MISMATCH';
+    outcomeLabel = 'Contract Total Mismatch';
+    headline = `Contract Total Mismatch — Recalculated BOQ total differs from the Official Awarded Contract Amount.`;
   } else if (officialAwardedContractAmount === null) {
     status = 'CONTRACT_AMOUNT_REQUIRED';
+    outcomeCategory = 'OFFICIAL_CONTRACT_AMOUNT_REQUIRED';
+    outcomeLabel = 'Official Contract Amount Required';
     headline = MSG_CONTRACT_AMOUNT_REQUIRED;
   } else {
     status = 'VERIFIED_MATCH';
+    outcomeCategory = 'BOQ_VERIFIED';
+    outcomeLabel = 'BOQ Verified';
     headline = MSG_VERIFIED_MATCH;
   }
 
   return {
     status,
+    outcomeCategory,
+    outcomeLabel,
+    unableToVerifyReason,
     headline,
     calculationCheck: calcFail ? 'FAIL' : 'PASS',
     formulaCheck: effectiveFormulaCount === 0 ? 'NO_FORMULAS' : formulaFail ? 'FAIL' : 'PASS',
