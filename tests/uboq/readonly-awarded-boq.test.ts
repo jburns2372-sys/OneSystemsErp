@@ -18,6 +18,7 @@ import {
 } from '../../src/lib/uboq/awarded-boq-reconciler';
 import { extractUniversalDocumentPackage } from '../../src/lib/uboq/intake/parsers';
 import { canConvertUom, normalizeUom } from '../../src/lib/uboq/uom-registry';
+import { buildSafePhaseConsolidation, type PhaseBoqInputLine } from '../../src/lib/uboq/validation-engine';
 
 const WORKTREE_ROOT = process.cwd();
 const PGH_XLSX_PATH =
@@ -125,20 +126,55 @@ async function testReal441EntryPghWorkbookZeroApprovals(): Promise<void> {
   assert.equal(legendInVerif!.quantity, null);
   assert.equal(legendInVerif!.lineAmount, null);
 
-  // Verify every priced PGH HVAC unit normalizes cleanly (ZERO VAL-03 UBOQ_UNKNOWN_UOM blocking errors)
-  const unknownUnits: string[] = [];
-  for (const row of verif.classifiedRows) {
-    if (row.classification !== 'PAY_ITEM' || !row.unit) continue;
-    try {
-      normalizeUom(row.unit, row.description);
-    } catch {
-      unknownUnits.push(row.unit);
-    }
-  }
-  assert.deepEqual(unknownUnits, [], `All PGH HVAC pay-item units must normalize without VAL-03 errors; unknown: ${unknownUnits.join(', ')}`);
-  // Distinct discrete pack units must remain non-convertible to preserve UOM safety
+  // Semantic UOM safety: never fabricate 6m bar length or equate distinct discrete units
+  assert.equal(normalizeUom('length/s').normalizedCode, 'length');
+  assert.equal(normalizeUom('length/s').packCode, 'LENGTH_DISCRETE');
+  assert.equal(canConvertUom('length', 'length_6m'), false);
+  assert.equal(canConvertUom('length', 'm'), false);
+  assert.equal(canConvertUom('assy', 'set'), false);
+  assert.equal(canConvertUom('pair', 'set'), false);
+  assert.equal(canConvertUom('tank', 'cylinder'), false);
+  assert.equal(canConvertUom('can', 'tin'), false);
   assert.equal(canConvertUom('tank', 'roll'), false);
-  assert.equal(canConvertUom('bottle', 'length_6m'), false);
+  assert.equal(canConvertUom('bottle', 'length'), false);
+
+  // Run ACTUAL post-extraction staging pipeline: buildSafePhaseConsolidation -> normalizeUom -> validate output
+  const phaseInputs: PhaseBoqInputLine[] = [];
+  for (const cand of extracted.candidates) {
+    if (cand.rowClassification !== 'PAY_ITEM') continue;
+    const mf = cand.mappedFields;
+    const desc = String(mf.work_description ?? '').trim();
+    const unitRaw = String(mf.unit ?? '').trim();
+    const qty = typeof mf.approved_qty === 'number' ? mf.approved_qty : null;
+    const rate = typeof mf.contract_unit_rate === 'number' ? mf.contract_unit_rate : null;
+    const lineAmt = typeof mf.contract_line_amount === 'number' ? mf.contract_line_amount : undefined;
+    if (!desc || !unitRaw || qty === null || rate === null) continue;
+    phaseInputs.push({
+      lineKey: `PGH-${cand.sourceRowNumber}`,
+      itemCode: String(mf.item_code || `ITEM-${cand.sourceRowNumber}`),
+      phaseCode: String(mf.phase_code || 'BOQ'),
+      workDescription: desc,
+      unitRaw,
+      originalQty: qty,
+      approvedQty: qty,
+      contractUnitRate: rate,
+      contractLineAmount: lineAmt,
+      sourceSheetName: cand.sheetOrPageRef,
+      sourceCellRef: cand.sourceCellRef,
+    });
+  }
+
+  assert.equal(phaseInputs.length, 326, 'All 326 priced PGH pay items must enter post-extraction staging');
+  const staged = buildSafePhaseConsolidation(phaseInputs);
+  const blocking = staged.issues.filter((i) => i.severity === 'BLOCKING');
+  const val03 = staged.issues.filter((i) => i.ruleCode === 'VAL-03');
+  assert.equal(val03.length, 0, `VAL-03 UBOQ_UNKNOWN_UOM exceptions must reduce to 0; got ${val03.length}`);
+  assert.equal(blocking.length, 0, `Staging must introduce 0 blocking issues; got ${blocking.map((b) => b.message).join('; ')}`);
+
+  const stagedMemberCount = staged.groups.reduce((s, g) => s + g.memberLinks.length, 0);
+  assert.equal(stagedMemberCount, 326, 'All 326 PGH pay items must be preserved in consolidated groups with zero drops or duplicates');
+  const stagedTotal = Math.round(staged.groups.reduce((s, g) => s + g.totalContractAmount, 0) * 100) / 100;
+  assert.equal(stagedTotal, 43106674.89, 'Staged consolidated total must match PHP 43,106,674.89 exactly');
 }
 
 async function testSynthetic1050EntryBoqZeroApprovals(): Promise<void> {
