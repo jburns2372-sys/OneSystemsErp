@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useTransition, useEffect } from 'react';
+import React, { useTransition, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { setActiveProjectCookie } from '@/app/actions/activeProject';
 
@@ -16,16 +17,21 @@ export default function ActiveProjectSelector({
   const router = useRouter();
   const params = useParams();
   const [isPending, startTransition] = useTransition();
+  const syncedUrlProjectRef = useRef<string | null>(null);
 
   const urlProjectId = (params?.id || params?.projectId) as string | undefined;
   const displayProjectId = urlProjectId || activeProjectId;
 
   useEffect(() => {
-    if (urlProjectId && urlProjectId !== activeProjectId) {
-      // Sync cookie quietly when URL dictates a different project
-      setActiveProjectCookie(urlProjectId);
+    if (urlProjectId && urlProjectId !== activeProjectId && syncedUrlProjectRef.current !== urlProjectId) {
+      syncedUrlProjectRef.current = urlProjectId;
+      // Persist the active project cookie and refresh Topbar once so RLS-scoped
+      // project metadata loads truthfully for the current URL project.
+      void setActiveProjectCookie(urlProjectId).then(() => {
+        router.refresh();
+      });
     }
-  }, [urlProjectId, activeProjectId]);
+  }, [urlProjectId, activeProjectId, router]);
 
   const handleProjectChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newProjectId = e.target.value;
@@ -43,6 +49,27 @@ export default function ActiveProjectSelector({
   };
 
   if (assignments.length === 0) {
+    // When no active project cookie is bound yet (e.g. on /projects under per-project RLS),
+    // guide the user to choose a project rather than falsely claiming no projects exist.
+    if (!displayProjectId) {
+      return (
+        <Link
+          href="/projects"
+          style={{
+            padding: '6px 12px',
+            fontSize: '0.8rem',
+            color: '#cbd5e1',
+            border: '1px solid rgba(148, 163, 184, 0.3)',
+            borderRadius: '6px',
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            textDecoration: 'none',
+            fontWeight: 600,
+          }}
+        >
+          {isGlobalProjectReader ? 'Select a Project' : 'Open Projects'}
+        </Link>
+      );
+    }
     return (
       <div
         role="status"
@@ -59,7 +86,7 @@ export default function ActiveProjectSelector({
             : 'rgba(245, 158, 11, 0.1)',
         }}
       >
-        {isGlobalProjectReader ? 'No projects created yet' : 'No assigned projects'}
+        {isGlobalProjectReader ? 'Loading project context…' : 'No assigned projects'}
       </div>
     );
   }

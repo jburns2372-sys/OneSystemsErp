@@ -203,7 +203,8 @@ test('Task 5: Topbar and ActiveProjectSelector display real effective access con
 
   const selectorSrc = read('src/components/layout/ActiveProjectSelector.tsx');
   assert.doesNotMatch(selectorSrc, /No Project Assignments/);
-  assert.match(selectorSrc, /No projects created yet/);
+  assert.doesNotMatch(selectorSrc, /No projects created yet/);
+  assert.match(selectorSrc, /Select a Project/);
   assert.match(selectorSrc, /No assigned projects/);
 });
 

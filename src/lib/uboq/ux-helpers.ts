@@ -377,6 +377,12 @@ export function formatFriendlyUboqError(rawError: unknown): string {
   if (msg.includes('UBOQ_CROSS_PROJECT_SPOOFING_BLOCKED')) {
     return 'This record belongs to a different project and cannot be modified here.';
   }
+  if (msg.includes('UBOQ_XLSX_LIMIT_EXCEEDED')) {
+    return 'This Excel workbook is too large or has too many rows/columns to process safely at once. Please save only the BOQ sheets into a smaller .xlsx file and upload again.';
+  }
+  if (msg.includes('UBOQ_XLSX_EMPTY_WORKBOOK')) {
+    return 'No readable worksheets were found in this Excel file. Please verify the file and try again.';
+  }
   if (msg.includes('UBOQ_OCR_TIMEOUT') || msg.includes('UBOQ_OCR_WORKER_FAILED')) {
     return 'We could not finish reading that scanned image within the time limit. Please try a clearer image or PDF.';
   }

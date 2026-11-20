@@ -2,6 +2,7 @@ import { verifySession } from '@/lib/dal/auth';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { logout } from '@/app/actions/auth';
+import { withUboqRlsContext } from '@/lib/uboq/project-ownership';
 import { resolveEffectiveHeaderAccessContext } from '@/lib/uboq/ux-helpers';
 import ActiveProjectSelector from './ActiveProjectSelector';
 import ExitRolePreviewButton from './ExitRolePreviewButton';
@@ -12,6 +13,7 @@ export default async function Topbar() {
   const cookieStore = await cookies();
   const __session = await verifySession();
   const sessionId = __session?.id || '';
+  const sessionVersion = __session?.sessionVersion ?? 0;
   const activeProjectId = cookieStore.get('activeProjectId')?.value || null;
   const rawSimulatedRole = cookieStore.get('simulatedRole')?.value || null;
 
@@ -25,21 +27,24 @@ export default async function Topbar() {
   let accessContext = resolveEffectiveHeaderAccessContext(null, null);
 
   if (sessionId) {
-    user = await prisma.user.findUnique({ where: { id: sessionId } });
-    if (user) {
+    const dbUser = await prisma.user.findUnique({ where: { id: sessionId } });
+    user = dbUser;
+    if (dbUser) {
+      const user = dbUser;
       accessContext = resolveEffectiveHeaderAccessContext(user.role, rawSimulatedRole);
-      if (accessContext.isGlobalProjectReader) {
-        const allProjects = await prisma.project.findMany({
-          orderBy: { name: 'asc' },
-          select: { id: true, name: true, contractAmount: true, originalContractDuration: true },
-        });
-        assignments = allProjects.map((p) => ({
-          projectId: p.id,
-          project: p,
-          projectRole: accessContext.realRoleCode,
-          accessLevel: 'FULL',
-        }));
-      } else {
+      const loadScopedProjects = async () => {
+        if (accessContext.isGlobalProjectReader) {
+          const allProjects = await prisma.project.findMany({
+            orderBy: { name: 'asc' },
+            select: { id: true, name: true, contractAmount: true, originalContractDuration: true },
+          });
+          return allProjects.map((p) => ({
+            projectId: p.id,
+            project: p,
+            projectRole: accessContext.realRoleCode,
+            accessLevel: 'FULL',
+          }));
+        }
         const [directAssignments, managedProjects] = await Promise.all([
           prisma.projectUserAssignment.findMany({
             where: { userId: user.id, assignmentStatus: { in: ['active', 'ACTIVE'] } },
@@ -53,7 +58,7 @@ export default async function Topbar() {
           }),
         ]);
         const seen = new Set(directAssignments.map((a) => a.projectId));
-        assignments = [
+        return [
           ...directAssignments,
           ...managedProjects
             .filter((p) => !seen.has(p.id))
@@ -64,6 +69,20 @@ export default async function Topbar() {
               accessLevel: 'MANAGER',
             })),
         ];
+      };
+
+      // Under PostgreSQL FORCE RLS (uboq_check_tenant_rls), Project and ProjectUserAssignment
+      // require a signed project RLS context. Bind the active project cookie truthfully using
+      // the authenticated DB user's real session without widening privileges.
+      try {
+        assignments = activeProjectId
+          ? await withUboqRlsContext(
+              { userId: user.id, sessionVersion, projectId: activeProjectId },
+              loadScopedProjects
+            )
+          : await loadScopedProjects();
+      } catch {
+        assignments = [];
       }
     }
   }
