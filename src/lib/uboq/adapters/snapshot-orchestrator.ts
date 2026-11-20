@@ -702,6 +702,19 @@ export async function ingestAndStageProjectUboqPackage(
             await applyProjectRlsSessionVars(tx, rlsStore);
           }
 
+          const compactVerification = extracted.awardedBoqVerification
+            ? {
+                calculationCheck: extracted.awardedBoqVerification.calculationCheck,
+                formulaCheck: extracted.awardedBoqVerification.formulaCheck,
+                workbookStatedGrandTotal: extracted.awardedBoqVerification.workbookStatedGrandTotal,
+                recalculatedTotal: extracted.awardedBoqVerification.recalculatedTotal,
+                roundingDecimals: extracted.awardedBoqVerification.roundingDecimals,
+                counts: extracted.awardedBoqVerification.counts,
+                priceComponents: extracted.awardedBoqVerification.priceComponents,
+                discrepancies: extracted.awardedBoqVerification.discrepancies.slice(0, 100),
+              }
+            : null;
+
           const createdDoc = await tx.uboqSourceDocument.create({
             data: {
               projectId: params.projectId,
@@ -718,6 +731,7 @@ export async function ingestAndStageProjectUboqPackage(
                 detectedFormat: extracted.security.detectedFormat,
                 vaultBackend: vaultReceipt.backend,
                 stagedIntakeOptions,
+                ...(compactVerification ? { awardedBoqVerification: compactVerification } : {}),
               } as unknown as Prisma.InputJsonValue,
             },
           });
@@ -762,6 +776,7 @@ export async function ingestAndStageProjectUboqPackage(
                 parsedJson: {
                   mappedFields: cand.mappedFields,
                   cellCoordinates: cand.cellCoordinates ?? {},
+                  ...(cand.rowClassification ? { rowClassification: cand.rowClassification } : {}),
                 } as unknown as Prisma.InputJsonValue,
                 confidenceScore: cand.confidenceScore,
                 extractionMethod: cand.extractionMethod,

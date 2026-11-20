@@ -8,6 +8,11 @@ import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { redactUboqPayloadForRole } from '@/lib/uboq/security/redact-payload';
 import VisualMappingReviewClient from './VisualMappingReviewClient';
 import SnapshotApprovalPanel, { type SnapshotSummaryItem } from './SnapshotApprovalPanel';
+import AwardedBoqReconciliationPanel from '../AwardedBoqReconciliationPanel';
+import {
+  reconcileImportedAwardedBoqCandidates,
+  type AwardedBoqVerificationReport,
+} from '@/lib/uboq/awarded-boq-reconciler';
 import type {
   VisualSourceDocumentRecord,
   VisualValidationExceptionRecord,
@@ -78,7 +83,15 @@ export default async function ProjectUboqWorkbenchPage({
         return Promise.all([
           prisma.project.findUnique({
             where: { id: projectId },
-            select: { id: true, name: true, contractNumber: true, contractAmount: true, uboqGovernanceEnabled: true },
+            select: {
+              id: true,
+              name: true,
+              contractNumber: true,
+              contractAmount: true,
+              boqLocked: true,
+              uboqGovernanceEnabled: true,
+              _count: { select: { awardedBoqItems: true } },
+            },
           }),
           prisma.uboqContractAuthority.findFirst({
             where: { projectId },
@@ -312,6 +325,38 @@ export default async function ProjectUboqWorkbenchPage({
       ? `Draft (${latestDraft.versionLabel})`
       : 'No BOQ Saved Yet';
 
+  const latestBoqDocRaw = sourceDocumentsRaw.find((d) => d.documentRole === 'CONTRACT_BOQ') ?? sourceDocumentsRaw[0] ?? null;
+  const boqVerification: AwardedBoqVerificationReport | null = latestBoqDocRaw
+    ? (() => {
+        const meta =
+          latestBoqDocRaw.metadataJson && typeof latestBoqDocRaw.metadataJson === 'object'
+            ? (latestBoqDocRaw.metadataJson as Record<string, unknown>)
+            : {};
+        const persistedSummary = (meta.awardedBoqVerification ?? null) as Partial<AwardedBoqVerificationReport> | null;
+        return reconcileImportedAwardedBoqCandidates(
+          latestBoqDocRaw.candidates.map((c) => {
+            const pJson =
+              c.parsedJson && typeof c.parsedJson === 'object' && !Array.isArray(c.parsedJson)
+                ? (c.parsedJson as Record<string, unknown>)
+                : {};
+            const mapped = (pJson.effectiveCanonicalFields ?? pJson.mappedFields ?? {}) as Record<string, unknown>;
+            return {
+              id: c.id,
+              sourceRowNumber: c.sourceRowNumber,
+              sourceCellRef: c.sourceCellRef,
+              sheetOrPageRef: c.section?.sheetOrPageRef ?? null,
+              rawFormulaText: c.rawFormulaText,
+              mappedFields: mapped,
+            };
+          }),
+          {
+            officialAwardedContractAmount: project.contractAmount || null,
+            persistedWorkbookSummary: persistedSummary,
+          }
+        );
+      })()
+    : null;
+
   return (
     <main style={{ padding: '20px clamp(14px, 3vw, 28px)', maxWidth: '1360px', margin: '0 auto', color: 'var(--text-primary, #f8fafc)' }}>
       {/* Project -> BOQ -> Scheduling Breadcrumb & Primary Navigation */}
@@ -392,13 +437,34 @@ export default async function ProjectUboqWorkbenchPage({
       {/* Page Title & Guided Stage Banner */}
       <header style={{ marginBottom: '20px' }}>
         <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(1.3rem, 2.5vw, 1.7rem)', color: '#f8fafc' }}>
-          Project BOQ Workspace
+          BOQ Verification &amp; Contract Reconciliation
         </h1>
         <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem' }}>
           <strong style={{ color: '#e2e8f0' }}>{project.name}</strong> ({project.contractNumber || project.id})
           {contract ? ` · ${contract.sectorType}` : ''}
         </p>
       </header>
+
+      <AwardedBoqReconciliationPanel
+        projectId={project.id}
+        sourceDocument={
+          latestBoqDocRaw
+            ? {
+                id: latestBoqDocRaw.id,
+                fileName: latestBoqDocRaw.fileName,
+                byteSize: latestBoqDocRaw.byteSize,
+                sha256Hash: latestBoqDocRaw.sha256Hash,
+                createdAt: latestBoqDocRaw.createdAt.toISOString(),
+              }
+            : null
+        }
+        verification={boqVerification}
+        hasWorkspaceBoq={(project._count?.awardedBoqItems ?? 0) > 0}
+        isBoqLocked={Boolean(project.boqLocked)}
+        canPopulateWorkspaceBoq={canApprove}
+        isSimulatingRole={accessContext.isSimulating}
+        showWorkspaceCta
+      />
 
       {/* Guided 4-Step Progress Bar */}
       <ol

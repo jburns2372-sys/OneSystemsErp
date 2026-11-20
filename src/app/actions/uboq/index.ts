@@ -1,11 +1,13 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { verifyOperationalSession } from '@/lib/dal/auth';
 import { assertProjectGraphOwnership, withUboqRlsContext } from '@/lib/uboq/project-ownership';
 import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { redactUboqPayloadForRole } from '@/lib/uboq/security/redact-payload';
+import { populateWorkspaceAwardedBoqFromVerifiedDocument } from '@/lib/uboq/adapters/workspace-boq-bridge';
 import {
   approveOperationalSnapshotAndPrrs,
   ingestAndStageProjectUboqPackage,
@@ -456,6 +458,44 @@ export async function syncUboqScheduleLinksAction(input: {
       })
   );
 
+  revalidatePath(`/projects/${input.projectId}/uboq`);
+  return redactUboqPayloadForRole(res, actor.role);
+}
+
+export async function populateWorkspaceAwardedBoqAction(input: {
+  projectId: string;
+  sourceDocumentId: string;
+  confirmationNote: string;
+}) {
+  const actor = await verifyOperationalSession();
+  if (!actor) {
+    throw new Error('UBOQ_UNAUTHORIZED: Active operational session required');
+  }
+  if (!input.projectId?.trim() || !input.sourceDocumentId?.trim()) {
+    throw new Error('UBOQ_INVALID_INPUT: projectId and sourceDocumentId are required');
+  }
+
+  const cookieStore = await cookies();
+  const rawSimulatedRole = cookieStore.get('simulatedRole')?.value || null;
+  const simulatedRole =
+    rawSimulatedRole && rawSimulatedRole.trim().toUpperCase() !== actor.role.toUpperCase()
+      ? rawSimulatedRole.trim().toUpperCase()
+      : null;
+
+  const res = await withUboqRlsContext(
+    { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId: input.projectId },
+    async () =>
+      populateWorkspaceAwardedBoqFromVerifiedDocument(prisma as never, {
+        projectId: input.projectId,
+        sourceDocumentId: input.sourceDocumentId,
+        actorUserId: actor.userId,
+        actorRole: actor.role,
+        simulatedRole,
+        confirmationNote: input.confirmationNote,
+      })
+  );
+
+  revalidatePath(`/projects/${input.projectId}`);
   revalidatePath(`/projects/${input.projectId}/uboq`);
   return redactUboqPayloadForRole(res, actor.role);
 }

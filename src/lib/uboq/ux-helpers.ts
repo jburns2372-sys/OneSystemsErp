@@ -5,6 +5,7 @@ import {
   type VisualSourceDocumentRecord,
   type VisualValidationExceptionRecord,
 } from './visual-mapping';
+import { classifyAwardedBoqRow } from './awarded-boq-reconciler';
 
 export type UboqWorkflowStepId = 'upload' | 'review' | 'approve' | 'schedule';
 export type UboqWorkflowStepStatus = 'completed' | 'current' | 'upcoming';
@@ -164,8 +165,27 @@ export function extractReadableBoqRow(candidate: VisualCandidateRecord): Readabl
         ? Number((quantity * unitPrice).toFixed(2))
         : null;
 
+  const rowClassification = classifyAwardedBoqRow({
+    itemCode,
+    description,
+    unit,
+    quantity,
+    unitPrice,
+    lineAmount: explicitAmount,
+    rawTextValues: [itemCode, description, unit].filter(Boolean),
+    hasFormula: Boolean(candidate.rawFormulaText),
+  });
+  const isNonPayableHeadingOrNote =
+    rowClassification === 'HEADING' ||
+    rowClassification === 'SUBHEADING' ||
+    rowClassification === 'NOTE' ||
+    rowClassification === 'HEADER_META' ||
+    rowClassification === 'SUBTOTAL' ||
+    rowClassification === 'GRAND_TOTAL';
+
   const statusKey: 'PENDING' | 'HUMAN_VERIFIED' | 'HUMAN_EXCLUDED' =
-    candidate.reviewDecision === 'HUMAN_VERIFIED'
+    candidate.reviewDecision === 'HUMAN_VERIFIED' ||
+    (candidate.reviewDecision === 'AUTO_VERIFIED_DETERMINISTIC' && !candidate.requiresHumanReview)
       ? 'HUMAN_VERIFIED'
       : candidate.reviewDecision === 'HUMAN_EXCLUDED'
         ? 'HUMAN_EXCLUDED'
@@ -180,12 +200,14 @@ export function extractReadableBoqRow(candidate: VisualCandidateRecord): Readabl
 
   const confidencePct = Math.round(Math.max(0, Math.min(1, Number(candidate.confidenceScore || 0))) * 100);
   const issues: string[] = [];
-  if (!description) issues.push('Missing description');
-  if (quantity === null) issues.push('Missing quantity');
-  if (!unit) issues.push('Missing unit');
-  if (unitPrice === null && amount === null) issues.push('Missing unit price');
-  if (candidate.requiresHumanReview && statusKey === 'PENDING') {
-    issues.push(confidencePct < 90 ? `Check scanned text (${confidencePct}% read certainty)` : 'Requires reviewer check');
+  if (!isNonPayableHeadingOrNote) {
+    if (!description) issues.push('Missing description');
+    if (quantity === null) issues.push('Missing quantity');
+    if (!unit) issues.push('Missing unit');
+    if (unitPrice === null && amount === null) issues.push('Missing unit price');
+    if (candidate.requiresHumanReview && statusKey === 'PENDING') {
+      issues.push(confidencePct < 90 ? `Check scanned text (${confidencePct}% read certainty)` : 'Requires reviewer check');
+    }
   }
 
   const sheetInfo = classifySourceSheet(candidate.sheetOrPageRef, candidate.sectionTitle);
@@ -382,6 +404,24 @@ export function formatFriendlyUboqError(rawError: unknown): string {
   }
   if (msg.includes('UBOQ_XLSX_EMPTY_WORKBOOK')) {
     return 'No readable worksheets were found in this Excel file. Please verify the file and try again.';
+  }
+  if (msg.includes('UBOQ_AWARDED_CONTRACT_AMOUNT_REQUIRED')) {
+    return 'Awarded contract amount required to complete reconciliation before populating the Project Workspace BOQ.';
+  }
+  if (msg.includes('UBOQ_AWARDED_BOQ_DISCREPANCIES_UNRESOLVED')) {
+    return 'Resolve the reported BOQ calculation, formula, or contract-total discrepancies before populating the Project Workspace BOQ.';
+  }
+  if (msg.includes('UBOQ_ROLE_PREVIEW_BLOCKED')) {
+    return 'Exit Role Preview before performing contract-import actions.';
+  }
+  if (msg.includes('UBOQ_WORKSPACE_BOQ_CONFLICT')) {
+    return 'This Project Workspace BOQ is already populated from a different source file. Resolve the conflict before importing another BOQ.';
+  }
+  if (msg.includes('UBOQ_SOURCE_IMMUTABILITY_REQUIRED')) {
+    return 'Only immutable, verified source BOQ files can populate the Project Workspace.';
+  }
+  if (msg.includes('UBOQ_WORKSPACE_BOQ_LOCKED')) {
+    return 'This Project Workspace BOQ is already locked.';
   }
   if (msg.includes('UBOQ_OCR_TIMEOUT') || msg.includes('UBOQ_OCR_WORKER_FAILED')) {
     return 'We could not finish reading that scanned image within the time limit. Please try a clearer image or PDF.';
