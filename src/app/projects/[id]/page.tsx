@@ -146,6 +146,10 @@ export default async function ProjectDetailsPage({
                 ? (c.parsedJson as Record<string, unknown>)
                 : {};
             const mapped = (pJson.effectiveCanonicalFields ?? pJson.mappedFields ?? {}) as Record<string, unknown>;
+            const rowClassification =
+              typeof pJson.rowClassification === 'string'
+                ? (pJson.rowClassification as Parameters<typeof reconcileImportedAwardedBoqCandidates>[0][number]['rowClassification'])
+                : null;
             return {
               id: c.id,
               sourceRowNumber: c.sourceRowNumber,
@@ -153,6 +157,7 @@ export default async function ProjectDetailsPage({
               sheetOrPageRef: c.section?.sheetOrPageRef ?? null,
               rawFormulaText: c.rawFormulaText,
               mappedFields: mapped,
+              rowClassification,
             };
           }),
           {

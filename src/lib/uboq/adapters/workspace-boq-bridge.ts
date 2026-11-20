@@ -3,6 +3,7 @@ import { assertUboqStageAuthorization } from '../security/stage-rbac';
 import { applyProjectRlsSessionVars, uboqRlsStorage } from '../project-ownership';
 import {
   reconcileImportedAwardedBoqCandidates,
+  type AwardedBoqRowClassification,
   type AwardedBoqVerificationReport,
 } from '../awarded-boq-reconciler';
 
@@ -120,6 +121,10 @@ export async function populateWorkspaceAwardedBoqFromVerifiedDocument(
     sourceDoc.candidates.map((c) => {
       const pJson = c.parsedJson && typeof c.parsedJson === 'object' ? (c.parsedJson as Record<string, unknown>) : {};
       const mapped = (pJson.effectiveCanonicalFields ?? pJson.mappedFields ?? {}) as Record<string, unknown>;
+      const rowClassification =
+        typeof pJson.rowClassification === 'string'
+          ? (pJson.rowClassification as AwardedBoqRowClassification)
+          : null;
       return {
         id: c.id,
         sourceRowNumber: c.sourceRowNumber,
@@ -127,6 +132,7 @@ export async function populateWorkspaceAwardedBoqFromVerifiedDocument(
         sheetOrPageRef: c.section?.sheetOrPageRef ?? null,
         rawFormulaText: c.rawFormulaText,
         mappedFields: mapped,
+        rowClassification,
       };
     }),
     {

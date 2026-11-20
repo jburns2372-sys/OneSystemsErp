@@ -7,6 +7,12 @@ import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { redactUboqPayloadForRole } from '@/lib/uboq/security/redact-payload';
 import { STANDARD_TAX_PROFILES } from '@/lib/uboq/tax-engine';
 import { scanUploadedDocumentSecurity } from '@/lib/uboq/intake/security-guard';
+import { streamVerifiedXlsxWorksheets } from '@/lib/uboq/intake/xlsx-streaming-reader';
+import {
+  classifyDocumentProjectRelevance,
+  extractWorkbookIdentitySignals,
+} from '@/lib/uboq/project-relevance';
+import type { ReconcilerWorksheetInput } from '@/lib/uboq/awarded-boq-reconciler';
 import {
   approveOperationalSnapshotAndPrrs,
   ingestAndStageProjectUboqPackage,
@@ -44,6 +50,7 @@ export async function POST(request: NextRequest) {
       }
       const documentRole = String(formData.get('documentRole') || 'CONTRACT_BOQ');
       const allowDuplicateNewRevision = String(formData.get('allowDuplicateNewRevision') || '') === 'true';
+      const confirmProjectAssociation = String(formData.get('confirmProjectAssociation') || '').trim().toLowerCase() === 'true';
 
       const staged = await withUboqRlsContext(
         { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId },
@@ -54,7 +61,8 @@ export async function POST(request: NextRequest) {
             capability: 'UBOQ_INTAKE_STAGE',
           });
           const project = await prisma.project.findUnique({
-            where: { id: projectId }, select: { projectCategory: true },
+            where: { id: projectId },
+            select: { id: true, name: true, projectCategory: true, contractNumber: true, client: true, location: true },
           });
           if (!project || project.projectCategory !== sectorType) {
             throw new Error('UBOQ_PROJECT_SECTOR_CONFIRMATION_REQUIRED');
@@ -63,6 +71,29 @@ export async function POST(request: NextRequest) {
           const scan = scanUploadedDocumentSecurity(file.name, buffer, file.type);
           if (!scan.safe || scan.findings.length > 0) {
             throw new Error('UBOQ_INTAKE_SECURITY_BLOCKED');
+          }
+          // Mandatory Project-Relevance check for Excel workbooks before attaching to selected project
+          if (scan.detectedFormat === 'XLSX' && !confirmProjectAssociation) {
+            const previewSheets: ReconcilerWorksheetInput[] = [];
+            await streamVerifiedXlsxWorksheets(buffer, ({ sheetName, rows }) => {
+              if (previewSheets.length < 4) {
+                previewSheets.push({ sheetName, rows: rows.slice(0, 15) });
+              }
+            });
+            const wbSignals = extractWorkbookIdentitySignals(file.name, previewSheets, documentRole);
+            const relevance = classifyDocumentProjectRelevance(
+              {
+                projectId: project.id,
+                projectName: project.name,
+                contractNumber: project.contractNumber,
+                clientName: project.client,
+                location: project.location,
+              },
+              wbSignals
+            );
+            if (relevance.status === 'UNRELATED') {
+              throw new Error(`UBOQ_UNRELATED_DOCUMENT_BLOCKED: ${relevance.reason}`);
+            }
           }
           return ingestAndStageProjectUboqPackage(prisma as never, {
             projectId,
@@ -215,7 +246,7 @@ export async function POST(request: NextRequest) {
       ? 403
       : /CONFLICT|DUPLICATE|ALREADY|LUMP_SUM|MISMATCH/i.test(msg)
         ? 409
-        : /UBOQ_XLSX_LIMIT_EXCEEDED|UBOQ_XLSX_EMPTY_WORKBOOK/i.test(msg)
+        : /UBOQ_XLSX_LIMIT_EXCEEDED|UBOQ_XLSX_EMPTY_WORKBOOK|UBOQ_UNRELATED_DOCUMENT_BLOCKED/i.test(msg)
           ? 422
           : 400;
     return NextResponse.json({ error: msg }, { status });

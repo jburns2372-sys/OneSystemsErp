@@ -92,6 +92,21 @@ export type AwardedBoqOutcomeCategory =
   | 'OFFICIAL_CONTRACT_AMOUNT_REQUIRED'
   | 'UNABLE_TO_VERIFY';
 
+export type WorkbookWorksheetRole =
+  | 'PRIMARY_BOQ'
+  | 'PROGRAM_OF_WORKS'
+  | 'DUPA_COST_ANALYSIS'
+  | 'SCHEDULE'
+  | 'CASH_FLOW'
+  | 'SUPPORTING_INFO';
+
+export interface ClassifiedWorkbookWorksheet {
+  readonly sheetName: string;
+  readonly role: WorkbookWorksheetRole;
+  readonly includedInBoqTotal: boolean;
+  readonly reason: string;
+}
+
 export interface AwardedBoqVerificationReport {
   readonly status: AwardedBoqReconciliationStatus;
   readonly outcomeCategory: AwardedBoqOutcomeCategory;
@@ -119,6 +134,7 @@ export interface AwardedBoqVerificationReport {
     readonly unsupportedFormulas: number;
     readonly discrepancies: number;
   };
+  readonly worksheetRoles?: ReadonlyArray<ClassifiedWorkbookWorksheet>;
   readonly priceComponents: ReadonlyArray<AwardedBoqPriceComponent>;
   readonly discrepancies: ReadonlyArray<AwardedBoqDiscrepancy>;
   readonly classifiedRows: ReadonlyArray<ClassifiedAwardedBoqRow>;
@@ -154,8 +170,94 @@ const PRICE_COMPONENT_LABEL_REGEX =
   /\b(vat|value[\s-]added\s+tax|e-?vat|output\s+tax|discount|less\s*:|provisional\s+sum|contingency|contingencies|escalation|price\s+adjustment|add\s*:)\b/i;
 const NON_PAYABLE_NOTE_VALUE_REGEX =
   /^(by\s+client|by\s+owner|included|incl\.?|excluded|excl\.?|n\/a|not\s+applicable|not\s+included|for\s+reference|see\s+note|waived|free\s+of\s+charge|foc|tbd|existing|others?)$/i;
+const DESCRIPTIVE_IN_WORDS_NOTE_REGEX =
+  /^(unit\s+(?:bid\s+)?price\s+in\s+words|amount\s+in\s+words|total\s+in\s+words)\s*:/i;
 const ROMAN_OR_PART_HEADING_REGEX =
   /^([IVXLCDM]{1,6}\.?|[A-Z]\.|PART\s+[A-Z0-9]+|DIV(?:ISION)?\.?\s*[A-Z0-9]+|SECTION\s+[A-Z0-9]+|ITEM\s+[A-Z0-9]+(?:\.[0-9]+)?)$/i;
+
+/**
+ * Classifies a worksheet's actual purpose inside a multi-sheet project workbook so ONLY
+ * primary BOQ worksheet(s) contribute payable items and totals to BOQ reconciliation,
+ * while POW, DUPA, Schedule, Cash Flow, and Supporting sheets retain their distinct roles.
+ */
+export function classifyWorkbookWorksheetRole(
+  sheetName: string,
+  allSheetNames: ReadonlyArray<string>
+): ClassifiedWorkbookWorksheet {
+  const raw = String(sheetName ?? '').trim();
+  const singleSheet = allSheetNames.length <= 1;
+
+  if (/\b(dupa|detailed\s+unit\s+price|unit\s+price\s+analysis|unit\s+rate\s+analysis)\b/i.test(raw)) {
+    return {
+      sheetName: raw,
+      role: 'DUPA_COST_ANALYSIS',
+      includedInBoqTotal: false,
+      reason: 'Detailed unit price / cost analysis sheet (supporting derivation, excluded from BOQ grand total)',
+    };
+  }
+  if (/\b(program\s+of\s+works|\bpow\b)\b/i.test(raw) && !/\b(bill\s+of\s+quantities|\bboq\b)\b/i.test(raw)) {
+    return {
+      sheetName: raw,
+      role: 'PROGRAM_OF_WORKS',
+      includedInBoqTotal: false,
+      reason: 'Program of Works / ABC summary sheet (derived summary, excluded from BOQ pay-item summation)',
+    };
+  }
+  if (/\b(cash\s*flow|financial\s+projection|quarterly\s+cash)\b/i.test(raw)) {
+    return {
+      sheetName: raw,
+      role: 'CASH_FLOW',
+      includedInBoqTotal: false,
+      reason: 'Cash flow / financial projection sheet (excluded from BOQ grand total)',
+    };
+  }
+  if (/\b(pert|cpm|gantt|s-?curve|manpower|equipment\s+sched|schedule|sched\b|timeline|bar\s+chart)\b/i.test(raw)) {
+    return {
+      sheetName: raw,
+      role: 'SCHEDULE',
+      includedInBoqTotal: false,
+      reason: 'Project schedule / manpower / equipment plan sheet (excluded from BOQ grand total)',
+    };
+  }
+  if (/\b(bill\s+of\s+quantities|\bboq\b|awarded\s+boq|pay\s+items|contract\s+boq)\b/i.test(raw)) {
+    return {
+      sheetName: raw,
+      role: 'PRIMARY_BOQ',
+      includedInBoqTotal: true,
+      reason: 'Primary Bill of Quantities worksheet',
+    };
+  }
+  if (!singleSheet && /\b(summary|cover|abc|approved\s+budget|general\s+notes|notes|reference|appendix|index|instructions|materials\s+list)\b/i.test(raw)) {
+    return {
+      sheetName: raw,
+      role: 'SUPPORTING_INFO',
+      includedInBoqTotal: false,
+      reason: 'Supporting project reference / summary sheet (excluded from BOQ grand total)',
+    };
+  }
+
+  // If another sheet in this workbook is explicitly named BOQ / Bill of Quantities,
+  // treat generically named companion sheets as supporting unless single-sheet.
+  const workbookHasExplicitBoq =
+    !singleSheet &&
+    allSheetNames.some((n) => /\b(bill\s+of\s+quantities|\bboq\b|awarded\s+boq|pay\s+items)\b/i.test(String(n)));
+
+  if (workbookHasExplicitBoq) {
+    return {
+      sheetName: raw,
+      role: 'SUPPORTING_INFO',
+      includedInBoqTotal: false,
+      reason: 'Companion worksheet alongside explicit Bill of Quantities sheet',
+    };
+  }
+
+  return {
+    sheetName: raw,
+    role: 'PRIMARY_BOQ',
+    includedInBoqTotal: true,
+    reason: singleSheet ? 'Single-worksheet BOQ workbook' : 'Primary BOQ worksheet',
+  };
+}
 
 export function roundCurrency(value: number, decimals = 2): number {
   const factor = Math.pow(10, decimals);
@@ -235,10 +337,12 @@ export function classifyAwardedBoqRow(input: {
   const rawTexts = (input.rawTextValues ?? []).map((t) => t.trim()).filter(Boolean);
   const amtFormula = String(input.amountFormula ?? '').trim().toUpperCase();
 
-  // 1. Multi-row header / numbering / legend rows like "(1) (2) (3)" or "(4)*(5)"
+  // 1. Multi-row header / numbering / legend rows like "(1) (2) (3) (4) (5a-1) (5a) = E+F+G (6) = D×M"
+  const isParenLegendCell = (t: string): boolean => /^\(\d+[a-z]?(?:-\d+)?\)(?:\s*=\s*.+)?$/i.test(t);
   if (
     rawTexts.length > 0 &&
-    rawTexts.every((t) => /^\(\d+\)$/.test(t) || /^[\[\]()0-9+*xX/\-\s]+$/.test(t))
+    (rawTexts.every((t) => /^\(\d+\)$/.test(t) || /^[\[\]()0-9+*xX/\-\s]+$/.test(t)) ||
+      (rawTexts.length >= 3 && rawTexts.filter(isParenLegendCell).length >= Math.ceil(rawTexts.length * 0.75)))
   ) {
     return 'HEADER_META';
   }
@@ -246,16 +350,13 @@ export function classifyAwardedBoqRow(input: {
     return 'HEADER_META';
   }
 
-  // 2. Grand Total / Subtotal (either labeled OR pure aggregate SUM/SUBTOTAL formula with no qty/unitPrice)
-  if (GRAND_TOTAL_LABEL_REGEX.test(combined) && input.quantity === null && input.unitPrice === null) {
+  // 2. Grand Total / Subtotal (explicit label when quantity is absent, OR pure aggregate SUM/SUBTOTAL formula with no qty/unitPrice)
+  if (GRAND_TOTAL_LABEL_REGEX.test(combined) && input.quantity === null) {
     return 'GRAND_TOTAL';
   }
   if (
-    (SUBTOTAL_LABEL_REGEX.test(desc) ||
-      SUBTOTAL_LABEL_REGEX.test(combined) ||
-      /^=\s*(?:SUM|SUBTOTAL)\s*\(/i.test(amtFormula)) &&
-    input.quantity === null &&
-    input.unitPrice === null
+    ((SUBTOTAL_LABEL_REGEX.test(desc) || SUBTOTAL_LABEL_REGEX.test(combined)) && input.quantity === null) ||
+    (/^=\s*(?:SUM|SUBTOTAL)\s*\(/i.test(amtFormula) && input.quantity === null && input.unitPrice === null)
   ) {
     return 'SUBTOTAL';
   }
@@ -271,11 +372,12 @@ export function classifyAwardedBoqRow(input: {
   }
 
   // 4. Explicit non-payable contractual annotation ("By Client", "Included", "Excluded", "N/A")
-  // when unitPrice and lineAmount are absent (even if quantity e.g. "1 lot" is listed for scope reference)
+  // or DPWH "Unit Bid Price in Words: ..." descriptive sub-line
   if (
     (input.unitPrice === null || input.unitPrice === undefined) &&
     (input.lineAmount === null || input.lineAmount === undefined) &&
-    rawTexts.some((t) => NON_PAYABLE_NOTE_VALUE_REGEX.test(t))
+    (rawTexts.some((t) => NON_PAYABLE_NOTE_VALUE_REGEX.test(t) || DESCRIPTIVE_IN_WORDS_NOTE_REGEX.test(t)) ||
+      DESCRIPTIVE_IN_WORDS_NOTE_REGEX.test(desc))
   ) {
     return 'NOTE';
   }
@@ -321,7 +423,13 @@ interface IndexedCell {
 }
 
 type EvalResult =
-  | { readonly ok: true; readonly value: number }
+  | {
+      readonly ok: true;
+      readonly value: number;
+      readonly kind?: 'number' | 'string' | 'array';
+      readonly textValue?: string;
+      readonly arrayValues?: ReadonlyArray<number>;
+    }
   | {
       readonly ok: false;
       readonly code:
@@ -504,7 +612,7 @@ function tokenizeFormula(rawFormula: string): { ok: true; tokens: FormulaToken[]
       i += 2;
       continue;
     }
-    if ('+-*/^%=<>'.includes(ch)) {
+    if ('+-*/^%=<>&'.includes(ch)) {
       tokens.push({ type: 'OP', value: ch });
       i++;
       continue;
@@ -588,19 +696,24 @@ class WorkbookFormulaEvaluator {
     }
 
     if (!cell.formula) {
-      const res: EvalResult = { ok: true, value: cell.cachedNum ?? 0 };
+      const res: EvalResult =
+        cell.cachedNum !== null
+          ? { ok: true, kind: 'number', value: cell.cachedNum }
+          : cell.rawText
+            ? { ok: true, kind: 'string', value: 0, textValue: cell.rawText }
+            : { ok: true, kind: 'number', value: 0 };
       this.memo.set(memoKey, res);
       return res;
     }
 
     this.visiting.add(memoKey);
-    const res = this.evaluateFormulaString(cell.sheetName, cell.formula);
+    const res = this.evaluateFormulaString(cell.sheetName, cell.formula, cell.row);
     this.visiting.delete(memoKey);
     this.memo.set(memoKey, res);
     return res;
   }
 
-  evaluateFormulaString(currentSheetName: string, rawFormula: string): EvalResult {
+  evaluateFormulaString(currentSheetName: string, rawFormula: string, currentRowNumber = 1): EvalResult {
     const tokRes = tokenizeFormula(rawFormula);
     if ('code' in tokRes) {
       return { ok: false, code: tokRes.code, message: tokRes.message };
@@ -614,7 +727,15 @@ class WorkbookFormulaEvaluator {
     const peek = (): FormulaToken | undefined => tokens[pos];
     const next = (): FormulaToken | undefined => tokens[pos++];
 
-    const resolveRangeNumbers = (sheet: string | null, startRef: string, endRef: string): { ok: true; values: number[] } | { ok: false; err: EvalResult } => {
+    const toExcelString = (ev: Extract<EvalResult, { ok: true }>): string =>
+      ev.kind === 'string' ? (ev.textValue ?? '') : String(ev.value);
+
+    const resolveRangeNumbers = (
+      sheet: string | null,
+      startRef: string,
+      endRef: string,
+      positional = false
+    ): { ok: true; values: number[] } | { ok: false; err: EvalResult } => {
       const targetSheet = sheet ?? currentSheetName;
       const sk = normalizeSheetKey(targetSheet);
       if (!this.sheetCells.has(sk)) {
@@ -656,34 +777,126 @@ class WorkbookFormulaEvaluator {
       }
 
       const sheetMap = this.sheetCells.get(sk)!;
+      if (positional) {
+        const values: number[] = [];
+        for (let r = rMin; r <= rMax; r++) {
+          for (let c = cMin; c <= cMax; c++) {
+            const cell = sheetMap.get(`${colNumberToLetters(c)}${r}`);
+            if (!cell) {
+              values.push(0);
+            } else if (cell.formula || cell.cachedNum !== null || EXCEL_ERROR_REGEX.test(cell.rawText)) {
+              const ev = this.evaluateCell(targetSheet, cell.cellRef);
+              if (!ev.ok) return { ok: false, err: ev };
+              values.push(ev.kind === 'string' ? (parseNumericStrictOrNull(ev.textValue ?? '') ?? 0) : ev.value);
+            } else {
+              values.push(0);
+            }
+          }
+        }
+        return { ok: true, values };
+      }
+
       const values: number[] = [];
       for (const cell of sheetMap.values()) {
         if (cell.row >= rMin && cell.row <= rMax && cell.col >= cMin && cell.col <= cMax) {
           if (cell.formula || cell.cachedNum !== null || EXCEL_ERROR_REGEX.test(cell.rawText)) {
             const ev = this.evaluateCell(targetSheet, cell.cellRef);
             if (!ev.ok) return { ok: false, err: ev };
-            values.push(ev.value);
+            if (ev.kind !== 'string') values.push(ev.value);
           }
         }
       }
       return { ok: true, values };
     };
 
+    const applyBinaryOp = (
+      op: string,
+      left: Extract<EvalResult, { ok: true }>,
+      right: Extract<EvalResult, { ok: true }>
+    ): EvalResult => {
+      if (op === '&') {
+        return { ok: true, kind: 'string', value: 0, textValue: `${toExcelString(left)}${toExcelString(right)}` };
+      }
+      const lIsArr = left.kind === 'array' && Array.isArray(left.arrayValues);
+      const rIsArr = right.kind === 'array' && Array.isArray(right.arrayValues);
+      if (lIsArr || rIsArr) {
+        const lArr = lIsArr ? left.arrayValues! : [left.value];
+        const rArr = rIsArr ? right.arrayValues! : [right.value];
+        const len = Math.max(lArr.length, rArr.length);
+        if (lArr.length !== 1 && rArr.length !== 1 && lArr.length !== rArr.length) {
+          return { ok: false, code: 'FORMULA_ERROR_VALUE', message: 'Mismatched array lengths in formula expression' };
+        }
+        const out: number[] = [];
+        for (let idx = 0; idx < len; idx++) {
+          const a = lArr.length === 1 ? lArr[0] : lArr[idx];
+          const b = rArr.length === 1 ? rArr[0] : rArr[idx];
+          if (op === '+') out.push(a + b);
+          else if (op === '-') out.push(a - b);
+          else if (op === '*') out.push(a * b);
+          else if (op === '/') {
+            if (Math.abs(b) < 1e-15) return { ok: false, code: 'FORMULA_ERROR_VALUE', message: 'Division by zero (#DIV/0!) in array formula' };
+            out.push(a / b);
+          } else if (op === '^') out.push(Math.pow(a, b));
+          else if (op === '=') out.push(Math.abs(a - b) < 1e-9 ? 1 : 0);
+          else if (op === '<>') out.push(Math.abs(a - b) >= 1e-9 ? 1 : 0);
+          else if (op === '<') out.push(a < b ? 1 : 0);
+          else if (op === '>') out.push(a > b ? 1 : 0);
+          else if (op === '<=') out.push(a <= b ? 1 : 0);
+          else if (op === '>=') out.push(a >= b ? 1 : 0);
+        }
+        return { ok: true, kind: 'array', value: out[0] ?? 0, arrayValues: out };
+      }
+      if (['=', '<>', '<', '>', '<=', '>='].includes(op)) {
+        if (left.kind === 'string' || right.kind === 'string') {
+          const ls = toExcelString(left).toLowerCase();
+          const rs = toExcelString(right).toLowerCase();
+          const truth =
+            op === '=' ? ls === rs : op === '<>' ? ls !== rs : op === '<' ? ls < rs : op === '>' ? ls > rs : op === '<=' ? ls <= rs : ls >= rs;
+          return { ok: true, kind: 'number', value: truth ? 1 : 0 };
+        }
+        const truth =
+          op === '=' ? Math.abs(left.value - right.value) < 1e-9 :
+          op === '<>' ? Math.abs(left.value - right.value) >= 1e-9 :
+          op === '<' ? left.value < right.value :
+          op === '>' ? left.value > right.value :
+          op === '<=' ? left.value <= right.value : left.value >= right.value;
+        return { ok: true, kind: 'number', value: truth ? 1 : 0 };
+      }
+      if (op === '+') return { ok: true, kind: 'number', value: left.value + right.value };
+      if (op === '-') return { ok: true, kind: 'number', value: left.value - right.value };
+      if (op === '*') return { ok: true, kind: 'number', value: left.value * right.value };
+      if (op === '/') {
+        if (Math.abs(right.value) < 1e-15) {
+          return { ok: false, code: 'FORMULA_ERROR_VALUE', message: 'Division by zero (#DIV/0!) in formula' };
+        }
+        return { ok: true, kind: 'number', value: left.value / right.value };
+      }
+      if (op === '^') return { ok: true, kind: 'number', value: Math.pow(left.value, right.value) };
+      return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: `Unsupported operator "${op}"` };
+    };
+
     const parseComparison = (): EvalResult => {
-      let left = parseAddSub();
+      let left = parseConcat();
       if (!left.ok) return left;
       while (peek()?.type === 'OP' && ['=', '<>', '<', '>', '<=', '>='].includes((peek() as { value: string }).value)) {
         const op = (next() as { value: string }).value;
+        const right = parseConcat();
+        if (!right.ok) return right;
+        left = applyBinaryOp(op, left, right);
+        if (!left.ok) return left;
+      }
+      return left;
+    };
+
+    const parseConcat = (): EvalResult => {
+      let left = parseAddSub();
+      if (!left.ok) return left;
+      while (peek()?.type === 'OP' && (peek() as { value: string }).value === '&') {
+        next();
         const right = parseAddSub();
         if (!right.ok) return right;
-        let truth = false;
-        if (op === '=') truth = Math.abs(left.value - right.value) < 1e-9;
-        else if (op === '<>') truth = Math.abs(left.value - right.value) >= 1e-9;
-        else if (op === '<') truth = left.value < right.value;
-        else if (op === '>') truth = left.value > right.value;
-        else if (op === '<=') truth = left.value <= right.value;
-        else if (op === '>=') truth = left.value >= right.value;
-        left = { ok: true, value: truth ? 1 : 0 };
+        left = applyBinaryOp('&', left, right);
+        if (!left.ok) return left;
       }
       return left;
     };
@@ -695,7 +908,8 @@ class WorkbookFormulaEvaluator {
         const op = (next() as { value: string }).value;
         const right = parseMulDiv();
         if (!right.ok) return right;
-        left = { ok: true, value: op === '+' ? left.value + right.value : left.value - right.value };
+        left = applyBinaryOp(op, left, right);
+        if (!left.ok) return left;
       }
       return left;
     };
@@ -707,14 +921,8 @@ class WorkbookFormulaEvaluator {
         const op = (next() as { value: string }).value;
         const right = parsePower();
         if (!right.ok) return right;
-        if (op === '/') {
-          if (Math.abs(right.value) < 1e-15) {
-            return { ok: false, code: 'FORMULA_ERROR_VALUE', message: 'Division by zero (#DIV/0!) in formula' };
-          }
-          left = { ok: true, value: left.value / right.value };
-        } else {
-          left = { ok: true, value: left.value * right.value };
-        }
+        left = applyBinaryOp(op, left, right);
+        if (!left.ok) return left;
       }
       return left;
     };
@@ -726,7 +934,8 @@ class WorkbookFormulaEvaluator {
         next();
         const right = parseUnary();
         if (!right.ok) return right;
-        left = { ok: true, value: Math.pow(left.value, right.value) };
+        left = applyBinaryOp('^', left, right);
+        if (!left.ok) return left;
       }
       return left;
     };
@@ -736,7 +945,11 @@ class WorkbookFormulaEvaluator {
         const op = (next() as { value: string }).value;
         const val = parseUnary();
         if (!val.ok) return val;
-        return { ok: true, value: op === '-' ? -val.value : val.value };
+        if (val.kind === 'array' && val.arrayValues) {
+          const out = op === '-' ? val.arrayValues.map((v) => -v) : [...val.arrayValues];
+          return { ok: true, kind: 'array', value: out[0] ?? 0, arrayValues: out };
+        }
+        return { ok: true, kind: 'number', value: op === '-' ? -val.value : val.value };
       }
       return parsePostfix();
     };
@@ -751,26 +964,58 @@ class WorkbookFormulaEvaluator {
       return val;
     };
 
-    const parseFunctionArgs = (allowRanges: boolean): { ok: true; flatValues: number[]; argGroups: number[][] } | { ok: false; err: EvalResult } => {
+    const skipBalancedArg = (): void => {
+      let depth = 0;
+      while (pos < tokens.length) {
+        const t = peek();
+        if (!t) break;
+        if (t.type === 'LPAREN') {
+          depth++;
+          next();
+        } else if (t.type === 'RPAREN') {
+          if (depth === 0) break;
+          depth--;
+          next();
+        } else if (t.type === 'COMMA' && depth === 0) {
+          break;
+        } else {
+          next();
+        }
+      }
+    };
+
+    const parseFunctionArgs = (
+      allowRanges: boolean
+    ):
+      | { ok: true; flatValues: number[]; argGroups: number[][]; rawResults: Array<Extract<EvalResult, { ok: true }>> }
+      | { ok: false; err: EvalResult } => {
       const flatValues: number[] = [];
       const argGroups: number[][] = [];
+      const rawResults: Array<Extract<EvalResult, { ok: true }>> = [];
       if (peek()?.type === 'RPAREN') {
         next();
-        return { ok: true, flatValues, argGroups };
+        return { ok: true, flatValues, argGroups, rawResults };
       }
       while (pos < tokens.length) {
         const cur = peek();
         if (allowRanges && cur?.type === 'RANGE') {
           next();
-          const r = resolveRangeNumbers(cur.sheet, cur.start, cur.end);
+          const r = resolveRangeNumbers(cur.sheet, cur.start, cur.end, false);
           if ('err' in r) return { ok: false, err: r.err };
           flatValues.push(...r.values);
           argGroups.push(r.values);
+          rawResults.push({ ok: true, kind: 'array', value: r.values[0] ?? 0, arrayValues: r.values });
         } else {
           const ev = parseComparison();
           if ('code' in ev) return { ok: false, err: ev };
-          flatValues.push(ev.value);
-          argGroups.push([ev.value]);
+          if (ev.kind === 'array' && ev.arrayValues) {
+            flatValues.push(...ev.arrayValues);
+            argGroups.push([...ev.arrayValues]);
+          } else {
+            flatValues.push(ev.value);
+            argGroups.push([ev.value]);
+          }
+          rawResults.push(ev);
         }
         if (peek()?.type === 'COMMA') {
           next();
@@ -778,7 +1023,7 @@ class WorkbookFormulaEvaluator {
         }
         if (peek()?.type === 'RPAREN') {
           next();
-          return { ok: true, flatValues, argGroups };
+          return { ok: true, flatValues, argGroups, rawResults };
         }
         return { ok: false, err: { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: 'Expected "," or ")" in function arguments' } };
       }
@@ -798,17 +1043,19 @@ class WorkbookFormulaEvaluator {
         };
       }
       if (tok.type === 'NUMBER') {
-        return { ok: true, value: tok.value };
+        return { ok: true, kind: 'number', value: tok.value };
       }
       if (tok.type === 'STRING') {
         const parsed = parseNumericStrictOrNull(tok.value);
-        return { ok: true, value: parsed ?? 0 };
+        return { ok: true, kind: 'string', value: parsed ?? 0, textValue: tok.value };
       }
       if (tok.type === 'REF') {
         return this.evaluateCell(tok.sheet ?? currentSheetName, tok.ref);
       }
       if (tok.type === 'RANGE') {
-        return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: `Bare range ${tok.start}:${tok.end} outside aggregate function` };
+        const r = resolveRangeNumbers(tok.sheet, tok.start, tok.end, true);
+        if ('err' in r) return r.err;
+        return { ok: true, kind: 'array', value: r.values[0] ?? 0, arrayValues: r.values };
       }
       if (tok.type === 'LPAREN') {
         const inner = parseComparison();
@@ -820,8 +1067,8 @@ class WorkbookFormulaEvaluator {
         return inner;
       }
       if (tok.type === 'IDENT') {
-        if (tok.value === 'TRUE') return { ok: true, value: 1 };
-        if (tok.value === 'FALSE') return { ok: true, value: 0 };
+        if (tok.value === 'TRUE') return { ok: true, kind: 'number', value: 1 };
+        if (tok.value === 'FALSE') return { ok: true, kind: 'number', value: 0 };
 
         if (peek()?.type !== 'LPAREN') {
           return { ok: false, code: 'FORMULA_UNSUPPORTED', message: `Unresolved named reference "${tok.value}"` };
@@ -829,10 +1076,104 @@ class WorkbookFormulaEvaluator {
         next(); // consume '('
         const fn = tok.value;
 
+        if (fn === 'ROW') {
+          if (peek()?.type === 'RPAREN') {
+            next();
+            return { ok: true, kind: 'number', value: currentRowNumber };
+          }
+          const argTok = next();
+          if (peek()?.type !== 'RPAREN') {
+            return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: 'ROW() expects a single cell or range argument' };
+          }
+          next();
+          if (argTok?.type === 'REF') {
+            const parsedRef = parseA1Ref(argTok.ref);
+            if (!parsedRef) return { ok: false, code: 'FORMULA_BROKEN_REFERENCE', message: `Invalid cell reference in ROW(${argTok.ref})` };
+            return { ok: true, kind: 'number', value: parsedRef.row };
+          }
+          if (argTok?.type === 'RANGE') {
+            const sPos = parseA1Ref(argTok.start);
+            const ePos = parseA1Ref(argTok.end);
+            if (!sPos || !ePos) return { ok: false, code: 'FORMULA_BROKEN_REFERENCE', message: `Invalid range in ROW(${argTok.start}:${argTok.end})` };
+            const rMin = Math.min(sPos.row, ePos.row);
+            const rMax = Math.max(sPos.row, ePos.row);
+            const cMin = Math.min(sPos.col, ePos.col);
+            const cMax = Math.max(sPos.col, ePos.col);
+            if ((rMax - rMin + 1) * (cMax - cMin + 1) > 100_000) {
+              return { ok: false, code: 'FORMULA_UNSUPPORTED', message: 'ROW range exceeds safe verification span' };
+            }
+            const rowsArr: number[] = [];
+            for (let r = rMin; r <= rMax; r++) {
+              for (let c = cMin; c <= cMax; c++) rowsArr.push(r);
+            }
+            return { ok: true, kind: 'array', value: rowsArr[0] ?? 0, arrayValues: rowsArr };
+          }
+          return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: 'Invalid argument to ROW()' };
+        }
+        if (fn === 'MOD') {
+          const args = parseFunctionArgs(false);
+          if ('err' in args) return args.err;
+          if (args.rawResults.length < 2) return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: 'MOD requires 2 arguments' };
+          const numRes = args.rawResults[0];
+          const divRes = args.rawResults[1];
+          const lArr = numRes.kind === 'array' && numRes.arrayValues ? numRes.arrayValues : [numRes.value];
+          const rArr = divRes.kind === 'array' && divRes.arrayValues ? divRes.arrayValues : [divRes.value];
+          const len = Math.max(lArr.length, rArr.length);
+          const out: number[] = [];
+          for (let idx = 0; idx < len; idx++) {
+            const n = lArr.length === 1 ? lArr[0] : lArr[idx];
+            const d = rArr.length === 1 ? rArr[0] : rArr[idx];
+            if (Math.abs(d) < 1e-15) return { ok: false, code: 'FORMULA_ERROR_VALUE', message: 'Division by zero (#DIV/0!) in MOD()' };
+            out.push(n - d * Math.floor(n / d));
+          }
+          return numRes.kind === 'array' || divRes.kind === 'array'
+            ? { ok: true, kind: 'array', value: out[0] ?? 0, arrayValues: out }
+            : { ok: true, kind: 'number', value: out[0] ?? 0 };
+        }
+        if (fn === 'SUMPRODUCT') {
+          const arrays: number[][] = [];
+          if (peek()?.type === 'RPAREN') {
+            next();
+            return { ok: true, kind: 'number', value: 0 };
+          }
+          while (pos < tokens.length) {
+            const ev = parseComparison();
+            if ('code' in ev) return ev;
+            arrays.push(ev.kind === 'array' && ev.arrayValues ? [...ev.arrayValues] : [ev.value]);
+            if (peek()?.type === 'COMMA') { next(); continue; }
+            if (peek()?.type === 'RPAREN') { next(); break; }
+            return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: 'Expected "," or ")" in SUMPRODUCT()' };
+          }
+          if (arrays.length === 0) return { ok: true, kind: 'number', value: 0 };
+          const maxLen = Math.max(...arrays.map((a) => a.length));
+          for (const a of arrays) {
+            if (a.length !== 1 && a.length !== maxLen) {
+              return { ok: false, code: 'FORMULA_ERROR_VALUE', message: 'SUMPRODUCT array dimensions do not match (#VALUE!)' };
+            }
+          }
+          let total = 0;
+          for (let idx = 0; idx < maxLen; idx++) {
+            let prod = 1;
+            for (const a of arrays) prod *= a.length === 1 ? a[0] : a[idx];
+            total += prod;
+          }
+          return { ok: true, kind: 'number', value: total };
+        }
         if (fn === 'SUM') {
           const args = parseFunctionArgs(true);
           if ('err' in args) return args.err;
-          return { ok: true, value: args.flatValues.reduce((a, b) => a + b, 0) };
+          return { ok: true, kind: 'number', value: args.flatValues.reduce((a, b) => a + b, 0) };
+        }
+        if (fn === 'AVERAGE') {
+          const args = parseFunctionArgs(true);
+          if ('err' in args) return args.err;
+          if (args.flatValues.length === 0) return { ok: false, code: 'FORMULA_ERROR_VALUE', message: 'AVERAGE of empty range (#DIV/0!)' };
+          return { ok: true, kind: 'number', value: args.flatValues.reduce((a, b) => a + b, 0) / args.flatValues.length };
+        }
+        if (fn === 'COUNT' || fn === 'COUNTA') {
+          const args = parseFunctionArgs(true);
+          if ('err' in args) return args.err;
+          return { ok: true, kind: 'number', value: args.flatValues.length };
         }
         if (fn === 'SUBTOTAL') {
           const args = parseFunctionArgs(true);
@@ -840,55 +1181,69 @@ class WorkbookFormulaEvaluator {
           const fnCode = args.argGroups[0]?.[0];
           const rest = args.argGroups.slice(1).flat();
           if (fnCode === 9 || fnCode === 109) {
-            return { ok: true, value: rest.reduce((a, b) => a + b, 0) };
+            return { ok: true, kind: 'number', value: rest.reduce((a, b) => a + b, 0) };
           }
           return { ok: false, code: 'FORMULA_UNSUPPORTED', message: `Unsupported SUBTOTAL function code ${String(fnCode)}` };
         }
         if (fn === 'ROUND' || fn === 'ROUNDUP' || fn === 'ROUNDDOWN') {
           const args = parseFunctionArgs(false);
           if ('err' in args) return args.err;
-          if (args.flatValues.length < 2) {
-            return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: `${fn} requires 2 arguments` };
-          }
+          if (args.flatValues.length < 2) return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: `${fn} requires 2 arguments` };
           const num = args.flatValues[0];
           const digits = Math.trunc(args.flatValues[1]);
           const factor = Math.pow(10, digits);
-          if (fn === 'ROUND') return { ok: true, value: roundCurrency(num, digits) };
-          if (fn === 'ROUNDUP') {
-            return { ok: true, value: (num >= 0 ? Math.ceil(num * factor - 1e-12) : Math.floor(num * factor + 1e-12)) / factor };
-          }
-          return { ok: true, value: (num >= 0 ? Math.floor(num * factor + 1e-12) : Math.ceil(num * factor - 1e-12)) / factor };
+          if (fn === 'ROUND') return { ok: true, kind: 'number', value: roundCurrency(num, digits) };
+          if (fn === 'ROUNDUP') return { ok: true, kind: 'number', value: (num >= 0 ? Math.ceil(num * factor - 1e-12) : Math.floor(num * factor + 1e-12)) / factor };
+          return { ok: true, kind: 'number', value: (num >= 0 ? Math.floor(num * factor + 1e-12) : Math.ceil(num * factor - 1e-12)) / factor };
+        }
+        if (fn === 'INT') {
+          const args = parseFunctionArgs(false);
+          if ('err' in args) return args.err;
+          return { ok: true, kind: 'number', value: Math.floor(args.flatValues[0] ?? 0) };
         }
         if (fn === 'ABS') {
           const args = parseFunctionArgs(false);
           if ('err' in args) return args.err;
-          return { ok: true, value: Math.abs(args.flatValues[0] ?? 0) };
+          return { ok: true, kind: 'number', value: Math.abs(args.flatValues[0] ?? 0) };
         }
         if (fn === 'MIN') {
           const args = parseFunctionArgs(true);
           if ('err' in args) return args.err;
-          return { ok: true, value: args.flatValues.length > 0 ? Math.min(...args.flatValues) : 0 };
+          return { ok: true, kind: 'number', value: args.flatValues.length > 0 ? Math.min(...args.flatValues) : 0 };
         }
         if (fn === 'MAX') {
           const args = parseFunctionArgs(true);
           if ('err' in args) return args.err;
-          return { ok: true, value: args.flatValues.length > 0 ? Math.max(...args.flatValues) : 0 };
+          return { ok: true, kind: 'number', value: args.flatValues.length > 0 ? Math.max(...args.flatValues) : 0 };
         }
         if (fn === 'IF') {
-          const args = parseFunctionArgs(false);
-          if ('err' in args) return args.err;
-          if (args.flatValues.length < 2) {
-            return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: 'IF requires at least 2 arguments' };
+          const cond = parseComparison();
+          if (!cond.ok) return cond;
+          if (peek()?.type !== 'COMMA') return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: 'IF requires at least 2 arguments' };
+          next();
+          let chosen: EvalResult;
+          if (cond.value !== 0) {
+            chosen = parseComparison();
+            if (peek()?.type === 'COMMA') { next(); skipBalancedArg(); }
+          } else {
+            skipBalancedArg();
+            if (peek()?.type === 'COMMA') { next(); chosen = parseComparison(); }
+            else { chosen = { ok: true, kind: 'number', value: 0 }; }
           }
-          return { ok: true, value: args.flatValues[0] !== 0 ? args.flatValues[1] : (args.flatValues[2] ?? 0) };
+          if (peek()?.type !== 'RPAREN') return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: 'Unclosed IF(...) expression' };
+          next();
+          return chosen;
         }
         if (fn === 'IFERROR') {
-          // Evaluate first arg; if error, evaluate second arg
           const first = parseComparison();
           if (peek()?.type === 'COMMA') next();
+          if (first.ok) {
+            skipBalancedArg();
+            if (peek()?.type === 'RPAREN') next();
+            return first;
+          }
           const second = parseComparison();
           if (peek()?.type === 'RPAREN') next();
-          if (first.ok) return first;
           return second;
         }
 
@@ -960,8 +1315,9 @@ function detectWorksheetBoqColumns(rows: ReadonlyArray<ReconcilerGridRow>): Dete
     for (const [colNum, rawLabel] of colText.entries()) {
       const label = rawLabel.replace(/\s+/g, ' ').trim();
       if (!label) continue;
+      const isPerUnitCol = /\/\s*unit\b|\bper\s+unit\b/i.test(label);
 
-      if (itemCodeCol === null && /^(item\s*(no\.?|code|#)|pay\s+item|code)$/i.test(label)) {
+      if (itemCodeCol === null && /^(item\s*(no\.?|code|#)|pay\s+item(\s*no\.?)?|code|boq\s+line)$/i.test(label)) {
         itemCodeCol = colNum;
         score += 2;
       } else if (descriptionCol === null && /\b(description|scope\s+of\s+work|particulars|work\s+item)\b/i.test(label)) {
@@ -970,19 +1326,26 @@ function detectWorksheetBoqColumns(rows: ReadonlyArray<ReconcilerGridRow>): Dete
       } else if (unitCol === null && /^(unit|uom|u\/m)$/i.test(label)) {
         unitCol = colNum;
         score += 2;
-      } else if (qtyCol === null && /^(qty\.?|quantity|quantities|volume|contract\s+qty)$/i.test(label)) {
+      } else if (qtyCol === null && /\b(boq\s*(?:qty|quantity)|qty\.?|quantity|quantities|volume|contract\s+qty|awarded\s+qty)\b/i.test(label)) {
         qtyCol = colNum;
         score += 3;
-      } else if (unitPriceCol === null && /\b(unit\s*(cost|price|rate))\b/i.test(label) && !/\btotal\b/i.test(label)) {
+      } else if (
+        unitPriceCol === null &&
+        /\b(total\s+unit\s+(?:bid\s+)?(?:cost|price|rate)|unit\s*(?:bid\s*)?(?:cost|price|rate))\b/i.test(label) &&
+        !/\b(direct|indirect|ocm|profit|vat|labor|equipment|material)\b/i.test(label)
+      ) {
         unitPriceCol = colNum;
         score += 3;
-      } else if (directCostCol === null && /\b(estimated\s+direct\s+cost|direct\s+cost)\b/i.test(label)) {
+      } else if (directCostCol === null && !isPerUnitCol && /\b(estimated\s+direct\s+cost|direct\s+cost)\b/i.test(label)) {
         directCostCol = colNum;
         score += 2;
-      } else if (indirectCostCol === null && /\b(total\s+indirect\s+cost|indirect\s+cost)\b/i.test(label)) {
+      } else if (indirectCostCol === null && !isPerUnitCol && /\b(total\s+indirect\s+cost|indirect\s+cost)\b/i.test(label)) {
         indirectCostCol = colNum;
         score += 1;
-      } else if (/\b(total\s*(cost|amount|price)|line\s+amount|contract\s+amount|amount)\b/i.test(label) && !/\b(indirect|direct|mark-?up|vat)\b/i.test(label)) {
+      } else if (
+        /\b(total\s*(?:bid\s*)?(?:cost|amount|price)|line\s+amount|contract\s+amount|extended\s+amount|amount)\b/i.test(label) &&
+        !/\b(unit|indirect|direct|mark-?up|vat|labor|equipment|material|ocm|profit)\b/i.test(label)
+      ) {
         totalAmountCol = colNum;
         score += 3;
       }
@@ -1049,6 +1412,19 @@ export function verifyAwardedBoqWorkbook(
   let workbookRecalculatedGrandTotal: number | null = null;
   let grandTotalMeta: { worksheet: string; cellRef: string; label: string; formulaText: string | null } | null = null;
 
+  const allSheetNames = sheets.map((s) => s.sheetName);
+  const worksheetRoles: ClassifiedWorkbookWorksheet[] = sheets.map((s) =>
+    classifyWorkbookWorksheetRole(s.sheetName, allSheetNames)
+  );
+  const primaryBoqSheetNames = new Set(
+    worksheetRoles.filter((w) => w.includedInBoqTotal).map((w) => w.sheetName)
+  );
+  // Fallback if every sheet was classified as supporting in a custom workbook: use first sheet with BOQ columns
+  if (primaryBoqSheetNames.size === 0) {
+    const firstWithCols = sheets.find((s) => detectWorksheetBoqColumns(s.rows) !== null);
+    if (firstWithCols) primaryBoqSheetNames.add(firstWithCols.sheetName);
+  }
+
   // Step 1: Verify ALL formulas across ALL worksheets (including cross-sheet refs & cached-vs-recalculated values)
   for (const sheet of sheets) {
     for (const row of sheet.rows) {
@@ -1093,6 +1469,12 @@ export function verifyAwardedBoqWorkbook(
           continue;
         }
 
+        if (ev.kind === 'string') {
+          // Valid Excel text formula (e.g., IF + "&" concatenation on schedule sheets) — NEVER report as financial error!
+          validFormulas++;
+          continue;
+        }
+
         const cachedNum = parseNumericStrictOrNull(cell.numOrText ?? cell.text);
         if (cachedNum !== null) {
           const roundedEval = roundCurrency(ev.value, roundingDecimals);
@@ -1121,7 +1503,9 @@ export function verifyAwardedBoqWorkbook(
   }
 
   // Step 2: Classify rows & verify pay-item arithmetic + subtotals + price components + grand total
+  // STRICTLY on PRIMARY_BOQ worksheet(s) so POW, DUPA, Schedule, and Cash Flow totals are NEVER double-counted!
   for (const sheet of sheets) {
+    if (!primaryBoqSheetNames.has(sheet.sheetName)) continue;
     const cols = detectWorksheetBoqColumns(sheet.rows);
     if (!cols) continue;
 
@@ -1487,6 +1871,7 @@ export function verifyAwardedBoqWorkbook(
       unsupportedFormulas,
       discrepancies: discrepancies.length,
     },
+    worksheetRoles,
     priceComponents,
     discrepancies,
     classifiedRows,
@@ -1505,6 +1890,8 @@ export function reconcileImportedAwardedBoqCandidates(
     readonly sheetOrPageRef?: string | null;
     readonly rawFormulaText: string | null;
     readonly mappedFields: Record<string, unknown>;
+    readonly rowClassification?: AwardedBoqRowClassification | null;
+    readonly rawTextValues?: ReadonlyArray<string>;
   }>,
   options?: {
     readonly officialAwardedContractAmount?: number | null;
@@ -1520,6 +1907,13 @@ export function reconcileImportedAwardedBoqCandidates(
       ? roundCurrency(options.officialAwardedContractAmount, roundingDecimals)
       : null;
 
+  // Identify primary BOQ worksheets among candidate sheets so supporting sheets (POW, DUPA, Schedule, Cash Flow)
+  // are never double-counted or flagged during BOQ candidate reconciliation.
+  const distinctSheets = [...new Set(candidates.map((c) => String(c.sheetOrPageRef || (c.sourceCellRef?.split('!')[0] ?? 'BOQ')).trim()))];
+  const candidateSheetRoles = distinctSheets.map((s) => classifyWorkbookWorksheetRole(s, distinctSheets));
+  const primaryCandidateSheets = new Set(candidateSheetRoles.filter((w) => w.includedInBoqTotal).map((w) => w.sheetName));
+  const filterByPrimarySheet = primaryCandidateSheets.size > 0 && primaryCandidateSheets.size < distinctSheets.length;
+
   const discrepancies: AwardedBoqDiscrepancy[] = [];
   const classifiedRows: ClassifiedAwardedBoqRow[] = [];
   const priceComponents: AwardedBoqPriceComponent[] = [];
@@ -1534,6 +1928,10 @@ export function reconcileImportedAwardedBoqCandidates(
   let sumTotal = 0;
 
   for (const c of candidates) {
+    const worksheet = String(c.sheetOrPageRef || (c.sourceCellRef?.split('!')[0] ?? 'BOQ')).trim();
+    if (filterByPrimarySheet && !primaryCandidateSheets.has(worksheet)) {
+      continue;
+    }
     const mf = c.mappedFields ?? {};
     const itemCode = String(mf.item_code ?? '').trim() || null;
     const desc = String(mf.work_description ?? mf.description ?? '').trim();
@@ -1543,7 +1941,6 @@ export function reconcileImportedAwardedBoqCandidates(
     const directCost = parseNumericStrictOrNull(mf.estimated_direct_cost ?? mf.agency_edc_amt);
     const indirectCost = parseNumericStrictOrNull(mf.estimated_indirect_cost);
     const lineAmount = parseNumericStrictOrNull(mf.contract_line_amount ?? mf.amount);
-    const worksheet = String(c.sheetOrPageRef || (c.sourceCellRef?.split('!')[0] ?? 'BOQ')).trim();
     const cellRef = c.sourceCellRef || `${worksheet}!R${c.sourceRowNumber ?? 0}`;
 
     const hasFormula = Boolean(c.rawFormulaText && c.rawFormulaText.trim() !== '' && c.rawFormulaText !== '{}');
@@ -1569,9 +1966,13 @@ export function reconcileImportedAwardedBoqCandidates(
     }
 
     const storedClassification =
-      typeof mf._rowClassification === 'string'
+      c.rowClassification ??
+      (typeof mf._rowClassification === 'string'
         ? (mf._rowClassification as AwardedBoqRowClassification)
-        : null;
+        : null);
+    const rawValues = c.rawTextValues
+      ? [...c.rawTextValues]
+      : [itemCode ?? '', desc, unit ?? ''].filter(Boolean);
     const classification =
       storedClassification ??
       classifyAwardedBoqRow({
@@ -1581,7 +1982,7 @@ export function reconcileImportedAwardedBoqCandidates(
         quantity: qty,
         unitPrice,
         lineAmount,
-        rawTextValues: [itemCode ?? '', desc, unit ?? ''].filter(Boolean),
+        rawTextValues: rawValues,
         hasFormula,
       });
 

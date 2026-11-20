@@ -38,7 +38,12 @@ function intakeFixture(overrides = {}) {
     '@/lib/uboq/security/stage-rbac': { assertUboqStageAuthorization: async () => {} },
     '@/lib/uboq/security/redact-payload': { redactUboqPayloadForRole: v => v },
     '@/lib/uboq/tax-engine': taxEngine(),
-    '@/lib/uboq/intake/security-guard': { scanUploadedDocumentSecurity: () => ({ safe: true, findings: [] }) },
+    '@/lib/uboq/intake/security-guard': { scanUploadedDocumentSecurity: () => ({ safe: true, findings: [], detectedFormat: 'CSV' }) },
+    '@/lib/uboq/intake/xlsx-streaming-reader': { streamVerifiedXlsxWorksheets: async () => {} },
+    '@/lib/uboq/project-relevance': {
+      extractWorkbookIdentitySignals: () => ({ fileName: 'boq.csv', documentRole: 'CONTRACT_BOQ' }),
+      classifyDocumentProjectRelevance: () => ({ status: 'BELONGS_TO_PROJECT', disposition: 'ATTACH_AND_PROCESS', confidence: 0.9, reason: 'ok', matchedSignals: [], conflictingSignals: [], extractedIdentifiers: {} }),
+    },
     '@/lib/uboq/adapters/snapshot-orchestrator': {
       ingestAndStageProjectUboqPackage: async (_db, p) => { calls.push(p); return { snapshot: { status: 'DRAFT' } }; },
       regenerateDraftSnapshotFromVerifiedDocument:async(_db,p)=>{calls.push(p);return {snapshot:{status:'DRAFT'}};},
@@ -128,13 +133,22 @@ test('BOQ rejects unclassified legacy project and denied staging actor',async()=
 function evidenceFixture() {
   let doc = null, deleted = 0, writes = 0, reads = 0;
   const vault = { putImmutableAndVerify: async () => ({ storageUri: 'fixture://object', newlyCreated: true }), getAndVerify: async () => { reads++; return { buffer: Buffer.from('a,b\n1,2') }; }, deleteOrphanIfCreated: async () => { deleted++; } };
-  const db = { $transaction: async fn => fn(db), uboqSourceDocument: {
-    findUnique: async () => doc,
-    create: async ({data}) => { writes++; doc = { id: 'document', ...data }; return doc; },
-  } };
+  const db = { $transaction: async fn => fn(db),
+    project: { findUnique: async () => ({ id: 'synthetic-project', name: 'Synthetic', contractNumber: null, client: null, location: null }) },
+    uboqSourceDocument: {
+      findUnique: async () => doc,
+      findMany: async () => [],
+      create: async ({data}) => { writes++; doc = { id: 'document', ...data }; return doc; },
+    } };
   const deps = { 'next/server': response, '@/lib/prisma': { prisma: db }, '@/lib/dal/auth': { verifyOperationalSession: async () => actor },
     '@/lib/uboq/security/stage-rbac': { assertUboqStageAuthorization: async () => {} }, '@/lib/uboq/project-ownership': rls,
-    '@/lib/uboq/intake/security-guard': { scanUploadedDocumentSecurity: () => ({ safe: true, findings: [], sha256Hash: 'a'.repeat(64), canonicalMimeType: 'text/csv' }) },
+    '@/lib/uboq/intake/security-guard': { scanUploadedDocumentSecurity: () => ({ safe: true, findings: [], sha256Hash: 'a'.repeat(64), canonicalMimeType: 'text/csv', detectedFormat: 'CSV' }) },
+    '@/lib/uboq/intake/parsers': { extractUniversalDocumentPackage: async () => ({ sections: [], candidates: [], blockingErrors: [] }) },
+    '@/lib/uboq/project-relevance': {
+      buildSignalsFromContractExtraction: () => ({ fileName: 'boq.csv' }),
+      classifyDocumentProjectRelevance: () => ({ status: 'BELONGS_TO_PROJECT', disposition: 'ATTACH_AND_PROCESS', confidence: 0.9, reason: 'ok', matchedSignals: [], conflictingSignals: [], extractedIdentifiers: {} }),
+      classifyExtractedFieldRelevance: () => ({ usedFields: [], ignoredReferenceFields: [], excludedUnrelatedFields: [] }),
+    },
     '@/lib/uboq/storage/vault-storage': { resolveUboqVaultStorageProvider: () => vault },
     '@/lib/uboq/security/document-permissions': { requireProjectDocumentPermission: async () => {} } };
   return { db, vault, deps, counts: () => ({ deleted, writes, reads }), post: () => load('src/app/api/projects/[id]/documents/route.ts', deps).POST, context: { params: Promise.resolve({ id: 'synthetic-project' }) } };
@@ -470,12 +484,14 @@ test('real scanner and XLSX extraction reject central-directory disagreement bef
     },
   };
   const reconciler = load('src/lib/uboq/awarded-boq-reconciler.ts', {});
+  const contractExtractor = load('src/lib/uboq/contract-document-extractor.ts', {});
   const parser = load('src/lib/uboq/intake/parsers.ts', {
     xlsx: XLSX, 'csv-parse/sync': require('csv-parse/sync'),
     '../field-catalog': { resolveCanonicalFieldId: () => null },
     './security-guard': guard,
     './xlsx-streaming-reader': observedReader,
     '../awarded-boq-reconciler': reconciler,
+    '../contract-document-extractor': contractExtractor,
   });
 
   // A normal workbook must still reach the REAL streaming XLSX parser and produce BOQ data.
@@ -600,6 +616,7 @@ test('DOCX descriptor entry extraction preserves BOQ table candidates', async ()
     './security-guard': guard,
   });
   const reconciler = load('src/lib/uboq/awarded-boq-reconciler.ts', {});
+  const contractExtractor = load('src/lib/uboq/contract-document-extractor.ts', {});
   const parser = load('src/lib/uboq/intake/parsers.ts', {
     xlsx: require('xlsx'),
     'csv-parse/sync': require('csv-parse/sync'),
@@ -607,6 +624,7 @@ test('DOCX descriptor entry extraction preserves BOQ table candidates', async ()
     './security-guard': guard,
     './xlsx-streaming-reader': realReader,
     '../awarded-boq-reconciler': reconciler,
+    '../contract-document-extractor': contractExtractor,
   });
   const xml = Buffer.from('<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>' +
     '<w:tr><w:tc><w:p><w:t>Item Code</w:t></w:p></w:tc><w:tc><w:p><w:t>Work Description</w:t></w:p></w:tc><w:tc><w:p><w:t>Unit</w:t></w:p></w:tc><w:tc><w:p><w:t>Quantity</w:t></w:p></w:tc><w:tc><w:p><w:t>Unit Rate</w:t></w:p></w:tc></w:tr>' +
@@ -665,7 +683,9 @@ test('document register query and rendered rows stay project-scoped without vaul
   const page=load('src/app/projects/[id]/documents/page.tsx',{'react/jsx-runtime':jsx,'next/link':{default:()=>{}},'next/navigation':{redirect:()=>{throw Error('redirect');}},
     '@/lib/prisma':{prisma:db},'@/lib/dal/auth':{verifyOperationalSession:async()=>actor},'@/lib/uboq/project-ownership':rls,
     '@/lib/uboq/security/stage-rbac':{assertUboqStageAuthorization:async()=>{},isRolePermittedForUboqStage:()=>true},
-    '@/lib/uboq/security/document-permissions':{requireProjectDocumentPermission:async()=>{}},'./ProjectDocumentIntakeClient':Client}).default;
+    '@/lib/uboq/security/document-permissions':{requireProjectDocumentPermission:async()=>{}},'./ProjectDocumentIntakeClient':Client,
+    '../ContractReconciliationBanner':{default:()=>null},
+    '@/lib/uboq/contract-document-extractor':load('src/lib/uboq/contract-document-extractor.ts',{})}).default;
   const tree=await page({params:Promise.resolve({id:'synthetic-project'})});const client=walk(tree,n=>n.type===Client);
   assert.equal(query.where.projectId,'synthetic-project');assert.equal(query.select.storageUri,undefined);
   assert.equal(client.props.files.length,1);assert.equal(client.props.canUploadEvidence,false);assert.ok(!JSON.stringify(client.props).includes('storageUri'));
