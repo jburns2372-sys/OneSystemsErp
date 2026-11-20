@@ -8,6 +8,7 @@ import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { redactUboqPayloadForRole } from '@/lib/uboq/security/redact-payload';
 import VisualMappingReviewClient from './VisualMappingReviewClient';
 import SnapshotApprovalPanel, { type SnapshotSummaryItem } from './SnapshotApprovalPanel';
+import ReadOnlyAwardedBoqTable from './ReadOnlyAwardedBoqTable';
 import AwardedBoqReconciliationPanel from '../AwardedBoqReconciliationPanel';
 import ContractReconciliationBanner from '../ContractReconciliationBanner';
 import {
@@ -332,6 +333,11 @@ export default async function ProjectUboqWorkbenchPage({
       : 'No BOQ Saved Yet';
 
   const latestBoqDocRaw = sourceDocumentsRaw.find((d) => d.documentRole === 'CONTRACT_BOQ') ?? sourceDocumentsRaw[0] ?? null;
+  // Separate review workflows (VisualMappingReviewClient + SnapshotApprovalPanel) are preserved
+  // strictly for non-awarded draft estimates or proposed variations — NEVER for final Awarded BOQs.
+  const isDraftEstimateOrVariationReview = Boolean(
+    latestBoqDocRaw && ['AGENCY_ESTIMATE', 'DUPA', 'VARIATION_ORDER'].includes(latestBoqDocRaw.documentRole)
+  );
   const boqVerification: AwardedBoqVerificationReport | null = latestBoqDocRaw
     ? (() => {
         const meta =
@@ -503,129 +509,139 @@ export default async function ProjectUboqWorkbenchPage({
         showWorkspaceCta
       />
 
-      {/* Guided 4-Step Progress Bar */}
-      <ol
-        aria-label="BOQ workflow steps"
-        style={{
-          listStyle: 'none',
-          padding: 0,
-          margin: '0 0 22px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '10px',
-        }}
-      >
-        {workflow.steps.map((step) => {
-          const isCurrent = step.status === 'current';
-          const isDone = step.status === 'completed';
-          return (
-            <li
-              key={step.id}
-              aria-current={isCurrent ? 'step' : undefined}
-              style={{
-                padding: '12px 14px',
-                borderRadius: '10px',
-                background: isCurrent
-                  ? 'rgba(56, 189, 248, 0.14)'
-                  : isDone
-                    ? 'rgba(16, 185, 129, 0.1)'
-                    : 'rgba(15, 23, 42, 0.65)',
-                border: isCurrent
-                  ? '1px solid rgba(56, 189, 248, 0.6)'
-                  : isDone
-                    ? '1px solid rgba(16, 185, 129, 0.4)'
-                    : '1px solid rgba(148, 163, 184, 0.2)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <span
+      {/* Final Awarded BOQ: Read-Only Verification & Extracted BOQ Table (Zero Per-Item Approvals) */}
+      {!isDraftEstimateOrVariationReview && latestBoqDocRaw && boqVerification && (
+        <ReadOnlyAwardedBoqTable
+          sourceFileName={latestBoqDocRaw.fileName}
+          sourceSha256Hash={latestBoqDocRaw.sha256Hash}
+          verification={boqVerification}
+        />
+      )}
+
+      {/* Separate Review Workflow Preserved Strictly for Draft Estimates & Proposed Variations */}
+      {isDraftEstimateOrVariationReview && (
+        <>
+          <ol
+            aria-label="Draft estimate review steps"
+            style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: '0 0 22px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '10px',
+            }}
+          >
+            {workflow.steps.map((step) => {
+              const isCurrent = step.status === 'current';
+              const isDone = step.status === 'completed';
+              return (
+                <li
+                  key={step.id}
+                  aria-current={isCurrent ? 'step' : undefined}
                   style={{
-                    width: '22px',
-                    height: '22px',
-                    borderRadius: '999px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    background: isDone ? '#10b981' : isCurrent ? '#38bdf8' : 'rgba(148,163,184,0.2)',
-                    color: isDone || isCurrent ? '#022c22' : '#cbd5e1',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    background: isCurrent
+                      ? 'rgba(56, 189, 248, 0.14)'
+                      : isDone
+                        ? 'rgba(16, 185, 129, 0.1)'
+                        : 'rgba(15, 23, 42, 0.65)',
+                    border: isCurrent
+                      ? '1px solid rgba(56, 189, 248, 0.6)'
+                      : isDone
+                        ? '1px solid rgba(16, 185, 129, 0.4)'
+                        : '1px solid rgba(148, 163, 184, 0.2)',
                   }}
                 >
-                  {isDone ? '✓' : step.number}
-                </span>
-                <strong style={{ fontSize: '0.86rem', color: isCurrent ? '#f8fafc' : '#e2e8f0' }}>
-                  {step.label}
-                </strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span
+                      style={{
+                        width: '22px',
+                        height: '22px',
+                        borderRadius: '999px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        background: isDone ? '#10b981' : isCurrent ? '#38bdf8' : 'rgba(148,163,184,0.2)',
+                        color: isDone || isCurrent ? '#022c22' : '#cbd5e1',
+                      }}
+                    >
+                      {isDone ? '✓' : step.number}
+                    </span>
+                    <strong style={{ fontSize: '0.86rem', color: isCurrent ? '#f8fafc' : '#e2e8f0' }}>
+                      {step.label}
+                    </strong>
+                  </div>
+                  <div style={{ fontSize: '0.77rem', color: '#94a3b8', paddingLeft: '30px' }}>
+                    {step.shortHint}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+            <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.72)', border: '1px solid rgba(148,163,184,0.2)' }}>
+              <div style={{ fontSize: '0.76rem', color: '#94a3b8' }}>Draft Status</div>
+              <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '4px', color: latestApproved ? '#34d399' : '#38bdf8' }}>
+                {latestStatusLabel}
               </div>
-              <div style={{ fontSize: '0.77rem', color: '#94a3b8', paddingLeft: '30px' }}>
-                {step.shortHint}
+            </div>
+            <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.72)', border: '1px solid rgba(148,163,184,0.2)' }}>
+              <div style={{ fontSize: '0.76rem', color: '#94a3b8' }}>Item Review Progress</div>
+              <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '4px' }}>
+                {workflow.totalCandidates > 0
+                  ? `${workflow.acceptedCandidates} of ${workflow.totalCandidates} Accepted`
+                  : 'No items uploaded yet'}
               </div>
-            </li>
-          );
-        })}
-      </ol>
+            </div>
+            <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.72)', border: '1px solid rgba(148,163,184,0.2)' }}>
+              <div style={{ fontSize: '0.76rem', color: '#94a3b8' }}>Open Issues</div>
+              <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '4px', color: workflow.openExceptions > 0 ? '#fbbf24' : '#34d399' }}>
+                {workflow.openExceptions === 0 ? 'All Clear (0)' : `${workflow.openExceptions} Open`}
+              </div>
+            </div>
+            <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.72)', border: '1px solid rgba(148,163,184,0.2)' }}>
+              <div style={{ fontSize: '0.76rem', color: '#94a3b8' }}>Next Step</div>
+              <div style={{ fontSize: '0.86rem', fontWeight: 600, marginTop: '4px', color: '#e2e8f0' }}>
+                {workflow.stageHeadline}
+              </div>
+            </div>
+          </div>
 
-      {/* Compact Project & BOQ Status Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px', marginBottom: '24px' }}>
-        <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.72)', border: '1px solid rgba(148,163,184,0.2)' }}>
-          <div style={{ fontSize: '0.76rem', color: '#94a3b8' }}>BOQ Status</div>
-          <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '4px', color: latestApproved ? '#34d399' : '#38bdf8' }}>
-            {latestStatusLabel}
-          </div>
-        </div>
-        <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.72)', border: '1px solid rgba(148,163,184,0.2)' }}>
-          <div style={{ fontSize: '0.76rem', color: '#94a3b8' }}>Item Review Progress</div>
-          <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '4px' }}>
-            {workflow.totalCandidates > 0
-              ? `${workflow.acceptedCandidates} of ${workflow.totalCandidates} Accepted`
-              : 'No items uploaded yet'}
-          </div>
-        </div>
-        <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.72)', border: '1px solid rgba(148,163,184,0.2)' }}>
-          <div style={{ fontSize: '0.76rem', color: '#94a3b8' }}>Open Issues</div>
-          <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '4px', color: workflow.openExceptions > 0 ? '#fbbf24' : '#34d399' }}>
-            {workflow.openExceptions === 0 ? 'All Clear (0)' : `${workflow.openExceptions} Open`}
-          </div>
-        </div>
-        <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.72)', border: '1px solid rgba(148,163,184,0.2)' }}>
-          <div style={{ fontSize: '0.76rem', color: '#94a3b8' }}>Next Step</div>
-          <div style={{ fontSize: '0.86rem', fontWeight: 600, marginTop: '4px', color: '#e2e8f0' }}>
-            {workflow.stageHeadline}
-          </div>
-        </div>
-      </div>
+          <VisualMappingReviewClient
+            projectId={project.id}
+            sectorType={(contract?.sectorType as 'GOVERNMENT' | 'CORPORATE' | 'PRIVATE' | undefined) ?? null}
+            taxProfileCode={contract?.taxProfile?.profileCode ?? null}
+            sourceDocuments={visualSourceDocuments}
+            exceptions={visualExceptions}
+            canReview={canReview}
+          />
 
-      {/* Step 2: Simplified BOQ Item Review + Hidden Advanced Tools */}
-      <VisualMappingReviewClient
-        projectId={project.id}
-        sectorType={(contract?.sectorType as 'GOVERNMENT' | 'CORPORATE' | 'PRIVATE' | undefined) ?? null}
-        taxProfileCode={contract?.taxProfile?.profileCode ?? null}
-        sourceDocuments={visualSourceDocuments}
-        exceptions={visualExceptions}
-        canReview={canReview}
-      />
-
-      {/* Step 3 (Submit / Explicit Approval) & Step 4 (Schedule & Export) */}
-      <SnapshotApprovalPanel
-        projectId={project.id}
-        projectName={project.name}
-        projectRef={project.contractNumber || project.id}
-        currentUserId={actor.userId}
-        actorEmail={actor.email ?? 'Authenticated User'}
-        actorRoleLabel={accessContext.realRoleLabel}
-        canApprove={canApprove}
-        canSyncSchedule={canSyncSchedule}
-        isSimulatingRole={accessContext.isSimulating}
-        totalCandidates={workflow.totalCandidates}
-        acceptedCandidates={workflow.acceptedCandidates}
-        pendingCandidates={workflow.pendingCandidates}
-        blockingOpenExceptions={workflow.blockingOpenExceptions}
-        latestDraft={latestDraft}
-        latestApproved={latestApproved}
-        eligibleScheduleId={eligibleSchedule?.id ?? null}
-        eligibleScheduleName={eligibleSchedule?.name ?? null}
-      />
+          <SnapshotApprovalPanel
+            projectId={project.id}
+            projectName={project.name}
+            projectRef={project.contractNumber || project.id}
+            currentUserId={actor.userId}
+            actorEmail={actor.email ?? 'Authenticated User'}
+            actorRoleLabel={accessContext.realRoleLabel}
+            canApprove={canApprove}
+            canSyncSchedule={canSyncSchedule}
+            isSimulatingRole={accessContext.isSimulating}
+            totalCandidates={workflow.totalCandidates}
+            acceptedCandidates={workflow.acceptedCandidates}
+            pendingCandidates={workflow.pendingCandidates}
+            blockingOpenExceptions={workflow.blockingOpenExceptions}
+            latestDraft={latestDraft}
+            latestApproved={latestApproved}
+            eligibleScheduleId={eligibleSchedule?.id ?? null}
+            eligibleScheduleName={eligibleSchedule?.name ?? null}
+          />
+        </>
+      )}
 
       {/* Collapsible Resource & Procurement Stock Accounts (kept out of the way until populated) */}
       <details

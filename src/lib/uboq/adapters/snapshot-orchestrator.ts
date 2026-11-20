@@ -764,8 +764,21 @@ export async function ingestAndStageProjectUboqPackage(
             fields: Record<string, unknown>;
           }> = [];
 
+          const isAwardedContractBoq = docRole === 'CONTRACT_BOQ';
+          const hasVerifiedAwardedClassification = Boolean(extracted.awardedBoqVerification);
+
           for (const cand of extracted.candidates) {
-            const reviewDecision = cand.requiresHumanReview
+            const alertsCount = Array.isArray(cand.securityAlerts) ? cand.securityAlerts.length : 0;
+            const isClassifiedAwardedRow = Boolean(cand.rowClassification);
+            // Final Awarded Contract BOQs are already approved for implementation:
+            // automatically classify and import valid rows without per-item human approval dependency.
+            // Unclassified unreadable extraction failures and draft estimates / proposed variations
+            // preserve their separate review / fail-closed hold.
+            const effectiveRequiresReview =
+              isAwardedContractBoq && hasVerifiedAwardedClassification && isClassifiedAwardedRow
+                ? alertsCount > 0
+                : Boolean(cand.requiresHumanReview);
+            const reviewDecision = effectiveRequiresReview
               ? 'PENDING_HUMAN_REVIEW'
               : 'AUTO_VERIFIED_DETERMINISTIC';
             const dbCand = await tx.uboqExtractionCandidate.create({
@@ -784,7 +797,7 @@ export async function ingestAndStageProjectUboqPackage(
                 } as unknown as Prisma.InputJsonValue,
                 confidenceScore: cand.confidenceScore,
                 extractionMethod: cand.extractionMethod,
-                requiresHumanReview: cand.requiresHumanReview,
+                requiresHumanReview: effectiveRequiresReview,
                 reviewDecision,
               },
             });
@@ -792,7 +805,7 @@ export async function ingestAndStageProjectUboqPackage(
               id: dbCand.id,
               sheetOrPageRef: cand.sheetOrPageRef,
               sourceCellRef: cand.sourceCellRef,
-              requiresHumanReview: cand.requiresHumanReview,
+              requiresHumanReview: effectiveRequiresReview,
               reviewDecision,
               fields: cand.mappedFields,
             });

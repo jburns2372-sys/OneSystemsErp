@@ -108,6 +108,8 @@ const HEADER_SEMANTIC_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/^(qty|quantity|quantities|boq\s*(qty|quantity)|approved\s*(qty|quantity)|contract\s*(qty|quantity)|awarded\s*(qty|quantity)|bill\s*(qty|quantity)|est(imated)?\s*(qty|quantity)|total\s*(qty|quantity)|volume)$/i, 'approved_qty'],
   [/^(original\s*(qty|quantity)|orig\s*(qty|quantity))$/i, 'original_qty'],
   [/^(total\s*unit\s*(bid\s*)?(rate|price|cost)|unit\s*(bid\s*)?(rate|price|cost)|unitrate|unitprice|contract\s*(unit\s*)?(rate|price)|bid\s*(unit\s*)?(rate|price)|awarded\s*(unit\s*)?(rate|price)|rate|price\s*per\s*unit)$/i, 'contract_unit_rate'],
+  [/^(total\s*)?direct\s*cost$/i, 'estimated_direct_cost'],
+  [/^(total\s*)?indirect\s*cost$/i, 'estimated_indirect_cost'],
   [/^(amount|total\s*(bid\s*)?(amount|cost|price)|bid\s*amount|line\s*(amount|total)|contract\s*(amount|price)|extended\s*(amt|amount|price)|total)$/i, 'contract_line_amount'],
   [/^(resource\s*code|stock\s*code|material\s*code)$/i, 'resource_id'],
   [/^(resource\s*description|material\s*description|material\s*name|resource)$/i, 'resource_description'],
@@ -238,6 +240,7 @@ function parseGridRowsToCandidates(
     'resource_required_qty',
     'target_resource_cost',
     'estimated_direct_cost',
+    'estimated_indirect_cost',
     'agency_abc',
     'ocm_amount',
     'contractor_profit_amt',
@@ -388,21 +391,23 @@ function parseGridRowsToCandidates(
       rowConfidences.length > 0 ? Math.min(baseConfidence, ...rowConfidences) : baseConfidence;
     const confidenceScore = Number(
       (
-        hasAmbiguousNumericToken
-          ? Math.min(measuredCellConf, 0.55)
-          : hasCoreBoqFields || hasCoreResourceFields || isNonPayableRow
-            ? measuredCellConf
-            : Math.min(measuredCellConf, 0.65)
+        isNonPayableRow
+          ? measuredCellConf
+          : hasAmbiguousNumericToken
+            ? Math.min(measuredCellConf, 0.55)
+            : hasCoreBoqFields || hasCoreResourceFields
+              ? measuredCellConf
+              : Math.min(measuredCellConf, 0.65)
       ).toFixed(4)
     );
 
-    const requiresHumanReview =
-      confidenceScore < 0.85 ||
-      hasAmbiguousNumericToken ||
-      securityAlerts.length > 0 ||
-      (!isNonPayableRow &&
-        Boolean(mappedFields.work_description) &&
-        (mappedFields.unit === null || mappedFields.approved_qty === null || mappedFields.contract_unit_rate === null));
+    const requiresHumanReview = isNonPayableRow
+      ? securityAlerts.length > 0
+      : confidenceScore < 0.85 ||
+        hasAmbiguousNumericToken ||
+        securityAlerts.length > 0 ||
+        (Boolean(mappedFields.work_description) &&
+          (mappedFields.unit === null || mappedFields.approved_qty === null || mappedFields.contract_unit_rate === null));
 
     const firstCellRef = nonEmptyCells[0]?.cellRef || `R${r + 1}`;
     candidates.push({

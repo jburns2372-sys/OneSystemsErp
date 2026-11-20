@@ -15,6 +15,7 @@ import {
 import BOQActions from './BOQActions';
 import AwardedBOQViewer from './AwardedBOQViewer';
 import AwardedBoqReconciliationPanel from './AwardedBoqReconciliationPanel';
+import ReadOnlyAwardedBoqTable from './uboq/ReadOnlyAwardedBoqTable';
 import BOQConsolidationTab from './BOQConsolidationTab';
 import ProjectVariationOrdersTab from './ProjectVariationOrdersTab';
 import ModuleKnowledgeTab from '@/app/knowledge-center/ModuleKnowledgeTab';
@@ -496,13 +497,29 @@ export default async function ProjectDetailsPage({
               )}
             </div>
           </div>
-          <AwardedBOQViewer 
-            projectId={project.id}
-            htmlTable={htmlTable} 
-            consolidatedHtmlTable={consolidatedHtmlTable} 
-            originalFileUrl={originalFileUrl}
-            projectName={project.name}
-          />
+          {hasBOQ ? (
+            <AwardedBOQViewer 
+              projectId={project.id}
+              htmlTable={htmlTable} 
+              consolidatedHtmlTable={consolidatedHtmlTable} 
+              originalFileUrl={originalFileUrl}
+              projectName={project.name}
+            />
+          ) : latestBoqDoc && boqVerification && boqVerification.classifiedRows.length > 0 ? (
+            <ReadOnlyAwardedBoqTable
+              sourceFileName={latestBoqDoc.fileName}
+              sourceSha256Hash={latestBoqDoc.sha256Hash}
+              verification={boqVerification}
+            />
+          ) : (
+            <AwardedBOQViewer 
+              projectId={project.id}
+              htmlTable={htmlTable} 
+              consolidatedHtmlTable={consolidatedHtmlTable} 
+              originalFileUrl={originalFileUrl}
+              projectName={project.name}
+            />
+          )}
         </>
       )}
 
