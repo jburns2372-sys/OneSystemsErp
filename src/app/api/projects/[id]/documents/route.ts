@@ -15,6 +15,12 @@ import {
   extractWorkbookIdentitySignals,
   type DocumentRelevanceAssessment,
 } from '@/lib/uboq/project-relevance';
+import {
+  computeCanonicalDocumentFingerprint,
+  evaluateCrossProjectDocumentOwnership,
+  type CanonicalDocumentFingerprint,
+  type ExistingDocumentOwnershipRecord,
+} from '@/lib/uboq/document-ownership-guard';
 import { resolveUboqVaultStorageProvider } from '@/lib/uboq/storage/vault-storage';
 import { requireProjectDocumentPermission } from '@/lib/uboq/security/document-permissions';
 
@@ -96,11 +102,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           });
         }
 
-        // Extract content metadata & enforce project-relevance filtering BEFORE any vault or DB write.
+        // Extract content metadata & enforce project-relevance + cross-project ownership BEFORE any vault or DB write.
         let contractExtraction: unknown = null;
         let fieldRelevance: unknown = null;
         let projectRelevance: DocumentRelevanceAssessment | null = null;
         let extractionVerified = false;
+        let incomingFingerprint: CanonicalDocumentFingerprint | null = null;
 
         if (projectRecord) {
           const knownRefs: string[] = [];
@@ -133,6 +140,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
               projectRelevance = classifyDocumentProjectRelevance(selectedIdentity, wbSignals);
               fieldRelevance = classifyExtractedFieldRelevance({ workbookSignals: wbSignals });
               extractionVerified = true;
+              incomingFingerprint = computeCanonicalDocumentFingerprint({
+                workbookSignals: wbSignals,
+                extractionVerified: true,
+              });
             } else if (documentRole === 'CONTRACT' || ['PDF', 'IMAGE', 'DOCX'].includes(scan.detectedFormat)) {
               const extracted = await extractUniversalDocumentPackage(file.name, buffer, {
                 declaredMimeType: file.type,
@@ -149,13 +160,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                   buildSignalsFromContractExtraction(extracted.contractExtraction, documentRole)
                 );
                 extractionVerified = true;
+                incomingFingerprint = computeCanonicalDocumentFingerprint({
+                  boqVerification: extracted.awardedBoqVerification ?? null,
+                  contractExtraction: extracted.contractExtraction,
+                  extractedText: fullText,
+                  extractionVerified: true,
+                });
               } else {
-                // No extractable contract text -> evaluate relevance explicitly (never assume verified!)
                 projectRelevance = classifyDocumentProjectRelevance(selectedIdentity, {
                   fileName: file.name,
                   documentRole,
                 });
                 extractionVerified = false;
+                incomingFingerprint = computeCanonicalDocumentFingerprint({ extractionVerified: false });
               }
             } else {
               projectRelevance = classifyDocumentProjectRelevance(selectedIdentity, {
@@ -163,9 +180,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                 documentRole,
               });
               extractionVerified = true;
+              incomingFingerprint = computeCanonicalDocumentFingerprint({ extractionVerified: true });
             }
           } catch {
-            // Rule 5: Extraction failures MUST NEVER be treated as verified project information.
             extractionVerified = false;
             projectRelevance = {
               status: 'NEEDS_CONFIRMATION',
@@ -182,6 +199,90 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                 awardedContractor: null,
               },
             };
+            incomingFingerprint = computeCanonicalDocumentFingerprint({ extractionVerified: false });
+          }
+
+          // Shared Cross-Project Approved-Document Ownership Guard (NEVER overridable by confirmProjectAssociation!)
+          if (typeof prisma.uboqSourceDocument?.findMany === 'function' && scan.sha256Hash && incomingFingerprint) {
+            const crossDocs = await prisma.uboqSourceDocument.findMany({
+              where: { projectId: { not: projectId } },
+              select: {
+                id: true,
+                projectId: true,
+                sha256Hash: true,
+                documentRole: true,
+                metadataJson: true,
+                project: {
+                  select: {
+                    contractNumber: true,
+                    contractAmount: true,
+                    boqLocked: true,
+                    managerId: true,
+                  },
+                },
+              },
+              take: 200,
+            });
+            const isGlobalReader = ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'EXECUTIVE', 'PRESIDENT', 'VP_OPERATIONS'].includes(
+              actor.role.toUpperCase()
+            );
+            const existingOwnership: ExistingDocumentOwnershipRecord[] = crossDocs
+              .filter((cd) => cd && typeof cd.projectId === 'string' && cd.projectId !== projectId)
+              .map((cd) => {
+                const m = cd.metadataJson && typeof cd.metadataJson === 'object' ? (cd.metadataJson as Record<string, unknown>) : null;
+                const fp = m?.documentOwnership && typeof m.documentOwnership === 'object'
+                  ? (m.documentOwnership as Partial<CanonicalDocumentFingerprint>)
+                  : null;
+                const projObj = cd.project as { contractNumber?: string | null; contractAmount?: number | null; boqLocked?: boolean | null; managerId?: string | null } | undefined;
+                const isApproved = Boolean(
+                  projObj?.boqLocked ||
+                  (typeof projObj?.contractAmount === 'number' && projObj.contractAmount > 0)
+                );
+                return {
+                  documentId: cd.id,
+                  projectId: cd.projectId,
+                  sha256Hash: cd.sha256Hash,
+                  documentRole: cd.documentRole,
+                  isProjectApprovedOrVerified: isApproved,
+                  actorCanAccessOwningProject: isGlobalReader || projObj?.managerId === actor.userId,
+                  projectContractRefs: projObj?.contractNumber ? [projObj.contractNumber] : [],
+                  fingerprint: fp,
+                };
+              });
+
+            const ownershipDecision = evaluateCrossProjectDocumentOwnership({
+              selectedProjectId: projectId,
+              incomingSha256: scan.sha256Hash,
+              incomingRole: documentRole,
+              incomingFingerprint,
+              existingDocuments: existingOwnership,
+            });
+
+            if (
+              ownershipDecision.decision === 'HARD_BLOCK_CROSS_PROJECT_DUPLICATE' ||
+              ownershipDecision.decision === 'HARD_BLOCK_FOREIGN_CONTRACT_IDENTITY'
+            ) {
+              return NextResponse.json(
+                {
+                  error: ownershipDecision.code,
+                  message: ownershipDecision.message,
+                  matchBasis: ownershipDecision.matchBasis,
+                  owningProjectId: ownershipDecision.owningProjectId,
+                  canOpenExistingProject: ownershipDecision.canOpenExistingProject,
+                },
+                { status: 422, headers: { 'Cache-Control': 'private, no-store' } }
+              );
+            }
+            if (ownershipDecision.decision === 'HOLD_UNCERTAIN_OWNERSHIP') {
+              return NextResponse.json(
+                {
+                  error: ownershipDecision.code,
+                  message: ownershipDecision.message,
+                  reason: ownershipDecision.reason,
+                },
+                { status: 409, headers: { 'Cache-Control': 'private, no-store' } }
+              );
+            }
           }
 
           // Rule 1: UNRELATED files are ALWAYS rejected HTTP 422 before ANY vault or DB write,
@@ -234,6 +335,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                   ...(contractExtraction ? { contractExtraction } : {}),
                   ...(fieldRelevance ? { fieldRelevance } : {}),
                   ...(projectRelevance ? { projectRelevance } : {}),
+                  ...(incomingFingerprint ? { documentOwnership: incomingFingerprint } : {}),
                 } as unknown as Prisma.InputJsonValue,
               },
               select: { id: true },

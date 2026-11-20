@@ -15,6 +15,12 @@ import {
   extractWorkbookIdentitySignals,
   type DocumentRelevanceAssessment,
 } from '@/lib/uboq/project-relevance';
+import {
+  computeCanonicalDocumentFingerprint,
+  evaluateCrossProjectDocumentOwnership,
+  type CanonicalDocumentFingerprint,
+  type ExistingDocumentOwnershipRecord,
+} from '@/lib/uboq/document-ownership-guard';
 import type { ReconcilerWorksheetInput } from '@/lib/uboq/awarded-boq-reconciler';
 import {
   approveOperationalSnapshotAndPrrs,
@@ -123,6 +129,7 @@ export async function POST(request: NextRequest) {
 
             let relevance: DocumentRelevanceAssessment;
             let extractionVerified = false;
+            let incomingFingerprint: CanonicalDocumentFingerprint | null = null;
             try {
               if (scan.detectedFormat === 'XLSX') {
                 const previewSheets: ReconcilerWorksheetInput[] = [];
@@ -134,6 +141,10 @@ export async function POST(request: NextRequest) {
                 const wbSignals = extractWorkbookIdentitySignals(file.name, previewSheets, documentRole);
                 relevance = classifyDocumentProjectRelevance(selectedIdentity, wbSignals);
                 extractionVerified = true;
+                incomingFingerprint = computeCanonicalDocumentFingerprint({
+                  workbookSignals: wbSignals,
+                  extractionVerified: true,
+                });
               } else if (['PDF', 'IMAGE', 'DOCX'].includes(scan.detectedFormat)) {
                 const extracted = await extractUniversalDocumentPackage(file.name, buffer, {
                   declaredMimeType: file.type,
@@ -144,12 +155,22 @@ export async function POST(request: NextRequest) {
                     buildSignalsFromContractExtraction(extracted.contractExtraction, documentRole)
                   );
                   extractionVerified = true;
+                  incomingFingerprint = computeCanonicalDocumentFingerprint({
+                    boqVerification: extracted.awardedBoqVerification ?? null,
+                    contractExtraction: extracted.contractExtraction,
+                    extractedText: (extracted.extractedTextPages ?? []).map((p) => p.text).join('\n'),
+                    extractionVerified: true,
+                  });
                 } else {
                   relevance = classifyDocumentProjectRelevance(selectedIdentity, {
                     fileName: file.name,
                     documentRole,
                   });
                   extractionVerified = false;
+                  incomingFingerprint = computeCanonicalDocumentFingerprint({
+                    boqVerification: extracted.awardedBoqVerification ?? null,
+                    extractionVerified: false,
+                  });
                 }
               } else {
                 // CSV / XLS / JSON lightweight header-text inspection for foreign project refs
@@ -157,7 +178,7 @@ export async function POST(request: NextRequest) {
                 const contractRefMatch = /(?:^|\n)\s*(?:Contract\s*(?:ID|Ref(?:erence)?|No\.?)|Project\s*ID)\s*[,:]\s*([^\r\n,]+)/i.exec(headText);
                 const clientMatch = /(?:^|\n)\s*(?:Client|Project\s*Owner|Implementing\s*Office)\s*[,:]\s*([^\r\n,]+)/i.exec(headText);
                 const projectNameMatch = /(?:^|\n)\s*(?:Project\s*Name|Contract\s*Name)\s*[,:]\s*([^\r\n,]+)/i.exec(headText);
-                relevance = classifyDocumentProjectRelevance(selectedIdentity, {
+                const csvSignals = {
                   fileName: file.name,
                   documentRole,
                   contractReference: contractRefMatch ? contractRefMatch[1].trim() : null,
@@ -165,8 +186,14 @@ export async function POST(request: NextRequest) {
                   clientName: clientMatch ? clientMatch[1].trim() : null,
                   projectName: projectNameMatch ? projectNameMatch[1].trim() : null,
                   rawHeaderText: headText.slice(0, 1000) || null,
-                });
+                };
+                relevance = classifyDocumentProjectRelevance(selectedIdentity, csvSignals);
                 extractionVerified = true;
+                incomingFingerprint = computeCanonicalDocumentFingerprint({
+                  workbookSignals: csvSignals,
+                  extractedText: headText || null,
+                  extractionVerified: true,
+                });
               }
             } catch {
               // Rule 5: Extraction failure MUST NEVER be treated as verified project information.
@@ -186,6 +213,75 @@ export async function POST(request: NextRequest) {
                   awardedContractor: null,
                 },
               };
+              incomingFingerprint = computeCanonicalDocumentFingerprint({ extractionVerified: false });
+            }
+
+            // Global Cross-Project Approved-Document Ownership Guard (NEVER overridable by confirmProjectAssociation or allowDuplicateNewRevision!)
+            if (typeof prisma.uboqSourceDocument?.findMany === 'function' && scan.sha256Hash && incomingFingerprint) {
+              const crossDocs = await prisma.uboqSourceDocument.findMany({
+                where: { projectId: { not: projectId } },
+                select: {
+                  id: true,
+                  projectId: true,
+                  sha256Hash: true,
+                  documentRole: true,
+                  metadataJson: true,
+                  project: {
+                    select: {
+                      contractNumber: true,
+                      contractAmount: true,
+                      boqLocked: true,
+                      managerId: true,
+                    },
+                  },
+                },
+                take: 200,
+              });
+              const isGlobalReader = ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'EXECUTIVE', 'PRESIDENT', 'VP_OPERATIONS'].includes(
+                actor.role.toUpperCase()
+              );
+              const existingOwnership: ExistingDocumentOwnershipRecord[] = crossDocs
+                .filter((cd) => cd && typeof cd.projectId === 'string' && cd.projectId !== projectId)
+                .map((cd) => {
+                  const m = cd.metadataJson && typeof cd.metadataJson === 'object' ? (cd.metadataJson as Record<string, unknown>) : null;
+                  const fp = m?.documentOwnership && typeof m.documentOwnership === 'object'
+                    ? (m.documentOwnership as Partial<CanonicalDocumentFingerprint>)
+                    : null;
+                  const projObj = cd.project as { contractNumber?: string | null; contractAmount?: number | null; boqLocked?: boolean | null; managerId?: string | null } | undefined;
+                  const isApproved = Boolean(
+                    projObj?.boqLocked ||
+                    (typeof projObj?.contractAmount === 'number' && projObj.contractAmount > 0)
+                  );
+                  return {
+                    documentId: cd.id,
+                    projectId: cd.projectId,
+                    sha256Hash: cd.sha256Hash,
+                    documentRole: cd.documentRole,
+                    isProjectApprovedOrVerified: isApproved,
+                    actorCanAccessOwningProject: isGlobalReader || projObj?.managerId === actor.userId,
+                    projectContractRefs: projObj?.contractNumber ? [projObj.contractNumber] : [],
+                    fingerprint: fp,
+                  };
+                });
+
+              const ownershipDecision = evaluateCrossProjectDocumentOwnership({
+                selectedProjectId: projectId,
+                incomingSha256: scan.sha256Hash,
+                incomingRole: documentRole,
+                incomingFingerprint,
+                allowDuplicateNewRevision,
+                existingDocuments: existingOwnership,
+              });
+
+              if (
+                ownershipDecision.decision === 'HARD_BLOCK_CROSS_PROJECT_DUPLICATE' ||
+                ownershipDecision.decision === 'HARD_BLOCK_FOREIGN_CONTRACT_IDENTITY'
+              ) {
+                throw new Error(`${ownershipDecision.code}: ${ownershipDecision.message}`);
+              }
+              if (ownershipDecision.decision === 'HOLD_UNCERTAIN_OWNERSHIP') {
+                throw new Error(`${ownershipDecision.code}: ${ownershipDecision.message}`);
+              }
             }
 
             // Rule 1: UNRELATED files are ALWAYS rejected HTTP 422 BEFORE any vault or DB write,
@@ -358,9 +454,9 @@ export async function POST(request: NextRequest) {
     const msg = err instanceof Error ? err.message : 'UBOQ_INTAKE_ERROR';
     const status = /UNAUTHORIZED|FORBIDDEN|SPOOFING|DENIED|RBAC/i.test(msg)
       ? 403
-      : /UBOQ_XLSX_LIMIT_EXCEEDED|UBOQ_XLSX_EMPTY_WORKBOOK|UBOQ_UNRELATED_DOCUMENT_BLOCKED|UBOQ_SUPPORTING_DOCUMENT_USE_EVIDENCE_REGISTER/i.test(msg)
+      : /UBOQ_XLSX_LIMIT_EXCEEDED|UBOQ_XLSX_EMPTY_WORKBOOK|UBOQ_UNRELATED_DOCUMENT_BLOCKED|UBOQ_CROSS_PROJECT_DUPLICATE_BLOCKED|UBOQ_SUPPORTING_DOCUMENT_USE_EVIDENCE_REGISTER/i.test(msg)
         ? 422
-        : /CONFLICT|DUPLICATE|ALREADY|LUMP_SUM|MISMATCH|UBOQ_PROJECT_RELEVANCE_CONFIRMATION_REQUIRED/i.test(msg)
+        : /CONFLICT|DUPLICATE|ALREADY|LUMP_SUM|MISMATCH|UBOQ_PROJECT_RELEVANCE_CONFIRMATION_REQUIRED|UBOQ_OWNERSHIP_VERIFICATION_REQUIRED/i.test(msg)
           ? 409
           : 400;
     return NextResponse.json({ error: msg }, { status });

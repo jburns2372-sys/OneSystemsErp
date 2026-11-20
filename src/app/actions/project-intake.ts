@@ -4,8 +4,24 @@ import { prisma } from '@/lib/prisma';
 import { verifyOperationalSession } from '@/lib/dal/auth';
 import { createHmac, randomUUID } from 'node:crypto';
 import { applyProjectRlsSessionVars } from '@/lib/uboq/project-ownership';
+import {
+  buildCanonicalContractIdentityKey,
+  evaluateProjectCreationIdentity,
+} from '@/lib/uboq/document-ownership-guard';
 
-export type ProjectCreateResult = { error: string } | { error?: never; projectId: string };
+export type ProjectCreateResult =
+  | {
+      error: string;
+      code?: 'PROJECT_ALREADY_EXISTS';
+      existingProjectId?: string | null;
+      canOpenExistingProject?: boolean;
+    }
+  | {
+      warning: string;
+      code: 'POSSIBLE_EXISTING_PROJECT';
+      similarProjectCount: number;
+    }
+  | { error?: never; warning?: never; projectId: string };
 
 const SUBMISSION_DEDUP_TTL_MS = 60_000;
 const recentSubmissions = new Map<string, { createdAt: number; promise: Promise<ProjectCreateResult> }>();
@@ -68,6 +84,7 @@ export async function createProjectProfile(formData: FormData): Promise<ProjectC
   const sector = String(formData.get('sector') ?? '').trim();
   const description = String(formData.get('description') ?? '').trim();
   const submissionToken = String(formData.get('submissionToken') ?? '').trim();
+  const confirmSimilarName = String(formData.get('confirmSimilarName') ?? '').trim().toLowerCase() === 'true';
 
   if (name.length < 3 || name.length > 180) return { error: 'Enter a project name (3–180 characters).' };
   if (!['GOVERNMENT', 'CORPORATE', 'PRIVATE'].includes(sector)) {
@@ -87,6 +104,68 @@ export async function createProjectProfile(formData: FormData): Promise<ProjectC
     }
   }
 
+  const canonicalContractKey = buildCanonicalContractIdentityKey({
+    sector,
+    client: client || null,
+    contractNumber: contractNumber || null,
+  });
+
+  // Phase 2 & 3: Project identity uniqueness check (similar names warn, confirmed duplicate contracts hard-block).
+  if (typeof prisma.project?.findMany === 'function') {
+    const existingProjects = await prisma.project.findMany({
+      select: {
+        id: true,
+        name: true,
+        projectCategory: true,
+        client: true,
+        contractNumber: true,
+        contractAmount: true,
+        boqLocked: true,
+        managerId: true,
+        userAssignments: {
+          where: { userId: actor.userId, assignmentStatus: { in: ['active', 'ACTIVE'] } },
+          select: { id: true },
+          take: 1,
+        },
+      },
+      take: 500,
+    });
+
+    const isGlobalReader = ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'EXECUTIVE', 'PRESIDENT', 'VP_OPERATIONS'].includes(
+      actor.role.toUpperCase()
+    );
+    const decision = evaluateProjectCreationIdentity(
+      { name, sector, client: client || null, contractNumber: contractNumber || null },
+      existingProjects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        projectCategory: p.projectCategory,
+        client: p.client,
+        contractNumber: p.contractNumber,
+        contractAmount: p.contractAmount,
+        boqLocked: p.boqLocked,
+        actorCanAccess: isGlobalReader || p.managerId === actor.userId || p.userAssignments.length > 0,
+      }))
+    );
+
+    if (decision.decision === 'BLOCK_CONFIRMED_DUPLICATE_CONTRACT') {
+      return {
+        error: decision.message,
+        code: 'PROJECT_ALREADY_EXISTS',
+        existingProjectId: decision.existingProjectId,
+        canOpenExistingProject: decision.canOpenExistingProject,
+      };
+    }
+
+    if (decision.decision === 'WARN_SIMILAR_NAME' && !confirmSimilarName) {
+      return {
+        warning: decision.message,
+        code: 'POSSIBLE_EXISTING_PROJECT',
+        similarProjectCount: decision.similarProjectCount,
+      };
+    }
+  }
+
   // Creating the project never writes BOQ, contract-authority, tax, or cost baselines.
   // Sector is captured here; a tax profile must be explicitly selected at BOQ intake.
   const projectId = submissionToken.length >= 16
@@ -99,6 +178,10 @@ export async function createProjectProfile(formData: FormData): Promise<ProjectC
         await applyProjectRlsSessionVars(tx, {
           projectId, userId: actor.userId, sessionVersion: actor.sessionVersion,
         });
+        // Phase 3 Case E: Transaction-scoped advisory lock serializes concurrent creations of the same verified contract identity.
+        if (canonicalContractKey && typeof tx.$executeRaw === 'function') {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${canonicalContractKey}))`;
+        }
         // The bounded command rechecks the DB actor/session/RBAC and creates only
         // this new project + its creator. Runtime PUA write privileges stay denied.
         await tx.$queryRaw`SELECT public.phase9_create_project_profile(
