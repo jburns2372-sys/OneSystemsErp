@@ -154,18 +154,37 @@ async function apiCallBinary(
 }
 
 function buildMinimalZipEntry(entryName: string, content: Buffer, fakeUncompSize?: number): Buffer {
+  // Emit a structurally complete ZIP. Scanner metadata must be tested using a
+  // central-directory entry, not an incomplete local-header-only fixture.
   const nameBuf = Buffer.from(entryName, 'utf8');
   const compressed = zlib.deflateRawSync(content);
-  const header = Buffer.alloc(30);
-  header.writeUInt32LE(0x04034b50, 0);
-  header.writeUInt16LE(20, 4);
-  header.writeUInt16LE(0, 6);
-  header.writeUInt16LE(8, 8);
-  header.writeUInt32LE(compressed.length, 18);
-  header.writeUInt32LE(fakeUncompSize ?? content.length, 22);
-  header.writeUInt16LE(nameBuf.length, 26);
-  header.writeUInt16LE(0, 28);
-  return Buffer.concat([header, nameBuf, compressed]);
+  const reportedSize = fakeUncompSize ?? content.length;
+  const local = Buffer.alloc(30 + nameBuf.length);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt16LE(8, 8);
+  local.writeUInt32LE(compressed.length, 18);
+  local.writeUInt32LE(reportedSize, 22);
+  local.writeUInt16LE(nameBuf.length, 26);
+  nameBuf.copy(local, 30);
+
+  const central = Buffer.alloc(46 + nameBuf.length);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(20, 4);
+  central.writeUInt16LE(20, 6);
+  central.writeUInt16LE(8, 10);
+  central.writeUInt32LE(compressed.length, 20);
+  central.writeUInt32LE(reportedSize, 24);
+  central.writeUInt16LE(nameBuf.length, 28);
+  nameBuf.copy(central, 46);
+
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(central.length, 12);
+  end.writeUInt32LE(local.length + compressed.length, 16);
+  return Buffer.concat([local, compressed, central, end]);
 }
 
 async function generateMultiPageNativePdfBuffer(): Promise<Buffer> {

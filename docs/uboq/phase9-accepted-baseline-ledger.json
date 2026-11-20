@@ -1,0 +1,177 @@
+{
+  "recordedAt": "2026-11-17T11:55:40.955Z",
+  "issue": "https://github.com/jburns2372-sys/OneSystemsErp/issues/4",
+  "inspectedSourceSha": "f7ce05cb3041c23626ba4d3826909b4b6f1b9069",
+  "baselineReleaseSha": "a850708f003798fbc237b8908330a0552beed7ec",
+  "environment": "Local isolated project-intake-p9 worktree; no application or database connection",
+  "evidenceRoot": "../../ (existing repository artifacts, read-only; relative to isolated worktree)",
+  "evidence": [
+    {
+      "path": "artifacts/uboq/release-readiness/phase1-d2-r3-local-acceptance-receipt.json",
+      "sha256": "f67634b39f9f2bf6e48ebd5b30b491de15d67614291bf27a9e47f65c57236070"
+    },
+    {
+      "path": "artifacts/uboq/release-readiness/phase5-final-local-verification.json",
+      "sha256": "54907d3f18d49aa4bb018a627577d75f590bce08eb5611b73815840dfad83b3f"
+    },
+    {
+      "path": "artifacts/uboq/release-readiness/release-readiness-checkpoint.json",
+      "sha256": "01baee6f69da042a09f83acf644d17eda131fc15f5de3d8da19ab39cd87202bd"
+    },
+    {
+      "path": "artifacts/uboq/wp3/batch-d-d2-r3/r2-evidence-references.json",
+      "sha256": "d04189b56f3d27e740f359b3a674761449b90a0e9c0da990ddab87ada00f96f6"
+    },
+    {
+      "path": "artifacts/uboq/preview-readiness/phase6-option-a-final-checkpoint-receipt.json",
+      "sha256": "13b9e5bff78a78d97a1a7df2d7309f4657ba0c686ef9171933836523f3390baa"
+    },
+    {
+      "path": "artifacts/uboq/preview-uat/phase7-preview-uat-receipt.json",
+      "sha256": "4a0782707b7eb8314a75df72fb08f41afee335234c1fddb1712d7042d7188d1b"
+    }
+  ],
+  "acceptedSources": [
+    {
+      "path": "prisma/migrations/20261114020000_wp3_batch_d_d2_r2_migration_checksum_immutability_guard/migration.sql",
+      "expectedSha256": "39eb48330d27e4a3b4192f970c0156045577cc4fd15e92c91133bfc6dc1564ac",
+      "actualLfSha256": "39eb48330d27e4a3b4192f970c0156045577cc4fd15e92c91133bfc6dc1564ac"
+    },
+    {
+      "path": "src/lib/uboq/template-builder.ts",
+      "expectedSha256": "2a42f4bcc9355531a18353fc5b4d17e87b3abd12ce49076805e06e8c8d5e49ca",
+      "actualLfSha256": "2a42f4bcc9355531a18353fc5b4d17e87b3abd12ce49076805e06e8c8d5e49ca"
+    },
+    {
+      "path": "src/lib/uboq/templates/canonical-source-adapters.ts",
+      "expectedSha256": "262d492585eeb5ef8933ee10fd906cbff1ee08fb3e0bd2966c3ae6a42dabaf0a",
+      "actualLfSha256": "262d492585eeb5ef8933ee10fd906cbff1ee08fb3e0bd2966c3ae6a42dabaf0a"
+    },
+    {
+      "path": "src/lib/uboq/templates/t0-t1.ts",
+      "expectedSha256": "afa7777e9d28c80e9fc995d9a69f8a15441d2e98af6f51dbefd2bc0b70d0bfce",
+      "actualLfSha256": "afa7777e9d28c80e9fc995d9a69f8a15441d2e98af6f51dbefd2bc0b70d0bfce"
+    },
+    {
+      "path": "src/lib/uboq/templates/saved-layouts.ts",
+      "expectedSha256": "d0840e82e2a3b755e03db8d55478afcb75a5395cc470f8b8b0765456bb2a6983",
+      "actualLfSha256": "d0840e82e2a3b755e03db8d55478afcb75a5395cc470f8b8b0765456bb2a6983"
+    },
+    {
+      "path": "src/app/projects/[id]/uboq/templates/TemplateBuilder.tsx",
+      "expectedSha256": "84bf3928b1be60628089977e2bf280cb65095645cf46066e8d29bfc8f8f65029",
+      "actualLfSha256": "84bf3928b1be60628089977e2bf280cb65095645cf46066e8d29bfc8f8f65029"
+    },
+    {
+      "path": "scripts/uboq/migration-checksum-guard.cjs",
+      "expectedSha256": "2a8043163c9245eb2fd2c9acc1eb67e7838fe6079e0f2d1c07c1c11da5062197",
+      "actualLfSha256": "2a8043163c9245eb2fd2c9acc1eb67e7838fe6079e0f2d1c07c1c11da5062197"
+    },
+    {
+      "path": "scripts/uboq/apply-wp3-batch-d-d2-r1-migration35.cjs",
+      "expectedSha256": "7725e53d59cf5f1b1c0726651e73423a9719cfdc98634be91d6596c956846ae6",
+      "actualLfSha256": "7725e53d59cf5f1b1c0726651e73423a9719cfdc98634be91d6596c956846ae6"
+    },
+    {
+      "path": "scripts/uboq/apply-wp3-batch-d-d2-r1-migration36.cjs",
+      "expectedSha256": "77cb024e1644e11030dc44f246ae34d51fe0d3ac441a83c1223c0204aaf7d585",
+      "actualLfSha256": "77cb024e1644e11030dc44f246ae34d51fe0d3ac441a83c1223c0204aaf7d585"
+    },
+    {
+      "path": "scripts/uboq/apply-wp3-batch-d-d2-r2-migration37.cjs",
+      "expectedSha256": "894f6130a45688608e4fd15c828157c221135b5d0a94e986e1cf7e05fa8c6c65",
+      "actualLfSha256": "894f6130a45688608e4fd15c828157c221135b5d0a94e986e1cf7e05fa8c6c65"
+    },
+    {
+      "path": "scripts/uboq/verify-wp3-batch-d-d2-r2.ts",
+      "expectedSha256": "224afd6e9b113f7546d4b64328f8e0d45220fcb1acfab100f3286dd3155c98e7",
+      "actualLfSha256": "224afd6e9b113f7546d4b64328f8e0d45220fcb1acfab100f3286dd3155c98e7"
+    },
+    {
+      "path": "scripts/uboq/package-wp3-batch-d-d2-r2.py",
+      "expectedSha256": "e7c417cd85661d04b2ec512851e02f3353ed427f49d892df7a99348d7bbfc7db",
+      "actualLfSha256": "e7c417cd85661d04b2ec512851e02f3353ed427f49d892df7a99348d7bbfc7db"
+    },
+    {
+      "path": "docs/uboq/wp3-batch-d-d2-r2.md",
+      "expectedSha256": "07262d24ab1806dc8a2ebc963e8a439cf184609ba47f1e3ab9d12447e16b20f4",
+      "actualLfSha256": "07262d24ab1806dc8a2ebc963e8a439cf184609ba47f1e3ab9d12447e16b20f4"
+    }
+  ],
+  "phase9ChangedPaths": [
+    "src/app/actions/project-intake.ts",
+    "src/app/api/projects/[id]/documents/[docId]/download/route.ts",
+    "src/app/api/projects/[id]/documents/route.ts",
+    "src/app/boq-template/page.tsx",
+    "src/app/projects/ProjectStartButton.tsx",
+    "src/app/projects/[id]/documents/ProjectDocumentIntakeClient.tsx",
+    "src/app/projects/[id]/documents/page.tsx",
+    "src/app/projects/[id]/page.tsx",
+    "src/app/projects/page.tsx",
+    "src/lib/uboq/security/document-permissions.ts"
+  ],
+  "features": [
+    {
+      "feature": "T0-T12 canonical sources",
+      "validatedSourceSha": null,
+      "sourceIdentity": "13 exact LF SHA-256 digests in acceptedSources",
+      "environment": "Historical isolated local PostgreSQL 18.4",
+      "acceptedOutcome": "ACCEPTED_FOR_ISOLATED_LOCAL_DEVELOPMENT; REUSED PASS for preserved sources only",
+      "evidencePath": "artifacts/uboq/release-readiness/phase1-d2-r3-local-acceptance-receipt.json",
+      "selectiveRegressionTrigger": "Relevant canonical source, adapter, dependency or runtime behavior changes"
+    },
+    {
+      "feature": "Phase 5 local verification",
+      "validatedSourceSha": null,
+      "environment": "Historical isolated local PostgreSQL 18.4",
+      "acceptedOutcome": "Historical six checks PASS; current Phase 9 type/build NOT VERIFIED",
+      "evidencePath": "artifacts/uboq/release-readiness/phase5-final-local-verification.json",
+      "selectiveRegressionTrigger": "Ten Phase 9 source changes require focused type/build checks; no inference of exact-SHA PASS"
+    },
+    {
+      "feature": "Phase 6 readiness",
+      "validatedSourceSha": null,
+      "sourceIdentity": "496c4375b5bd15ff593d0d6e0d845871ace1e4b370625879366f40afe156513d",
+      "environment": "Dedicated historical Preview and managed PG18 candidate",
+      "acceptedOutcome": "PASS_READY_FOR_PREVIEW_DEPLOYMENT_APPROVAL_GATE",
+      "evidencePath": "artifacts/uboq/preview-readiness/phase6-option-a-final-checkpoint-receipt.json",
+      "selectiveRegressionTrigger": "Deployment/config/database identity changes; NOT VERIFIED for current live environment"
+    },
+    {
+      "feature": "Phase 7 UAT",
+      "validatedSourceSha": "e753c2647e0fd5765c8c690c3b282588bb4efd17",
+      "environment": "Historical dedicated Preview",
+      "acceptedOutcome": "Historical 19/19 PASS, pending Owner acceptance; NOT VERIFIED for Phase 9",
+      "evidencePath": "artifacts/uboq/preview-uat/phase7-preview-uat-receipt.json",
+      "selectiveRegressionTrigger": "Current intake pages/APIs differ; run Phase 9 delta UAT only after focused local checks"
+    },
+    {
+      "feature": "RBAC",
+      "validatedSourceSha": null,
+      "environment": "Issue #4 dedicated Preview reference",
+      "acceptedOutcome": "71/71 and 6/6 previously reported PASS; preserved, no suite rerun; current-environment PASS not asserted",
+      "evidencePath": "GitHub Issue #4",
+      "selectiveRegressionTrigger": "Separately demonstrated regression; no RBAC changes authorized"
+    },
+    {
+      "feature": "July 25 Production provenance",
+      "validatedSourceSha": null,
+      "environment": "Historical Production",
+      "acceptedOutcome": "UNKNOWN exact deployed SHA; functional reference only",
+      "evidencePath": "GitHub Issue #4",
+      "selectiveRegressionTrigger": "Read-only identity verification before any release"
+    }
+  ],
+  "executedTests": [],
+  "newVerification": [
+    "13/13 accepted source digest matches (LF-normalized, not raw Windows bytes)",
+    "No dependency/config/schema/auth/permissions delta against pinned baseline"
+  ],
+  "remaining": [
+    "Phase 9 exact-SHA type/build checks missing",
+    "Phase 9 route/action and UI delta tests missing",
+    "Disposable Preview UAT and independent review not accepted"
+  ],
+  "productionActions": false,
+  "databaseActions": false
+}

@@ -157,7 +157,10 @@ export async function resolveBackendRequestProjectContext(
     addCandidate(decodeURIComponent(m[1]));
   } else if ((m = relPath.match(/^consolidation\/([^/?#]+)/i)) && m[1].toLowerCase() !== 'items') {
     addCandidate(decodeURIComponent(m[1]));
-  } else if ((m = relPath.match(/^projects\/([^/?#]+)/i))) {
+  } else if (
+    (m = relPath.match(/^projects\/([^/?#]+)/i)) &&
+    !((req.method === 'GET' || req.method === 'HEAD') && /^projects\/dashboard-stats\/?$/i.test(relPath))
+  ) {
     addCandidate(decodeURIComponent(m[1]));
   }
 

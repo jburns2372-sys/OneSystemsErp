@@ -6,8 +6,25 @@ export const metadata = {
   title: 'Project Portfolio | Command Center',
 };
 
+const ALLOWED_PUBLIC_EXECUTIVE_ERRORS = new Set([
+  'Unauthorized: Session token missing',
+  'Unauthorized: User not found',
+  'Unauthorized: Account inactive',
+  'Unauthorized: Executive access required',
+]);
+
 export default async function ExecutivePortfolioPage() {
-  const projects = await getProjectPortfolio();
+  let projects: Awaited<ReturnType<typeof getProjectPortfolio>> = [];
+  let error: string | null = null;
+
+  try {
+    projects = await getProjectPortfolio();
+  } catch (err: any) {
+    const msg = typeof err?.message === 'string' ? err.message : '';
+    error = ALLOWED_PUBLIC_EXECUTIVE_ERRORS.has(msg)
+      ? msg
+      : 'Failed to load project portfolio data.';
+  }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
@@ -33,6 +50,14 @@ export default async function ExecutivePortfolioPage() {
           <p style={{ margin: '4px 0 0', color: '#6b7280' }}>High-level overview of all projects, progress, and AI risk scores.</p>
         </div>
       </div>
+
+      {/* Error State */}
+      {error && (
+        <div role="alert" style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '16px' }}>
+          <h3 style={{ margin: 0, color: '#991b1b', fontSize: '1rem', fontWeight: 600 }}>Failed to load data</h3>
+          <p style={{ margin: '4px 0 0', color: '#b91c1c', fontSize: '0.875rem' }}>{error}</p>
+        </div>
+      )}
 
       {/* Projects Table */}
       <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'hidden', border: '1px solid #e5e7eb' }}>

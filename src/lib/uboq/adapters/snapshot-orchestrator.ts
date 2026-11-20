@@ -152,7 +152,7 @@ function buildPhaseInputLineFromCandidateFields(params: {
   const sourcedAbc = toPositiveFiniteNumber(fields.agency_abc);
 
   return {
-    lineKey: `LINE-${lineIndex + 1}`,
+    lineKey: String(fields.source_line_id || `LINE-${lineIndex + 1}`).trim(),
     itemCode: String(fields.item_code || `ITEM-${lineIndex + 1}`).trim(),
     phaseCode: resolvedPhase,
     sectionCode: fields.section_code ? String(fields.section_code).trim() : null,
@@ -594,7 +594,7 @@ export async function ingestAndStageProjectUboqPackage(
   const vaultProvider = resolveUboqVaultStorageProvider();
 
   // M01 & R1-H01: Idempotent duplicate source upload check BEFORE writing duplicate sections/candidates/snapshots
-  const existingDoc = await prisma.uboqSourceDocument.findUnique({
+  const findExistingDocument = () => prisma.uboqSourceDocument.findUnique({
     where: {
       projectId_sha256Hash_documentRole: {
         projectId: params.projectId,
@@ -615,7 +615,7 @@ export async function ingestAndStageProjectUboqPackage(
     },
   });
 
-  if (existingDoc && !params.allowDuplicateNewRevision) {
+  const replayDocument = async (existingDoc: NonNullable<Awaited<ReturnType<typeof findExistingDocument>>>) => {
     // Verify immutable vault integrity on replay
     await vaultProvider.getAndVerify({
       storageUri: existingDoc.storageUri,
@@ -637,6 +637,11 @@ export async function ingestAndStageProjectUboqPackage(
       createdAccounts: [],
       createdPrrs: [],
     };
+  };
+
+  const existingDoc = await findExistingDocument();
+  if (existingDoc && !params.allowDuplicateNewRevision) {
+    return replayDocument(existingDoc);
   }
 
   // H02: Persist binary to private immutable vault with immediate SHA-256 read-back verification
@@ -697,6 +702,22 @@ export async function ingestAndStageProjectUboqPackage(
             await applyProjectRlsSessionVars(tx, rlsStore);
           }
 
+          const compactVerification = extracted.awardedBoqVerification
+            ? {
+                calculationCheck: extracted.awardedBoqVerification.calculationCheck,
+                formulaCheck: extracted.awardedBoqVerification.formulaCheck,
+                workbookStatedGrandTotal: extracted.awardedBoqVerification.workbookStatedGrandTotal,
+                recalculatedTotal: extracted.awardedBoqVerification.recalculatedTotal,
+                roundingDecimals: extracted.awardedBoqVerification.roundingDecimals,
+                counts: extracted.awardedBoqVerification.counts,
+                ...(extracted.awardedBoqVerification.worksheetRoles
+                  ? { worksheetRoles: extracted.awardedBoqVerification.worksheetRoles }
+                  : {}),
+                priceComponents: extracted.awardedBoqVerification.priceComponents,
+                discrepancies: extracted.awardedBoqVerification.discrepancies.slice(0, 100),
+              }
+            : null;
+
           const createdDoc = await tx.uboqSourceDocument.create({
             data: {
               projectId: params.projectId,
@@ -713,6 +734,8 @@ export async function ingestAndStageProjectUboqPackage(
                 detectedFormat: extracted.security.detectedFormat,
                 vaultBackend: vaultReceipt.backend,
                 stagedIntakeOptions,
+                ...(compactVerification ? { awardedBoqVerification: compactVerification } : {}),
+                ...(extracted.contractExtraction ? { contractExtraction: extracted.contractExtraction } : {}),
               } as unknown as Prisma.InputJsonValue,
             },
           });
@@ -741,8 +764,21 @@ export async function ingestAndStageProjectUboqPackage(
             fields: Record<string, unknown>;
           }> = [];
 
+          const isAwardedContractBoq = docRole === 'CONTRACT_BOQ';
+          const hasVerifiedAwardedClassification = Boolean(extracted.awardedBoqVerification);
+
           for (const cand of extracted.candidates) {
-            const reviewDecision = cand.requiresHumanReview
+            const alertsCount = Array.isArray(cand.securityAlerts) ? cand.securityAlerts.length : 0;
+            const isClassifiedAwardedRow = Boolean(cand.rowClassification);
+            // Final Awarded Contract BOQs are already approved for implementation:
+            // automatically classify and import valid rows without per-item human approval dependency.
+            // Unclassified unreadable extraction failures and draft estimates / proposed variations
+            // preserve their separate review / fail-closed hold.
+            const effectiveRequiresReview =
+              isAwardedContractBoq && hasVerifiedAwardedClassification && isClassifiedAwardedRow
+                ? alertsCount > 0
+                : Boolean(cand.requiresHumanReview);
+            const reviewDecision = effectiveRequiresReview
               ? 'PENDING_HUMAN_REVIEW'
               : 'AUTO_VERIFIED_DETERMINISTIC';
             const dbCand = await tx.uboqExtractionCandidate.create({
@@ -757,10 +793,11 @@ export async function ingestAndStageProjectUboqPackage(
                 parsedJson: {
                   mappedFields: cand.mappedFields,
                   cellCoordinates: cand.cellCoordinates ?? {},
+                  ...(cand.rowClassification ? { rowClassification: cand.rowClassification } : {}),
                 } as unknown as Prisma.InputJsonValue,
                 confidenceScore: cand.confidenceScore,
                 extractionMethod: cand.extractionMethod,
-                requiresHumanReview: cand.requiresHumanReview,
+                requiresHumanReview: effectiveRequiresReview,
                 reviewDecision,
               },
             });
@@ -768,7 +805,7 @@ export async function ingestAndStageProjectUboqPackage(
               id: dbCand.id,
               sheetOrPageRef: cand.sheetOrPageRef,
               sourceCellRef: cand.sourceCellRef,
-              requiresHumanReview: cand.requiresHumanReview,
+              requiresHumanReview: effectiveRequiresReview,
               reviewDecision,
               fields: cand.mappedFields,
             });
@@ -856,10 +893,14 @@ export async function ingestAndStageProjectUboqPackage(
       createdPrrs: [],
     };
   } catch (err) {
-    // H02: Clean up newly written vault object ONLY if L0 UboqSourceDocument was NOT persisted in DB
-    if (vaultReceipt.newlyCreated && !sourceDocIdForOrphanGuard) {
-      await vaultProvider.deleteOrphanIfCreated(vaultReceipt.storageUri);
+    if (!sourceDocIdForOrphanGuard && err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
+      // The unique source constraint arbitrates concurrent initial uploads. The loser
+      // must not stage a second financial snapshot or delete the winner's object.
+      const winner = await findExistingDocument();
+      if (winner) return replayDocument(winner);
     }
+    // A concurrent category/request may reference this content-addressed object.
+    // Leave possible orphans to reference-aware reconciliation, never inline deletion.
     throw err;
   }
 }

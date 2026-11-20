@@ -3,12 +3,10 @@ import { cookies } from 'next/headers';
 import { verifySession } from '@/lib/dal/auth';
 import { getBackendUrl, isTrustedFirstPartyBackendUrl } from '@/lib/backendUrl';
 
+// Only active global system-admin roles may simulate roles; simulation never widens PBAC.
 const PRIVILEGED_SIMULATION_ROLES = new Set([
   'SUPER_ADMIN',
   'SYSTEM_ADMIN',
-  'ADMIN',
-  'PROJECT_DIRECTOR',
-  'DIRECTORS',
 ]);
 
 const FIRST_PARTY_AUTH_COOKIES = new Set([
@@ -40,6 +38,40 @@ export function signInternalBackendToken(claims: InternalAuthClaims, secretOverr
   const encoded = Buffer.from(JSON.stringify(claims), 'utf8').toString('base64url');
   const signature = crypto.createHmac('sha256', secret).update(`v1.${encoded}`).digest('hex');
   return `v1.${encoded}.${signature}`;
+}
+
+/**
+ * Vercel Automation Protection Bypass for the dedicated, SSO-protected backend Preview project.
+ * Returned ONLY when all hold:
+ *  - running in a Vercel Preview deployment (never Production / local),
+ *  - a server-only AWS_BACKEND_PROTECTION_BYPASS_SECRET is configured (never NEXT_PUBLIC_),
+ *  - the request targets exactly the pinned AWS_BACKEND_URL origin over HTTPS,
+ *  - that origin differs from this frontend deployment's own origin.
+ * The backend continues to enforce HMAC x-internal-auth, sessionVersion, RBAC/PBAC and signed RLS.
+ */
+export function resolvePinnedPreviewBackendBypass(targetUrl: string): string | null {
+  if (process.env.VERCEL_ENV !== 'preview') return null;
+  const secret = (process.env.AWS_BACKEND_PROTECTION_BYPASS_SECRET || '').trim();
+  const pinned = (process.env.AWS_BACKEND_URL || '').trim();
+  if (!secret || !pinned || !/^[A-Za-z0-9]{32}$/.test(secret)) return null;
+
+  let pinnedOrigin: string;
+  let targetOrigin: string;
+  try {
+    const pinnedParsed = new URL(pinned);
+    const targetParsed = new URL(targetUrl);
+    if (pinnedParsed.protocol !== 'https:' || targetParsed.protocol !== 'https:') return null;
+    pinnedOrigin = pinnedParsed.origin;
+    targetOrigin = targetParsed.origin;
+  } catch {
+    return null;
+  }
+  if (targetOrigin !== pinnedOrigin) return null;
+
+  const selfHost = (process.env.VERCEL_URL || '').trim();
+  if (selfHost && `https://${selfHost}` === targetOrigin) return null;
+
+  return secret;
 }
 
 export interface BackendRequestOptions {
@@ -91,6 +123,13 @@ export async function buildAuthenticatedBackendRequest(
   headers.delete('x-internal-auth');
   headers.delete('x-user-session');
   headers.delete('x-simulated-role');
+  headers.delete('x-vercel-protection-bypass');
+  headers.delete('x-vercel-set-bypass-cookie');
+
+  const previewBypass = resolvePinnedPreviewBackendBypass(resolvedUrl);
+  if (previewBypass) {
+    headers.set('x-vercel-protection-bypass', previewBypass);
+  }
 
   const nowSec = Math.floor(Date.now() / 1000);
   const signedToken = signInternalBackendToken({
@@ -143,6 +182,7 @@ export async function buildAuthenticatedBackendRequest(
     url: resolvedUrl,
     init: {
       ...init,
+      redirect: 'manual',
       headers,
     },
   };

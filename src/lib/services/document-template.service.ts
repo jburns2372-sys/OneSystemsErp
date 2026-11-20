@@ -1,5 +1,5 @@
-import { prisma } from '@/lib/prisma';
-import { checkUserAccess } from '@/lib/accessControl';
+import { prisma } from '../prisma';
+import { checkUserAccess } from '../accessControl';
 
 export async function fetchActiveTemplatesService(actorId: string, projectId: string | null = null) {
   if (!actorId) {

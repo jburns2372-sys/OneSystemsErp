@@ -1,0 +1,154 @@
+{
+  "recordedAt": "2026-11-17T12:35:28.008Z",
+  "issue": "https://github.com/jburns2372-sys/OneSystemsErp/issues/4",
+  "baselineSha": "f7ce05cb3041c23626ba4d3826909b4b6f1b9069",
+  "checkedSourceCommit": "8b67e74e05bc0e6894a548f06c5d9e324add50a5",
+  "worktree": "C:\\Users\\user\\Documents\\JD SOFTWARE PROJECTS\\OneSystemsERP-UBOQ-001\\.worktrees\\project-intake-p9",
+  "branch": "feat/oserp-unified-project-intake-p9",
+  "sourceFiles": [
+    {
+      "path": "next.config.ts",
+      "gitBlobSha256": "67489b21c593face224ac7d59afb86ff774b48507c7907de5401e404bcafb21f"
+    },
+    {
+      "path": "scripts/uboq/phase9-acceptance.test.cjs",
+      "gitBlobSha256": "0adcd0d2c9c04c39f3d5e79b9fab577136f9ec2ffe502b3d7510a9d4c25d3b60"
+    },
+    {
+      "path": "scripts/uboq/phase9-local-checks.cjs",
+      "gitBlobSha256": "81d8d653ee3781c9da4f487b48a39333bcd44e776fcb66b1b12f573444f9d3e7"
+    },
+    {
+      "path": "src/app/api/projects/[id]/documents/route.ts",
+      "gitBlobSha256": "2dd72fb1475e3e3a6079d556f16199e526e6a9ed10b6e817ddbe4fdc4b29b8ab"
+    },
+    {
+      "path": "src/app/api/uboq/intake/route.ts",
+      "gitBlobSha256": "da80f36c114b4e72f5c3a171f56968f6f37b61f1c08617efde9798b4172123e5"
+    },
+    {
+      "path": "src/lib/uboq/adapters/snapshot-orchestrator.ts",
+      "gitBlobSha256": "11c817c5f20515cfbf727a2c7b50b2f1f573683d3ec6369fee5876d779fa6f5c"
+    },
+    {
+      "path": "src/lib/uboq/intake/security-guard.ts",
+      "gitBlobSha256": "30a75a58e1988d7a3797eb456f51971dcf4a52886a5f1fdb5edf139046c59ec4"
+    },
+    {
+      "path": "src/lib/uboq/project-ownership.ts",
+      "gitBlobSha256": "323d5b45f9ae825b2eeb5fcda1d0d0fc3703bb43fece5233d85815a3506402cd"
+    },
+    {
+      "path": "src/lib/uboq/storage/vault-storage.ts",
+      "gitBlobSha256": "368d0d96b9c16a6d0a2c83ef371b087b3ab61fdbf40640cf8083600f34c59631"
+    }
+  ],
+  "environment": {
+    "node": "v22.22.2",
+    "next": "16.2.7",
+    "typescript": "5.9.3",
+    "prisma": "6.19.3",
+    "dependencyLockSha256": "53b7702e42127f46138d5138091efef613a21c953f74294aa4a77a49aa81520c",
+    "dependencyRecovery": "Identical-lockfile tree copied read-only into isolated worktree after npm ci ECONNRESET; 1367 matching installed entries, zero mismatches",
+    "database": "Closed loopback 127.0.0.1:1, synthetic credentials, no connected database",
+    "vault": "Disposable local files; real AES-GCM with mocked private-blob transport"
+  },
+  "checks": [
+    {
+      "name": "Focused Phase 9 tests",
+      "command": "node --test scripts/uboq/phase9-acceptance.test.cjs",
+      "status": "PASS",
+      "passed": 38,
+      "failed": 0,
+      "reuse": "Tested module content unchanged after this execution; config and erased RLS type correction do not affect these tests"
+    },
+    {
+      "name": "Prisma client generation",
+      "status": "PASS",
+      "exitCode": 0,
+      "databaseMigration": false
+    },
+    {
+      "name": "Next type generation",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "TypeScript",
+      "command": "tsc --noEmit --incremental false",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "Production build",
+      "command": "npm run build",
+      "status": "PASS",
+      "exitCode": 0,
+      "buildId": "VLnTiFysqJSWJtTcoSSJG",
+      "limitations": "Prerender logged closed-loopback database read failures and unrelated dynamic-render messages; no runtime UAT claim. Existing Serwist/Turbopack warning remains."
+    },
+    {
+      "name": "Focused ESLint zero-warning gate",
+      "status": "FAILED_ZERO_WARNING_THRESHOLD",
+      "exitCode": 1,
+      "errors": 0,
+      "warnings": 7,
+      "baselineWarningLinesUnchanged": true
+    },
+    {
+      "name": "RLS type-only correction",
+      "status": "PASS",
+      "generatedJavaScriptIdenticalAfterLfNormalization": true
+    },
+    {
+      "name": "Git whitespace validation",
+      "status": "PASS"
+    }
+  ],
+  "logs": [
+    {
+      "path": "artifacts/phase9-acceptance-tests.tap",
+      "sha256": "930959b302518604ec545f61633dfc2384e042aa2d5b08079edce4372ea0f1a2"
+    },
+    {
+      "path": "artifacts/phase9-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "artifacts/phase9-build.log",
+      "sha256": "4e4f2e8760f4754017644a8488c8aca48ea0299ab11dd56b35c9e737b3d6a8be"
+    },
+    {
+      "path": "artifacts/phase9-eslint.log",
+      "sha256": "c8641e1cb102e6cac8408fc6f175142396bf8419a24682c867535c5ddddfaa23"
+    },
+    {
+      "path": "artifacts/phase9-generate.log",
+      "sha256": "6c60ff4be15413fd67ccca393947d0e17664da343598697ccd9d68bcaa7ad556"
+    },
+    {
+      "path": "artifacts/phase9-typegen.log",
+      "sha256": "adba4af9194e10e47dda75ff0fd0f8c2b756474896d0eba5612799c527ff372a"
+    },
+    {
+      "path": "artifacts/phase9-dependency-copy.log",
+      "sha256": "d5402746c030f01c600da5cb8d5f0a9aadd9a04016ac7ce1280aef39dd56965a"
+    },
+    {
+      "path": "artifacts/phase9-rls-type-only.json",
+      "sha256": "2864dc483ed48ab18e7ed3bcedce300b2c9a0e7f1b0b469732528c4e743a6f34"
+    }
+  ],
+  "reusedEvidence": "phase9-accepted-baseline-ledger.json; historical T0-T12 and Phase 5/6/7 scope retained; reported RBAC evidence not rerun or upgraded to current-environment acceptance",
+  "remainingAcceptance": [
+    "Independent review and Owner sign-off",
+    "Real disposable PostgreSQL concurrency/transactions and RLS enforcement",
+    "Exact-commit disposable Preview browser UAT",
+    "Real private-blob transport validation",
+    "Resolve or accept baseline zero-warning lint findings separately"
+  ],
+  "productionWrites": false,
+  "databaseMigrations": false,
+  "existingUserAssignmentsChanged": false,
+  "prMerged": false
+}

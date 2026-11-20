@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma";
-import { getUserPermissions } from "@/lib/permissions";
+import { prisma } from "./prisma";
+import { getUserPermissions } from "./permissions";
 import { isSystemAdminRole, resolveAuthorizationAction } from './authorizationActions';
 
 export type AccessCheckResult = {
