@@ -592,7 +592,7 @@ class WorkbookFormulaEvaluator {
 
   evaluateFormulaString(currentSheetName: string, rawFormula: string): EvalResult {
     const tokRes = tokenizeFormula(rawFormula);
-    if (!tokRes.ok) {
+    if ('code' in tokRes) {
       return { ok: false, code: tokRes.code, message: tokRes.message };
     }
     const tokens = tokRes.tokens;
@@ -753,12 +753,12 @@ class WorkbookFormulaEvaluator {
         if (allowRanges && cur?.type === 'RANGE') {
           next();
           const r = resolveRangeNumbers(cur.sheet, cur.start, cur.end);
-          if (!r.ok) return { ok: false, err: r.err };
+          if ('err' in r) return { ok: false, err: r.err };
           flatValues.push(...r.values);
           argGroups.push(r.values);
         } else {
           const ev = parseComparison();
-          if (!ev.ok) return { ok: false, err: ev };
+          if ('code' in ev) return { ok: false, err: ev };
           flatValues.push(ev.value);
           argGroups.push([ev.value]);
         }
@@ -821,12 +821,12 @@ class WorkbookFormulaEvaluator {
 
         if (fn === 'SUM') {
           const args = parseFunctionArgs(true);
-          if (!args.ok) return args.err;
+          if ('err' in args) return args.err;
           return { ok: true, value: args.flatValues.reduce((a, b) => a + b, 0) };
         }
         if (fn === 'SUBTOTAL') {
           const args = parseFunctionArgs(true);
-          if (!args.ok) return args.err;
+          if ('err' in args) return args.err;
           const fnCode = args.argGroups[0]?.[0];
           const rest = args.argGroups.slice(1).flat();
           if (fnCode === 9 || fnCode === 109) {
@@ -836,7 +836,7 @@ class WorkbookFormulaEvaluator {
         }
         if (fn === 'ROUND' || fn === 'ROUNDUP' || fn === 'ROUNDDOWN') {
           const args = parseFunctionArgs(false);
-          if (!args.ok) return args.err;
+          if ('err' in args) return args.err;
           if (args.flatValues.length < 2) {
             return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: `${fn} requires 2 arguments` };
           }
@@ -851,22 +851,22 @@ class WorkbookFormulaEvaluator {
         }
         if (fn === 'ABS') {
           const args = parseFunctionArgs(false);
-          if (!args.ok) return args.err;
+          if ('err' in args) return args.err;
           return { ok: true, value: Math.abs(args.flatValues[0] ?? 0) };
         }
         if (fn === 'MIN') {
           const args = parseFunctionArgs(true);
-          if (!args.ok) return args.err;
+          if ('err' in args) return args.err;
           return { ok: true, value: args.flatValues.length > 0 ? Math.min(...args.flatValues) : 0 };
         }
         if (fn === 'MAX') {
           const args = parseFunctionArgs(true);
-          if (!args.ok) return args.err;
+          if ('err' in args) return args.err;
           return { ok: true, value: args.flatValues.length > 0 ? Math.max(...args.flatValues) : 0 };
         }
         if (fn === 'IF') {
           const args = parseFunctionArgs(false);
-          if (!args.ok) return args.err;
+          if ('err' in args) return args.err;
           if (args.flatValues.length < 2) {
             return { ok: false, code: 'FORMULA_SYNTAX_ERROR', message: 'IF requires at least 2 arguments' };
           }
@@ -1065,7 +1065,7 @@ export function verifyAwardedBoqWorkbook(
         if (!cell.formula) continue;
         totalFormulasChecked++;
         const ev = evaluator.evaluateCell(sheet.sheetName, cell.cellRef);
-        if (!ev.ok) {
+        if ('code' in ev) {
           if (ev.code === 'FORMULA_UNSUPPORTED') unsupportedFormulas++;
           else brokenFormulas++;
           discrepancies.push({
