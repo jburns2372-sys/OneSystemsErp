@@ -270,11 +270,82 @@ function parseWorkbookSheetTargets(workbookXml: string, relsXml: string): Array<
   return sheets;
 }
 
+interface SharedFormulaAnchor {
+  readonly formula: string;
+  readonly baseCol: number;
+  readonly baseRow: number;
+}
+
+/**
+ * Translates relative (non-$-anchored) A1 cell references in an OOXML shared formula
+ * from its master anchor cell (baseCol, baseRow) to a follower cell (col, row),
+ * preserving string literals and absolute $ anchors verbatim.
+ */
+function translateSharedFormula(anchor: SharedFormulaAnchor, targetCol: number, targetRow: number): string {
+  const dCol = targetCol - anchor.baseCol;
+  const dRow = targetRow - anchor.baseRow;
+  if (dCol === 0 && dRow === 0) return anchor.formula;
+
+  const src = anchor.formula;
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i];
+    // Preserve double-quoted string literals verbatim
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < src.length) {
+        if (src[j] === '"' && src[j + 1] === '"') { j += 2; continue; }
+        if (src[j] === '"') { j++; break; }
+        j++;
+      }
+      out += src.slice(i, j);
+      i = j;
+      continue;
+    }
+    // Preserve single-quoted sheet names verbatim (up to closing quote)
+    if (ch === "'") {
+      let j = i + 1;
+      while (j < src.length) {
+        if (src[j] === "'" && src[j + 1] === "'") { j += 2; continue; }
+        if (src[j] === "'") { j++; break; }
+        j++;
+      }
+      out += src.slice(i, j);
+      i = j;
+      continue;
+    }
+
+    // Match A1 cell reference not preceded by identifier char and not followed by '(' or '!' or identifier char
+    const prevChar = i > 0 ? src[i - 1] : '';
+    if (!/[A-Za-z0-9_.]/.test(prevChar)) {
+      const m = /^(\$?)([A-Za-z]{1,3})(\$?)(\d{1,7})(?![A-Za-z0-9_(!])/.exec(src.slice(i));
+      if (m) {
+        const colAbs = m[1] === '$';
+        const colNum = colLettersToNumber(m[2]);
+        const rowAbs = m[3] === '$';
+        const rowNum = Number.parseInt(m[4], 10);
+        if (colNum >= 1 && colNum <= 16384 && rowNum >= 1 && rowNum <= 1048576) {
+          const newCol = colAbs ? colNum : Math.max(1, colNum + dCol);
+          const newRow = rowAbs ? rowNum : Math.max(1, rowNum + dRow);
+          out += `${colAbs ? '$' : ''}${colNumberToLetters(newCol)}${rowAbs ? '$' : ''}${newRow}`;
+          i += m[0].length;
+          continue;
+        }
+      }
+    }
+
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
 function parseRowXmlCells(
   rowInnerXml: string,
   rowNumber: number,
   sharedStrings: ReadonlyArray<string>,
-  sharedFormulas: Map<string, string>,
+  sharedFormulas: Map<string, SharedFormulaAnchor>,
   maxSheetCols: number,
   sheetName: string
 ): StreamedXlsxCell[] {
@@ -304,10 +375,11 @@ function parseRowXmlCells(
       if (fBody) {
         formula = `=${fBody.replace(/^=/, '')}`;
         if (fType === 'shared' && si) {
-          sharedFormulas.set(si, formula);
+          sharedFormulas.set(si, { formula, baseCol: colNumber, baseRow: rowNumber });
         }
       } else if (fType === 'shared' && si && sharedFormulas.has(si)) {
-        formula = sharedFormulas.get(si) ?? null;
+        const anchor = sharedFormulas.get(si)!;
+        formula = translateSharedFormula(anchor, colNumber, rowNumber);
       }
     }
 
@@ -396,7 +468,7 @@ async function streamSingleWorksheetRows(params: {
   }
 
   const rows: StreamedXlsxRow[] = [];
-  const sharedFormulas = new Map<string, string>();
+  const sharedFormulas = new Map<string, SharedFormulaAnchor>();
   let totalCells = 0;
   let bytesRead = 0;
   let carry = '';

@@ -3,6 +3,13 @@ import { parse as parseCsvSync } from 'csv-parse/sync';
 import { resolveCanonicalFieldId } from '../field-catalog';
 import { inspectCellSecurity, scanUploadedDocumentSecurity, readVerifiedOfficeZipEntry, type FileSecurityScanResult } from './security-guard';
 import { streamVerifiedXlsxWorksheets } from './xlsx-streaming-reader';
+import {
+  classifyAwardedBoqRow,
+  verifyAwardedBoqWorkbook,
+  type AwardedBoqRowClassification,
+  type AwardedBoqVerificationReport,
+  type ReconcilerWorksheetInput,
+} from '../awarded-boq-reconciler';
 
 function ensureServerlessPdfGlobals() {
   const g = globalThis as Record<string, unknown>;
@@ -53,6 +60,7 @@ export interface ExtractedBoqRowCandidate {
   readonly extractionMethod: 'DETERMINISTIC_PARSER' | 'NATIVE_PDF_PARSER' | 'TABLE_PARSER' | 'OCR_RASTER';
   readonly requiresHumanReview: boolean;
   readonly securityAlerts: string[];
+  readonly rowClassification?: AwardedBoqRowClassification;
 }
 
 export interface UniversalExtractionResult {
@@ -66,6 +74,7 @@ export interface UniversalExtractionResult {
   }>;
   readonly candidates: ExtractedBoqRowCandidate[];
   readonly blockingErrors: string[];
+  readonly awardedBoqVerification?: AwardedBoqVerificationReport;
 }
 
 interface InternalGridCell {
@@ -269,6 +278,29 @@ function parseGridRowsToCandidates(
       continue;
     }
 
+    // Classify row according to Awarded BOQ business rules: headings, subheadings, descriptive notes
+    // ("By Client", "Included", "Excluded"), and multi-row header legends are NEVER flagged merely for
+    // missing quantity/unit/price. Only payable items with missing calculation values, ambiguous numeric
+    // tokens, low OCR confidence, or security alerts require human exception review.
+    const rowClassification = classifyAwardedBoqRow({
+      itemCode: mappedFields.item_code ? String(mappedFields.item_code) : null,
+      description: mappedFields.work_description ? String(mappedFields.work_description) : descOrCode,
+      unit: mappedFields.unit ? String(mappedFields.unit) : null,
+      quantity: typeof mappedFields.approved_qty === 'number' ? mappedFields.approved_qty : null,
+      unitPrice: typeof mappedFields.contract_unit_rate === 'number' ? mappedFields.contract_unit_rate : null,
+      lineAmount: typeof mappedFields.contract_line_amount === 'number' ? mappedFields.contract_line_amount : null,
+      rawTextValues: nonEmptyCells.map((c) => String(c.text ?? '').trim()),
+      hasFormula: Object.keys(rawFormulas).length > 0,
+      amountFormula: rawFormulas.contract_line_amount ?? rawFormulas.estimated_direct_cost ?? null,
+    });
+    const isNonPayableRow =
+      rowClassification === 'HEADING' ||
+      rowClassification === 'SUBHEADING' ||
+      rowClassification === 'NOTE' ||
+      rowClassification === 'HEADER_META' ||
+      rowClassification === 'SUBTOTAL' ||
+      rowClassification === 'GRAND_TOTAL';
+
     // VAL-02: Never fabricate missing quantities, units, or unit rates!
     const hasCoreBoqFields = Boolean(
       mappedFields.work_description &&
@@ -284,7 +316,7 @@ function parseGridRowsToCandidates(
       (
         hasAmbiguousNumericToken
           ? Math.min(measuredCellConf, 0.55)
-          : hasCoreBoqFields || hasCoreResourceFields
+          : hasCoreBoqFields || hasCoreResourceFields || isNonPayableRow
             ? measuredCellConf
             : Math.min(measuredCellConf, 0.65)
       ).toFixed(4)
@@ -294,7 +326,8 @@ function parseGridRowsToCandidates(
       confidenceScore < 0.85 ||
       hasAmbiguousNumericToken ||
       securityAlerts.length > 0 ||
-      (Boolean(mappedFields.work_description) &&
+      (!isNonPayableRow &&
+        Boolean(mappedFields.work_description) &&
         (mappedFields.unit === null || mappedFields.approved_qty === null || mappedFields.contract_unit_rate === null));
 
     const firstCellRef = nonEmptyCells[0]?.cellRef || `R${r + 1}`;
@@ -311,6 +344,7 @@ function parseGridRowsToCandidates(
       extractionMethod,
       requiresHumanReview,
       securityAlerts,
+      rowClassification,
     });
   }
 
@@ -471,12 +505,15 @@ export async function extractUniversalDocumentPackage(
   const sections: UniversalExtractionResult['sections'] = [];
   const allCandidates: ExtractedBoqRowCandidate[] = [];
   const blockingErrors: string[] = [...security.findings];
+  let awardedBoqVerification: AwardedBoqVerificationReport | undefined;
 
   if (security.detectedFormat === 'XLSX') {
     // Bounded incremental OOXML worksheet streaming: processes one worksheet at a time directly from
     // the security-verified ZIP central directory, skipping style/column-range expansion (<col max="16384"/>)
     // and externalLinks caches so complex workbooks stay well within Vercel serverless memory budgets.
+    const reconcilerSheets: ReconcilerWorksheetInput[] = [];
     await streamVerifiedXlsxWorksheets(buffer, ({ sheetName, displayOrder, rows }) => {
+      reconcilerSheets.push({ sheetName, rows });
       const denseGrid: Array<Array<InternalGridCell>> = [];
       for (const row of rows) {
         const rowCells: Array<InternalGridCell> = [];
@@ -503,6 +540,9 @@ export async function extractUniversalDocumentPackage(
       allCandidates.push(...parsed.candidates);
       blockingErrors.push(...parsed.blockingErrors);
     });
+    if (reconcilerSheets.length > 0) {
+      awardedBoqVerification = verifyAwardedBoqWorkbook(reconcilerSheets);
+    }
   } else if (security.detectedFormat === 'XLS') {
     // H10: Legacy OLE2/BIFF8 .xls extraction via SheetJS with formula, cell-coordinate, and row-limit enforcement
     const wb = XLSX.read(buffer, {
@@ -844,5 +884,6 @@ export async function extractUniversalDocumentPackage(
     sections,
     candidates: allCandidates,
     blockingErrors,
+    awardedBoqVerification,
   };
 }

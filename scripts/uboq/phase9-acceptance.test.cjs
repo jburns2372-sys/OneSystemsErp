@@ -469,11 +469,13 @@ test('real scanner and XLSX extraction reject central-directory disagreement bef
       return realReader.streamVerifiedXlsxWorksheets(...args);
     },
   };
+  const reconciler = load('src/lib/uboq/awarded-boq-reconciler.ts', {});
   const parser = load('src/lib/uboq/intake/parsers.ts', {
     xlsx: XLSX, 'csv-parse/sync': require('csv-parse/sync'),
     '../field-catalog': { resolveCanonicalFieldId: () => null },
     './security-guard': guard,
     './xlsx-streaming-reader': observedReader,
+    '../awarded-boq-reconciler': reconciler,
   });
 
   // A normal workbook must still reach the REAL streaming XLSX parser and produce BOQ data.
@@ -597,12 +599,14 @@ test('DOCX descriptor entry extraction preserves BOQ table candidates', async ()
     'node:zlib': require('node:zlib'),
     './security-guard': guard,
   });
+  const reconciler = load('src/lib/uboq/awarded-boq-reconciler.ts', {});
   const parser = load('src/lib/uboq/intake/parsers.ts', {
     xlsx: require('xlsx'),
     'csv-parse/sync': require('csv-parse/sync'),
     '../field-catalog': { resolveCanonicalFieldId: () => null },
     './security-guard': guard,
     './xlsx-streaming-reader': realReader,
+    '../awarded-boq-reconciler': reconciler,
   });
   const xml = Buffer.from('<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>' +
     '<w:tr><w:tc><w:p><w:t>Item Code</w:t></w:p></w:tc><w:tc><w:p><w:t>Work Description</w:t></w:p></w:tc><w:tc><w:p><w:t>Unit</w:t></w:p></w:tc><w:tc><w:p><w:t>Quantity</w:t></w:p></w:tc><w:tc><w:p><w:t>Unit Rate</w:t></w:p></w:tc></w:tr>' +

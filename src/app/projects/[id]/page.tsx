@@ -1,15 +1,20 @@
 import { prisma } from '@/lib/prisma';
 import styles from '../page.module.css';
 import Link from 'next/link';
-import * as xlsx from 'xlsx';
-import * as fs from 'fs';
-import * as path from 'path';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
+import { verifyOperationalSession } from '@/lib/dal/auth';
+import { withUboqRlsContext } from '@/lib/uboq/project-ownership';
+import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
+import { resolveEffectiveHeaderAccessContext } from '@/lib/uboq/ux-helpers';
+import {
+  reconcileImportedAwardedBoqCandidates,
+  type AwardedBoqVerificationReport,
+} from '@/lib/uboq/awarded-boq-reconciler';
 
 import BOQActions from './BOQActions';
 import AwardedBOQViewer from './AwardedBOQViewer';
+import AwardedBoqReconciliationPanel from './AwardedBoqReconciliationPanel';
 import BOQConsolidationTab from './BOQConsolidationTab';
 import ProjectVariationOrdersTab from './ProjectVariationOrdersTab';
 import ModuleKnowledgeTab from '@/app/knowledge-center/ModuleKnowledgeTab';
@@ -63,37 +68,101 @@ export default async function ProjectDetailsPage({
 }) {
   const { id } = await params;
   const { tab = 'summary' } = await searchParams;
-  
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: {
-      materialRequests: true,
-      awardedBoqItems: { orderBy: { createdAt: 'asc' } },
-      procurementBenchmarkItems: true,
-      variationOrders: {
-        where: { currentStatus: 'APPROVED' }
-      },
-      userAssignments: {
-        include: { user: { select: { name: true, email: true, role: true, id: true } } },
-        orderBy: { createdAt: 'desc' }
-      }
-    }
-  });
 
-  if (!project) {
-    return <div style={{ padding: '20px', color: 'red' }}>Project not found.</div>;
-  }
-
-  const session = await auth();
-  if(!session || !session.user) {
+  const actor = await verifyOperationalSession();
+  if (!actor) {
     redirect('/login');
   }
-  
-  const userId = session.user.id;
-  const currentUser = await prisma.user.findFirst({
-    where: { id: userId },
-    include: { userRoles: { include: { role: true } } }
-  });
+
+  const cookieStore = await cookies();
+  const rawSimulatedRole = cookieStore.get('simulatedRole')?.value || null;
+  const accessContext = resolveEffectiveHeaderAccessContext(actor.role, rawSimulatedRole);
+  const rlsCtx = { userId: actor.userId, sessionVersion: actor.sessionVersion, projectId: id };
+
+  const [project, currentUser, canPopulateWorkspaceBoq] = await withUboqRlsContext(rlsCtx, async () =>
+    Promise.all([
+      prisma.project.findUnique({
+        where: { id },
+        include: {
+          materialRequests: true,
+          awardedBoqItems: { orderBy: { createdAt: 'asc' } },
+          procurementBenchmarkItems: true,
+          variationOrders: {
+            where: { currentStatus: 'APPROVED' },
+          },
+          userAssignments: {
+            include: { user: { select: { name: true, email: true, role: true, id: true } } },
+            orderBy: { createdAt: 'desc' },
+          },
+          uboqSourceDocuments: {
+            where: { documentRole: 'CONTRACT_BOQ' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: {
+              candidates: {
+                orderBy: [{ sourceRowNumber: 'asc' }, { createdAt: 'asc' }],
+                include: { section: { select: { sheetOrPageRef: true } } },
+              },
+            },
+          },
+        },
+      }),
+      prisma.user.findFirst({
+        where: { id: actor.userId },
+        include: { userRoles: { include: { role: true } } },
+      }),
+      assertUboqStageAuthorization(prisma, {
+        userId: actor.userId,
+        projectId: id,
+        capability: 'UBOQ_INTAKE_STAGE',
+        simulatedRole: accessContext.activePreviewRoleCode,
+      })
+        .then(() => true)
+        .catch(() => false),
+    ])
+  );
+
+  if (!project) {
+    return (
+      <div style={{ padding: '32px', maxWidth: '720px', margin: '0 auto', color: '#f8fafc' }}>
+        <h2 style={{ color: '#fca5a5', marginBottom: '8px' }}>Project not found or access restricted.</h2>
+        <Link href="/projects" style={{ color: '#38bdf8', fontWeight: 600 }}>&larr; Back to Projects</Link>
+      </div>
+    );
+  }
+
+  const latestBoqDoc = project.uboqSourceDocuments?.[0] ?? null;
+  const boqVerification: AwardedBoqVerificationReport | null = latestBoqDoc
+    ? (() => {
+        const meta =
+          latestBoqDoc.metadataJson && typeof latestBoqDoc.metadataJson === 'object'
+            ? (latestBoqDoc.metadataJson as Record<string, unknown>)
+            : {};
+        const persistedSummary = (meta.awardedBoqVerification ?? null) as Partial<AwardedBoqVerificationReport> | null;
+        return reconcileImportedAwardedBoqCandidates(
+          latestBoqDoc.candidates.map((c) => {
+            const pJson =
+              c.parsedJson && typeof c.parsedJson === 'object'
+                ? (c.parsedJson as Record<string, unknown>)
+                : {};
+            const mapped = (pJson.effectiveCanonicalFields ?? pJson.mappedFields ?? {}) as Record<string, unknown>;
+            return {
+              id: c.id,
+              sourceRowNumber: c.sourceRowNumber,
+              sourceCellRef: c.sourceCellRef,
+              sheetOrPageRef: c.section?.sheetOrPageRef ?? null,
+              rawFormulaText: c.rawFormulaText,
+              mappedFields: mapped,
+            };
+          }),
+          {
+            officialAwardedContractAmount: project.contractAmount || null,
+            persistedWorkbookSummary: persistedSummary,
+          }
+        );
+      })()
+    : null;
+
   const isPurchasingOfficer = currentUser?.userRoles.some(ur => ur.role.roleCode === 'PURCHASING_OFFICER');
 
   let htmlTable = '';
@@ -173,7 +242,10 @@ export default async function ProjectDetailsPage({
     htmlTable = customHtml;
 
     // Generate Consolidated HTML Table for Schedule Verification
-    const groups = new Map<string, any>();
+    const groups = new Map<
+      string,
+      { itemCode: string; description: string; unit: string; quantity: number; totalCost: number; unitCost: number }
+    >();
     for (const item of project.awardedBoqItems) {
       let oldItemCode = item.itemCode || 'N/A';
       if (oldItemCode === 'N/A' || oldItemCode.trim() === '') {
@@ -194,8 +266,10 @@ export default async function ProjectDetailsPage({
         });
       }
       const group = groups.get(key);
-      group.quantity += (item.revisedContractQuantity || item.quantity || 0);
-      group.totalCost += (item.revisedContractAmount || item.totalCost || 0);
+      if (group) {
+        group.quantity += (item.revisedContractQuantity || item.quantity || 0);
+        group.totalCost += (item.revisedContractAmount || item.totalCost || 0);
+      }
     }
 
     let consHtml = '<table><thead><tr style="background: #0f172a; color: #38bdf8; font-weight: bold;"><th>Item No.</th><th>Description</th><th>Unit</th><th>Consolidated Quantity</th><th>Unit Cost</th><th>Total Cost</th></tr></thead><tbody>';
@@ -240,17 +314,32 @@ export default async function ProjectDetailsPage({
             <Link
               href={`/projects/${project.id}/uboq`}
               style={{
-                padding: '4px 12px',
+                padding: '6px 14px',
                 borderRadius: '14px',
                 background: 'rgba(56, 189, 248, 0.14)',
                 border: '1px solid rgba(56, 189, 248, 0.4)',
                 color: 'var(--accent-color)',
                 textDecoration: 'none',
-                fontSize: '0.8rem',
+                fontSize: '0.82rem',
                 fontWeight: 'bold',
               }}
             >
-              Universal BOQ Workbench &rarr;
+              BOQ Verification Details
+            </Link>
+            <Link
+              href={`/projects/${project.id}/scheduling`}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '14px',
+                background: 'rgba(16, 185, 129, 0.14)',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                color: '#6ee7b7',
+                textDecoration: 'none',
+                fontSize: '0.82rem',
+                fontWeight: 'bold',
+              }}
+            >
+              Scheduling &rarr;
             </Link>
           </div>
           <h1>{project.name}</h1>
@@ -294,7 +383,29 @@ export default async function ProjectDetailsPage({
       </div>
 
       {tab === 'summary' && (
-        <ProjectSummaryTab projectId={project.id} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <AwardedBoqReconciliationPanel
+            projectId={project.id}
+            sourceDocument={
+              latestBoqDoc
+                ? {
+                    id: latestBoqDoc.id,
+                    fileName: latestBoqDoc.fileName,
+                    byteSize: latestBoqDoc.byteSize,
+                    sha256Hash: latestBoqDoc.sha256Hash,
+                    createdAt: latestBoqDoc.createdAt.toISOString(),
+                  }
+                : null
+            }
+            verification={boqVerification}
+            hasWorkspaceBoq={hasBOQ}
+            isBoqLocked={project.boqLocked}
+            canPopulateWorkspaceBoq={canPopulateWorkspaceBoq}
+            isSimulatingRole={accessContext.isSimulating}
+            compact
+          />
+          {await withUboqRlsContext(rlsCtx, () => ProjectSummaryTab({ projectId: project.id }))}
+        </div>
       )}
 
       {tab === 'team-access' && (
@@ -306,6 +417,25 @@ export default async function ProjectDetailsPage({
 
       {tab === 'awarded-boq' && (
         <>
+          <AwardedBoqReconciliationPanel
+            projectId={project.id}
+            sourceDocument={
+              latestBoqDoc
+                ? {
+                    id: latestBoqDoc.id,
+                    fileName: latestBoqDoc.fileName,
+                    byteSize: latestBoqDoc.byteSize,
+                    sha256Hash: latestBoqDoc.sha256Hash,
+                    createdAt: latestBoqDoc.createdAt.toISOString(),
+                  }
+                : null
+            }
+            verification={boqVerification}
+            hasWorkspaceBoq={hasBOQ}
+            isBoqLocked={project.boqLocked}
+            canPopulateWorkspaceBoq={canPopulateWorkspaceBoq}
+            isSimulatingRole={accessContext.isSimulating}
+          />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
             <div>
               <h2 style={{ color: 'var(--text-primary)', margin: 0 }}>Contract BOQ (Awarded)</h2>
@@ -362,16 +492,18 @@ export default async function ProjectDetailsPage({
           isLocked={project.procurementBenchmarkLocked}
           items={project.procurementBenchmarkItems || []}
           totalItems={(project.procurementBenchmarkItems || []).length}
-          totalAmount={(project.procurementBenchmarkItems || []).reduce((acc: number, cur: any) => acc + cur.totalCost, 0)}
+          totalAmount={(project.procurementBenchmarkItems || []).reduce((acc: number, cur: { totalCost: number }) => acc + cur.totalCost, 0)}
         />
       )}
 
       {tab === 'consolidation' && (
-        <BOQConsolidationTab projectId={project.id} isBenchmarkLocked={project.procurementBenchmarkLocked} />
+        await withUboqRlsContext(rlsCtx, () =>
+          BOQConsolidationTab({ projectId: project.id, isBenchmarkLocked: project.procurementBenchmarkLocked })
+        )
       )}
 
       {tab === 'variation-orders' && (
-        <ProjectVariationOrdersTab projectId={project.id} />
+        await withUboqRlsContext(rlsCtx, () => ProjectVariationOrdersTab({ projectId: project.id }))
       )}
 
       {tab === 'profitability' && (
@@ -387,31 +519,31 @@ export default async function ProjectDetailsPage({
       )}
 
       {tab === 'expense-ledger' && (
-        <ProjectExpenseLedgerTab projectId={project.id} />
+        await withUboqRlsContext(rlsCtx, () => ProjectExpenseLedgerTab({ projectId: project.id }))
       )}
 
       {tab === 'payroll-cost' && (
-        <ProjectPayrollCostTab projectId={project.id} />
+        await withUboqRlsContext(rlsCtx, () => ProjectPayrollCostTab({ projectId: project.id }))
       )}
 
       {tab === 'materials-control' && (
-        <ProjectMaterialsControlTab projectId={project.id} />
+        await withUboqRlsContext(rlsCtx, () => ProjectMaterialsControlTab({ projectId: project.id }))
       )}
 
       {tab === 'subcontracting' && (
-        <ProjectSubcontractingTab projectId={project.id} />
+        await withUboqRlsContext(rlsCtx, () => ProjectSubcontractingTab({ projectId: project.id }))
       )}
 
       {tab === 'job-orders' && (
-        <ProjectJobOrdersTab projectId={project.id} />
+        await withUboqRlsContext(rlsCtx, () => ProjectJobOrdersTab({ projectId: project.id }))
       )}
 
       {tab === 'accomplishment' && (
-        <ProjectAccomplishmentTab projectId={project.id} />
+        await withUboqRlsContext(rlsCtx, () => ProjectAccomplishmentTab({ projectId: project.id }))
       )}
 
       {tab === 'billing' && (
-        <ProjectBillingTab projectId={project.id} />
+        await withUboqRlsContext(rlsCtx, () => ProjectBillingTab({ projectId: project.id }))
       )}
 
       {tab === 'reports' && (
@@ -419,7 +551,7 @@ export default async function ProjectDetailsPage({
       )}
 
       {tab === 'audit-trail' && (
-        <ProjectAuditTrailTab projectId={project.id} />
+        await withUboqRlsContext(rlsCtx, () => ProjectAuditTrailTab({ projectId: project.id }))
       )}
 
       {tab === 'ai-assistant' && (
