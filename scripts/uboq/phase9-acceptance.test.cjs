@@ -24,6 +24,7 @@ const actor = { userId: 'synthetic-user', role: 'PROJECT_MANAGER', sessionVersio
 const rls = { withUboqRlsContext: (_ctx, fn) => fn(), applyProjectRlsSessionVars: async () => {}, uboqRlsStorage: { getStore: () => undefined } };
 const response = { NextResponse: Response };
 const taxEngine = () => load('src/lib/uboq/tax-engine.ts');
+const ownershipGuard = () => load('src/lib/uboq/document-ownership-guard.ts', { 'node:crypto': crypto });
 function intakeFixture(overrides = {}) {
   const calls = [];
   const approveCalls = [];
@@ -46,6 +47,7 @@ function intakeFixture(overrides = {}) {
       extractWorkbookIdentitySignals: () => ({ fileName: 'boq.csv', documentRole: 'CONTRACT_BOQ' }),
       classifyDocumentProjectRelevance: () => ({ status: 'BELONGS_TO_PROJECT', disposition: 'ATTACH_AND_PROCESS', confidence: 0.9, reason: 'ok', matchedSignals: [], conflictingSignals: [], extractedIdentifiers: {} }),
     },
+    '@/lib/uboq/document-ownership-guard': ownershipGuard(),
     '@/lib/uboq/adapters/snapshot-orchestrator': {
       ingestAndStageProjectUboqPackage: async (_db, p) => { calls.push(p); return { snapshot: { status: 'DRAFT' } }; },
       regenerateDraftSnapshotFromVerifiedDocument:async(_db,p)=>{calls.push(p);return {snapshot:{status:'DRAFT'}};},
@@ -153,6 +155,7 @@ function evidenceFixture() {
       classifyDocumentProjectRelevance: () => ({ status: 'BELONGS_TO_PROJECT', disposition: 'ATTACH_AND_PROCESS', confidence: 0.9, reason: 'ok', matchedSignals: [], conflictingSignals: [], extractedIdentifiers: {} }),
       classifyExtractedFieldRelevance: () => ({ usedFields: [], ignoredReferenceFields: [], excludedUnrelatedFields: [] }),
     },
+    '@/lib/uboq/document-ownership-guard': ownershipGuard(),
     '@/lib/uboq/storage/vault-storage': { resolveUboqVaultStorageProvider: () => vault },
     '@/lib/uboq/security/document-permissions': { requireProjectDocumentPermission: async () => {} } };
   return { db, vault, deps, counts: () => ({ deleted, writes, reads }), post: () => load('src/app/api/projects/[id]/documents/route.ts', deps).POST, context: { params: Promise.resolve({ id: 'synthetic-project' }) } };
@@ -404,6 +407,7 @@ function projectFixture({grant=true,failAssignment=false,session=actor}={}) {
   const action=load('src/app/actions/project-intake.ts',{'@/lib/prisma':{prisma:db},'@/lib/dal/auth':{verifyOperationalSession:async()=>session},
     'node:crypto':{randomUUID:()=> 'new-project'},
     '@/lib/uboq/project-ownership':{applyProjectRlsSessionVars:async(client,ctx)=>{assert.equal(client,tx);rows.contexts.push(ctx);}},
+    '@/lib/uboq/document-ownership-guard': ownershipGuard(),
   }).createProjectProfile;
   const form=()=>{const f=new FormData();f.set('name','Synthetic project');f.set('sector','CORPORATE');return f;};
   return {action,form,rows};

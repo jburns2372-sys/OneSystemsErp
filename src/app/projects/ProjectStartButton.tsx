@@ -23,6 +23,8 @@ function generateSubmissionToken(): string {
 export default function ProjectStartButton() {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
+  const [duplicateProjectId, setDuplicateProjectId] = useState<string | null>(null);
+  const [similarNameWarning, setSimilarNameWarning] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
   const [submissionToken, setSubmissionToken] = useState<string>('');
@@ -40,6 +42,8 @@ export default function ProjectStartButton() {
 
   function openModal() {
     setError('');
+    setDuplicateProjectId(null);
+    setSimilarNameWarning(null);
     setCreatedProjectId(null);
     setSubmitting(false);
     inFlightRef.current = false;
@@ -70,11 +74,21 @@ export default function ProjectStartButton() {
     const formData = new FormData(e.currentTarget);
     const activeToken = submissionToken || generateSubmissionToken();
     formData.set('submissionToken', activeToken);
+    if (similarNameWarning) {
+      formData.set('confirmSimilarName', 'true');
+    }
 
     try {
       const result = await createProjectProfile(formData);
+      if ('warning' in result && result.warning) {
+        setSimilarNameWarning(result.warning);
+        setSubmitting(false);
+        inFlightRef.current = false;
+        return;
+      }
       if ('error' in result && result.error) {
         setError(result.error);
+        setDuplicateProjectId(result.canOpenExistingProject && result.existingProjectId ? result.existingProjectId : null);
         setSubmitting(false);
         inFlightRef.current = false;
         return;
@@ -171,13 +185,29 @@ export default function ProjectStartButton() {
                     <label htmlFor="project-notes" style={labelStyle}>Notes (optional)</label>
                     <textarea id="project-notes" name="description" maxLength={2000} rows={2} style={inputStyle} disabled={submitting}/>
                   </div>
-                  {error && <div role="alert" style={{gridColumn:'1 / -1',color:'#fca5a5'}}>{error}</div>}
+                  {similarNameWarning && (
+                    <div role="status" style={{gridColumn:'1 / -1',padding:'10px 12px',borderRadius:8,background:'rgba(245,158,11,0.14)',border:'1px solid rgba(245,158,11,0.45)',color:'#fde68a',whiteSpace:'pre-line',fontSize:13}}>
+                      {similarNameWarning}
+                    </div>
+                  )}
+                  {error && (
+                    <div role="alert" style={{gridColumn:'1 / -1',padding:'10px 12px',borderRadius:8,background:'rgba(239,68,68,0.14)',border:'1px solid rgba(239,68,68,0.45)',color:'#fca5a5',whiteSpace:'pre-line',fontSize:13}}>
+                      <div>{error}</div>
+                      {duplicateProjectId && (
+                        <div style={{marginTop:8}}>
+                          <Link href={`/projects/${encodeURIComponent(duplicateProjectId)}`} style={{color:'#38bdf8',fontWeight:700}}>
+                            Open Existing Project &rarr;
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div style={{gridColumn:'1 / -1',display:'flex',justifyContent:'flex-end',gap:10}}>
                     <button type="button" onClick={closeModal} disabled={submitting}
                       style={{padding:'10px 16px',color:'#e2e8f0',background:'transparent',border:'1px solid #64748b',borderRadius:8,cursor:submitting?'not-allowed':'pointer'}}>Cancel</button>
                     <button type="submit" disabled={submitting}
                       style={{padding:'10px 16px',color:'#042f2e',background:'#22d3ee',fontWeight:700,border:0,borderRadius:8,cursor:submitting?'wait':'pointer',opacity:submitting?0.7:1}}>
-                      {submitting ? 'Creating...' : 'Create & Open Documents'}
+                      {submitting ? 'Creating...' : similarNameWarning ? 'Confirm Different Contract & Create' : 'Create & Open Documents'}
                     </button>
                   </div>
                 </form>
