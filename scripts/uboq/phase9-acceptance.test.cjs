@@ -38,9 +38,11 @@ function intakeFixture(overrides = {}) {
     '@/lib/uboq/security/stage-rbac': { assertUboqStageAuthorization: async () => {} },
     '@/lib/uboq/security/redact-payload': { redactUboqPayloadForRole: v => v },
     '@/lib/uboq/tax-engine': taxEngine(),
-    '@/lib/uboq/intake/security-guard': { scanUploadedDocumentSecurity: () => ({ safe: true, findings: [], detectedFormat: 'CSV' }) },
+    '@/lib/uboq/intake/security-guard': { scanUploadedDocumentSecurity: () => ({ safe: true, findings: [], detectedFormat: 'CSV', sha256Hash: 'b'.repeat(64) }) },
+    '@/lib/uboq/intake/parsers': { extractUniversalDocumentPackage: async () => ({ sections: [], candidates: [], blockingErrors: [] }) },
     '@/lib/uboq/intake/xlsx-streaming-reader': { streamVerifiedXlsxWorksheets: async () => {} },
     '@/lib/uboq/project-relevance': {
+      buildSignalsFromContractExtraction: () => ({ fileName: 'boq.csv', documentRole: 'CONTRACT_BOQ' }),
       extractWorkbookIdentitySignals: () => ({ fileName: 'boq.csv', documentRole: 'CONTRACT_BOQ' }),
       classifyDocumentProjectRelevance: () => ({ status: 'BELONGS_TO_PROJECT', disposition: 'ATTACH_AND_PROCESS', confidence: 0.9, reason: 'ok', matchedSignals: [], conflictingSignals: [], extractedIdentifiers: {} }),
     },
@@ -144,8 +146,10 @@ function evidenceFixture() {
     '@/lib/uboq/security/stage-rbac': { assertUboqStageAuthorization: async () => {} }, '@/lib/uboq/project-ownership': rls,
     '@/lib/uboq/intake/security-guard': { scanUploadedDocumentSecurity: () => ({ safe: true, findings: [], sha256Hash: 'a'.repeat(64), canonicalMimeType: 'text/csv', detectedFormat: 'CSV' }) },
     '@/lib/uboq/intake/parsers': { extractUniversalDocumentPackage: async () => ({ sections: [], candidates: [], blockingErrors: [] }) },
+    '@/lib/uboq/intake/xlsx-streaming-reader': { streamVerifiedXlsxWorksheets: async () => {} },
     '@/lib/uboq/project-relevance': {
       buildSignalsFromContractExtraction: () => ({ fileName: 'boq.csv' }),
+      extractWorkbookIdentitySignals: () => ({ fileName: 'boq.csv' }),
       classifyDocumentProjectRelevance: () => ({ status: 'BELONGS_TO_PROJECT', disposition: 'ATTACH_AND_PROCESS', confidence: 0.9, reason: 'ok', matchedSignals: [], conflictingSignals: [], extractedIdentifiers: {} }),
       classifyExtractedFieldRelevance: () => ({ usedFields: [], ignoredReferenceFields: [], excludedUnrelatedFields: [] }),
     },
@@ -182,6 +186,166 @@ test('evidence failed insert retains potential shared vault object for reconcili
   assert.equal((await f.post()(request({documentRole:'CONTRACT'}),f.context)).status,400);
   assert.equal(f.counts().deleted,0);
 });
+
+// --- PR #28 Mandatory Project-Relevance Enforcement Tests (BOTH /api/projects/[id]/documents AND /api/uboq/intake) ---
+test('PR28 project-relevance: UNRELATED file is ALWAYS rejected HTTP 422 before vault/DB write on BOTH routes regardless of confirmProjectAssociation', async () => {
+  const unrelatedRel = {
+    status: 'UNRELATED',
+    disposition: 'REJECT_UNRELATED_DO_NOT_ATTACH',
+    confidence: 0.95,
+    reason: 'Document contract reference 26OA0001 conflicts with selected project CA-DEMO-001.',
+    matchedSignals: [],
+    conflictingSignals: ['Contract ID mismatch'],
+    extractedIdentifiers: { contractReference: '26OA0001' },
+  };
+
+  for (const confirmFlag of ['false', 'true']) {
+    // 1. /api/projects/[id]/documents
+    const ef = evidenceFixture();
+    let vaultPutCalls = 0;
+    const origPut = ef.vault.putImmutableAndVerify;
+    ef.vault.putImmutableAndVerify = async (...args) => { vaultPutCalls++; return origPut(...args); };
+    ef.deps['@/lib/uboq/project-relevance'] = {
+      ...ef.deps['@/lib/uboq/project-relevance'],
+      classifyDocumentProjectRelevance: () => unrelatedRel,
+    };
+    const resDoc = await ef.post()(request({ documentRole: 'CONTRACT', confirmProjectAssociation: confirmFlag }), ef.context);
+    assert.equal(resDoc.status, 422, `/documents must return 422 for UNRELATED with confirm=${confirmFlag}`);
+    const bodyDoc = await resDoc.json();
+    assert.equal(bodyDoc.error, 'UBOQ_UNRELATED_DOCUMENT_BLOCKED');
+    assert.equal(vaultPutCalls, 0, 'Zero vault writes permitted for UNRELATED file');
+    assert.equal(ef.counts().writes, 0, 'Zero DB writes permitted for UNRELATED file');
+
+    // 2. /api/uboq/intake
+    const inf = intakeFixture({
+      '@/lib/uboq/project-relevance': {
+        buildSignalsFromContractExtraction: () => ({ fileName: 'foreign.xlsx', documentRole: 'CONTRACT_BOQ' }),
+        extractWorkbookIdentitySignals: () => ({ fileName: 'foreign.xlsx', documentRole: 'CONTRACT_BOQ' }),
+        classifyDocumentProjectRelevance: () => unrelatedRel,
+      },
+    });
+    const resIntake = await inf.post(request({
+      sectorType: 'CORPORATE',
+      taxProfileCode: 'CORP_PH_VAT_EXCL_12',
+      confirmProjectAssociation: confirmFlag,
+    }));
+    assert.equal(resIntake.status, 422, `/uboq/intake must return 422 for UNRELATED with confirm=${confirmFlag}`);
+    const bodyIntake = await resIntake.json();
+    assert.match(bodyIntake.error, /UBOQ_UNRELATED_DOCUMENT_BLOCKED/);
+    assert.equal(inf.calls.length, 0, 'Zero vault/DB staging calls permitted for UNRELATED file');
+  }
+});
+
+test('PR28 project-relevance: NEEDS_CONFIRMATION holds financial/operational processing until confirmed on BOTH routes', async () => {
+  const uncertainRel = {
+    status: 'NEEDS_CONFIRMATION',
+    disposition: 'HOLD_FOR_USER_CONFIRMATION',
+    confidence: 0.55,
+    reason: 'No matching project reference found; awaiting user confirmation.',
+    matchedSignals: [],
+    conflictingSignals: [],
+    extractedIdentifiers: {},
+  };
+
+  // 1. /api/uboq/intake holds staging with HTTP 409 when unconfirmed, then permits when confirmed
+  const inf = intakeFixture({
+    '@/lib/uboq/project-relevance': {
+      buildSignalsFromContractExtraction: () => ({ fileName: 'unlabeled.csv', documentRole: 'CONTRACT_BOQ' }),
+      extractWorkbookIdentitySignals: () => ({ fileName: 'unlabeled.csv', documentRole: 'CONTRACT_BOQ' }),
+      classifyDocumentProjectRelevance: () => uncertainRel,
+    },
+  });
+  const heldRes = await inf.post(request({ sectorType: 'CORPORATE', taxProfileCode: 'CORP_PH_VAT_EXCL_12', confirmProjectAssociation: 'false' }));
+  assert.equal(heldRes.status, 409);
+  assert.equal(inf.calls.length, 0, 'Unconfirmed NEEDS_CONFIRMATION must not run financial staging');
+  const confirmedRes = await inf.post(request({ sectorType: 'CORPORATE', taxProfileCode: 'CORP_PH_VAT_EXCL_12', confirmProjectAssociation: 'true' }));
+  assert.equal(confirmedRes.status, 201);
+  assert.equal(inf.calls.length, 1);
+
+  // 2. /api/projects/[id]/documents holds financial & operational processing in metadataJson without populating financial records
+  const ef = evidenceFixture();
+  let createdMeta = null;
+  const origCreate = ef.db.uboqSourceDocument.create;
+  ef.db.uboqSourceDocument.create = async (arg) => { createdMeta = arg.data.metadataJson; return origCreate(arg); };
+  ef.deps['@/lib/uboq/project-relevance'] = {
+    ...ef.deps['@/lib/uboq/project-relevance'],
+    classifyDocumentProjectRelevance: () => uncertainRel,
+  };
+  const docRes = await ef.post()(request({ documentRole: 'CONTRACT', confirmProjectAssociation: 'false' }), ef.context);
+  assert.equal(docRes.status, 201);
+  const docJson = await docRes.json();
+  assert.equal(docJson.status, 'NEEDS_CONFIRMATION');
+  assert.equal(createdMeta.financialProcessingHeld, true);
+  assert.equal(createdMeta.operationalProcessingHeld, true);
+  assert.equal(createdMeta.reviewState, 'PENDING_PROJECT_RELEVANCE_CONFIRMATION');
+});
+
+test('PR28 project-relevance: extraction failure NEVER treats document as verified on BOTH routes', async () => {
+  // 1. /api/uboq/intake holds financial processing (409) when extraction throws
+  const inf = intakeFixture({
+    '@/lib/uboq/intake/security-guard': { scanUploadedDocumentSecurity: () => ({ safe: true, findings: [], detectedFormat: 'PDF', sha256Hash: 'c'.repeat(64) }) },
+    '@/lib/uboq/intake/parsers': { extractUniversalDocumentPackage: async () => { throw new Error('CORRUPT_PDF_STREAM'); } },
+  });
+  const intakeRes = await inf.post(request({ sectorType: 'CORPORATE', taxProfileCode: 'CORP_PH_VAT_EXCL_12' }));
+  assert.equal(intakeRes.status, 409);
+  assert.equal(inf.calls.length, 0);
+
+  // 2. /api/projects/[id]/documents marks extractionVerified=false & holds financial/operational processing
+  const ef = evidenceFixture();
+  let createdMeta = null;
+  const origCreate = ef.db.uboqSourceDocument.create;
+  ef.db.uboqSourceDocument.create = async (arg) => { createdMeta = arg.data.metadataJson; return origCreate(arg); };
+  ef.deps['@/lib/uboq/intake/security-guard'] = { scanUploadedDocumentSecurity: () => ({ safe: true, findings: [], sha256Hash: 'd'.repeat(64), canonicalMimeType: 'application/pdf', detectedFormat: 'PDF' }) };
+  ef.deps['@/lib/uboq/intake/parsers'] = { extractUniversalDocumentPackage: async () => { throw new Error('OCR_FAILED'); } };
+  const docRes = await ef.post()(request({ documentRole: 'CONTRACT' }), ef.context);
+  assert.equal(docRes.status, 201);
+  const docJson = await docRes.json();
+  assert.equal(docJson.extractionVerified, false);
+  assert.equal(docJson.status, 'NEEDS_CONFIRMATION');
+  assert.equal(createdMeta.extractionVerified, false);
+  assert.equal(createdMeta.financialProcessingHeld, true);
+});
+
+test('PR28 project-relevance: RELEVANT_SUPPORTING_DOCUMENT preserves evidence while excluding supporting amounts from awarded contract calculations', async () => {
+  const ef = evidenceFixture();
+  let createdMeta = null;
+  const origCreate = ef.db.uboqSourceDocument.create;
+  ef.db.uboqSourceDocument.create = async (arg) => { createdMeta = arg.data.metadataJson; return origCreate(arg); };
+  ef.deps['@/lib/uboq/project-relevance'] = {
+    ...ef.deps['@/lib/uboq/project-relevance'],
+    classifyDocumentProjectRelevance: () => ({
+      status: 'RELEVANT_SUPPORTING_DOCUMENT',
+      disposition: 'ATTACH_AND_PROCESS',
+      confidence: 0.82,
+      reason: 'Supporting DUPA sheet preserved without altering awarded contract amount.',
+      matchedSignals: ['Compatible supporting sheet'],
+      conflictingSignals: [],
+      extractedIdentifiers: {},
+    }),
+  };
+  const docRes = await ef.post()(request({ documentRole: 'DUPA' }), ef.context);
+  assert.equal(docRes.status, 201);
+  assert.equal(createdMeta.intakeMode, 'EVIDENCE_ONLY');
+  assert.equal(createdMeta.excludedFromAwardedContractCalculations, true);
+  assert.equal(createdMeta.financialProcessingHeld, true);
+});
+
+test('PR28 project-relevance: RBAC/PBAC denial blocks unauthorized upload before relevance check, vault, or DB writes', async () => {
+  let relevanceCalled = false;
+  const inf = intakeFixture({
+    '@/lib/uboq/security/stage-rbac': { assertUboqStageAuthorization: async () => { throw new Error('UBOQ_RBAC_FORBIDDEN'); } },
+    '@/lib/uboq/project-relevance': {
+      buildSignalsFromContractExtraction: () => { relevanceCalled = true; return {}; },
+      extractWorkbookIdentitySignals: () => { relevanceCalled = true; return {}; },
+      classifyDocumentProjectRelevance: () => { relevanceCalled = true; return { status: 'BELONGS_TO_PROJECT' }; },
+    },
+  });
+  const res = await inf.post(request({ sectorType: 'CORPORATE', taxProfileCode: 'CORP_PH_VAT_EXCL_12' }));
+  assert.equal(res.status, 403);
+  assert.equal(relevanceCalled, false);
+  assert.equal(inf.calls.length, 0);
+});
+
 module.exports = { load, intakeFixture, evidenceFixture, request, actor, rls };
 
 function orchestratorFixture({ concurrent = false, pending = false } = {}) {

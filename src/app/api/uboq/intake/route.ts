@@ -7,10 +7,13 @@ import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { redactUboqPayloadForRole } from '@/lib/uboq/security/redact-payload';
 import { STANDARD_TAX_PROFILES } from '@/lib/uboq/tax-engine';
 import { scanUploadedDocumentSecurity } from '@/lib/uboq/intake/security-guard';
+import { extractUniversalDocumentPackage } from '@/lib/uboq/intake/parsers';
 import { streamVerifiedXlsxWorksheets } from '@/lib/uboq/intake/xlsx-streaming-reader';
 import {
+  buildSignalsFromContractExtraction,
   classifyDocumentProjectRelevance,
   extractWorkbookIdentitySignals,
+  type DocumentRelevanceAssessment,
 } from '@/lib/uboq/project-relevance';
 import type { ReconcilerWorksheetInput } from '@/lib/uboq/awarded-boq-reconciler';
 import {
@@ -72,29 +75,140 @@ export async function POST(request: NextRequest) {
           if (!scan.safe || scan.findings.length > 0) {
             throw new Error('UBOQ_INTAKE_SECURITY_BLOCKED');
           }
-          // Mandatory Project-Relevance check for Excel workbooks before attaching to selected project
-          if (scan.detectedFormat === 'XLSX' && !confirmProjectAssociation) {
-            const previewSheets: ReconcilerWorksheetInput[] = [];
-            await streamVerifiedXlsxWorksheets(buffer, ({ sheetName, rows }) => {
-              if (previewSheets.length < 4) {
-                previewSheets.push({ sheetName, rows: rows.slice(0, 15) });
+
+          // Rule 6: Preserve all original documents already legitimately stored (idempotent replay bypasses new-upload block)
+          const existingStored =
+            !allowDuplicateNewRevision &&
+            typeof prisma.uboqSourceDocument?.findUnique === 'function' &&
+            scan.sha256Hash
+              ? await prisma.uboqSourceDocument.findUnique({
+                  where: {
+                    projectId_sha256Hash_documentRole: {
+                      projectId,
+                      sha256Hash: scan.sha256Hash,
+                      documentRole,
+                    },
+                  },
+                  select: { id: true },
+                })
+              : null;
+
+          if (!existingStored) {
+            const priorDocs =
+              typeof prisma.uboqSourceDocument?.findMany === 'function'
+                ? await prisma.uboqSourceDocument.findMany({
+                    where: { projectId },
+                    select: { metadataJson: true },
+                    take: 25,
+                  })
+                : [];
+            const knownRefs: string[] = [];
+            for (const pd of priorDocs) {
+              const m = pd.metadataJson && typeof pd.metadataJson === 'object' ? (pd.metadataJson as Record<string, unknown>) : null;
+              const ce = m?.contractExtraction && typeof m.contractExtraction === 'object' ? (m.contractExtraction as Record<string, unknown>) : null;
+              const f = ce?.fields && typeof ce.fields === 'object' ? (ce.fields as Record<string, { value?: unknown } | null>) : null;
+              for (const key of ['projectReference', 'contractReference', 'noticeOfAwardRef', 'noticeToProceedRef']) {
+                if (typeof f?.[key]?.value === 'string') knownRefs.push(String(f[key]!.value));
               }
-            });
-            const wbSignals = extractWorkbookIdentitySignals(file.name, previewSheets, documentRole);
-            const relevance = classifyDocumentProjectRelevance(
-              {
-                projectId: project.id,
-                projectName: project.name,
-                contractNumber: project.contractNumber,
-                clientName: project.client,
-                location: project.location,
-              },
-              wbSignals
-            );
+            }
+
+            const selectedIdentity = {
+              projectId: project.id,
+              projectName: project.name,
+              contractNumber: project.contractNumber,
+              clientName: project.client,
+              location: project.location,
+              knownReferences: knownRefs,
+            };
+
+            let relevance: DocumentRelevanceAssessment;
+            let extractionVerified = false;
+            try {
+              if (scan.detectedFormat === 'XLSX') {
+                const previewSheets: ReconcilerWorksheetInput[] = [];
+                await streamVerifiedXlsxWorksheets(buffer, ({ sheetName, rows }) => {
+                  if (previewSheets.length < 4) {
+                    previewSheets.push({ sheetName, rows: rows.slice(0, 15) });
+                  }
+                });
+                const wbSignals = extractWorkbookIdentitySignals(file.name, previewSheets, documentRole);
+                relevance = classifyDocumentProjectRelevance(selectedIdentity, wbSignals);
+                extractionVerified = true;
+              } else if (['PDF', 'IMAGE', 'DOCX'].includes(scan.detectedFormat)) {
+                const extracted = await extractUniversalDocumentPackage(file.name, buffer, {
+                  declaredMimeType: file.type,
+                });
+                if (extracted.contractExtraction) {
+                  relevance = classifyDocumentProjectRelevance(
+                    selectedIdentity,
+                    buildSignalsFromContractExtraction(extracted.contractExtraction, documentRole)
+                  );
+                  extractionVerified = true;
+                } else {
+                  relevance = classifyDocumentProjectRelevance(selectedIdentity, {
+                    fileName: file.name,
+                    documentRole,
+                  });
+                  extractionVerified = false;
+                }
+              } else {
+                // CSV / XLS / JSON lightweight header-text inspection for foreign project refs
+                const headText = scan.detectedFormat === 'CSV' ? buffer.subarray(0, 4096).toString('utf8') : '';
+                const contractRefMatch = /(?:^|\n)\s*(?:Contract\s*(?:ID|Ref(?:erence)?|No\.?)|Project\s*ID)\s*[,:]\s*([^\r\n,]+)/i.exec(headText);
+                const clientMatch = /(?:^|\n)\s*(?:Client|Project\s*Owner|Implementing\s*Office)\s*[,:]\s*([^\r\n,]+)/i.exec(headText);
+                const projectNameMatch = /(?:^|\n)\s*(?:Project\s*Name|Contract\s*Name)\s*[,:]\s*([^\r\n,]+)/i.exec(headText);
+                relevance = classifyDocumentProjectRelevance(selectedIdentity, {
+                  fileName: file.name,
+                  documentRole,
+                  contractReference: contractRefMatch ? contractRefMatch[1].trim() : null,
+                  projectReference: contractRefMatch ? contractRefMatch[1].trim() : null,
+                  clientName: clientMatch ? clientMatch[1].trim() : null,
+                  projectName: projectNameMatch ? projectNameMatch[1].trim() : null,
+                  rawHeaderText: headText.slice(0, 1000) || null,
+                });
+                extractionVerified = true;
+              }
+            } catch {
+              // Rule 5: Extraction failure MUST NEVER be treated as verified project information.
+              extractionVerified = false;
+              relevance = {
+                status: 'NEEDS_CONFIRMATION',
+                disposition: 'HOLD_FOR_USER_CONFIRMATION',
+                confidence: 0,
+                reason: 'Document contents could not be verified automatically; financial and operational processing is held until project association is confirmed.',
+                matchedSignals: [],
+                conflictingSignals: [],
+                extractedIdentifiers: {
+                  projectName: null,
+                  projectReference: null,
+                  contractReference: null,
+                  clientName: null,
+                  awardedContractor: null,
+                },
+              };
+            }
+
+            // Rule 1: UNRELATED files are ALWAYS rejected HTTP 422 BEFORE any vault or DB write,
+            // REGARDLESS of confirmProjectAssociation!
             if (relevance.status === 'UNRELATED') {
               throw new Error(`UBOQ_UNRELATED_DOCUMENT_BLOCKED: ${relevance.reason}`);
             }
+
+            // Rule 2 & Rule 5: NEEDS_CONFIRMATION or unverified extraction holds financial/operational
+            // staging until explicitly confirmed by the user (zero vault/DB write while unconfirmed).
+            if ((relevance.status === 'NEEDS_CONFIRMATION' || !extractionVerified) && !confirmProjectAssociation) {
+              throw new Error(`UBOQ_PROJECT_RELEVANCE_CONFIRMATION_REQUIRED: ${relevance.reason}`);
+            }
+
+            // Rule 4: RELEVANT_SUPPORTING_DOCUMENT must not enter CONTRACT_BOQ financial calculations directly
+            // when uploaded as a non-BOQ supporting role via intake; preserve safely without inventing contract amounts.
+            if (relevance.status === 'RELEVANT_SUPPORTING_DOCUMENT' && documentRole !== 'CONTRACT_BOQ' && !confirmProjectAssociation) {
+              throw new Error(
+                'UBOQ_SUPPORTING_DOCUMENT_USE_EVIDENCE_REGISTER: Supporting documents must be stored as supporting evidence and are excluded from awarded contract BOQ calculations.'
+              );
+            }
           }
+
           return ingestAndStageProjectUboqPackage(prisma as never, {
             projectId,
             uploadedByUserId: actor.userId,
@@ -244,10 +358,10 @@ export async function POST(request: NextRequest) {
     const msg = err instanceof Error ? err.message : 'UBOQ_INTAKE_ERROR';
     const status = /UNAUTHORIZED|FORBIDDEN|SPOOFING|DENIED|RBAC/i.test(msg)
       ? 403
-      : /CONFLICT|DUPLICATE|ALREADY|LUMP_SUM|MISMATCH/i.test(msg)
-        ? 409
-        : /UBOQ_XLSX_LIMIT_EXCEEDED|UBOQ_XLSX_EMPTY_WORKBOOK|UBOQ_UNRELATED_DOCUMENT_BLOCKED/i.test(msg)
-          ? 422
+      : /UBOQ_XLSX_LIMIT_EXCEEDED|UBOQ_XLSX_EMPTY_WORKBOOK|UBOQ_UNRELATED_DOCUMENT_BLOCKED|UBOQ_SUPPORTING_DOCUMENT_USE_EVIDENCE_REGISTER/i.test(msg)
+        ? 422
+        : /CONFLICT|DUPLICATE|ALREADY|LUMP_SUM|MISMATCH|UBOQ_PROJECT_RELEVANCE_CONFIRMATION_REQUIRED/i.test(msg)
+          ? 409
           : 400;
     return NextResponse.json({ error: msg }, { status });
   }

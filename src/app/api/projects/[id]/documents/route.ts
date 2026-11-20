@@ -6,10 +6,13 @@ import { assertUboqStageAuthorization } from '@/lib/uboq/security/stage-rbac';
 import { withUboqRlsContext, applyProjectRlsSessionVars } from '@/lib/uboq/project-ownership';
 import { scanUploadedDocumentSecurity } from '@/lib/uboq/intake/security-guard';
 import { extractUniversalDocumentPackage } from '@/lib/uboq/intake/parsers';
+import { streamVerifiedXlsxWorksheets } from '@/lib/uboq/intake/xlsx-streaming-reader';
+import type { ReconcilerWorksheetInput } from '@/lib/uboq/awarded-boq-reconciler';
 import {
   buildSignalsFromContractExtraction,
   classifyDocumentProjectRelevance,
   classifyExtractedFieldRelevance,
+  extractWorkbookIdentitySignals,
   type DocumentRelevanceAssessment,
 } from '@/lib/uboq/project-relevance';
 import { resolveUboqVaultStorageProvider } from '@/lib/uboq/storage/vault-storage';
@@ -93,74 +96,121 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           });
         }
 
-        // Extract content metadata for contract & text-readable supporting documents (never filenames alone)
+        // Extract content metadata & enforce project-relevance filtering BEFORE any vault or DB write.
         let contractExtraction: unknown = null;
         let fieldRelevance: unknown = null;
         let projectRelevance: DocumentRelevanceAssessment | null = null;
-        const shouldExtractContent =
-          documentRole === 'CONTRACT' ||
-          ['PDF', 'IMAGE', 'DOCX'].includes(scan.detectedFormat);
+        let extractionVerified = false;
 
-        if (shouldExtractContent && projectRecord) {
+        if (projectRecord) {
+          const knownRefs: string[] = [];
+          for (const pd of priorDocs) {
+            const m = pd.metadataJson && typeof pd.metadataJson === 'object' ? (pd.metadataJson as Record<string, unknown>) : null;
+            const ce = m?.contractExtraction && typeof m.contractExtraction === 'object' ? (m.contractExtraction as Record<string, unknown>) : null;
+            const f = ce?.fields && typeof ce.fields === 'object' ? (ce.fields as Record<string, { value?: unknown } | null>) : null;
+            for (const key of ['projectReference', 'contractReference', 'noticeOfAwardRef', 'noticeToProceedRef']) {
+              if (typeof f?.[key]?.value === 'string') knownRefs.push(String(f[key]!.value));
+            }
+          }
+          const selectedIdentity = {
+            projectId: projectRecord.id,
+            projectName: projectRecord.name,
+            contractNumber: projectRecord.contractNumber,
+            clientName: projectRecord.client,
+            location: projectRecord.location,
+            knownReferences: knownRefs,
+          };
+
           try {
-            const extracted = await extractUniversalDocumentPackage(file.name, buffer, {
-              declaredMimeType: file.type,
-            });
-            if (extracted.contractExtraction) {
-              contractExtraction = extracted.contractExtraction;
-              const fullText = (extracted.extractedTextPages ?? []).map((p) => p.text).join('\n');
-              fieldRelevance = classifyExtractedFieldRelevance({
-                contractDoc: extracted.contractExtraction,
-                fullText,
-              });
-
-              const knownRefs: string[] = [];
-              for (const pd of priorDocs) {
-                const m = pd.metadataJson && typeof pd.metadataJson === 'object' ? (pd.metadataJson as Record<string, unknown>) : null;
-                const ce = m?.contractExtraction && typeof m.contractExtraction === 'object' ? (m.contractExtraction as Record<string, unknown>) : null;
-                const f = ce?.fields && typeof ce.fields === 'object' ? (ce.fields as Record<string, { value?: unknown } | null>) : null;
-                for (const key of ['projectReference', 'contractReference', 'noticeOfAwardRef', 'noticeToProceedRef']) {
-                  if (typeof f?.[key]?.value === 'string') knownRefs.push(String(f[key]!.value));
+            if (scan.detectedFormat === 'XLSX') {
+              const previewSheets: ReconcilerWorksheetInput[] = [];
+              await streamVerifiedXlsxWorksheets(buffer, ({ sheetName, rows }) => {
+                if (previewSheets.length < 4) {
+                  previewSheets.push({ sheetName, rows: rows.slice(0, 15) });
                 }
-              }
-
-              projectRelevance = classifyDocumentProjectRelevance(
-                {
-                  projectId: projectRecord.id,
-                  projectName: projectRecord.name,
-                  contractNumber: projectRecord.contractNumber,
-                  clientName: projectRecord.client,
-                  location: projectRecord.location,
-                  knownReferences: knownRefs,
-                },
-                buildSignalsFromContractExtraction(extracted.contractExtraction, documentRole)
-              );
-
-              // Mandatory Project-Relevance Enforcement: an UNRELATED new file MUST NOT attach to this project!
-              if (projectRelevance.status === 'UNRELATED' && !confirmProjectAssociation) {
-                return NextResponse.json(
-                  {
-                    error: 'UBOQ_UNRELATED_DOCUMENT_BLOCKED',
-                    message: projectRelevance.reason,
-                    projectRelevance,
-                  },
-                  { status: 422, headers: { 'Cache-Control': 'private, no-store' } }
+              });
+              const wbSignals = extractWorkbookIdentitySignals(file.name, previewSheets, documentRole);
+              projectRelevance = classifyDocumentProjectRelevance(selectedIdentity, wbSignals);
+              fieldRelevance = classifyExtractedFieldRelevance({ workbookSignals: wbSignals });
+              extractionVerified = true;
+            } else if (documentRole === 'CONTRACT' || ['PDF', 'IMAGE', 'DOCX'].includes(scan.detectedFormat)) {
+              const extracted = await extractUniversalDocumentPackage(file.name, buffer, {
+                declaredMimeType: file.type,
+              });
+              if (extracted.contractExtraction) {
+                contractExtraction = extracted.contractExtraction;
+                const fullText = (extracted.extractedTextPages ?? []).map((p) => p.text).join('\n');
+                fieldRelevance = classifyExtractedFieldRelevance({
+                  contractDoc: extracted.contractExtraction,
+                  fullText,
+                });
+                projectRelevance = classifyDocumentProjectRelevance(
+                  selectedIdentity,
+                  buildSignalsFromContractExtraction(extracted.contractExtraction, documentRole)
                 );
+                extractionVerified = true;
+              } else {
+                // No extractable contract text -> evaluate relevance explicitly (never assume verified!)
+                projectRelevance = classifyDocumentProjectRelevance(selectedIdentity, {
+                  fileName: file.name,
+                  documentRole,
+                });
+                extractionVerified = false;
               }
+            } else {
+              projectRelevance = classifyDocumentProjectRelevance(selectedIdentity, {
+                fileName: file.name,
+                documentRole,
+              });
+              extractionVerified = true;
             }
           } catch {
-            // Non-blocking fallback: if content extraction fails on an opaque scan/drawing, still preserve safely as evidence
+            // Rule 5: Extraction failures MUST NEVER be treated as verified project information.
+            extractionVerified = false;
+            projectRelevance = {
+              status: 'NEEDS_CONFIRMATION',
+              disposition: 'HOLD_FOR_USER_CONFIRMATION',
+              confidence: 0,
+              reason: 'Document contents could not be verified automatically; held for user confirmation before using in project records.',
+              matchedSignals: [],
+              conflictingSignals: [],
+              extractedIdentifiers: {
+                projectName: null,
+                projectReference: null,
+                contractReference: null,
+                clientName: null,
+                awardedContractor: null,
+              },
+            };
+          }
+
+          // Rule 1: UNRELATED files are ALWAYS rejected HTTP 422 before ANY vault or DB write,
+          // regardless of confirmProjectAssociation.
+          if (projectRelevance?.status === 'UNRELATED') {
+            return NextResponse.json(
+              {
+                error: 'UBOQ_UNRELATED_DOCUMENT_BLOCKED',
+                message: projectRelevance.reason,
+                projectRelevance,
+              },
+              { status: 422, headers: { 'Cache-Control': 'private, no-store' } }
+            );
           }
         }
+
+        const isHeldForConfirmation =
+          projectRelevance?.status === 'NEEDS_CONFIRMATION' && !confirmProjectAssociation;
+        const isSupportingEvidence = projectRelevance?.status === 'RELEVANT_SUPPORTING_DOCUMENT';
 
         const stored = await vault.putImmutableAndVerify({
           projectId, sha256Hash: scan.sha256Hash,
           fileName: file.name, mimeType: scan.canonicalMimeType, buffer,
         });
 
-        const reviewState =
-          projectRelevance?.status === 'NEEDS_CONFIRMATION' && !confirmProjectAssociation
-            ? 'PENDING_PROJECT_RELEVANCE_CONFIRMATION'
+        const reviewState = isHeldForConfirmation
+          ? 'PENDING_PROJECT_RELEVANCE_CONFIRMATION'
+          : !extractionVerified
+            ? 'UNVERIFIED_EXTRACTION_HOLD'
             : 'PENDING_CLASSIFICATION_REVIEW';
 
         try {
@@ -177,6 +227,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                 metadataJson: {
                   intakeMode: 'EVIDENCE_ONLY',
                   reviewState,
+                  extractionVerified,
+                  financialProcessingHeld: isHeldForConfirmation || !extractionVerified || isSupportingEvidence,
+                  operationalProcessingHeld: isHeldForConfirmation || !extractionVerified,
+                  excludedFromAwardedContractCalculations: isSupportingEvidence || isHeldForConfirmation || !extractionVerified,
                   ...(contractExtraction ? { contractExtraction } : {}),
                   ...(fieldRelevance ? { fieldRelevance } : {}),
                   ...(projectRelevance ? { projectRelevance } : {}),
@@ -188,7 +242,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           return NextResponse.json({
             id: created.id,
             duplicate: false,
-            status: reviewState === 'PENDING_PROJECT_RELEVANCE_CONFIRMATION' ? 'NEEDS_CONFIRMATION' : 'PRESERVED_EVIDENCE',
+            status: isHeldForConfirmation ? 'NEEDS_CONFIRMATION' : 'PRESERVED_EVIDENCE',
+            extractionVerified,
             projectRelevance,
           }, {
             status: 201,
